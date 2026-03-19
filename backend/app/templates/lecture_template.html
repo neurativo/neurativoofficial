@@ -492,6 +492,41 @@
             color: var(--ink-3);
             line-height: 1.55;
         }
+
+        /* ─── CONCEPTS & EXAMPLES GRID (per section) ────────────────── */
+        .ce-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 3mm;
+            margin-top: 3.5mm;
+        }
+
+        .ce-col-label {
+            font-size: 7pt;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            color: var(--ink-4);
+            margin-bottom: 2mm;
+        }
+
+        .ce-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .ce-list li {
+            font-size: 9pt;
+            color: var(--ink-2);
+            line-height: 1.6;
+            padding: 1.5mm 0;
+            border-bottom: 1px solid var(--slate-100);
+        }
+
+        .ce-list li:last-child {
+            border-bottom: none;
+        }
     </style>
 </head>
 
@@ -544,6 +579,18 @@
                     <div class="cover-meta-label">Sections</div>
                     <div class="cover-meta-value">{{ total_sections }}</div>
                 </div>
+                {% if total_concepts %}
+                <div class="cover-meta-item">
+                    <div class="cover-meta-label">Concepts</div>
+                    <div class="cover-meta-value">{{ total_concepts }}</div>
+                </div>
+                {% endif %}
+                {% if qa_pairs %}
+                <div class="cover-meta-item">
+                    <div class="cover-meta-label">Q&amp;A Pairs</div>
+                    <div class="cover-meta-value">{{ qa_pairs }}</div>
+                </div>
+                {% endif %}
             </div>
         </div>
 
@@ -584,7 +631,6 @@
         <span class="eyebrow-label">{{ section_label }}</span>
     </div>
     <hr class="eyebrow-rule">
-    <h2>{{ section_label }}</h2>
 
     {% for sec in enriched_sections %}
     <div class="section-card">
@@ -610,6 +656,34 @@
             <li>{{ bullet }}</li>
             {% endfor %}
         </ul>
+        {% endif %}
+
+        {% if sec.highlight %}
+        <div style="background:#FAEEDA;border-left:3px solid #BA7517;border-radius:0 5px 5px 0;padding:4mm 5mm;margin-bottom:4mm;">
+            <p style="font-style:italic;color:#633806;font-size:10pt;margin:0;line-height:1.6;">{{ sec.highlight }}</p>
+        </div>
+        {% endif %}
+
+        {% if sec.concepts %}
+        <div style="margin-bottom:4mm;">
+            <div class="ce-col-label">Key Concepts</div>
+            <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:2mm;">
+                {% for c in sec.concepts %}
+                <span style="background:#EFF6FF;color:#1D4ED8;border:0.5px solid #BFDBFE;border-radius:20px;padding:2px 10px;font-size:8.5pt;font-weight:500;display:inline-block;margin:2px 3px;">{{ c }}</span>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if sec.examples %}
+        <div style="border-left:2px solid #5DCAA5;padding-left:8px;margin-bottom:4mm;">
+            <div class="ce-col-label" style="margin-bottom:2mm;">Examples</div>
+            {% for e in sec.examples %}
+            <div style="font-size:9pt;color:#334155;margin-bottom:1.5mm;">
+                <span style="color:#1D9E75;font-weight:600;margin-right:4px;">→</span>{{ e }}
+            </div>
+            {% endfor %}
+        </div>
         {% endif %}
     </div>
     {% endfor %}

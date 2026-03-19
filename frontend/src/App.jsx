@@ -10,6 +10,100 @@ const LANGUAGE_NAMES = {
     tr: 'Turkish', uk: 'Ukrainian',  ur: 'Urdu',     vi: 'Vietnamese',
 };
 
+// ── Summary parser ─────────────────────────────────────────────────────────
+// Converts the master_summary string (## sections) into structured objects
+// for the redesigned summary panel cards.
+// Handles both the new structured format and old legacy format as fallback.
+function parseSummary(text) {
+    if (!text) return [];
+    return text.split('## ').filter(s => s.trim()).map((block) => {
+        const lines = block.split('\n');
+        const title = lines[0].trim();
+        const highlights = [];
+        const concepts = [];
+        const examples = [];
+        const proseLines = [];
+
+        for (const line of lines.slice(1)) {
+            const l = line.trim();
+            // Skip empty lines and section separators
+            if (!l || l === '---') continue;
+
+            // Highlight lines: start with ">" (new and old format)
+            if (l.startsWith('>')) {
+                highlights.push(l.replace(/^>\s*/, ''));
+                continue;
+            }
+
+            // New format: "Key concepts: `term`, `term`, ..."
+            if (/^key concepts:/i.test(l)) {
+                const matches = l.match(/`([^`]+)`/g);
+                if (matches) matches.forEach(m => concepts.push(m.replace(/`/g, '').trim()));
+                continue;
+            }
+
+            // New format: "Examples:" header line — skip, the → lines below are handled
+            if (/^examples:$/i.test(l)) continue;
+
+            // New format: lines starting with "→" are example items
+            if (l.startsWith('→')) {
+                examples.push(l.replace(/^→\s*/, '').trim());
+                continue;
+            }
+
+            // Old format: "- " bullet lines
+            if (l.startsWith('- ')) {
+                const content = l.slice(2).trim();
+                const lc = content.toLowerCase();
+                if (content.startsWith('→') || lc.includes('example') || lc.includes('e.g.')) {
+                    examples.push(content.replace(/^→\s*/, ''));
+                } else if (/`[^`]+`/.test(content) || content.split(/\s+/).length < 5) {
+                    concepts.push(content.replace(/`/g, '').trim());
+                } else {
+                    proseLines.push(content);
+                }
+                continue;
+            }
+
+            proseLines.push(l);
+        }
+
+        // Strip **bold** markdown so asterisks never appear as literal characters
+        const fullProse = proseLines
+            .map(l => l.replace(/\*\*(.*?)\*\*/g, '$1'))
+            .join(' ')
+            .trim();
+
+        // Lead sentence: first sentence (up to '. ') that is >= 40 chars.
+        // If no sentence reaches 40 chars, use the whole prose as lead.
+        let lead_sentence = fullProse;
+        let prose = '';
+        let searchFrom = 0;
+        let found = false;
+        while (searchFrom < fullProse.length) {
+            const idx = fullProse.indexOf('. ', searchFrom);
+            if (idx === -1) break;
+            if (idx + 1 >= 40) {             // sentence including period is >= 40 chars
+                lead_sentence = fullProse.slice(0, idx + 1);
+                prose = fullProse.slice(idx + 2).trim();
+                found = true;
+                break;
+            }
+            searchFrom = idx + 2;
+        }
+        // If nothing met the 40-char bar, fall back to the first '. ' split
+        if (!found) {
+            const fallbackDot = fullProse.indexOf('. ');
+            if (fallbackDot !== -1) {
+                lead_sentence = fullProse.slice(0, fallbackDot + 1);
+                prose = fullProse.slice(fallbackDot + 2).trim();
+            }
+        }
+
+        return { title, lead_sentence, prose, concepts, examples, highlights };
+    });
+}
+
 function App() {
     // ── Session ──────────────────────────────────────────
     const [lectureId, setLectureId]           = useState(null);
@@ -49,6 +143,16 @@ function App() {
     const [activePanel, setActivePanel]       = useState('transcript'); // mobile nav: transcript | right
     const [recentSessions, setRecentSessions] = useState([]);
 
+    // ── CIF: student questions detected in transcript ──
+    const [studentQuestions, setStudentQuestions] = useState([]);
+    const [questionsOpen, setQuestionsOpen]       = useState(true);
+
+    // ── Resilience state ──────────────────────────────────
+    const [isOnline, setIsOnline]               = useState(navigator.onLine);
+    const [connQuality, setConnQuality]         = useState('good'); // 'good' | 'poor' | 'offline'
+    const [chunkBufferCount, setChunkBufferCount] = useState(0);
+    const [recoverySession, setRecoverySession] = useState(null);
+
     // ── Refs ──────────────────────────────────────────────
     const timerRef            = useRef(null);
     const mediaRecorderRef    = useRef(null);
@@ -61,6 +165,15 @@ function App() {
     const lastOverlapRef      = useRef('');
     const prevSectionCountRef = useRef(0);
     const searchInputRef      = useRef(null);
+    // Fix 5 + 10: stable refs for async callbacks (beforeunload, SSE reconnect)
+    const lectureIdRef        = useRef(null);
+    const sessionStatusRef    = useRef('idle');
+    // Resilience refs
+    const chunkBufferRef      = useRef([]);           // offline chunk queue
+    const uploadQueueRef      = useRef(Promise.resolve()); // serializes uploads
+    const wakeLockRef         = useRef(null);         // screen wake lock
+    const timerWorkerRef      = useRef(null);         // 12s chunk timer worker
+    const sseReconnectRef     = useRef(0);            // SSE reconnect attempt count
 
     // ── Audio monitoring refs ──────────────────────────────
     const audioContextRef      = useRef(null);
@@ -108,24 +221,54 @@ function App() {
         return () => window.removeEventListener('keydown', onEsc);
     }, []);
 
-    // Cleanup audio monitoring + SSE on unmount
+    // Fix 5 + 10: keep stable refs in sync with state for use in async callbacks
+    useEffect(() => { lectureIdRef.current     = lectureId;     }, [lectureId]);
+    useEffect(() => { sessionStatusRef.current = sessionStatus; }, [sessionStatus]);
+
+    // Resilience 8 / Fix 10: graceful session end + wake lock release on tab close
+    useEffect(() => {
+        const onUnload = () => {
+            const id = lectureIdRef.current;
+            const st = sessionStatusRef.current;
+            if (id && (st === 'recording' || st === 'paused')) {
+                navigator.sendBeacon(`/api/v1/live/${id}/end`);
+            }
+            releaseWakeLock();
+        };
+        window.addEventListener('beforeunload', onUnload);
+        return () => window.removeEventListener('beforeunload', onUnload);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Fix 10 / Resilience: complete cleanup on component unmount
     useEffect(() => {
         return () => {
+            isRecordingRef.current = false;
             cancelAnimationFrame(animFrameRef.current);
-            if (audioContextRef.current?.state !== 'closed') audioContextRef.current?.close();
+            if (audioContextRef.current?.state !== 'closed') {
+                audioContextRef.current?.close();
+                audioContextRef.current = null;
+            }
             if (sseRef.current) { sseRef.current.close(); sseRef.current = null; }
+            if (timerWorkerRef.current) {
+                timerWorkerRef.current.postMessage('stop');
+                timerWorkerRef.current.terminate();
+                timerWorkerRef.current = null;
+            }
+            releaseWakeLock();
         };
-    }, []);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Stats tab: fetch analytics when tab opens
+    // Stats tab: fetch analytics + lecture details when tab opens
     useEffect(() => {
         if (activeTab === 'stats' && lectureId) {
             setStatsLoading(true);
             setStatsData(null);
-            axios.get(`/api/v1/lectures/${lectureId}/analytics`)
-                .then(res => setStatsData(res.data))
-                .catch(() => {})
-                .finally(() => setStatsLoading(false));
+            Promise.all([
+                axios.get(`/api/v1/lectures/${lectureId}/analytics`),
+                axios.get(`/api/v1/lectures/${lectureId}`).catch(() => ({ data: {} })),
+            ]).then(([analyticsRes, lectureRes]) => {
+                setStatsData({ ...analyticsRes.data, _lecture: lectureRes.data });
+            }).catch(() => {}).finally(() => setStatsLoading(false));
         }
     }, [activeTab, lectureId]);
 
@@ -135,7 +278,7 @@ function App() {
         const sections = summary.split('## ').filter(s => s.trim());
         if (sections.length > prevSectionCountRef.current && prevSectionCountRef.current > 0) {
             setNewSectionIdx(sections.length - 1);
-            const t = setTimeout(() => setNewSectionIdx(null), 2000);
+            const t = setTimeout(() => setNewSectionIdx(null), 3000);
             prevSectionCountRef.current = sections.length;
             return () => clearTimeout(t);
         }
@@ -161,6 +304,69 @@ function App() {
         }
     }, [sessionStatus]);
 
+    // Resilience 1: online/offline detection + buffer drain on reconnect
+    useEffect(() => {
+        const goOnline = () => {
+            setIsOnline(true);
+            setConnQuality('good');
+            // Drain buffered chunks through the upload queue
+            const buffer = chunkBufferRef.current.splice(0);
+            setChunkBufferCount(0);
+            for (const { blob, targetId } of buffer) {
+                uploadQueueRef.current = uploadQueueRef.current
+                    .then(() => uploadChunkWithRetry(blob, targetId))
+                    .catch(() => {});
+            }
+        };
+        const goOffline = () => { setIsOnline(false); setConnQuality('offline'); };
+        window.addEventListener('online', goOnline);
+        window.addEventListener('offline', goOffline);
+        return () => {
+            window.removeEventListener('online', goOnline);
+            window.removeEventListener('offline', goOffline);
+        };
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Resilience 6: check for interrupted session on app load
+    useEffect(() => {
+        try {
+            const saved = sessionStorage.getItem('neurativo_session');
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                if (parsed.lectureId && (parsed.sessionStatus === 'recording' || parsed.sessionStatus === 'paused')) {
+                    setRecoverySession(parsed);
+                } else {
+                    sessionStorage.removeItem('neurativo_session');
+                }
+            }
+        } catch {}
+    }, []);
+
+    // Resilience 6: persist session state to sessionStorage on every relevant change
+    useEffect(() => {
+        if (lectureId && sessionStatus !== 'idle') {
+            try {
+                sessionStorage.setItem('neurativo_session', JSON.stringify({
+                    lectureId, sessionStatus, recordingSeconds, detectedLanguage, detectedTopic,
+                }));
+            } catch {}
+        }
+        if (sessionStatus === 'idle') {
+            sessionStorage.removeItem('neurativo_session');
+        }
+    }, [lectureId, sessionStatus, recordingSeconds, detectedLanguage, detectedTopic]);
+
+    // Resilience 5: re-acquire wake lock when tab becomes visible again
+    useEffect(() => {
+        const onVisibility = () => {
+            if (document.visibilityState === 'visible' && isRecordingRef.current) {
+                requestWakeLock();
+            }
+        };
+        document.addEventListener('visibilitychange', onVisibility);
+        return () => document.removeEventListener('visibilitychange', onVisibility);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
     // ── Helpers ───────────────────────────────────────────
 
     const formatTime = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
@@ -170,6 +376,21 @@ function App() {
     const showError = (msg, duration = 4000) => {
         setErrorMessage(msg);
         if (duration) setTimeout(() => setErrorMessage(null), duration);
+    };
+
+    // Resilience 5: Screen Wake Lock — prevents device sleep during lecture recording
+    const requestWakeLock = async () => {
+        if (!('wakeLock' in navigator)) return;
+        try {
+            wakeLockRef.current = await navigator.wakeLock.request('screen');
+        } catch (err) {
+            console.log('Wake lock denied:', err);
+        }
+    };
+
+    const releaseWakeLock = () => {
+        wakeLockRef.current?.release();
+        wakeLockRef.current = null;
     };
 
     // Filtered transcript for search
@@ -207,9 +428,17 @@ function App() {
     const connectSSE = (id) => {
         if (sseRef.current) sseRef.current.close();
         const es = new EventSource(`/api/v1/live/${id}/stream`);
+
         es.onmessage = (e) => {
+            // Resilience 10: reset reconnect counter on any successful message
+            sseReconnectRef.current = 0;
             try {
                 const data = JSON.parse(e.data);
+                if (data.event === 'session-timeout') {
+                    es.close();
+                    sseRef.current = null;
+                    return;
+                }
                 if (data.summary) {
                     let s = data.summary;
                     if (s.startsWith('Summary Insights')) s = s.replace('Summary Insights', '').trim();
@@ -225,7 +454,45 @@ function App() {
                 }
             } catch {}
         };
-        es.onerror = () => es.close();
+
+        // Resilience 10: exponential backoff reconnect with polling fallback
+        es.onerror = () => {
+            es.close();
+            sseRef.current = null;
+            const st = sessionStatusRef.current;
+            if (st !== 'recording' && st !== 'paused') return;
+
+            const MAX_SSE_RECONNECTS = 10;
+            if (sseReconnectRef.current >= MAX_SSE_RECONNECTS) {
+                // Fall back to polling every 30s after exhausting reconnects
+                const pollInterval = setInterval(async () => {
+                    const currentSt = sessionStatusRef.current;
+                    if (currentSt !== 'recording' && currentSt !== 'paused') {
+                        clearInterval(pollInterval);
+                        return;
+                    }
+                    try {
+                        const res = await axios.get(`/api/v1/lectures/${lectureIdRef.current}`);
+                        if (res.data.master_summary) setSummary(res.data.master_summary);
+                    } catch {}
+                }, 30000);
+                return;
+            }
+
+            sseReconnectRef.current += 1;
+            const delay = Math.min(1000 * sseReconnectRef.current, 10000);
+            setTimeout(() => {
+                const currentSt = sessionStatusRef.current;
+                if (currentSt === 'recording' || currentSt === 'paused') {
+                    connectSSE(id);
+                    // Catchup: fetch latest summary immediately after reconnect
+                    axios.get(`/api/v1/lectures/${id}`).then(res => {
+                        if (res.data.master_summary) setSummary(res.data.master_summary);
+                    }).catch(() => {});
+                }
+            }, delay);
+        };
+
         sseRef.current = es;
     };
 
@@ -257,6 +524,8 @@ function App() {
             setSearchQuery('');
             setSearchActive(false);
             setActivePanel('transcript');
+            setStudentQuestions([]);
+            setQuestionsOpen(true);
             prevSectionCountRef.current = 0;
             lastOverlapRef.current = '';
             setExplainPanel({ show: false, loading: false, data: null });
@@ -305,6 +574,19 @@ function App() {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
+            // Fix 6: recover from unexpected microphone disconnects
+            stream.getTracks().forEach(track => {
+                track.onended = () => {
+                    // If we stopped intentionally (pause/end), isRecordingRef is already false — ignore
+                    if (!isRecordingRef.current) return;
+                    showError('Microphone disconnected. Reconnecting…', 0);
+                    isRecordingRef.current = false;
+                    setSessionStatus('paused');
+                    stopAudioMonitoring();
+                    setTimeout(() => startRecording(targetId), 2000);
+                };
+            });
+
             stopAudioMonitoring();
             const AudioCtx = window.AudioContext || window.webkitAudioContext;
             audioContextRef.current = new AudioCtx();
@@ -317,6 +599,19 @@ function App() {
 
             const measuredFloor = await calibrateNoiseFloor(dataArray);
             let speechThreshold = Math.max(8, Math.min(60, measuredFloor * 2.5));
+
+            // Resilience 5: request screen wake lock so device doesn't sleep
+            await requestWakeLock();
+
+            // Resilience 7: create Web Worker for 12s tick — not throttled in background tabs
+            if (timerWorkerRef.current) {
+                timerWorkerRef.current.postMessage('stop');
+                timerWorkerRef.current.terminate();
+                timerWorkerRef.current = null;
+            }
+            timerWorkerRef.current = new Worker(
+                new URL('../workers/timerWorker.js', import.meta.url)
+            );
 
             const drawLoop = () => {
                 animFrameRef.current = requestAnimationFrame(drawLoop);
@@ -360,13 +655,21 @@ function App() {
                     if (isRecordingRef.current) startLoop();
                     else stream.getTracks().forEach(t => t.stop());
                 };
+                // Resilience 7: point worker tick at the current recorder instance
+                if (timerWorkerRef.current) {
+                    timerWorkerRef.current.onmessage = () => {
+                        if (recorder.state === 'recording') recorder.stop();
+                    };
+                }
                 recorder.start();
-                setTimeout(() => { if (recorder.state === 'recording') recorder.stop(); }, 12000);
+                // setTimeout replaced by timerWorker (not throttled in background tabs)
             };
 
             isRecordingRef.current = true;
             setSessionStatus('recording');
             startLoop();
+            // Start the 12s worker tick after the first recorder starts
+            timerWorkerRef.current?.postMessage('start');
         } catch (err) {
             setIsCalibrating(false);
             const reason = err.name === 'NotAllowedError'  ? 'Microphone access denied.'
@@ -377,11 +680,22 @@ function App() {
         }
     };
 
-    const uploadChunk = async (blob, targetId) => {
+    // Resilience 3: actual upload with 25s axios timeout + exponential backoff retry
+    // Resilience 4: measure round-trip latency to set connQuality
+    const uploadChunkWithRetry = async (blob, targetId, attempt = 0) => {
         const formData = new FormData();
         formData.append('file', new File([blob], 'chunk.webm', { type: 'audio/webm' }));
+        const start = Date.now();
         try {
-            const res = await axios.post(`/api/v1/live/${targetId}/chunk`, formData);
+            const res = await axios.post(
+                `/api/v1/live/${targetId}/chunk`,
+                formData,
+                { timeout: 25000 },
+            );
+            // Resilience 4: update connection quality from round-trip latency
+            const latency = Date.now() - start;
+            setConnQuality(latency > 8000 ? 'poor' : 'good');
+
             if (res.data.chunk_transcript) {
                 const rawText = res.data.chunk_transcript.trim();
                 const overlap = lastOverlapRef.current;
@@ -389,18 +703,47 @@ function App() {
                 setTranscript(prev => [...prev, { id: Date.now(), text: displayText }]);
                 lastOverlapRef.current = getLastTwoSentences(rawText);
             }
-            if (res.data.language && !detectedLanguage) {
-                setDetectedLanguage(res.data.language);
+            // Use functional updates — safe in stale closures (online/offline drain effect)
+            if (res.data.language) setDetectedLanguage(prev => prev || res.data.language);
+            if (res.data.topic)    setDetectedTopic(prev => prev || res.data.topic);
+            if (res.data.nast?.composite != null) setNastScore(res.data.nast.composite);
+            if (res.data.cif_type === 'STUDENT_QUESTION' && res.data.cif_confidence > 0.75) {
+                if (res.data.chunk_transcript) {
+                    setStudentQuestions(prev => [...prev, {
+                        id: Date.now(),
+                        text: res.data.chunk_transcript.trim(),
+                    }]);
+                }
             }
-            if (res.data.topic && !detectedTopic) {
-                setDetectedTopic(res.data.topic);
+        } catch (err) {
+            if (attempt < 2 && navigator.onLine) {
+                await new Promise(r => setTimeout(r, (attempt + 1) * 2000));
+                return uploadChunkWithRetry(blob, targetId, attempt + 1);
             }
-            if (res.data.nast?.composite != null) {
-                setNastScore(res.data.nast.composite);
+            if (!navigator.onLine) {
+                // Re-buffer on failure when offline (will drain on next 'online' event)
+                if (chunkBufferRef.current.length >= 5) chunkBufferRef.current.shift();
+                chunkBufferRef.current.push({ blob, targetId });
+                setChunkBufferCount(chunkBufferRef.current.length);
+            } else {
+                showError('Upload failed after 3 attempts — small gap may exist', 3000);
             }
-        } catch {
-            showError('A chunk failed to upload — transcription may have gaps.');
         }
+    };
+
+    // Resilience 1: buffer offline chunks; Resilience 2: serialize uploads via queue
+    const uploadChunk = (blob, targetId) => {
+        if (!navigator.onLine) {
+            // Buffer up to 5 chunks while offline; drop oldest beyond that
+            if (chunkBufferRef.current.length >= 5) chunkBufferRef.current.shift();
+            chunkBufferRef.current.push({ blob, targetId });
+            setChunkBufferCount(chunkBufferRef.current.length);
+            return;
+        }
+        // Chain onto queue — next upload waits for previous to finish
+        uploadQueueRef.current = uploadQueueRef.current
+            .then(() => uploadChunkWithRetry(blob, targetId))
+            .catch(() => {});
     };
 
     const pauseSession = () => {
@@ -409,12 +752,22 @@ function App() {
         stopAudioMonitoring();
         silentChunksRef.current = 0;
         setIsCalibrating(false);
+        // Resilience 7: stop worker tick
+        if (timerWorkerRef.current) {
+            timerWorkerRef.current.postMessage('stop');
+            timerWorkerRef.current.terminate();
+            timerWorkerRef.current = null;
+        }
+        // Resilience 5: release wake lock on pause
+        releaseWakeLock();
         setSessionStatus('paused');
     };
 
     const endSession = async () => {
-        pauseSession();
+        pauseSession(); // stops worker + releases wake lock
         disconnectSSE();
+        sseReconnectRef.current = 0;
+        sessionStorage.removeItem('neurativo_session');
         setSessionStatus('ended');
         try { await axios.post(`/api/v1/live/${lectureId}/end`); } catch {}
     };
@@ -433,20 +786,39 @@ function App() {
 
     const handleExportPDF = async () => {
         if (!lectureId) return;
-        setExportModal({ show: true, progress: 10, status: 'Compiling lecture report...' });
+        const STAGES = [
+            { pct:  8, msg: 'Compiling lecture report...' },
+            { pct: 18, msg: 'Analysing transcript...' },
+            { pct: 30, msg: 'Building section summaries...' },
+            { pct: 44, msg: 'Generating executive summary...' },
+            { pct: 57, msg: 'Enriching glossary...' },
+            { pct: 68, msg: 'Preparing Q&A review...' },
+            { pct: 78, msg: 'Rendering PDF layout...' },
+            { pct: 88, msg: 'Applying cover page...' },
+            { pct: 97, msg: 'Finalising document...' },
+        ];
+        let stageIdx = 0;
+        setExportModal({ show: true, progress: STAGES[0].pct, status: STAGES[0].msg, error: null });
+        const interval = setInterval(() => {
+            stageIdx = Math.min(stageIdx + 1, STAGES.length - 1);
+            setExportModal(p => ({ ...p, progress: STAGES[stageIdx].pct, status: STAGES[stageIdx].msg }));
+        }, 2500);
         try {
             const res = await axios.get(`/api/v1/lectures/${lectureId}/export/pdf`, { responseType: 'blob' });
-            setExportModal({ show: true, progress: 100, status: 'Ready!' });
+            clearInterval(interval);
+            setExportModal({ show: true, progress: 100, status: 'Your report is ready!', error: null });
             setTimeout(() => {
                 const url = window.URL.createObjectURL(new Blob([res.data]));
                 const a = document.createElement('a');
                 a.href = url;
                 a.setAttribute('download', 'Neurativo_Report.pdf');
                 a.click();
-                setExportModal(p => ({ ...p, show: false }));
-            }, 800);
-        } catch {
-            setExportModal({ show: true, progress: 0, status: 'Export failed. Try again.' });
+                setTimeout(() => setExportModal(p => ({ ...p, show: false })), 1500);
+            }, 400);
+        } catch (err) {
+            clearInterval(interval);
+            const msg = err?.response?.data?.detail || err?.message || 'Unknown error';
+            setExportModal({ show: true, progress: -1, status: 'Export failed', error: msg });
         }
     };
 
@@ -498,6 +870,26 @@ function App() {
     //  IDLE: Welcome Screen
     // ═══════════════════════════════════════════
 
+    // Resilience 6: session recovery flow
+    const handleResumeSession = async () => {
+        const { lectureId: savedId, detectedLanguage: savedLang, detectedTopic: savedTopic } = recoverySession;
+        setRecoverySession(null);
+        setLectureId(savedId);
+        setRecordingSeconds(recoverySession.recordingSeconds || 0);
+        if (savedLang) setDetectedLanguage(savedLang);
+        if (savedTopic) setDetectedTopic(savedTopic);
+        try {
+            const res = await axios.get(`/api/v1/lectures/${savedId}`);
+            if (res.data.transcript) {
+                setTranscript([{ id: Date.now(), text: res.data.transcript }]);
+            }
+            const masterSummary = res.data.master_summary || res.data.summary;
+            if (masterSummary) setSummary(masterSummary);
+        } catch {}
+        connectSSE(savedId);
+        setSessionStatus('paused'); // user must manually resume — mic requires user gesture
+    };
+
     if (sessionStatus === 'idle') {
         return (
             <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 relative overflow-hidden">
@@ -507,6 +899,35 @@ function App() {
                     <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-indigo-400/10 rounded-full blur-3xl animate-bg-pulse" style={{ animationDelay: '1.5s' }} />
                     <div className="absolute top-2/3 left-1/2 w-64 h-64 bg-teal-400/8 rounded-full blur-3xl animate-bg-pulse" style={{ animationDelay: '3s' }} />
                 </div>
+
+                {/* Resilience 6: Session recovery modal */}
+                {recoverySession && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in">
+                        <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4">
+                            <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center mb-4">
+                                <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                                </svg>
+                            </div>
+                            <h2 className="text-[15px] font-bold text-slate-900 mb-1">Session interrupted</h2>
+                            <p className="text-[13px] text-slate-500 mb-5 leading-relaxed">
+                                You have an active session from before. Would you like to resume where you left off?
+                            </p>
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={handleResumeSession}
+                                    className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-[13px] font-bold rounded-xl transition-colors">
+                                    Resume Session
+                                </button>
+                                <button
+                                    onClick={() => { setRecoverySession(null); sessionStorage.removeItem('neurativo_session'); }}
+                                    className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[13px] font-semibold rounded-xl transition-colors">
+                                    Start New
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {errorMessage && (
                     <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 bg-red-600 text-white text-sm font-semibold px-5 py-2.5 rounded-xl shadow-lg flex items-center gap-3 animate-fade-in">
@@ -599,6 +1020,13 @@ function App() {
     return (
         <div className="h-screen bg-white flex flex-col overflow-hidden selection:bg-blue-100">
 
+            {/* ── Resilience 1: Offline Banner ── */}
+            {!isOnline && (sessionStatus === 'recording' || sessionStatus === 'paused') && (
+                <div className="bg-amber-400 text-amber-900 text-xs font-semibold px-4 py-1.5 text-center shrink-0 z-40">
+                    No connection — recording continues locally.{chunkBufferCount > 0 ? ` ${chunkBufferCount} chunk${chunkBufferCount > 1 ? 's' : ''} queued.` : ''}
+                </div>
+            )}
+
             {/* ── Error Toast ── */}
             {errorMessage && (
                 <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[200] bg-red-600 text-white text-sm font-semibold px-5 py-2.5 rounded-xl shadow-lg animate-fade-in flex items-center gap-3">
@@ -629,6 +1057,15 @@ function App() {
                         <div className="flex items-center gap-2 text-sm font-semibold text-red-600">
                             <div className="w-2 h-2 rounded-full bg-red-500 pulse-red" />
                             <span className="font-mono text-[13px]">{formatTime(recordingSeconds)}</span>
+                            {/* Resilience 4: connection quality dot */}
+                            <div
+                                className={`w-2 h-2 rounded-full shrink-0 ${
+                                    connQuality === 'offline' ? 'bg-red-400' :
+                                    connQuality === 'poor'    ? 'bg-amber-400' :
+                                    'bg-green-400'
+                                }`}
+                                title={connQuality === 'offline' ? 'Offline' : connQuality === 'poor' ? 'Poor connection' : 'Good connection'}
+                            />
                             <span className="text-[11px] font-normal text-red-400 uppercase tracking-wider hidden md:inline">Live</span>
                         </div>
                     )}
@@ -849,81 +1286,223 @@ function App() {
 
                     {/* ── Summary Tab ── */}
                     {activeTab === 'summary' && (
-                        <div onMouseUp={handleTextSelection} className="flex-1 overflow-y-auto">
-                            {summary ? (
-                                <div className={`p-4 space-y-3 transition-opacity duration-500 ${isSummaryUpdating ? 'opacity-40' : 'opacity-100'}`}>
-                                    {isSummaryUpdating && (
-                                        <div className="flex items-center gap-2 text-blue-600 text-xs font-semibold px-1 py-0.5 animate-fade-in">
-                                            <div className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-                                            Updating summary...
-                                        </div>
+                        <div onMouseUp={handleTextSelection} className="flex-1 flex flex-col overflow-hidden">
+
+                            {/* Panel sub-header */}
+                            <div className="h-9 px-3 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
+                                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Summary</span>
+                                <div className="flex items-center gap-1 font-mono text-[11px] text-slate-400">
+                                    {(() => {
+                                        const count = parseSummary(summary).length;
+                                        return <span>{count} section{count !== 1 ? 's' : ''}</span>;
+                                    })()}
+                                    {sessionStatus === 'recording' && (
+                                        <span className="flex items-center gap-1 ml-1">
+                                            ·&nbsp;<span className="inline-block w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />&nbsp;live
+                                        </span>
                                     )}
-                                    {summary.split('## ').filter(s => s.trim()).map((section, idx) => {
-                                        const lines = section.split('\n');
-                                        const title = lines[0].trim();
-                                        const content = lines.slice(1).join('\n');
-                                        const isNew = idx === newSectionIdx;
-                                        return (
-                                            <div key={idx}
-                                                className={`rounded-xl border overflow-hidden animate-slide-up ${isNew ? 'section-new' : 'border-slate-100'}`}
-                                                style={{ animationDelay: `${idx * 0.05}s` }}>
-                                                <div className="px-4 py-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-                                                    <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">{title}</h3>
-                                                    <button
-                                                        onClick={() => handleCopySection(content.trim(), idx)}
-                                                        title="Copy section"
-                                                        className="w-6 h-6 flex items-center justify-center text-slate-400 hover:text-slate-700 rounded transition-colors shrink-0">
-                                                        {copiedSectionIdx === idx ? (
-                                                            <svg className="w-3.5 h-3.5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                                                            </svg>
-                                                        ) : (
-                                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                                            </svg>
+                                </div>
+                            </div>
+
+                            {/* Scrollable content */}
+                            <div className="flex-1 overflow-y-auto">
+                                {summary ? (
+                                    <div className="p-3 space-y-2.5">
+                                        {parseSummary(summary).map((sec, idx) => {
+                                            const isNew = idx === newSectionIdx;
+                                            return (
+                                                <div key={idx}
+                                                    className="summary-card-enter overflow-hidden"
+                                                    style={{
+                                                        border: '0.5px solid #e2e8f0',
+                                                        borderRadius: isNew ? '0 12px 12px 0' : '12px',
+                                                        boxShadow: isNew ? 'inset 3px 0 0 #2563eb' : 'none',
+                                                        transition: 'box-shadow 600ms ease, border-radius 600ms ease',
+                                                    }}>
+
+                                                    {/* Card header */}
+                                                    <div className="px-3 py-2 bg-slate-50 border-b border-slate-100 flex items-center gap-2">
+                                                        <span className="text-[11px] font-mono text-slate-400 shrink-0 select-none">
+                                                            {String(idx + 1).padStart(2, '0')}
+                                                        </span>
+                                                        <span className="flex-1 text-[12px] font-medium text-slate-700 leading-tight min-w-0 truncate">
+                                                            {sec.title}
+                                                        </span>
+                                                        {isNew && (
+                                                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 shrink-0 select-none">
+                                                                new
+                                                            </span>
                                                         )}
-                                                    </button>
-                                                </div>
-                                                <div className="px-4 py-3 space-y-2">
-                                                    {content.split('\n').filter(l => l.trim()).map((line, li) => {
-                                                        const isBullet = line.startsWith('- ');
-                                                        const parts = line.split('**');
-                                                        return (
-                                                            <div key={li} className={`flex gap-2 ${isBullet ? 'items-start' : ''}`}>
-                                                                {isBullet && <div className="w-1 h-1 rounded-full bg-blue-400 mt-[7px] shrink-0" />}
-                                                                <p className="text-[13px] text-slate-600 leading-relaxed">
-                                                                    {parts.map((t, ti) =>
-                                                                        ti % 2 === 1
-                                                                            ? <strong key={ti} className="text-slate-800 font-semibold">{t}</strong>
-                                                                            : t.replace('- ', '')
-                                                                    )}
-                                                                </p>
+                                                        <button
+                                                            onClick={() => handleCopySection(
+                                                                [sec.lead_sentence, sec.prose, ...sec.concepts, ...sec.examples].filter(Boolean).join(' '),
+                                                                idx
+                                                            )}
+                                                            title="Copy section"
+                                                            className="w-5 h-5 flex items-center justify-center text-slate-400 hover:text-slate-700 rounded transition-colors shrink-0">
+                                                            {copiedSectionIdx === idx ? (
+                                                                <svg className="w-3 h-3 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                                                                </svg>
+                                                            ) : (
+                                                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                                                </svg>
+                                                            )}
+                                                        </button>
+                                                    </div>
+
+                                                    {/* Card body */}
+                                                    <div className="px-3 py-3">
+                                                        {/* Lead sentence — most important line */}
+                                                        {sec.lead_sentence && (
+                                                            <p className="text-[13px] font-medium text-slate-900 leading-[1.6] mb-2">
+                                                                {sec.lead_sentence}
+                                                            </p>
+                                                        )}
+
+                                                        {/* Highlight block */}
+                                                        {sec.highlights.length > 0 && (
+                                                            <div className="mb-2.5"
+                                                                style={{ borderLeft: '3px solid #F59E0B', background: '#FAEEDA', borderRadius: '0 6px 6px 0', padding: '8px 12px' }}>
+                                                                {sec.highlights.map((h, hi) => (
+                                                                    <p key={hi} className="text-[12px] italic leading-relaxed" style={{ color: '#633806' }}>{h}</p>
+                                                                ))}
                                                             </div>
-                                                        );
-                                                    })}
+                                                        )}
+
+                                                        {/* Prose */}
+                                                        {sec.prose && (
+                                                            <p className="text-[12px] text-slate-500 leading-[1.7] mb-2.5">
+                                                                {sec.prose}
+                                                            </p>
+                                                        )}
+
+                                                        {/* Concept pills */}
+                                                        {sec.concepts.length > 0 && (
+                                                            <div className="mb-2">
+                                                                <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Key concepts</p>
+                                                                <div className="concepts-row">
+                                                                    {sec.concepts.map((c, ci) => (
+                                                                        <span key={ci} className="concept-pill">{c}</span>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Example list */}
+                                                        {sec.examples.length > 0 && (
+                                                            <div>
+                                                                <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Examples</p>
+                                                                <div className="pl-2.5" style={{ borderLeft: '2px solid #5DCAA5' }}>
+                                                                    {sec.examples.map((ex, ei) => (
+                                                                        <p key={ei} className="text-[11px] text-slate-500 leading-relaxed">
+                                                                            <span style={{ color: '#1D9E75' }}>→ </span>{ex}
+                                                                        </p>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                        <p className="text-[11px] text-slate-400 text-center py-2 italic">
+                                            Select any text to get an AI explanation
+                                        </p>
+
+                                        {/* ── Questions Raised (CIF-detected) ── */}
+                                        {studentQuestions.length > 0 && (
+                                            <div className="mt-1 rounded-xl overflow-hidden" style={{ border: '0.5px solid #e2e8f0' }}>
+                                                {/* Collapsible header */}
+                                                <button
+                                                    onClick={() => setQuestionsOpen(o => !o)}
+                                                    className="w-full px-3 py-2 bg-amber-50 border-b border-amber-100 flex items-center gap-2 hover:bg-amber-100/60 transition-colors">
+                                                    <svg className="w-3.5 h-3.5 text-amber-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                    </svg>
+                                                    <span className="flex-1 text-left text-[11px] font-semibold text-amber-700 uppercase tracking-wider">
+                                                        Questions Raised
+                                                    </span>
+                                                    <span className="text-[10px] font-mono text-amber-500 mr-1">{studentQuestions.length}</span>
+                                                    <svg
+                                                        className={`w-3 h-3 text-amber-400 transition-transform ${questionsOpen ? 'rotate-180' : ''}`}
+                                                        fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                    </svg>
+                                                </button>
+                                                {/* Question cards */}
+                                                {questionsOpen && (
+                                                    <div className="divide-y divide-slate-100">
+                                                        {studentQuestions.map((q, qi) => (
+                                                            <div key={q.id} className="px-3 py-2.5 bg-white animate-fade-in">
+                                                                <div className="flex items-start gap-2">
+                                                                    <span className="text-[10px] font-mono text-amber-400 pt-[2px] shrink-0 select-none">
+                                                                        Q{qi + 1}
+                                                                    </span>
+                                                                    <p className="text-[12px] text-slate-600 leading-relaxed">{q.text}</p>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    /* Skeleton empty state — 3 shimmer placeholder cards */
+                                    <div className="p-3 space-y-2.5">
+                                        {[110, 80, 95].map((titleW, i) => (
+                                            <div key={i} className="rounded-xl overflow-hidden" style={{ border: '0.5px solid #e2e8f0' }}>
+                                                <div className="px-3 py-2.5 bg-slate-50 border-b border-slate-100 flex items-center gap-2.5">
+                                                    <div className="w-6 h-2.5 rounded skeleton-shimmer shrink-0" />
+                                                    <div className="h-2.5 rounded skeleton-shimmer" style={{ width: `${titleW}px` }} />
+                                                </div>
+                                                <div className="px-3 py-3 space-y-2">
+                                                    <div className="h-3 rounded skeleton-shimmer w-full" />
+                                                    <div className="h-2.5 rounded skeleton-shimmer w-5/6" />
+                                                    <div className="h-2.5 rounded skeleton-shimmer" style={{ width: `${60 + i * 10}%` }} />
                                                 </div>
                                             </div>
-                                        );
-                                    })}
-                                    <p className="text-[11px] text-slate-400 text-center py-2 italic">
-                                        Select any text to get an AI explanation
-                                    </p>
-                                </div>
-                            ) : (
-                                <div className="h-full flex flex-col items-center justify-center p-8 text-center gap-3">
-                                    <div className="w-12 h-12 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center">
-                                        <svg className="w-5 h-5 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-                                        </svg>
-                                    </div>
-                                    <div>
-                                        <p className="text-sm font-medium text-slate-500">No summary yet</p>
-                                        <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                                            Summary builds after enough content<br />has been captured
+                                        ))}
+                                        <p className="text-[11px] text-slate-400 text-center py-1">
+                                            {sessionStatus === 'recording'
+                                                ? 'Summary builds after a few minutes of speech...'
+                                                : 'No summary yet'}
                                         </p>
+                                        {/* Questions Raised — also visible in skeleton state */}
+                                        {studentQuestions.length > 0 && (
+                                            <div className="rounded-xl overflow-hidden" style={{ border: '0.5px solid #e2e8f0' }}>
+                                                <button
+                                                    onClick={() => setQuestionsOpen(o => !o)}
+                                                    className="w-full px-3 py-2 bg-amber-50 border-b border-amber-100 flex items-center gap-2 hover:bg-amber-100/60 transition-colors">
+                                                    <svg className="w-3.5 h-3.5 text-amber-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                    </svg>
+                                                    <span className="flex-1 text-left text-[11px] font-semibold text-amber-700 uppercase tracking-wider">Questions Raised</span>
+                                                    <span className="text-[10px] font-mono text-amber-500 mr-1">{studentQuestions.length}</span>
+                                                    <svg className={`w-3 h-3 text-amber-400 transition-transform ${questionsOpen ? 'rotate-180' : ''}`}
+                                                        fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                    </svg>
+                                                </button>
+                                                {questionsOpen && (
+                                                    <div className="divide-y divide-slate-100">
+                                                        {studentQuestions.map((q, qi) => (
+                                                            <div key={q.id} className="px-3 py-2.5 bg-white animate-fade-in">
+                                                                <div className="flex items-start gap-2">
+                                                                    <span className="text-[10px] font-mono text-amber-400 pt-[2px] shrink-0 select-none">Q{qi + 1}</span>
+                                                                    <p className="text-[12px] text-slate-600 leading-relaxed">{q.text}</p>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
-                                </div>
-                            )}
+                                )}
+                            </div>
                         </div>
                     )}
 
@@ -1007,31 +1586,132 @@ function App() {
                                 <div className="h-full flex items-center justify-center">
                                     <div className="w-6 h-6 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
                                 </div>
-                            ) : statsData ? (
-                                <div className="space-y-4">
-                                    <div className="grid grid-cols-2 gap-2.5">
-                                        {[
-                                            { label: 'Words', value: statsData.word_count?.toLocaleString() ?? '—' },
-                                            { label: 'Chunks', value: statsData.total_chunks ?? transcript.length ?? '—' },
-                                            { label: 'Sections', value: statsData.total_sections ?? '—' },
-                                            { label: 'Duration', value: statsData.total_duration_seconds ? formatTime(statsData.total_duration_seconds) : '—' },
-                                            { label: 'Language', value: statsData.language ? (LANGUAGE_NAMES[statsData.language] || statsData.language.toUpperCase()) : (detectedLanguage ? (LANGUAGE_NAMES[detectedLanguage] || detectedLanguage.toUpperCase()) : '—') },
-                                            { label: 'Topic', value: statsData.topic || detectedTopic || '—' },
-                                            { label: 'Compression', value: statsData.compression_ratio ? `${(statsData.compression_ratio * 100).toFixed(0)}%` : '—' },
-                                            { label: 'N.A.S.T.', value: nastScore != null ? nastScore.toFixed(2) : (statsData.nast_score ? Number(statsData.nast_score).toFixed(2) : '—') },
-                                        ].map(({ label, value }) => (
-                                            <div key={label} className="bg-slate-50 border border-slate-100 rounded-xl p-3.5">
-                                                <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">{label}</div>
-                                                <div className="text-[15px] font-bold text-slate-900 font-mono capitalize truncate">{value}</div>
-                                            </div>
-                                        ))}
+                            ) : statsData ? (() => {
+                                const lec = statsData._lecture || {};
+                                const totalChunks  = statsData.total_chunks ?? transcript.length ?? 0;
+                                const totalSecs    = totalChunks * 12;
+                                const wordCount    = statsData.word_count ?? 0;
+                                const avgChunkWords = totalChunks > 0 ? Math.round(wordCount / totalChunks) : 0;
+                                const sections     = statsData.total_sections ?? 0;
+                                const compressionPct = statsData.compression_ratio
+                                    ? Math.round((1 - statsData.compression_ratio) * 100)
+                                    : null;
+                                const topicVal   = statsData.topic || detectedTopic || null;
+                                const langCode   = statsData.language || detectedLanguage || null;
+                                const langVal    = langCode ? (LANGUAGE_NAMES[langCode] || langCode.toUpperCase()) : null;
+                                // Summary-derived stats from master_summary
+                                const masterSummary = lec.master_summary || summary || '';
+                                const summaryWords  = masterSummary ? masterSummary.split(/\s+/).length : 0;
+                                const summarySecCount = masterSummary ? masterSummary.split('## ').filter(s => s.trim()).length : 0;
+                                const readingMins   = summaryWords > 0 ? Math.ceil(summaryWords / 238) : null;
+                                const coveragePct   = wordCount > 0 && summaryWords > 0
+                                    ? Math.min(100, Math.round((summaryWords / wordCount) * 100))
+                                    : null;
+                                // N.A.S.T. score
+                                const nastVal = nastScore != null ? nastScore : (statsData.nast_score ? Number(statsData.nast_score) : null);
+
+                                const StatCard = ({ label, value, sub }) => (
+                                    <div className="bg-slate-50 border border-slate-100 rounded-xl p-3">
+                                        <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">{label}</div>
+                                        <div className="text-[15px] font-bold text-slate-900 font-mono truncate">{value ?? '—'}</div>
+                                        {sub && <div className="text-[10px] text-slate-400 mt-0.5">{sub}</div>}
                                     </div>
-                                    <button onClick={() => { setStatsData(null); setStatsLoading(true); axios.get(`/api/v1/lectures/${lectureId}/analytics`).then(r => setStatsData(r.data)).catch(() => {}).finally(() => setStatsLoading(false)); }}
-                                        className="w-full py-2 text-[12px] text-slate-400 hover:text-slate-600 transition-colors border border-slate-100 rounded-xl hover:bg-slate-50">
-                                        Refresh
-                                    </button>
-                                </div>
-                            ) : (
+                                );
+
+                                return (
+                                    <div className="space-y-4">
+                                        {/* Row 1: Recording stats */}
+                                        <div>
+                                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Recording</p>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <StatCard label="Duration" value={totalSecs ? formatTime(totalSecs) : '—'} />
+                                                <StatCard label="Words Spoken" value={wordCount ? wordCount.toLocaleString() : '—'} />
+                                                <StatCard label="Audio Chunks" value={totalChunks || '—'} sub="12 s each" />
+                                                <StatCard label="Avg Chunk" value={avgChunkWords ? `${avgChunkWords} w` : '—'} sub="words per chunk" />
+                                            </div>
+                                        </div>
+
+                                        {/* Row 2: Processing stats */}
+                                        <div>
+                                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Processing</p>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <StatCard label="Sections" value={sections || '—'} />
+                                                <StatCard label="Compression" value={compressionPct != null ? `${compressionPct}%` : '—'} sub="content reduced" />
+                                                <div className="bg-slate-50 border border-slate-100 rounded-xl p-3">
+                                                    <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Topic</div>
+                                                    {topicVal
+                                                        ? <span className="inline-block px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[11px] font-semibold border border-blue-100 capitalize">{topicVal}</span>
+                                                        : <span className="text-[15px] font-bold text-slate-900 font-mono">—</span>
+                                                    }
+                                                </div>
+                                                <div className="bg-slate-50 border border-slate-100 rounded-xl p-3">
+                                                    <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Language</div>
+                                                    {langVal
+                                                        ? <span className="inline-block px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-[11px] font-semibold border border-indigo-100">{langVal}</span>
+                                                        : <span className="text-[15px] font-bold text-slate-900 font-mono">—</span>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Row 3: Summary stats (only if master_summary exists) */}
+                                        {summarySecCount > 0 && (
+                                            <div>
+                                                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Summary</p>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <StatCard label="Summary Sections" value={summarySecCount} />
+                                                    <StatCard label="Reading Time" value={readingMins ? `${readingMins} min` : '—'} />
+                                                    <StatCard label="Summary Words" value={summaryWords ? summaryWords.toLocaleString() : '—'} />
+                                                    <StatCard label="Coverage" value={coveragePct != null ? `${coveragePct}%` : '—'} sub="summary / transcript" />
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* N.A.S.T. explainer */}
+                                        {nastVal != null && (
+                                            <div className="bg-teal-50 border border-teal-100 rounded-xl p-4">
+                                                <div className="flex items-center justify-between mb-3">
+                                                    <div>
+                                                        <p className="text-[11px] font-bold text-teal-700 uppercase tracking-wider">N.A.S.T. Score</p>
+                                                        <p className="text-[10px] text-teal-600 mt-0.5">Novelty-Aware Section Trigger</p>
+                                                    </div>
+                                                    <span className="text-[22px] font-bold text-teal-700 font-mono">{nastVal.toFixed(2)}</span>
+                                                </div>
+                                                {[
+                                                    { label: 'Semantic Divergence', pct: Math.min(100, Math.round(nastVal * 100 * 0.9)), color: 'bg-teal-400', weight: '50%' },
+                                                    { label: 'Novelty Drift',        pct: Math.min(100, Math.round(nastVal * 100 * 0.75)), color: 'bg-teal-300', weight: '30%' },
+                                                    { label: 'Momentum',             pct: Math.min(100, Math.round(nastVal * 100 * 0.6)), color: 'bg-teal-200', weight: '20%' },
+                                                ].map(({ label, pct, color, weight }) => (
+                                                    <div key={label} className="mb-2 last:mb-0">
+                                                        <div className="flex items-center justify-between mb-0.5">
+                                                            <span className="text-[10px] text-teal-700 font-medium">{label}</span>
+                                                            <span className="text-[10px] text-teal-500">{weight}</span>
+                                                        </div>
+                                                        <div className="w-full bg-teal-100 h-1 rounded-full overflow-hidden">
+                                                            <div className={`h-full ${color} rounded-full transition-all`} style={{ width: `${pct}%` }} />
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                                <p className="text-[10px] text-teal-600 mt-3 leading-relaxed">
+                                                    Fires a new section when the composite score exceeds 0.55. Higher = more semantic novelty in the lecture flow.
+                                                </p>
+                                            </div>
+                                        )}
+
+                                        {/* Refresh */}
+                                        <button onClick={() => {
+                                            setStatsData(null); setStatsLoading(true);
+                                            Promise.all([
+                                                axios.get(`/api/v1/lectures/${lectureId}/analytics`),
+                                                axios.get(`/api/v1/lectures/${lectureId}`).catch(() => ({ data: {} })),
+                                            ]).then(([a, l]) => setStatsData({ ...a.data, _lecture: l.data }))
+                                              .catch(() => {}).finally(() => setStatsLoading(false));
+                                        }} className="w-full py-2 text-[12px] text-slate-400 hover:text-slate-600 transition-colors border border-slate-100 rounded-xl hover:bg-slate-50">
+                                            Refresh
+                                        </button>
+                                    </div>
+                                );
+                            })() : (
                                 <div className="h-full flex flex-col items-center justify-center text-center gap-3">
                                     <div className="w-12 h-12 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center">
                                         <svg className="w-5 h-5 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1235,35 +1915,74 @@ function App() {
             {/* ── Export Modal ── */}
             {exportModal.show && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-950/50 backdrop-blur-md animate-fade-in">
-                    <div className="bg-white w-full max-w-sm rounded-2xl p-8 shadow-2xl text-center animate-slide-up border border-slate-100">
-                        <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-5">
-                            {exportModal.progress === 100 ? (
-                                <svg className="w-7 h-7 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                                </svg>
-                            ) : exportModal.progress === 0 ? (
-                                <svg className="w-7 h-7 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                            ) : (
-                                <div className="w-7 h-7 border-[3px] border-blue-100 border-t-blue-600 rounded-full animate-spin" />
-                            )}
+                    <div className="bg-white w-full max-w-sm rounded-2xl p-8 shadow-2xl animate-slide-up border border-slate-100">
+                        {/* Icon row */}
+                        <div className="flex items-center justify-center mb-5">
+                            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center
+                                ${exportModal.progress === 100 ? 'bg-emerald-50' : exportModal.progress === -1 ? 'bg-red-50' : 'bg-blue-50'}`}>
+                                {exportModal.progress === 100 ? (
+                                    <svg className="w-7 h-7 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                                    </svg>
+                                ) : exportModal.progress === -1 ? (
+                                    <svg className="w-7 h-7 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                ) : (
+                                    <div className="w-7 h-7 border-[3px] border-blue-100 border-t-blue-600 rounded-full animate-spin" />
+                                )}
+                            </div>
                         </div>
-                        <h3 className="text-[17px] font-bold text-slate-900 mb-1 font-heading">
-                            {exportModal.progress === 100 ? 'Export Ready' : exportModal.progress === 0 ? 'Export Failed' : 'Generating PDF'}
+
+                        {/* Title + status */}
+                        <h3 className="text-[17px] font-bold text-slate-900 mb-1 font-heading text-center">
+                            {exportModal.progress === 100 ? 'Export Ready' : exportModal.progress === -1 ? 'Export Failed' : 'Generating PDF'}
                         </h3>
-                        <p className="text-slate-400 text-sm mb-6">{exportModal.status}</p>
-                        {exportModal.progress > 0 && (
-                            <div className="w-full bg-slate-100 h-1 rounded-full overflow-hidden">
-                                <div className="h-full bg-blue-600 transition-all duration-500 rounded-full"
-                                    style={{ width: `${exportModal.progress}%` }} />
+                        <p className="text-slate-400 text-sm text-center mb-5">{exportModal.status}</p>
+
+                        {/* Progress bar — shown while in-progress */}
+                        {exportModal.progress > 0 && exportModal.progress < 100 && (
+                            <div className="mb-3">
+                                <div className="flex items-center justify-between mb-1.5">
+                                    <span className="text-[11px] text-slate-400 font-medium">Progress</span>
+                                    <span className="text-[13px] font-bold text-slate-700 font-mono">{exportModal.progress}%</span>
+                                </div>
+                                <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                                    <div className="h-full bg-blue-600 transition-all duration-700 ease-out rounded-full"
+                                        style={{ width: `${exportModal.progress}%` }} />
+                                </div>
                             </div>
                         )}
-                        {exportModal.progress === 0 && (
-                            <button onClick={() => setExportModal(p => ({ ...p, show: false }))}
-                                className="mt-4 text-sm text-slate-500 hover:text-slate-700 transition-colors">
-                                Dismiss
-                            </button>
+
+                        {/* Success: full bar */}
+                        {exportModal.progress === 100 && (
+                            <div className="mb-4">
+                                <div className="w-full bg-emerald-100 h-1.5 rounded-full overflow-hidden">
+                                    <div className="h-full bg-emerald-500 w-full rounded-full" />
+                                </div>
+                                <p className="text-[11px] text-emerald-600 font-medium text-center mt-2">Download starting automatically...</p>
+                            </div>
+                        )}
+
+                        {/* Failure: error detail + retry */}
+                        {exportModal.progress === -1 && (
+                            <div className="mt-1 space-y-3">
+                                {exportModal.error && (
+                                    <div className="bg-red-50 border border-red-100 rounded-xl px-3.5 py-2.5 text-xs text-red-600 font-mono break-all">
+                                        {exportModal.error}
+                                    </div>
+                                )}
+                                <div className="flex gap-2">
+                                    <button onClick={handleExportPDF}
+                                        className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition-colors">
+                                        Try Again
+                                    </button>
+                                    <button onClick={() => setExportModal(p => ({ ...p, show: false }))}
+                                        className="flex-1 py-2 border border-slate-200 text-slate-500 hover:text-slate-700 text-sm font-medium rounded-xl transition-colors">
+                                        Dismiss
+                                    </button>
+                                </div>
+                            </div>
                         )}
                     </div>
                 </div>

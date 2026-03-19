@@ -1,4 +1,5 @@
 import asyncio
+import httpx
 from openai import OpenAI
 from fastapi import UploadFile, HTTPException
 from app.core.config import settings
@@ -14,7 +15,12 @@ LANGUAGE_NAMES = {
     "tr": "Turkish", "uk": "Ukrainian", "ur": "Urdu", "vi": "Vietnamese",
 }
 
-client = OpenAI(api_key=settings.OPENAI_API_KEY) if settings.OPENAI_API_KEY else None
+# Resilience 9: granular timeout — 5s to connect, 30s for response body
+# Prevents Whisper/GPT calls from hanging indefinitely on network stalls
+client = OpenAI(
+    api_key=settings.OPENAI_API_KEY,
+    timeout=httpx.Timeout(30.0, connect=5.0),
+) if settings.OPENAI_API_KEY else None
 
 
 async def transcribe_audio(file: UploadFile) -> tuple[str, str]:

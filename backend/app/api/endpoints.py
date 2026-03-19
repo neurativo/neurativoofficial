@@ -5,7 +5,9 @@ from fastapi import APIRouter, BackgroundTasks, UploadFile, File, HTTPException
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 import numpy as np
+from openai import OpenAI
 
+from app.core.config import settings
 from app.services.openai_service import transcribe_audio
 from app.services.explanation_service import generate_explanation
 from app.services.qa_service import answer_lecture_question
@@ -17,6 +19,7 @@ from app.services.summarization_service import (
     generate_master_summary,
 )
 from app.services.embedding_service import get_embeddings, cosine_similarity
+from app.services.cif_service import classify_chunk
 from app.services.supabase_service import (
     save_lecture,
     create_lecture,
@@ -31,6 +34,7 @@ from app.services.supabase_service import (
     create_lecture_section,
     get_section_summaries,
     get_latest_section_end_index,
+    get_latest_section_count,
     get_unsummarized_chunks,
     end_live_session,
     update_lecture_analytics,
@@ -41,6 +45,10 @@ from app.services.supabase_service import (
     get_cached_embeddings,
     save_embeddings_cache,
     get_lecture_transcript,
+    get_client,
+    get_recent_lectures,
+    update_lecture_title,
+    save_student_question,
 )
 
 
@@ -127,12 +135,12 @@ def should_trigger_section(pending_chunks: list) -> tuple:
 
     debug = {
         "chunks":     n,
-        "divergence": round(divergence_score, 3),
-        "drift":      round(drift_score, 3),
-        "momentum":   round(momentum_score, 3),
-        "composite":  round(composite, 3),
+        "divergence": round(float(divergence_score), 3),
+        "drift":      round(float(drift_score), 3),
+        "momentum":   round(float(momentum_score), 3),
+        "composite":  round(float(composite), 3),
         "threshold":  TRIGGER_THRESHOLD,
-        "triggered":  should_fire,
+        "triggered":  bool(should_fire),
     }
     print(f"[N.A.S.T.] {debug}")
     return should_fire, debug
@@ -151,6 +159,17 @@ class ExplainRequest(BaseModel):
 
 
 router = APIRouter()
+
+# Fix 4: Per-lecture asyncio locks prevent two overlapping chunks for the same
+# lecture from racing through transcription + transcript-append simultaneously.
+_lecture_locks: dict[str, asyncio.Lock] = {}
+
+
+def _get_lecture_lock(lecture_id: str) -> asyncio.Lock:
+    """Returns (creating if needed) the asyncio.Lock for a given lecture."""
+    if lecture_id not in _lecture_locks:
+        _lecture_locks[lecture_id] = asyncio.Lock()
+    return _lecture_locks[lecture_id]
 
 
 # =============================================================================
@@ -209,49 +228,192 @@ def start_live_session():
         raise HTTPException(status_code=500, detail=f"Failed to start live session: {str(e)}")
 
 
+_openai_client = OpenAI(api_key=settings.OPENAI_API_KEY) if settings.OPENAI_API_KEY else None
+
+
+def _generate_lecture_title(chunk_text: str, topic: str | None) -> str:
+    """
+    Generates a short, specific lecture title from the first meaningful transcript chunk.
+    Called at chunk_idx == 1 when the title is still the default "Live Session".
+    """
+    if not _openai_client:
+        return "Live Session"
+    topic_hint = f" The topic appears to be: {topic}." if topic else ""
+    prompt = (
+        f"Generate a short, specific title (max 8 words) for a lecture based on this transcript excerpt.{topic_hint} "
+        "The title should describe what specific concepts or ideas are being taught. "
+        "Do NOT use generic titles like 'Lecture 1', 'Introduction', 'Overview', or 'Fundamentals'.\n\n"
+        f"Transcript excerpt:\n{chunk_text[:600]}\n\n"
+        "Respond with only the title, no quotes or punctuation at the end."
+    )
+    resp = _openai_client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=30,
+        temperature=0.3,
+    )
+    return resp.choices[0].message.content.strip().strip('"').strip("'")
+
+
 def _run_summarization(
     lecture_id: str,
     chunk_text: str,
     chunk_idx: int,
     language: str,
-    topic,          # str | None — value already stored in DB; passed to avoid re-fetch
+    topic,              # str | None — value already stored in DB; passed to avoid re-fetch
+    cif_type: str = "LECTURE",
+    cif_confidence: float = 1.0,
 ):
     """
-    Background worker: micro summary → N.A.S.T. → section + master summary.
-    Runs off the hot /chunk path so the endpoint returns after transcription.
+    Background worker: CIF routing → micro summary → N.A.S.T. → section + master summary.
+    Uses a fresh Supabase client per invocation (Fix 2 — thread safety).
+    Per-step try/except blocks (Fix 7) ensure one failure never silently drops
+    all later steps.
     FastAPI BackgroundTasks runs sync functions in the thread pool.
     """
+    # Fix 2: fresh client per invocation avoids "Server disconnected" errors
+    db = get_client()
+    if not db:
+        print(f"[BG] No DB client for lecture {lecture_id}")
+        return
+
+    # ── CIF Routing ───────────────────────────────────────────────────────────
+    # Only act on high-confidence non-lecture classifications (> 0.75).
+    # On confidence <= 0.75 for any type: fall through to normal summarization.
+    if cif_confidence > 0.75:
+        if cif_type == "OFF_TOPIC":
+            print(f"[BG][CIF] Dropped OFF_TOPIC chunk (lecture={lecture_id})")
+            return
+        if cif_type == "STUDENT_QUESTION":
+            try:
+                save_student_question(lecture_id, chunk_text)
+                print(f"[BG][CIF] Saved STUDENT_QUESTION for lecture={lecture_id}")
+            except Exception as sq_err:
+                print(f"[BG][CIF] save_student_question failed (non-fatal): {sq_err}")
+            return
+        # LECTURER_RESPONSE → treat as LECTURE, fall through
+
+    # ── Phase 1: micro summary ────────────────────────────────────────────────
     try:
-        # Phase 1: micro summary
         micro = generate_micro_summary(chunk_text, language=language)
-        create_lecture_chunk(lecture_id, chunk_text, micro, chunk_idx)
+        db.table("lecture_chunks").insert({
+            "lecture_id":    lecture_id,
+            "transcript":    chunk_text,
+            "micro_summary": micro,
+            "chunk_index":   chunk_idx,
+        }).execute()
+    except Exception as e:
+        print(f"[BG] Micro summary / chunk insert failed for lecture {lecture_id}: {e}")
+        return  # can't proceed without the micro summary row
 
-        # N.A.S.T.: section boundary detection
-        last_sec_end   = get_latest_section_end_index(lecture_id)
-        pending_chunks = get_unsummarized_chunks(lecture_id, last_sec_end)
+    # ── Auto-title at 2nd chunk ───────────────────────────────────────────────
+    if chunk_idx == 1:
+        try:
+            title_resp = db.table("lectures").select("title").eq("id", lecture_id).execute()
+            if title_resp.data and title_resp.data[0].get("title") == "Live Session":
+                new_title = _generate_lecture_title(chunk_text, topic)
+                db.table("lectures").update({"title": new_title}).eq("id", lecture_id).execute()
+                print(f"[BG] Auto-set title '{new_title}' for lecture {lecture_id}")
+        except Exception as e:
+            print(f"[BG] Title generation failed (non-fatal): {e}")
 
-        if pending_chunks:
-            trigger, nast_debug = should_trigger_section(pending_chunks)
+    # ── N.A.S.T. + section + master summary ──────────────────────────────────
+    try:
+        last_sec_resp = (
+            db.table("lecture_sections")
+            .select("chunk_range_end")
+            .eq("lecture_id", lecture_id)
+            .order("section_index", desc=True)
+            .limit(1)
+            .execute()
+        )
+        last_sec_end = (
+            last_sec_resp.data[0]["chunk_range_end"]
+            if (hasattr(last_sec_resp, "data") and last_sec_resp.data)
+            else -1
+        )
 
-            if trigger:
-                start_idx      = pending_chunks[0]['chunk_index']
-                last_idx       = pending_chunks[-1]['chunk_index']
-                lecture_data   = get_lecture_for_summarization(lecture_id)
-                total_secs     = (lecture_data.get("total_sections") or 0) if lecture_data else 0
-                micro_list     = [c['micro_summary'] for c in pending_chunks]
+        pending_resp = (
+            db.table("lecture_chunks")
+            .select("chunk_index, micro_summary")
+            .eq("lecture_id", lecture_id)
+            .gt("chunk_index", last_sec_end)
+            .order("chunk_index", desc=False)
+            .execute()
+        )
+        pending_chunks = pending_resp.data if hasattr(pending_resp, "data") else []
 
-                # Phase 2: section summary (topic-aware)
-                new_section = generate_section_summary(micro_list, language=language, topic=topic)
-                create_lecture_section(lecture_id, new_section, start_idx, last_idx, total_secs)
+        if not pending_chunks:
+            return
 
-                # Phase 3: master summary (topic-aware)
-                all_sections = get_section_summaries(lecture_id)
-                if all_sections:
-                    master = generate_master_summary(all_sections, language=language, topic=topic)
-                    update_lecture_summary_only(lecture_id, master)
+        trigger, nast_debug = should_trigger_section(pending_chunks)
+        if not trigger:
+            return
+
+        start_idx = pending_chunks[0]["chunk_index"]
+        last_idx  = pending_chunks[-1]["chunk_index"]
+
+        # Fix 1: use COUNT(*) from lecture_sections — always accurate, never lags
+        # like total_sections column can after concurrent inserts.
+        section_count = get_latest_section_count(lecture_id)
+
+        micro_list = [c["micro_summary"] for c in pending_chunks]
+
+        # Phase 2: section summary (topic-aware)
+        new_section = generate_section_summary(micro_list, language=language, topic=topic)
+
+        # Fix 1: upsert with ignore_duplicates handles any remaining race window
+        try:
+            db.table("lecture_sections").upsert(
+                {
+                    "lecture_id":         lecture_id,
+                    "section_summary":    new_section,
+                    "chunk_range_start":  start_idx,
+                    "chunk_range_end":    last_idx,
+                    "section_index":      section_count,
+                },
+                on_conflict="lecture_id,section_index",
+                ignore_duplicates=True,
+            ).execute()
+            db.table("lectures").update(
+                {"total_sections": section_count + 1}
+            ).eq("id", lecture_id).execute()
+        except Exception as e:
+            if "23505" in str(e):
+                print(
+                    f"[BG] Duplicate section insert ignored "
+                    f"(lecture={lecture_id}, section={section_count})"
+                )
+            else:
+                print(f"[BG] Section insert error (non-fatal): {e}")
+                return
 
     except Exception as e:
-        print(f"[summarization bg] Error for lecture {lecture_id}: {e}")
+        print(f"[BG] N.A.S.T./section error for lecture {lecture_id}: {e}")
+        return
+
+    # ── Phase 3: master summary (non-fatal if it fails) ───────────────────────
+    try:
+        secs_resp = (
+            db.table("lecture_sections")
+            .select("section_summary")
+            .eq("lecture_id", lecture_id)
+            .order("section_index", desc=False)
+            .execute()
+        )
+        all_sections = (
+            [item["section_summary"] for item in secs_resp.data]
+            if hasattr(secs_resp, "data")
+            else []
+        )
+        if all_sections:
+            master = generate_master_summary(all_sections, language=language, topic=topic)
+            db.table("lectures").update({
+                "master_summary": master,
+                "summary":        master,
+            }).eq("id", lecture_id).execute()
+    except Exception as e:
+        print(f"[BG] Master summary error for lecture {lecture_id} (non-fatal): {e}")
 
 
 @router.post("/live/{lecture_id}/chunk")
@@ -273,29 +435,32 @@ async def process_live_chunk(
     if not session:
         raise HTTPException(status_code=400, detail="Active live session not found")
 
-    # 2. Transcribe
-    try:
-        chunk_text, detected_language = await transcribe_audio(file)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
+    # Fix 4: serialize per-lecture so two overlapping chunks never race through
+    # transcription + transcript-append for the same lecture simultaneously.
+    async with _get_lecture_lock(lecture_id):
+        # 2. Transcribe
+        try:
+            chunk_text, detected_language = await transcribe_audio(file)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
 
-    if not chunk_text:
-        return {"lecture_id": lecture_id, "chunk_transcript": "", "message": "Empty transcription"}
+        if not chunk_text:
+            return {"lecture_id": lecture_id, "chunk_transcript": "", "message": "Empty transcription"}
 
-    # 3. Persist language (stored value wins after first detection)
-    stored_language = get_lecture_language(lecture_id)
-    if stored_language == "en" and detected_language != "en":
-        update_lecture_language(lecture_id, detected_language)
-        stored_language = detected_language
-    language = stored_language
+        # 3. Persist language (stored value wins after first detection)
+        stored_language = get_lecture_language(lecture_id)
+        if stored_language == "en" and detected_language != "en":
+            update_lecture_language(lecture_id, detected_language)
+            stored_language = detected_language
+        language = stored_language
 
-    # 4. Append transcript + update session analytics
-    try:
-        full_transcript_length = append_lecture_transcript(lecture_id, chunk_text)
-        update_live_session_timestamp(session['id'])
-        update_lecture_analytics(lecture_id, chunk_duration=12)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to update lecture: {str(e)}")
+        # 4. Append transcript + update session analytics
+        try:
+            full_transcript_length = append_lecture_transcript(lecture_id, chunk_text)
+            update_live_session_timestamp(session['id'])
+            update_lecture_analytics(lecture_id, chunk_duration=12)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to update lecture: {str(e)}")
 
     # 5. Compute chunk_idx (needed by background task and topic detection)
     lecture_data = get_lecture_for_summarization(lecture_id)
@@ -313,7 +478,16 @@ async def process_live_chunk(
         except Exception as e:
             print(f"[topic] Detection failed (non-fatal): {e}")
 
-    # 7. Offload summarization
+    # 7. CIF — classify chunk before summarization
+    #    Runs synchronously so the result is included in the response.
+    #    Fast call (max_tokens=60, temperature=0.1, ~50–100ms).
+    try:
+        cif_result = classify_chunk(chunk_text, topic)
+    except Exception as cif_err:
+        print(f"[CIF] classify_chunk raised unexpectedly (failing toward inclusion): {cif_err}")
+        cif_result = {"type": "LECTURE", "confidence": 0.5, "note": ""}
+
+    # 8. Offload summarization (CIF result passed through for routing)
     background_tasks.add_task(
         _run_summarization,
         lecture_id=lecture_id,
@@ -321,6 +495,8 @@ async def process_live_chunk(
         chunk_idx=chunk_idx,
         language=language,
         topic=topic,
+        cif_type=cif_result["type"],
+        cif_confidence=cif_result["confidence"],
     )
 
     return {
@@ -329,6 +505,8 @@ async def process_live_chunk(
         "full_transcript_length": full_transcript_length,
         "language":               language,
         "topic":                  topic,
+        "cif_type":               cif_result["type"],
+        "cif_confidence":         cif_result["confidence"],
     }
 
 
@@ -348,11 +526,19 @@ async def stream_summary(lecture_id: str):
         last_summary  = None
         last_topic    = None
         idle_ticks    = 0           # counts 2-second polls with no change
+        elapsed       = 0           # total seconds elapsed (Fix 5: max 4 h cap)
+        max_duration  = 14400       # 4 hours in seconds
 
         try:
             while True:
                 await asyncio.sleep(2)
                 idle_ticks += 1
+                elapsed    += 2
+
+                # Fix 5: hard session timeout — prevents zombie SSE streams
+                if elapsed >= max_duration:
+                    yield f"data: {json.dumps({'event': 'session-timeout'})}\n\n"
+                    break
 
                 try:
                     data = await asyncio.to_thread(get_lecture_for_summarization, lecture_id)
@@ -378,8 +564,8 @@ async def stream_summary(lecture_id: str):
                 except Exception as e:
                     print(f"[SSE] poll error for {lecture_id}: {e}")
 
-                # Heartbeat comment every ~30 s (15 × 2-second ticks)
-                if idle_ticks >= 15:
+                # Fix 5: heartbeat every ~15 s (7 × 2-second ticks) instead of 30 s
+                if idle_ticks >= 7:
                     idle_ticks = 0
                     yield ": heartbeat\n\n"
 
@@ -435,6 +621,10 @@ def end_session_endpoint(lecture_id: str):
         except Exception as e:
             print(f"Final summary on end (non-fatal): {e}")
 
+        # Fix 4: release per-lecture lock so memory doesn't grow unbounded
+        if lecture_id in _lecture_locks:
+            del _lecture_locks[lecture_id]
+
         return {"status": "ended", "lecture_id": lecture_id}
 
     except Exception as e:
@@ -480,6 +670,18 @@ async def export_pdf(lecture_id: str):
     except Exception as e:
         print(f"Error in export_pdf: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to generate PDF: {str(e)}")
+
+
+@router.get("/lectures")
+def get_lectures(limit: int = 5, offset: int = 0):
+    """
+    Returns recent lectures sorted by created_at DESC.
+    Used by the frontend idle screen to display session history.
+    """
+    try:
+        return get_recent_lectures(limit=limit, offset=offset)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch lectures: {str(e)}")
 
 
 @router.get("/lectures/{lecture_id}")

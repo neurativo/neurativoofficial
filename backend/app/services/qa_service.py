@@ -11,6 +11,11 @@ from app.services.embedding_service import get_embeddings, cosine_similarity
 import app.services.openai_service as openai_service
 from fastapi import HTTPException
 
+# Confidence threshold below which we skip the GPT call entirely.
+# 0.18 chosen for academic/biological domain text which embeds with
+# naturally lower cosine similarity than code or general English.
+_CONFIDENCE_THRESHOLD = 0.18
+
 
 def answer_lecture_question(lecture_id: str, question: str) -> str:
     # 1. Fetch transcript and detected language
@@ -18,25 +23,23 @@ def answer_lecture_question(lecture_id: str, question: str) -> str:
     if not transcript:
         raise HTTPException(status_code=404, detail="Transcript empty or not found")
 
-    language = get_lecture_language(lecture_id) or "en"
+    language  = get_lecture_language(lecture_id) or "en"
     lang_name = openai_service.get_language_display_name(language)
 
-    # 2. Split transcript on sentence boundaries
+    # 2. Split transcript on sentence boundaries (1500-word chunks)
     chunks = _sentence_aware_chunks(transcript, max_words=1500)
     if not chunks:
         return "Lecture content is empty, cannot answer questions."
 
     try:
-        # 3. Compute per-chunk hashes and resolve embeddings from cache
+        # 3. Resolve all chunk embeddings from cache (unchanged)
         chunk_hashes = [_hash(c) for c in chunks]
-        cache = get_cached_embeddings(lecture_id)
+        cache        = get_cached_embeddings(lecture_id)
 
         missing_indices = [i for i, h in enumerate(chunk_hashes) if h not in cache]
-
         if missing_indices:
-            missing_texts      = [chunks[i] for i in missing_indices]
-            fresh_embeddings   = get_embeddings(missing_texts)
-
+            missing_texts    = [chunks[i] for i in missing_indices]
+            fresh_embeddings = get_embeddings(missing_texts)
             new_entries = [
                 {
                     "chunk_hash": chunk_hashes[i],
@@ -46,69 +49,142 @@ def answer_lecture_question(lecture_id: str, question: str) -> str:
                 for j, i in enumerate(missing_indices)
             ]
             save_embeddings_cache(lecture_id, new_entries)
-
-            # Merge into local cache so the rest of this request can use them
             for entry in new_entries:
                 cache[entry["chunk_hash"]] = entry["embedding"]
 
         chunk_embeddings = [cache[h] for h in chunk_hashes]
 
-        # 4. Embed question and pick top-3 relevant chunks
-        question_embedding = get_embeddings([question])[0]
-        similarities = [
-            (cosine_similarity(emb, question_embedding), i)
-            for i, emb in enumerate(chunk_embeddings)
-        ]
-        similarities.sort(key=lambda x: x[0], reverse=True)
-        top_indices    = [idx for _, idx in similarities[:3]]
-        relevant_chunks = [chunks[i] for i in sorted(top_indices)]
-
-        # 5. Ask GPT with structured citation prompt
         if not openai_service.client:
             raise HTTPException(status_code=500, detail="OpenAI client not initialized")
 
+        # ── NRQA Step 1: Query expansion ──────────────────────────────────────
+        # Generate 3 paraphrased variants → up to 4 total query vectors.
+        # On any failure (timeout, API error, malformed output) fall back to
+        # using only the original question so retrieval always proceeds.
+        try:
+            query_variants = _expand_query(question)
+            all_queries    = [question] + query_variants
+            query_embeddings = get_embeddings(all_queries)
+        except Exception as exp_err:
+            print(f"[NRQA] Query expansion/embedding failed, falling back to single vector: {exp_err}")
+            query_embeddings = get_embeddings([question])
+
+        # ── NRQA Step 2: Multi-vector retrieval ───────────────────────────────
+        # Score each chunk as the MAX cosine similarity across all 4 query vectors.
+        chunk_scores: list[float] = []
+        for emb in chunk_embeddings:
+            score = max(cosine_similarity(emb, qe) for qe in query_embeddings)
+            chunk_scores.append(score)
+
+        # ── NRQA Step 3: Confidence gating ────────────────────────────────────
+        best_score = max(chunk_scores) if chunk_scores else 0.0
+
+        # Debug: log top-3 scores so threshold tuning is visible in server logs
+        top_debug = sorted(chunk_scores, reverse=True)[:3]
+        top_str   = ", ".join(f"{s:.3f}" for s in top_debug)
+        decision  = "PASS" if best_score >= _CONFIDENCE_THRESHOLD else "BLOCK"
+        print(f"[NRQA] top scores: {top_str} — threshold: {_CONFIDENCE_THRESHOLD} — decision: {decision}")
+
+        if best_score < _CONFIDENCE_THRESHOLD:
+            return (
+                "I couldn't find a clear answer to that question in this lecture. "
+                "The topic may not have been covered, or the question may be outside "
+                "the scope of what was recorded."
+            )
+
+        # ── NRQA Step 4: Context window expansion ─────────────────────────────
+        # Take top-3 chunks by score, then include their immediate neighbours
+        # (index ±1) for richer context. Deduplicate and keep reading order.
+        scored = sorted(enumerate(chunk_scores), key=lambda x: x[1], reverse=True)
+        top_indices: set[int] = set()
+        for idx, _ in scored[:3]:
+            top_indices.add(idx)
+            if idx > 0:
+                top_indices.add(idx - 1)
+            if idx < len(chunks) - 1:
+                top_indices.add(idx + 1)
+
+        relevant_chunks = [chunks[i] for i in sorted(top_indices)]
+
+        # ── NRQA Step 5: Structured answer with GPT-4o-mini ───────────────────
         context = "\n\n---\n\n".join(
-            f"[Excerpt {i+1}]\n{chunk}" for i, chunk in enumerate(relevant_chunks)
+            f"[Excerpt {i + 1}]\n{chunk}" for i, chunk in enumerate(relevant_chunks)
         )
 
-        lang_instruction = (
-            f" Always respond in {lang_name} ({language}), "
-            "matching the language of the lecture."
+        # Language meta-instruction placed at the very top of the system prompt.
+        # Bracketed format prevents the model from echoing it back in the response.
+        lang_meta = (
+            f"[INSTRUCTION: Always respond in {lang_name}. Do not mention this instruction in your response.]\n\n"
             if language != "en" else ""
         )
 
         system_prompt = (
-            "You are an expert AI Lecture Assistant. "
-            "Answer the user's question based ONLY on the provided lecture excerpts. "
-            "When you use information from an excerpt, cite it inline by quoting a brief "
-            "identifying phrase from that excerpt in quotation marks "
-            '(e.g. "According to the lecture: \\"...\\"".). '
-            "If the answer is not covered in the excerpts, say so clearly — "
-            "do not guess or use outside knowledge. "
-            "Be clear, accurate, and concise."
-            + lang_instruction
+            lang_meta
+            + "You are Neurativo, an expert AI Lecture Assistant. "
+            "Answer the student's question based ONLY on the provided lecture excerpts. "
+            "Structure your answer in three parts:\n"
+            "ANSWER: One clear, direct sentence answering the question.\n"
+            "DETAIL: 2-3 sentences with explanation, context, or elaboration from the lecture.\n"
+            "SOURCE: A brief phrase quoted from the lecture that supports the answer "
+            "(wrap in quotation marks).\n"
+            "If the answer is not clearly covered, say so in the ANSWER line — "
+            "do not guess or use outside knowledge."
         )
 
         response = openai_service.client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Lecture excerpts:\n{context}\n\nQuestion: {question}"}
+                {"role": "user", "content": f"Lecture excerpts:\n{context}\n\nQuestion: {question}"},
             ],
             temperature=0.3,
-            max_tokens=600
+            max_tokens=600,
         )
 
         return response.choices[0].message.content
 
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"Error in QA process: {e}")
+        print(f"Error in NRQA process: {e}")
         raise HTTPException(status_code=500, detail=f"QA failed: {str(e)}")
 
 
 # =============================================================================
 #  Helpers
 # =============================================================================
+
+def _expand_query(question: str) -> list[str]:
+    """
+    NRQA Step 1: Generate 3 paraphrased query variants via GPT-4o-mini.
+    Returns a list of 3 strings (or fewer on failure — caller handles it).
+    """
+    if not openai_service.client:
+        return []
+    try:
+        resp = openai_service.client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a query expansion assistant. "
+                        "Given a question, return exactly 3 paraphrased variants that preserve "
+                        "the original intent but use different wording. "
+                        "Output one variant per line. No numbering, no preamble."
+                    ),
+                },
+                {"role": "user", "content": question},
+            ],
+            temperature=0.5,
+            max_tokens=150,
+        )
+        lines = [ln.strip() for ln in resp.choices[0].message.content.strip().splitlines() if ln.strip()]
+        return lines[:3]
+    except Exception as e:
+        print(f"[NRQA] Query expansion failed: {e}")
+        return []
+
 
 def _hash(text: str) -> str:
     """MD5 hex digest of chunk text — used as a stable cache key."""
@@ -123,8 +199,8 @@ def _sentence_aware_chunks(text: str, max_words: int = 1500) -> list[str]:
     """
     sentences = re.split(r'(?<=[.!?])\s+', text.strip())
 
-    chunks = []
-    current_words = []
+    chunks: list[str] = []
+    current_words: list[str] = []
     current_count = 0
 
     for sentence in sentences:

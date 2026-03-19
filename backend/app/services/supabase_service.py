@@ -3,8 +3,31 @@ from app.core.config import settings
 from datetime import datetime, timezone
 
 
-# Initialize Supabase client
+# Initialize Supabase client (global singleton for normal synchronous use)
 supabase: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY) if settings.SUPABASE_URL and settings.SUPABASE_KEY else None
+
+
+def get_client() -> Client | None:
+    """
+    Returns a fresh Supabase client with its own connection.
+    Use this in background tasks to avoid sharing the global singleton
+    across concurrent threads, which causes 'Server disconnected' errors.
+    """
+    if settings.SUPABASE_URL and settings.SUPABASE_KEY:
+        return create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
+    return None
+
+
+def _fresh_db() -> Client:
+    """
+    Creates a fresh Supabase client and raises if unavailable.
+    Used by functions called from background threads (Fix 2: thread safety).
+    Each call creates its own connection so threads never share state.
+    """
+    db = get_client()
+    if not db:
+        raise Exception("Supabase client is not initialized")
+    return db
 
 def save_lecture(title: str, transcript: str, duration_seconds: int = None, language: str = "en") -> str:
     """
@@ -41,25 +64,24 @@ def update_lecture_language(lecture_id: str, language: str):
     Sets the detected language on a lecture record.
     Called on the first chunk of a live session once Whisper returns its detection.
     """
-    if not supabase:
-        raise Exception("Supabase client is not initialized")
-    supabase.table("lectures").update({"language": language}).eq("id", lecture_id).execute()
+    _fresh_db().table("lectures").update({"language": language}).eq("id", lecture_id).execute()
 
 
 def get_lecture_language(lecture_id: str) -> str:
     """
     Returns the stored ISO-639-1 language code for a lecture, defaulting to 'en'.
     """
-    if not supabase:
-        return "en"
-    response = (
-        supabase.table("lectures")
-        .select("language")
-        .eq("id", lecture_id)
-        .execute()
-    )
-    if hasattr(response, 'data') and len(response.data) > 0:
-        return response.data[0].get("language") or "en"
+    try:
+        response = (
+            _fresh_db().table("lectures")
+            .select("language")
+            .eq("id", lecture_id)
+            .execute()
+        )
+        if hasattr(response, 'data') and len(response.data) > 0:
+            return response.data[0].get("language") or "en"
+    except Exception:
+        pass
     return "en"
 
 
@@ -164,27 +186,21 @@ def get_active_live_session(lecture_id: str):
         return response.data[0]
     return None
 
-def append_lecture_transcript(lecture_id: str, chunk_text: str) -> str:
+def append_lecture_transcript(lecture_id: str, chunk_text: str) -> int:
     """
     Appends text to a lecture's transcript.
     Returns the new length of the transcript.
+    Uses a single fresh client for both the read and write (thread-safe).
     """
-    if not supabase:
-        raise Exception("Supabase client is not initialized")
-
-    current_transcript = get_lecture_transcript(lecture_id)
-
-    if current_transcript:
-        new_transcript = current_transcript + "\n" + chunk_text
-    else:
-        new_transcript = chunk_text
-
-    response = supabase.table("lectures").update({"transcript": new_transcript}).eq("id", lecture_id).execute()
-    
+    db = _fresh_db()
+    # Inline fetch — avoids calling get_lecture_transcript (which uses global singleton)
+    fetch = db.table("lectures").select("transcript").eq("id", lecture_id).execute()
+    current = fetch.data[0].get("transcript") or "" if (hasattr(fetch, "data") and fetch.data) else ""
+    new_transcript = (current + "\n" + chunk_text) if current else chunk_text
+    response = db.table("lectures").update({"transcript": new_transcript}).eq("id", lecture_id).execute()
     if hasattr(response, 'data') and len(response.data) > 0:
         return len(new_transcript)
-    else:
-        raise Exception("Failed to update transcript")
+    raise Exception("Failed to update transcript")
 
 def update_live_session_timestamp(live_session_id: str):
     """
@@ -237,10 +253,8 @@ def get_lecture_for_summarization(lecture_id: str):
     """
     Retrieves transcript, summary, language, and analytics for a lecture.
     """
-    if not supabase:
-        raise Exception("Supabase client is not initialized")
-
-    response = supabase.table("lectures").select(
+    db = _fresh_db()
+    response = db.table("lectures").select(
         "transcript, summary, master_summary, total_sections, last_summarized_length, "
         "total_chunks, total_duration_seconds, title, created_at, language, topic"
     ).eq("id", lecture_id).execute()
@@ -301,25 +315,19 @@ def update_lecture_summary_only(lecture_id: str, summary: str):
     """
     Overwrites the primary summary (master_summary).
     """
-    if not supabase:
-        raise Exception("Supabase client is not initialized")
-        
-    supabase.table("lectures").update({"master_summary": summary, "summary": summary}).eq("id", lecture_id).execute()
+    _fresh_db().table("lectures").update({"master_summary": summary, "summary": summary}).eq("id", lecture_id).execute()
 
 def create_lecture_chunk(lecture_id: str, transcript: str, micro_summary: str, chunk_index: int):
     """
     Saves a transcription chunk and its micro summary with index.
     """
-    if not supabase:
-        raise Exception("Supabase client is not initialized")
-        
     data = {
         "lecture_id": lecture_id,
         "transcript": transcript,
         "micro_summary": micro_summary,
         "chunk_index": chunk_index
     }
-    supabase.table("lecture_chunks").insert(data).execute()
+    _fresh_db().table("lecture_chunks").insert(data).execute()
 
 def get_micro_summaries(lecture_id: str, limit: int = 10):
     """
@@ -343,10 +351,10 @@ def get_micro_summaries(lecture_id: str, limit: int = 10):
 def create_lecture_section(lecture_id: str, section_summary: str, range_start: int, range_end: int, section_index: int):
     """
     Saves a section summary with index.
+    Uses upsert with ignore_duplicates=True to safely handle race conditions
+    where two concurrent background tasks try to insert the same section_index.
     """
-    if not supabase:
-        raise Exception("Supabase client is not initialized")
-        
+    db = _fresh_db()
     data = {
         "lecture_id": lecture_id,
         "section_summary": section_summary,
@@ -354,24 +362,25 @@ def create_lecture_section(lecture_id: str, section_summary: str, range_start: i
         "chunk_range_end": range_end,
         "section_index": section_index
     }
-    supabase.table("lecture_sections").insert(data).execute()
-    
+    # Bug 1 fix: upsert with ignore_duplicates prevents postgres error 23505
+    # on (lecture_id, section_index) unique constraint violation
+    db.table("lecture_sections").upsert(
+        data, on_conflict="lecture_id,section_index", ignore_duplicates=True
+    ).execute()
+
     # Also update total_sections counter in master table
-    supabase.table("lectures").update({"total_sections": section_index + 1}).eq("id", lecture_id).execute()
+    db.table("lectures").update({"total_sections": section_index + 1}).eq("id", lecture_id).execute()
 
 def get_section_summaries(lecture_id: str):
     """
     Fetches all section summaries for a lecture in chronological order.
     """
-    if not supabase:
-        raise Exception("Supabase client is not initialized")
-        
-    response = supabase.table("lecture_sections")\
+    response = _fresh_db().table("lecture_sections")\
         .select("section_summary")\
         .eq("lecture_id", lecture_id)\
-        .order("created_at", desc=False)\
+        .order("section_index", desc=False)\
         .execute()
-        
+
     if hasattr(response, 'data'):
         return [item['section_summary'] for item in response.data]
     return []
@@ -379,32 +388,50 @@ def get_latest_section_end_index(lecture_id: str) -> int:
     """
     Returns the chunk_range_end of the latest section, or -1 if no sections exist.
     """
-    if not supabase: return -1
-    response = supabase.table("lecture_sections")\
-        .select("chunk_range_end")\
-        .eq("lecture_id", lecture_id)\
-        .order("section_index", desc=True)\
-        .limit(1)\
-        .execute()
-    
-    if hasattr(response, 'data') and len(response.data) > 0:
-        return response.data[0]['chunk_range_end']
+    try:
+        response = _fresh_db().table("lecture_sections")\
+            .select("chunk_range_end")\
+            .eq("lecture_id", lecture_id)\
+            .order("section_index", desc=True)\
+            .limit(1)\
+            .execute()
+        if hasattr(response, 'data') and len(response.data) > 0:
+            return response.data[0]['chunk_range_end']
+    except Exception:
+        pass
     return -1
+
+
+def get_latest_section_count(lecture_id: str) -> int:
+    """
+    Returns the exact count of sections for a lecture via COUNT(*).
+    More reliable than reading total_sections column (which may lag).
+    Used in _run_summarization to compute the next section_index.
+    """
+    try:
+        response = _fresh_db().table("lecture_sections")\
+            .select("id", count="exact")\
+            .eq("lecture_id", lecture_id)\
+            .execute()
+        return response.count if response.count is not None else 0
+    except Exception:
+        return 0
 
 def get_unsummarized_chunks(lecture_id: str, after_index: int):
     """
     Fetches chunks (index and micro_summary) after a specific index.
     """
-    if not supabase: return []
-    response = supabase.table("lecture_chunks")\
-        .select("chunk_index, micro_summary")\
-        .eq("lecture_id", lecture_id)\
-        .gt("chunk_index", after_index)\
-        .order("chunk_index", desc=False)\
-        .execute()
-
-    if hasattr(response, 'data'):
-        return response.data
+    try:
+        response = _fresh_db().table("lecture_chunks")\
+            .select("chunk_index, micro_summary")\
+            .eq("lecture_id", lecture_id)\
+            .gt("chunk_index", after_index)\
+            .order("chunk_index", desc=False)\
+            .execute()
+        if hasattr(response, 'data'):
+            return response.data
+    except Exception:
+        pass
     return []
 
 
@@ -448,3 +475,66 @@ def save_embeddings_cache(lecture_id: str, entries: list) -> None:
         for e in entries
     ]
     supabase.table("lecture_embeddings").upsert(rows, on_conflict="lecture_id,chunk_hash").execute()
+
+
+def update_lecture_title(lecture_id: str, title: str):
+    """
+    Overwrites the lecture title. Called when auto-title is generated from transcript.
+    """
+    if not supabase:
+        return
+    supabase.table("lectures").update({"title": title}).eq("id", lecture_id).execute()
+
+
+def save_student_question(lecture_id: str, question_text: str) -> None:
+    """
+    Inserts a CIF-detected student question into lecture_questions.
+
+    Migration SQL (run manually in Supabase SQL editor):
+        CREATE TABLE IF NOT EXISTS lecture_questions (
+            id           uuid        DEFAULT gen_random_uuid() PRIMARY KEY,
+            lecture_id   uuid        REFERENCES lectures(id) ON DELETE CASCADE,
+            question_text text       NOT NULL,
+            detected_at  timestamptz DEFAULT now()
+        );
+    """
+    try:
+        _fresh_db().table("lecture_questions").insert({
+            "lecture_id":    lecture_id,
+            "question_text": question_text,
+            "detected_at":   datetime.now(timezone.utc).isoformat(),
+        }).execute()
+    except Exception as e:
+        print(f"[CIF] Failed to save student question: {e}")
+
+
+def get_recent_lectures(limit: int = 5, offset: int = 0) -> list:
+    """
+    Returns the most recent lectures sorted by created_at DESC.
+    Used by the frontend idle screen to show session history.
+    """
+    if not supabase:
+        return []
+    response = (
+        supabase.table("lectures")
+        .select("id, title, topic, language, total_chunks, total_duration_seconds, created_at, summary")
+        .order("created_at", desc=True)
+        .range(offset, offset + limit - 1)
+        .execute()
+    )
+    if not hasattr(response, "data"):
+        return []
+    rows = []
+    for row in response.data:
+        summary = row.get("summary") or ""
+        rows.append({
+            "id":                     row["id"],
+            "title":                  row.get("title") or "Untitled",
+            "topic":                  row.get("topic"),
+            "language":               row.get("language") or "en",
+            "total_chunks":           row.get("total_chunks") or 0,
+            "total_duration_seconds": row.get("total_duration_seconds") or 0,
+            "created_at":             row.get("created_at"),
+            "summary_preview":        summary[:200] if summary else "",
+        })
+    return rows

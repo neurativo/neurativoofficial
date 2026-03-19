@@ -116,6 +116,45 @@
   animation: section-highlight-fade 2s ease-out forwards;
 }
 
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(90deg, #f1f5f9 25%, #e8edf5 50%, #f1f5f9 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes summary-card-enter {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.summary-card-enter {
+  animation: summary-card-enter 300ms ease both;
+}
+
+/* Concept pills row — explicit CSS to override any Tailwind gap/wrap issues */
+.concepts-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.concept-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  background: #E6F1FB;
+  color: #185FA5;
+  border: 0.5px solid #B5D4F4;
+  white-space: nowrap;
+}
+
 /* ========================
    SCROLLBAR
 ======================== */

@@ -15,22 +15,6 @@ from app.services.supabase_service import get_lecture_for_summarization
 # ── OpenAI client ─────────────────────────────────────────────────────────────
 _client = OpenAI(api_key=settings.OPENAI_API_KEY) if settings.OPENAI_API_KEY else None
 
-# ── Browser singleton ─────────────────────────────────────────────────────────
-_playwright_instance = None
-_browser = None
-
-
-def _get_browser():
-    global _playwright_instance, _browser
-    if _browser is None or not _browser.is_connected():
-        if _playwright_instance is not None:
-            try:
-                _playwright_instance.stop()
-            except Exception:
-                pass
-        _playwright_instance = sync_playwright().start()
-        _browser = _playwright_instance.chromium.launch(headless=True)
-    return _browser
 
 
 # ── Domain-aware labels ───────────────────────────────────────────────────────
@@ -157,7 +141,10 @@ def _call_enrich_section(
 ) -> dict:
     if not _client:
         lead, rest = _extract_lead_sentence(section_text[:300])
-        return {"title": f"Section {idx + 1}", "lead_sentence": lead, "prose": rest, "bullets": [], "raw_section": section_text}
+        return {
+            "title": f"Section {idx + 1}", "lead_sentence": lead, "prose": rest,
+            "bullets": [], "concepts": [], "examples": [], "raw_section": section_text,
+        }
     hint = f" Domain: {topic}." if topic else ""
     resp = _client.chat.completions.create(
         model="gpt-4o-mini",
@@ -168,15 +155,23 @@ def _call_enrich_section(
                     f"You are enriching section {idx + 1} of {total} from a lecture.{hint}\n"
                     f"Section summary:\n{section_text}\n\n"
                     "Return a JSON object with exactly these fields:\n"
-                    "- \"title\": A crisp noun-phrase title for this section (max 6 words)\n"
+                    "- \"title\": A crisp noun-phrase title describing specifically what concepts "
+                    "are taught in THIS section (max 6 words). "
+                    "FORBIDDEN generic titles: 'Introduction', 'Overview', 'Fundamentals', 'Basics', "
+                    "'Summary', 'Review', 'Lecture Notes'. Name the actual concepts taught.\n"
                     "- \"prose\": 2-3 flowing sentences expanding the core idea. Present tense. No bullets.\n"
                     "- \"bullets\": Array of 3-5 specific key points as short strings\n"
+                    "- \"concepts\": Array of exactly 3 key concept names from this section "
+                    "(single nouns or short noun phrases, e.g. 'Action Potential', 'Ohm's Law')\n"
+                    "- \"examples\": Array of exactly 2 concrete real-world examples or applications "
+                    "from this section (one sentence each)\n"
+                    "IMPORTANT: All 5 fields are required. concepts and examples must not be empty.\n"
                     "Return only valid JSON."
                 ),
             }
         ],
         temperature=0.3,
-        max_tokens=450,
+        max_tokens=550,
         response_format={"type": "json_object"},
     )
     try:
@@ -185,12 +180,17 @@ def _call_enrich_section(
         data = {}
     prose = data.get("prose", "")
     lead, rest = _extract_lead_sentence(prose)
+    concepts = data.get("concepts") or []
+    examples = data.get("examples") or []
+    print(f"[enrich_section] s{idx + 1}/{total}: title={data.get('title')!r} concepts={concepts} examples={examples}")
     return {
-        "title":        data.get("title", f"Section {idx + 1}"),
+        "title":         data.get("title", f"Section {idx + 1}"),
         "lead_sentence": lead,
-        "prose":        rest,
-        "bullets":      data.get("bullets", []),
-        "raw_section":  section_text,
+        "prose":         rest,
+        "bullets":       data.get("bullets") or [],
+        "concepts":      concepts,
+        "examples":      examples,
+        "raw_section":   section_text,
     }
 
 
@@ -367,37 +367,44 @@ def _call_conceptual_map(section_summaries: list[str]) -> list[dict]:
 # ── PDF renderer (sync, run in thread) ───────────────────────────────────────
 
 def _render_pdf(html_content: str, title_short: str) -> bytes:
-    browser = _get_browser()
-    page = browser.new_page()
-    try:
-        page.set_content(html_content, wait_until="networkidle")
-        pdf_bytes = page.pdf(
-            format="A4",
-            margin={"top": "28mm", "bottom": "16mm", "left": "22mm", "right": "22mm"},
-            print_background=True,
-            display_header_footer=True,
-            header_template=(
-                "<div style='"
-                "width:100%;font-size:7pt;color:#94a3b8;"
-                "font-family:Arial,sans-serif;"
-                "display:flex;justify-content:space-between;"
-                "padding:0 22mm;border-bottom:0.5px solid #e2e8f0;"
-                "padding-bottom:4px;box-sizing:border-box;"
-                f"'><span>{title_short}</span>"
-                "<span>Lecture Intelligence Report</span></div>"
-            ),
-            footer_template=(
-                "<div style='"
-                "width:100%;font-size:7pt;color:#94a3b8;"
-                "font-family:Arial,sans-serif;"
-                "text-align:center;padding:0 22mm;"
-                "box-sizing:border-box;"
-                "'>Page <span class='pageNumber'></span> "
-                "of <span class='totalPages'></span> · Neurativo</div>"
-            ),
-        )
-    finally:
-        page.close()
+    # Bug 3 fix: use a per-call context manager instead of a global browser singleton.
+    # The singleton became invalid after the first PDF export and caused 500 errors
+    # on subsequent calls (including the /chunk endpoint due to import-time side effects).
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            try:
+                page.set_content(html_content, wait_until="networkidle")
+                pdf_bytes = page.pdf(
+                    format="A4",
+                    margin={"top": "28mm", "bottom": "16mm", "left": "22mm", "right": "22mm"},
+                    print_background=True,
+                    display_header_footer=True,
+                    header_template=(
+                        "<div style='"
+                        "width:100%;font-size:7pt;color:#94a3b8;"
+                        "font-family:Arial,sans-serif;"
+                        "display:flex;justify-content:space-between;"
+                        "padding:0 22mm;border-bottom:0.5px solid #e2e8f0;"
+                        "padding-bottom:4px;box-sizing:border-box;"
+                        f"'><span>{title_short}</span>"
+                        "<span>Lecture Intelligence Report</span></div>"
+                    ),
+                    footer_template=(
+                        "<div style='"
+                        "width:100%;font-size:7pt;color:#94a3b8;"
+                        "font-family:Arial,sans-serif;"
+                        "text-align:center;padding:0 22mm;"
+                        "box-sizing:border-box;"
+                        "'>Page <span class='pageNumber'></span> "
+                        "of <span class='totalPages'></span> · Neurativo</div>"
+                    ),
+                )
+            finally:
+                page.close()
+        finally:
+            browser.close()
     return pdf_bytes
 
 
@@ -418,12 +425,24 @@ async def generate_lecture_pdf(lecture_id: str) -> bytes:
     summary       = data.get("master_summary") or data.get("summary") or ""
     title         = data.get("title") or "Lecture Notes"
     created_at    = str(data.get("created_at") or datetime.now().date())[:10]
-    duration_sec  = data.get("total_duration_seconds") or 0
     total_chunks  = data.get("total_chunks") or 0
     language      = data.get("language") or "en"
     topic         = data.get("topic") or None
 
-    word_count          = len(transcript.split()) if transcript else 0
+    # Duration: derive from total_chunks * 12s (more accurate than stored total_duration_seconds)
+    duration_sec = total_chunks * 12
+
+    # Word count: deduplicate consecutive identical transcript lines before counting
+    if transcript:
+        raw_lines  = [ln.strip() for ln in transcript.split("\n") if ln.strip()]
+        dedup_lines: list[str] = []
+        for ln in raw_lines:
+            if not dedup_lines or ln != dedup_lines[-1]:
+                dedup_lines.append(ln)
+        word_count = len(" ".join(dedup_lines).split())
+    else:
+        word_count = 0
+
     duration_formatted  = format_duration(duration_sec)
     section_label, review_label, glossary_label = _get_domain_labels(topic)
 
@@ -477,11 +496,13 @@ async def generate_lecture_pdf(lecture_id: str) -> bytes:
         if isinstance(r, Exception):
             lead, rest = _extract_lead_sentence(raw_sections[i][:300])
             enriched_sections.append({
-                "title": f"Section {i + 1}",
+                "title":         f"Section {i + 1}",
                 "lead_sentence": lead,
-                "prose": rest,
-                "bullets": [],
-                "raw_section": raw_sections[i],
+                "prose":         rest,
+                "bullets":       [],
+                "concepts":      [],
+                "examples":      [],
+                "raw_section":   raw_sections[i],
             })
         else:
             enriched_sections.append(r)
@@ -502,6 +523,14 @@ async def generate_lecture_pdf(lecture_id: str) -> bytes:
 
     r = results[ri]; ri += 1
     study_roadmap: dict = r if not isinstance(r, Exception) else {"next_topics": [], "prerequisites": []}
+
+    # 5b. Title fallback: if title is still generic, extract from exec_summary first sentence
+    _GENERIC_TITLES = {"live session", "lecture notes", "untitled", "untitled lecture"}
+    if title.lower().strip() in _GENERIC_TITLES and exec_summary:
+        first_sentence = re.split(r'(?<=[.!?])\s', exec_summary)[0]
+        words = first_sentence.split()[:8]
+        if words:
+            title = " ".join(words).rstrip(".,;:").title()
 
     # 6. Estimate reading time (total enriched words ÷ 238 wpm)
     doc_word_count = (
@@ -525,6 +554,9 @@ async def generate_lecture_pdf(lecture_id: str) -> bytes:
     env          = Environment(loader=FileSystemLoader(template_dir))
     template     = env.get_template("lecture_template.html")
 
+    total_concepts = sum(len(s.get("concepts", [])) for s in enriched_sections)
+    qa_pairs       = len(quick_review)
+
     context = {
         # Cover
         "title":                title,
@@ -533,6 +565,8 @@ async def generate_lecture_pdf(lecture_id: str) -> bytes:
         "word_count":           f"{word_count:,}",
         "total_chunks":         total_chunks,
         "total_sections":       n_sections,
+        "total_concepts":       total_concepts,
+        "qa_pairs":             qa_pairs,
         "language":             language.upper(),
         "topic":                topic,
         "reading_time_minutes": reading_time_minutes,
