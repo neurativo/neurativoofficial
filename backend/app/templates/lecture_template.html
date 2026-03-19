@@ -5,177 +5,755 @@
     <meta charset="UTF-8">
     <title>{{ title }} – Neurativo</title>
 
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&display=swap">
+
     <style>
+        /* ─── Reset & Variables ─────────────────────────────────────── */
         * {
             box-sizing: border-box;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
         }
 
-        /* Proper Print Margins (Controlled by Playwright) */
         @page {
             size: A4;
         }
 
+        /* Reduce top margin on cover to leave room for Playwright header */
+        @page :first {
+            margin-top: 12mm;
+        }
+
+        :root {
+            --ink:        #111827;
+            --ink-2:      #374151;
+            --ink-3:      #6b7280;
+            --ink-4:      #9ca3af;
+            --accent:     #2563eb;
+            --accent-lt:  #eff6ff;
+            --accent-mid: #bfdbfe;
+            --slate-100:  #f1f5f9;
+            --slate-200:  #e2e8f0;
+            --slate-300:  #cbd5e1;
+            --border:     #e5e7eb;
+        }
+
         body {
             margin: 0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Helvetica, Arial, sans-serif;
-            color: #1f2937;
-            font-size: 14px;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            color: var(--ink-2);
+            font-size: 10pt;
             line-height: 1.75;
             background: #ffffff;
         }
 
         .container {
-            max-width: 760px;
+            max-width: 660px;
             margin: 0 auto;
         }
 
-        /* ===== BRAND HEADER ===== */
-        .brand {
-            font-family: Georgia, serif;
-            font-size: 26px;
-            font-weight: 700;
-            color: #111827;
-            margin-bottom: 35px;
-            padding-bottom: 12px;
-            border-bottom: 1px solid #f1f5f9;
+        /* ─── COVER PAGE ────────────────────────────────────────────── */
+        .cover {
+            page-break-after: always;
+            min-height: 255mm;
+            display: flex;
+            flex-direction: column;
+            padding-bottom: 6mm;
+        }
+
+        .cover-top {
             display: flex;
             justify-content: space-between;
             align-items: baseline;
+            padding-bottom: 0;
         }
 
-        .brand span {
-            font-family: -apple-system, sans-serif;
-            font-size: 10px;
+        .cover-wordmark {
+            font-family: 'Lora', Georgia, serif;
+            font-size: 11pt;
+            font-weight: 700;
+            color: var(--ink);
+            letter-spacing: -0.2px;
+        }
+
+        .cover-report-type {
+            font-size: 7pt;
             font-weight: 600;
             text-transform: uppercase;
-            letter-spacing: 1.5px;
-            color: #9ca3af;
+            letter-spacing: 1.8px;
+            color: var(--ink-4);
         }
 
-        /* ===== TITLE ===== */
-        h1 {
-            font-family: Georgia, "Times New Roman", serif;
-            font-size: 32px;
-            font-weight: 700;
-            line-height: 1.3;
-            letter-spacing: -0.3px;
-            margin: 0 0 18px 0;
-            color: #111827;
-        }
-
-        /* ===== META ===== */
-        .meta {
+        .cover-middle {
+            flex: 1;
             display: flex;
-            gap: 48px;
-            margin-bottom: 55px;
+            flex-direction: column;
+            justify-content: center;
+            padding: 28mm 0 18mm;
         }
 
-        .meta-item {
+        .cover-title {
+            font-family: 'Lora', Georgia, "Times New Roman", serif;
+            font-size: 28pt;
+            font-weight: 700;
+            line-height: 1.2;
+            letter-spacing: -0.5px;
+            color: var(--ink);
+            margin: 0 0 9mm 0;
+        }
+
+        .cover-badges {
+            display: flex;
+            gap: 7px;
+            margin-bottom: 9mm;
+            flex-wrap: wrap;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 20px;
+            font-size: 7.5pt;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+        }
+
+        .badge-topic {
+            background: #f5f3ff;
+            color: #7c3aed;
+            border: 1px solid #ede9fe;
+            text-transform: capitalize;
+        }
+
+        .badge-lang {
+            background: var(--accent-lt);
+            color: #1d4ed8;
+            border: 1px solid var(--accent-mid);
+            text-transform: uppercase;
+        }
+
+        .cover-rule {
+            border: none;
+            border-top: 1px solid var(--border);
+            margin: 0 0 8mm 0;
+        }
+
+        .cover-meta {
+            display: flex;
+            gap: 32px;
+            flex-wrap: wrap;
+        }
+
+        .cover-meta-item {
             display: flex;
             flex-direction: column;
         }
 
-        .meta-label {
-            font-size: 10px;
+        .cover-meta-label {
+            font-size: 7pt;
+            font-weight: 600;
             text-transform: uppercase;
-            letter-spacing: 1px;
-            color: #9ca3af;
-            margin-bottom: 4px;
+            letter-spacing: 0.9px;
+            color: var(--ink-4);
+            margin-bottom: 3px;
         }
 
-        .meta-value {
-            font-size: 14px;
+        .cover-meta-value {
+            font-size: 10.5pt;
             font-weight: 500;
-            color: #374151;
+            color: var(--ink);
         }
 
-        /* ===== SECTION TITLE ===== */
-        h2 {
-            font-family: Georgia, serif;
-            font-size: 20px;
-            font-weight: 600;
-            margin: 0 0 20px 0;
-            padding-bottom: 10px;
-            border-bottom: 1px solid #e5e7eb;
-            letter-spacing: -0.2px;
+        .cover-bottom {
+            text-align: center;
+            font-size: 7.5pt;
+            color: var(--ink-4);
+            padding-top: 6mm;
         }
 
-        h3 {
-            font-size: 16px;
+        /* ─── SECTION EYEBROW ───────────────────────────────────────── */
+        .eyebrow-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 9mm;
+            margin-bottom: 2mm;
+        }
+
+        .eyebrow-label {
+            font-size: 7pt;
             font-weight: 700;
-            margin: 24px 0 10px 0;
-            color: #111827;
+            text-transform: uppercase;
+            letter-spacing: 1.6px;
+            color: var(--accent);
         }
 
-        /* ===== SUMMARY CARD ===== */
-        .summary-card {
-            background: #94c4f3;
-            border-radius: 12px;
-            padding: 30px;
-            border: 1px solid #f1f5f9;
-            display: block;
-            page-break-inside: auto;
+        .eyebrow-counter {
+            font-size: 7.5pt;
+            font-weight: 500;
+            color: var(--ink-4);
         }
 
-        .summary-card p {
-            margin-bottom: 16px;
-            color: #475569;
+        .eyebrow-rule {
+            border: none;
+            border-top: 1px solid var(--slate-200);
+            margin: 0 0 5mm 0;
         }
 
-        .summary-card ul {
-            padding-left: 22px;
-            margin-bottom: 20px;
+        /* ─── DOCUMENT SECTION HEADINGS (h2) ────────────────────────── */
+        h2 {
+            font-family: 'Lora', Georgia, serif;
+            font-size: 15pt;
+            font-weight: 700;
+            margin: 0 0 5mm 0;
+            letter-spacing: -0.3px;
+            color: var(--ink);
         }
 
-        .summary-card li {
-            margin-bottom: 9px;
-            color: #475569;
+        /* ─── EXECUTIVE SUMMARY ─────────────────────────────────────── */
+        .exec-card {
+            background: var(--accent-lt);
+            border-radius: 10px;
+            padding: 7mm 8mm;
+            margin-bottom: 10mm;
         }
 
-        .summary-card li::marker {
-            color: #2563eb;
+        .exec-card p {
+            margin: 0 0 4mm 0;
+            font-size: 10.5pt;
+            line-height: 1.8;
+            color: var(--ink-2);
         }
 
-        .summary-card strong {
+        .exec-card p:last-child {
+            margin-bottom: 0;
+        }
+
+        /* Drop cap — first letter of executive summary */
+        .drop-cap::first-letter {
+            float: left;
+            font-family: 'Lora', Georgia, serif;
+            font-size: 3.2em;
+            line-height: 0.8;
+            padding-right: 4px;
+            padding-top: 5px;
+            color: var(--accent);
+        }
+
+        /* ─── SECTION CARDS ─────────────────────────────────────────── */
+        .section-card {
+            margin-bottom: 7mm;
+            page-break-inside: avoid;
+        }
+
+        .section-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-bottom: 1.5mm;
+        }
+
+        .section-card-title {
+            font-family: 'Lora', Georgia, serif;
+            font-size: 12pt;
+            font-weight: 700;
+            color: var(--ink);
+        }
+
+        .section-progress {
+            font-size: 7.5pt;
+            color: var(--ink-4);
+            font-weight: 500;
+            white-space: nowrap;
+            padding-left: 8px;
+        }
+
+        .section-bar {
+            border: none;
+            border-top: 2px solid var(--accent);
+            width: 28px;
+            margin: 0 0 3.5mm 0;
+        }
+
+        /* Section lead-in sentence */
+        .ls-lead {
+            font-size: 11.5pt;
+            font-weight: 500;
+            color: var(--ink);
+            margin: 0 0 3mm 0;
+            line-height: 1.65;
+        }
+
+        .section-card p {
+            font-size: 9.5pt;
+            color: var(--ink-3);
+            margin: 0 0 2.5mm 0;
+            line-height: 1.7;
+        }
+
+        .section-bullets {
+            list-style: none;
+            padding: 0;
+            margin: 3mm 0 0 0;
+        }
+
+        .section-bullets li {
+            display: flex;
+            gap: 7px;
+            align-items: flex-start;
+            margin-bottom: 2mm;
+            font-size: 9.5pt;
+            color: var(--ink-2);
+            line-height: 1.6;
+        }
+
+        .section-bullets li::before {
+            content: "→";
+            color: var(--accent);
+            font-size: 8pt;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        /* ─── CONCEPTUAL MAP ─────────────────────────────────────────── */
+        .connection-block {
+            border-left: 2px solid var(--slate-300);
+            padding: 3mm 5mm 3mm 5mm;
+            margin-bottom: 4mm;
+            page-break-inside: avoid;
+        }
+
+        .connection-heading {
+            font-variant: small-caps;
+            font-size: 8.5pt;
             font-weight: 600;
-            color: #111827;
+            color: var(--ink-3);
+            margin-bottom: 1.5mm;
+            letter-spacing: 0.3px;
+        }
+
+        .connection-block p {
+            font-size: 9.5pt;
+            color: var(--ink-2);
+            margin: 0;
+            line-height: 1.7;
+        }
+
+        /* ─── KEY TAKEAWAYS ─────────────────────────────────────────── */
+        .takeaway-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .takeaway-list li {
+            display: flex;
+            gap: 8px;
+            align-items: flex-start;
+            padding: 3mm 4mm;
+            margin-bottom: 2mm;
+            background: #f9fafb;
+            border-radius: 7px;
+            font-size: 9.5pt;
+            color: var(--ink-2);
+            line-height: 1.65;
+        }
+
+        .takeaway-num {
+            font-weight: 700;
+            color: var(--accent);
+            min-width: 16px;
+            font-size: 9pt;
+            padding-top: 1px;
+        }
+
+        /* ─── GLOSSARY ──────────────────────────────────────────────── */
+        .glossary-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 3mm;
+        }
+
+        .glossary-item {
+            border: 1px solid var(--slate-100);
+            border-radius: 7px;
+            padding: 3mm 4mm;
+            page-break-inside: avoid;
+        }
+
+        .glossary-term {
+            font-size: 9pt;
+            font-weight: 700;
+            color: var(--ink);
+            margin-bottom: 1.5mm;
+        }
+
+        .glossary-def {
+            font-size: 8.5pt;
+            color: var(--ink-3);
+            line-height: 1.55;
+        }
+
+        /* ─── SELF-TEST ──────────────────────────────────────────────── */
+        .review-item {
+            margin-bottom: 6mm;
+            page-break-inside: avoid;
+        }
+
+        .review-header {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            margin-bottom: 2mm;
+        }
+
+        .review-num {
+            font-weight: 700;
+            font-size: 9.5pt;
+            color: var(--ink);
+        }
+
+        .review-dot {
+            color: var(--ink-4);
+            font-size: 9pt;
+        }
+
+        .difficulty-badge {
+            font-size: 7pt;
+            font-weight: 600;
+            padding: 1px 8px;
+            border-radius: 10px;
+        }
+
+        .diff-recall        { background: var(--slate-100); color: #475569; }
+        .diff-understanding { background: var(--accent-lt); color: #1d4ed8; }
+        .diff-application   { background: #fffbeb;          color: #b45309; }
+
+        .review-question {
+            font-size: 10pt;
+            font-weight: 500;
+            color: var(--ink);
+            margin-bottom: 2mm;
+            line-height: 1.6;
+        }
+
+        .review-answer {
+            background: #f9fafb;
+            border: 1px solid var(--slate-100);
+            border-radius: 7px;
+            padding: 3mm 4mm;
+            font-size: 9pt;
+            color: var(--ink-3);
+            line-height: 1.65;
+        }
+
+        /* ─── LEARNING PATH ──────────────────────────────────────────── */
+        .roadmap-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6mm;
+        }
+
+        .roadmap-col-heading {
+            font-size: 7.5pt;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            margin-bottom: 3mm;
+            padding-bottom: 2mm;
+            border-bottom: 1px solid var(--slate-200);
+        }
+
+        .roadmap-before { color: var(--ink-3); }
+        .roadmap-next   { color: var(--accent); }
+
+        .roadmap-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .roadmap-list li {
+            margin-bottom: 3.5mm;
+            page-break-inside: avoid;
+        }
+
+        .roadmap-concept {
+            font-size: 9.5pt;
+            font-weight: 600;
+            color: var(--ink);
+            margin-bottom: 0.8mm;
+        }
+
+        .roadmap-reason {
+            font-size: 8.5pt;
+            color: var(--ink-3);
+            line-height: 1.55;
         }
     </style>
 </head>
 
 <body>
+<div class="container">
 
-    <div class="container">
-
-        <div class="brand">
-            Neurativo
-            <span>Lecture Report</span>
+    <!-- ══════════════════════════════════════════
+         COVER PAGE
+    ══════════════════════════════════════════ -->
+    <div class="cover">
+        <div class="cover-top">
+            <div class="cover-wordmark">Neurativo</div>
+            <div class="cover-report-type">Lecture Intelligence Report</div>
         </div>
 
-        <h1>{{ title }}</h1>
+        <div class="cover-middle">
+            <div class="cover-title">{{ title }}</div>
 
-        <div class="meta">
-            <div class="meta-item">
-                <div class="meta-label">Date</div>
-                <div class="meta-value">{{ created_at }}</div>
+            {% if topic or language %}
+            <div class="cover-badges">
+                {% if topic %}
+                <span class="badge badge-topic">{{ topic }}</span>
+                {% endif %}
+                {% if language %}
+                <span class="badge badge-lang">{{ language }}</span>
+                {% endif %}
             </div>
+            {% endif %}
 
-            <div class="meta-item">
-                <div class="meta-label">Duration</div>
-                <div class="meta-value">{{ duration_formatted }}</div>
+            <hr class="cover-rule">
+
+            <div class="cover-meta">
+                <div class="cover-meta-item">
+                    <div class="cover-meta-label">Date</div>
+                    <div class="cover-meta-value">{{ created_at }}</div>
+                </div>
+                <div class="cover-meta-item">
+                    <div class="cover-meta-label">Duration</div>
+                    <div class="cover-meta-value">{{ duration_formatted }}</div>
+                </div>
+                <div class="cover-meta-item">
+                    <div class="cover-meta-label">Words Spoken</div>
+                    <div class="cover-meta-value">{{ word_count }}</div>
+                </div>
+                <div class="cover-meta-item">
+                    <div class="cover-meta-label">Est. Reading Time</div>
+                    <div class="cover-meta-value">{{ reading_time_minutes }} min</div>
+                </div>
+                <div class="cover-meta-item">
+                    <div class="cover-meta-label">Sections</div>
+                    <div class="cover-meta-value">{{ total_sections }}</div>
+                </div>
             </div>
         </div>
 
-        <h2>Structured Summary</h2>
-
-        <div class="summary-card">
-            {{ summary_html | safe }}
+        <div class="cover-bottom">
+            Generated by Neurativo AI · neurativo.app
         </div>
-
     </div>
 
-</body>
 
+    <!-- ══════════════════════════════════════════
+         EXECUTIVE SUMMARY
+    ══════════════════════════════════════════ -->
+    {% if executive_summary %}
+    <div class="eyebrow-row">
+        <span class="eyebrow-label">Executive Summary</span>
+    </div>
+    <hr class="eyebrow-rule">
+    <h2>Overview</h2>
+
+    <div class="exec-card">
+        {% set exec_paras = executive_summary.split('\n\n') %}
+        {% for para in exec_paras %}
+            {% if loop.first %}
+            <p class="drop-cap">{{ para }}</p>
+            {% else %}
+            <p>{{ para }}</p>
+            {% endif %}
+        {% endfor %}
+    </div>
+    {% endif %}
+
+
+    <!-- ══════════════════════════════════════════
+         SECTION BREAKDOWN
+    ══════════════════════════════════════════ -->
+    {% if enriched_sections %}
+    <div class="eyebrow-row">
+        <span class="eyebrow-label">{{ section_label }}</span>
+    </div>
+    <hr class="eyebrow-rule">
+    <h2>{{ section_label }}</h2>
+
+    {% for sec in enriched_sections %}
+    <div class="section-card">
+        <div class="section-card-header">
+            <div class="section-card-title">{{ sec.title }}</div>
+            <div class="section-progress">Section {{ loop.index }} of {{ enriched_sections | length }}</div>
+        </div>
+        <hr class="section-bar">
+
+        {% if sec.lead_sentence %}
+        <p class="ls-lead">{{ sec.lead_sentence }}</p>
+        {% endif %}
+
+        {% if sec.prose %}
+            {% for para in sec.prose.split('\n\n') %}
+            <p>{{ para }}</p>
+            {% endfor %}
+        {% endif %}
+
+        {% if sec.bullets %}
+        <ul class="section-bullets">
+            {% for bullet in sec.bullets %}
+            <li>{{ bullet }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+    </div>
+    {% endfor %}
+    {% endif %}
+
+
+    <!-- ══════════════════════════════════════════
+         CONCEPTUAL MAP
+    ══════════════════════════════════════════ -->
+    {% if conceptual_map %}
+    <div class="eyebrow-row">
+        <span class="eyebrow-label">How It All Connects</span>
+    </div>
+    <hr class="eyebrow-rule">
+    <h2>Conceptual Map</h2>
+
+    {% for conn in conceptual_map %}
+    <div class="connection-block">
+        {% if conn.heading %}
+        <div class="connection-heading">{{ conn.heading }}</div>
+        {% endif %}
+        <p>{{ conn.paragraph }}</p>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+
+    <!-- ══════════════════════════════════════════
+         KEY TAKEAWAYS
+    ══════════════════════════════════════════ -->
+    {% if takeaways %}
+    <div class="eyebrow-row">
+        <span class="eyebrow-label">Key Takeaways</span>
+    </div>
+    <hr class="eyebrow-rule">
+    <h2>Key Takeaways</h2>
+
+    <ul class="takeaway-list">
+        {% for t in takeaways %}
+        <li>
+            <span class="takeaway-num">{{ loop.index }}.</span>
+            {{ t }}
+        </li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+
+    <!-- ══════════════════════════════════════════
+         GLOSSARY
+    ══════════════════════════════════════════ -->
+    {% if glossary %}
+    <div class="eyebrow-row" style="padding-top: 10mm;">
+        <span class="eyebrow-label">{{ glossary_label }}</span>
+    </div>
+    <hr class="eyebrow-rule">
+    <h2>{{ glossary_label }}</h2>
+
+    <div class="glossary-grid">
+        {% for item in glossary %}
+        <div class="glossary-item">
+            <div class="glossary-term">{{ item.term }}</div>
+            <div class="glossary-def">{{ item.definition }}</div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+
+    <!-- ══════════════════════════════════════════
+         SELF-TEST
+    ══════════════════════════════════════════ -->
+    {% if quick_review %}
+    <div class="eyebrow-row" style="padding-top: 10mm;">
+        <span class="eyebrow-label">{{ review_label }}</span>
+    </div>
+    <hr class="eyebrow-rule">
+    <h2>{{ review_label }}</h2>
+
+    {% for item in quick_review %}
+    <div class="review-item">
+        <div class="review-header">
+            <span class="review-num">Q{{ loop.index }}</span>
+            <span class="review-dot">·</span>
+            {% if item.difficulty == 'Recall' %}
+            <span class="difficulty-badge diff-recall">Recall</span>
+            {% elif item.difficulty == 'Understanding' %}
+            <span class="difficulty-badge diff-understanding">Understanding</span>
+            {% elif item.difficulty == 'Application' %}
+            <span class="difficulty-badge diff-application">Application</span>
+            {% else %}
+            <span class="difficulty-badge diff-recall">{{ item.difficulty }}</span>
+            {% endif %}
+        </div>
+        <div class="review-question">{{ item.question }}</div>
+        <div class="review-answer">{{ item.answer }}</div>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+
+    <!-- ══════════════════════════════════════════
+         LEARNING PATH
+    ══════════════════════════════════════════ -->
+    {% if study_roadmap and (study_roadmap.prerequisites or study_roadmap.next_topics) %}
+    <div class="eyebrow-row" style="padding-top: 10mm;">
+        <span class="eyebrow-label">Your Learning Path</span>
+    </div>
+    <hr class="eyebrow-rule">
+    <h2>Your Learning Path</h2>
+
+    <div class="roadmap-grid">
+
+        {% if study_roadmap.prerequisites %}
+        <div class="roadmap-col">
+            <div class="roadmap-col-heading roadmap-before">Before this lecture</div>
+            <ul class="roadmap-list">
+                {% for item in study_roadmap.prerequisites %}
+                <li>
+                    <div class="roadmap-concept">{{ item.concept }}</div>
+                    <div class="roadmap-reason">{{ item.reason }}</div>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        {% if study_roadmap.next_topics %}
+        <div class="roadmap-col">
+            <div class="roadmap-col-heading roadmap-next">What to study next</div>
+            <ul class="roadmap-list">
+                {% for item in study_roadmap.next_topics %}
+                <li>
+                    <div class="roadmap-concept">{{ item.topic }}</div>
+                    <div class="roadmap-reason">{{ item.reason }}</div>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+    </div>
+    {% endif %}
+
+</div>
+</body>
 </html>

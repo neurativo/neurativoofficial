@@ -6,20 +6,18 @@ from datetime import datetime, timezone
 # Initialize Supabase client
 supabase: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY) if settings.SUPABASE_URL and settings.SUPABASE_KEY else None
 
-def save_lecture(title: str, transcript: str, duration_seconds: int = None) -> str:
+def save_lecture(title: str, transcript: str, duration_seconds: int = None, language: str = "en") -> str:
     """
     Saves a lecture to the Supabase database.
-    
+
     Args:
         title: The title of the lecture
         transcript: The full transcript text
         duration_seconds: Optional duration in seconds
-        
+        language: ISO-639-1 language code detected by Whisper (e.g. "en", "ar")
+
     Returns:
         str: The UUID of the created lecture record
-        
-    Raises:
-        Exception: If Supabase client is not configured or insert fails
     """
     if not supabase:
         raise Exception("Supabase client is not initialized. check your environment variables.")
@@ -27,18 +25,69 @@ def save_lecture(title: str, transcript: str, duration_seconds: int = None) -> s
     data = {
         "title": title,
         "transcript": transcript,
-        "duration_seconds": duration_seconds
+        "duration_seconds": duration_seconds,
+        "language": language,
     }
-    
-    # Supabase-py v2 returns a response object with .data
+
     response = supabase.table("lectures").insert(data).execute()
-    
+
     if hasattr(response, 'data') and len(response.data) > 0:
         return response.data[0]['id']
     else:
-        # Depending on version, response might be different, but v2 strongly types .data
-        # If execution failed, it likely raised an exception already.
         raise Exception("Failed to insert lecture record: No data returned")
+
+def update_lecture_language(lecture_id: str, language: str):
+    """
+    Sets the detected language on a lecture record.
+    Called on the first chunk of a live session once Whisper returns its detection.
+    """
+    if not supabase:
+        raise Exception("Supabase client is not initialized")
+    supabase.table("lectures").update({"language": language}).eq("id", lecture_id).execute()
+
+
+def get_lecture_language(lecture_id: str) -> str:
+    """
+    Returns the stored ISO-639-1 language code for a lecture, defaulting to 'en'.
+    """
+    if not supabase:
+        return "en"
+    response = (
+        supabase.table("lectures")
+        .select("language")
+        .eq("id", lecture_id)
+        .execute()
+    )
+    if hasattr(response, 'data') and len(response.data) > 0:
+        return response.data[0].get("language") or "en"
+    return "en"
+
+
+def get_lecture_topic(lecture_id: str):
+    """
+    Returns the stored topic label for a lecture, or None if not yet detected.
+    """
+    if not supabase:
+        return None
+    response = (
+        supabase.table("lectures")
+        .select("topic")
+        .eq("id", lecture_id)
+        .execute()
+    )
+    if hasattr(response, 'data') and len(response.data) > 0:
+        return response.data[0].get("topic") or None
+    return None
+
+
+def update_lecture_topic(lecture_id: str, topic: str):
+    """
+    Stores the detected topic label on the lecture record.
+    """
+    if not supabase:
+        return
+    supabase.table("lectures").update({"topic": topic}).eq("id", lecture_id).execute()
+
 
 def get_lecture_transcript(lecture_id: str) -> str:
     """
@@ -69,12 +118,12 @@ def update_lecture_summary(lecture_id: str, summary: str):
          raise Exception(f"Failed to update summary. Lecture ID {lecture_id} might not exist.")
 
 
-def create_lecture(title: str = "Live Session", transcript: str = "") -> str:
+def create_lecture(title: str = "Live Session", transcript: str = "", language: str = "en") -> str:
     """
     Creates a new lecture record, useful for initializing live sessions.
-    Defaults to empty transcript.
+    Defaults to empty transcript. Language is updated on first chunk arrival.
     """
-    return save_lecture(title, transcript)
+    return save_lecture(title, transcript, language=language)
 
 def create_live_session(lecture_id: str) -> str:
     """
@@ -186,14 +235,16 @@ def end_live_session(lecture_id: str):
 
 def get_lecture_for_summarization(lecture_id: str):
     """
-    Retrieves transcript, summary, and last_summarized_length for a lecture.
+    Retrieves transcript, summary, language, and analytics for a lecture.
     """
     if not supabase:
         raise Exception("Supabase client is not initialized")
-        
-    response = supabase.table("lectures").select("transcript, summary, master_summary, total_sections, last_summarized_length, total_chunks, total_duration_seconds, title, created_at").eq("id", lecture_id).execute()
 
-    
+    response = supabase.table("lectures").select(
+        "transcript, summary, master_summary, total_sections, last_summarized_length, "
+        "total_chunks, total_duration_seconds, title, created_at, language, topic"
+    ).eq("id", lecture_id).execute()
+
     if hasattr(response, 'data') and len(response.data) > 0:
         return response.data[0]
     return None
@@ -351,7 +402,49 @@ def get_unsummarized_chunks(lecture_id: str, after_index: int):
         .gt("chunk_index", after_index)\
         .order("chunk_index", desc=False)\
         .execute()
-    
+
     if hasattr(response, 'data'):
         return response.data
     return []
+
+
+# =============================================================================
+#  EMBEDDING CACHE
+# =============================================================================
+
+def get_cached_embeddings(lecture_id: str) -> dict:
+    """
+    Returns a dict mapping chunk_hash -> embedding list for all cached
+    QA chunk embeddings belonging to this lecture.
+    """
+    if not supabase:
+        return {}
+    response = (
+        supabase.table("lecture_embeddings")
+        .select("chunk_hash, embedding")
+        .eq("lecture_id", lecture_id)
+        .execute()
+    )
+    if hasattr(response, 'data'):
+        return {row['chunk_hash']: row['embedding'] for row in response.data}
+    return {}
+
+
+def save_embeddings_cache(lecture_id: str, entries: list) -> None:
+    """
+    Upserts a list of {chunk_hash, chunk_text, embedding} dicts into the
+    lecture_embeddings cache table.  Uses ON CONFLICT DO NOTHING so existing
+    rows are never overwritten (hash collision → identical content).
+    """
+    if not supabase or not entries:
+        return
+    rows = [
+        {
+            "lecture_id": lecture_id,
+            "chunk_hash": e["chunk_hash"],
+            "chunk_text": e["chunk_text"],
+            "embedding":  e["embedding"],
+        }
+        for e in entries
+    ]
+    supabase.table("lecture_embeddings").upsert(rows, on_conflict="lecture_id,chunk_hash").execute()

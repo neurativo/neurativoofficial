@@ -79,15 +79,41 @@
   40%           { transform: translateY(-5px); }
 }
 
+@keyframes nast-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(20, 184, 166, 0); }
+  50%       { box-shadow: 0 0 0 6px rgba(20, 184, 166, 0.25); }
+}
+
+@keyframes section-highlight-fade {
+  0%   { border-left-color: #3b82f6; background-color: #eff6ff; }
+  70%  { border-left-color: #3b82f6; background-color: transparent; }
+  100% { border-left-color: transparent; background-color: transparent; }
+}
+
+@keyframes bg-pulse {
+  0%, 100% { opacity: 0.35; transform: scale(1); }
+  50%       { opacity: 0.6;  transform: scale(1.06); }
+}
+
 /* Animation classes */
 .animate-fade-in        { animation: fade-in 0.25s ease forwards; }
 .animate-slide-up       { animation: slide-up 0.3s ease forwards; }
 .animate-slide-in-right { animation: slide-in-right 0.28s ease forwards; }
+.animate-bg-pulse       { animation: bg-pulse 4s ease-in-out infinite; }
 
 /* .wave-bar is no longer used — waveform bars are driven by the Web Audio API analyser */
 
 .pulse-red {
   animation: rec-pulse 1.4s ease-in-out infinite;
+}
+
+.nast-glow {
+  animation: nast-glow 1.2s ease-in-out 2;
+}
+
+.section-new {
+  border-left: 3px solid #3b82f6 !important;
+  animation: section-highlight-fade 2s ease-out forwards;
 }
 
 /* ========================

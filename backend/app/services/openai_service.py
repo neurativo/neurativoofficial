@@ -4,36 +4,57 @@ from fastapi import UploadFile, HTTPException
 from app.core.config import settings
 from io import BytesIO
 
-# Initialize the OpenAI client only if the API key is available to avoid immediate errors on startup,
-# but we will check it before usage.
+# Language code → display name map for the frontend badge
+LANGUAGE_NAMES = {
+    "en": "English", "ar": "Arabic", "zh": "Chinese", "fr": "French",
+    "de": "German", "hi": "Hindi", "id": "Indonesian", "it": "Italian",
+    "ja": "Japanese", "ko": "Korean", "ms": "Malay", "nl": "Dutch",
+    "pl": "Polish", "pt": "Portuguese", "ru": "Russian", "es": "Spanish",
+    "sv": "Swedish", "ta": "Tamil", "te": "Telugu", "th": "Thai",
+    "tr": "Turkish", "uk": "Ukrainian", "ur": "Urdu", "vi": "Vietnamese",
+}
+
 client = OpenAI(api_key=settings.OPENAI_API_KEY) if settings.OPENAI_API_KEY else None
 
-async def transcribe_audio(file: UploadFile) -> str:
+
+async def transcribe_audio(file: UploadFile) -> tuple[str, str]:
+    """
+    Transcribes audio using Whisper and returns (transcript_text, language_code).
+    Language code is ISO-639-1 (e.g. "en", "ar", "zh").
+    Whisper detects language automatically — we just capture what it found.
+    """
     if not settings.OPENAI_API_KEY:
         raise HTTPException(status_code=500, detail="OpenAI API key not configured")
-    
+
     if not client:
         raise HTTPException(status_code=500, detail="OpenAI client not initialized")
 
     try:
-        # Read the file content
         file_content = await file.read()
-        
-        # Create a file-like object with the original filename
-        # This is crucial for OpenAI to detect the file type
         file_obj = BytesIO(file_content)
         file_obj.name = file.filename
 
-        # Call OpenAI Whisper API in a thread to avoid blocking the async event loop
+        # Use response_format="verbose_json" to get language alongside transcript.
+        # Whisper always detects language internally — verbose_json exposes it
+        # instead of discarding it. No extra API cost, no extra latency.
         transcript_response = await asyncio.to_thread(
             client.audio.transcriptions.create,
             model="whisper-1",
-            file=file_obj
+            file=file_obj,
+            response_format="verbose_json"
         )
-        
-        return transcript_response.text
+
+        text = transcript_response.text or ""
+        # verbose_json includes a top-level 'language' field (ISO-639-1 code)
+        detected_language = getattr(transcript_response, "language", None) or "en"
+
+        return text, detected_language
 
     except Exception as e:
-        # Log the error here in a real app
         print(f"Error during transcription: {e}")
         raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
+
+
+def get_language_display_name(language_code: str) -> str:
+    """Returns a human-readable language name for display in the UI."""
+    return LANGUAGE_NAMES.get(language_code.lower(), language_code.upper())
