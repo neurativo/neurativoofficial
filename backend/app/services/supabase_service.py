@@ -1,3 +1,5 @@
+import uuid as _uuid
+
 from supabase import create_client, Client
 from app.core.config import settings
 from datetime import datetime, timezone
@@ -29,7 +31,7 @@ def _fresh_db() -> Client:
         raise Exception("Supabase client is not initialized")
     return db
 
-def save_lecture(title: str, transcript: str, duration_seconds: int = None, language: str = "en") -> str:
+def save_lecture(title: str, transcript: str, duration_seconds: int = None, language: str = "en", user_id: str = None) -> str:
     """
     Saves a lecture to the Supabase database.
 
@@ -38,6 +40,7 @@ def save_lecture(title: str, transcript: str, duration_seconds: int = None, lang
         transcript: The full transcript text
         duration_seconds: Optional duration in seconds
         language: ISO-639-1 language code detected by Whisper (e.g. "en", "ar")
+        user_id: Optional UUID of the authenticated user who owns this lecture
 
     Returns:
         str: The UUID of the created lecture record
@@ -51,6 +54,8 @@ def save_lecture(title: str, transcript: str, duration_seconds: int = None, lang
         "duration_seconds": duration_seconds,
         "language": language,
     }
+    if user_id:
+        data["user_id"] = user_id
 
     response = supabase.table("lectures").insert(data).execute()
 
@@ -140,12 +145,13 @@ def update_lecture_summary(lecture_id: str, summary: str):
          raise Exception(f"Failed to update summary. Lecture ID {lecture_id} might not exist.")
 
 
-def create_lecture(title: str = "Live Session", transcript: str = "", language: str = "en") -> str:
+def create_lecture(title: str = "Live Session", transcript: str = "", language: str = "en", user_id: str = None) -> str:
     """
     Creates a new lecture record, useful for initializing live sessions.
     Defaults to empty transcript. Language is updated on first chunk arrival.
+    user_id links the lecture to an authenticated user (used for RLS + ownership checks).
     """
-    return save_lecture(title, transcript, language=language)
+    return save_lecture(title, transcript, language=language, user_id=user_id)
 
 def create_live_session(lecture_id: str) -> str:
     """
@@ -508,33 +514,233 @@ def save_student_question(lecture_id: str, question_text: str) -> None:
         print(f"[CIF] Failed to save student question: {e}")
 
 
-def get_recent_lectures(limit: int = 5, offset: int = 0) -> list:
+def get_recent_lectures(limit: int = 5, offset: int = 0, user_id: str = None) -> list:
     """
     Returns the most recent lectures sorted by created_at DESC.
-    Used by the frontend idle screen to show session history.
+    When user_id is provided, filters to only that user's lectures (dashboard view).
+    Without user_id, returns all lectures (legacy / unauthenticated mode).
     """
     if not supabase:
         return []
-    response = (
+    query = (
         supabase.table("lectures")
-        .select("id, title, topic, language, total_chunks, total_duration_seconds, created_at, summary")
+        .select("id, title, topic, language, total_chunks, total_sections, total_duration_seconds, created_at, master_summary, summary")
         .order("created_at", desc=True)
         .range(offset, offset + limit - 1)
-        .execute()
     )
+    if user_id:
+        query = query.eq("user_id", user_id)
+    response = query.execute()
     if not hasattr(response, "data"):
         return []
     rows = []
     for row in response.data:
-        summary = row.get("summary") or ""
+        preview_src = row.get("master_summary") or row.get("summary") or ""
         rows.append({
             "id":                     row["id"],
             "title":                  row.get("title") or "Untitled",
             "topic":                  row.get("topic"),
             "language":               row.get("language") or "en",
             "total_chunks":           row.get("total_chunks") or 0,
+            "total_sections":         row.get("total_sections") or 0,
             "total_duration_seconds": row.get("total_duration_seconds") or 0,
             "created_at":             row.get("created_at"),
-            "summary_preview":        summary[:200] if summary else "",
+            "summary_preview":        preview_src[:120] if preview_src else "",
         })
     return rows
+
+
+def get_lecture_owner(lecture_id: str) -> str | None:
+    """
+    Returns the user_id of the lecture owner, or None if the lecture doesn't exist
+    or was created before authentication was added (legacy lectures).
+    Used by endpoints to verify ownership before returning or modifying data.
+    """
+    try:
+        response = (
+            supabase.table("lectures")
+            .select("user_id")
+            .eq("id", lecture_id)
+            .execute()
+        )
+        if hasattr(response, "data") and response.data:
+            return response.data[0].get("user_id")
+    except Exception:
+        pass
+    return None
+
+
+def delete_lecture(lecture_id: str) -> None:
+    """
+    Permanently deletes a lecture and all its associated data.
+    Cascade deletes handle lecture_chunks, lecture_sections, etc.
+    """
+    if not supabase:
+        raise Exception("Supabase client is not initialized")
+    supabase.table("lectures").delete().eq("id", lecture_id).execute()
+
+
+# =============================================================================
+#  SHARE / FULL LECTURE
+# =============================================================================
+
+def generate_share_token(lecture_id: str) -> str:
+    """
+    Returns the existing share_token or generates a new uuid4 token, saves it,
+    and returns it. Idempotent — calling twice returns the same token.
+    """
+    db = _fresh_db()
+    resp = db.table("lectures").select("share_token").eq("id", lecture_id).execute()
+    if hasattr(resp, "data") and resp.data:
+        existing = resp.data[0].get("share_token")
+        if existing:
+            return existing
+    token = str(_uuid.uuid4())
+    db.table("lectures").update({"share_token": token}).eq("id", lecture_id).execute()
+    return token
+
+
+def clear_share_token(lecture_id: str) -> None:
+    """Sets share_token = NULL to unshare a lecture."""
+    _fresh_db().table("lectures").update({"share_token": None}).eq("id", lecture_id).execute()
+
+
+def get_lecture_by_share_token(token: str):
+    """
+    Finds a lecture by share_token. Returns public-safe fields, or None if not found.
+    """
+    if not supabase:
+        return None
+    response = (
+        supabase.table("lectures")
+        .select("id, title, topic, language, master_summary, summary, transcript, created_at, total_duration_seconds, share_views")
+        .eq("share_token", token)
+        .execute()
+    )
+    if hasattr(response, "data") and response.data:
+        return response.data[0]
+    return None
+
+
+def increment_share_views(lecture_id: str) -> None:
+    """Increments share_views counter. Non-fatal on failure."""
+    if not supabase:
+        return
+    try:
+        resp = supabase.table("lectures").select("share_views").eq("id", lecture_id).execute()
+        if hasattr(resp, "data") and resp.data:
+            current = resp.data[0].get("share_views") or 0
+            supabase.table("lectures").update({"share_views": current + 1}).eq("id", lecture_id).execute()
+    except Exception as e:
+        print(f"[share] increment_share_views failed (non-fatal): {e}")
+
+
+def get_lecture_full(lecture_id: str):
+    """
+    Returns complete lecture data including share fields for the LectureView page.
+    """
+    db = _fresh_db()
+    response = db.table("lectures").select(
+        "id, title, topic, language, transcript, master_summary, summary, "
+        "total_chunks, total_sections, total_duration_seconds, created_at, "
+        "share_token, share_views"
+    ).eq("id", lecture_id).execute()
+    if hasattr(response, "data") and response.data:
+        return response.data[0]
+    return None
+
+
+# =============================================================================
+#  PROFILE
+# =============================================================================
+
+def get_user_profile(user_id: str) -> dict:
+    """
+    Returns profile data for a user from the profiles table.
+    Gracefully handles missing optional columns.
+    """
+    if not supabase:
+        return {}
+    try:
+        response = supabase.table("profiles").select("*").eq("id", user_id).execute()
+        if hasattr(response, "data") and response.data:
+            row = response.data[0]
+            return {
+                "id":                   row.get("id"),
+                "display_name":         row.get("display_name") or row.get("full_name") or "",
+                "avatar_url":           row.get("avatar_url"),
+                "preferred_language":   row.get("preferred_language") or "en",
+                "pdf_auto_download":    row.get("pdf_auto_download") if row.get("pdf_auto_download") is not None else True,
+                "total_hours_recorded": row.get("total_hours_recorded") or 0,
+                "total_words_transcribed": row.get("total_words_transcribed") or 0,
+            }
+    except Exception as e:
+        print(f"[profile] get_user_profile error (non-fatal): {e}")
+    return {
+        "id": user_id,
+        "display_name": "",
+        "avatar_url": None,
+        "preferred_language": "en",
+        "pdf_auto_download": True,
+        "total_hours_recorded": 0,
+        "total_words_transcribed": 0,
+    }
+
+
+def update_user_profile(user_id: str, data: dict) -> dict:
+    """
+    Upserts profile data. Accepts display_name, preferred_language, pdf_auto_download.
+    """
+    if not supabase:
+        raise Exception("Supabase client is not initialized")
+    allowed = {"display_name", "preferred_language", "pdf_auto_download"}
+    payload = {k: v for k, v in data.items() if k in allowed}
+    payload["id"] = user_id
+    try:
+        supabase.table("profiles").upsert(payload, on_conflict="id").execute()
+    except Exception as e:
+        raise Exception(f"Failed to update profile: {e}")
+    return get_user_profile(user_id)
+
+
+def delete_user_account(user_id: str) -> None:
+    """
+    Deletes all user data: lectures cascade via DB constraints.
+    Profile is deleted from the profiles table.
+    Auth user deletion must be done via Supabase admin API separately.
+    """
+    if not supabase:
+        raise Exception("Supabase client is not initialized")
+    # Delete all lectures (cascades to chunks, sections, embeddings)
+    supabase.table("lectures").delete().eq("user_id", user_id).execute()
+    # Delete profile
+    try:
+        supabase.table("profiles").delete().eq("id", user_id).execute()
+    except Exception as e:
+        print(f"[profile] delete profile error (non-fatal): {e}")
+
+
+def get_monthly_lecture_count(user_id: str) -> dict:
+    """
+    Returns lectures_this_month count for a user.
+    Free plan limit is 5/month.
+    """
+    if not supabase:
+        return {"count": 0}
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    # First day of current month in ISO format
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
+    try:
+        response = (
+            supabase.table("lectures")
+            .select("id", count="exact")
+            .eq("user_id", user_id)
+            .gte("created_at", month_start)
+            .execute()
+        )
+        count = response.count if response.count is not None else 0
+        return {"count": count}
+    except Exception as e:
+        print(f"[usage] get_monthly_lecture_count error (non-fatal): {e}")
+        return {"count": 0}

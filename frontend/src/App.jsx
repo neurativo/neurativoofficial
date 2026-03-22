@@ -1,5 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import axios from 'axios';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import api from './lib/api';
+import { supabase } from './lib/supabase';
+import QAAnswer from './components/QAAnswer';
 
 const LANGUAGE_NAMES = {
     en: 'English', ar: 'Arabic',  zh: 'Chinese',    fr: 'French',
@@ -9,6 +12,16 @@ const LANGUAGE_NAMES = {
     sv: 'Swedish', ta: 'Tamil',   te: 'Telugu',      th: 'Thai',
     tr: 'Turkish', uk: 'Ukrainian',  ur: 'Urdu',     vi: 'Vietnamese',
 };
+
+// ── Timestamp formatter ────────────────────────────────────────────────────
+function fmtTs(seconds) {
+    const s = Math.floor(seconds);
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    if (h > 0) return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+    return `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+}
 
 // ── Summary parser ─────────────────────────────────────────────────────────
 // Converts the master_summary string (## sections) into structured objects
@@ -104,7 +117,10 @@ function parseSummary(text) {
     });
 }
 
-function App() {
+function App({ user }) {
+    const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+
     // ── Session ──────────────────────────────────────────
     const [lectureId, setLectureId]           = useState(null);
     const [sessionStatus, setSessionStatus]   = useState('idle'); // idle | recording | paused | ended
@@ -131,6 +147,7 @@ function App() {
     const [selectionInfo, setSelectionInfo]   = useState({ text: '', x: 0, y: 0, show: false });
     const [explainPanel, setExplainPanel]     = useState({ show: false, loading: false, data: null });
     const [exportModal, setExportModal]       = useState({ show: false, progress: 0, status: '' });
+    const [endModal, setEndModal]             = useState(false);
 
     // ── Phase 5: new state ────────────────────────────────
     const [nastScore, setNastScore]           = useState(null);  // from SSE when backend sends it
@@ -210,16 +227,28 @@ function App() {
     }, [sessionStatus]);
 
     useEffect(() => {
-        const onEsc = (e) => {
+        const onKey = (e) => {
             if (e.key === 'Escape') {
                 setExplainPanel(p => ({ ...p, show: false }));
                 setSearchActive(false);
                 setSearchQuery('');
             }
+            // Keyboard shortcuts only when no input is focused
+            if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
+            const st = sessionStatusRef.current;
+            if (e.key === ' ' && (st === 'recording' || st === 'paused')) {
+                e.preventDefault();
+                if (st === 'recording') pauseSession();
+                else startRecording(lectureIdRef.current);
+            }
+            if (e.key === 'e' && (st === 'recording' || st === 'paused')) {
+                e.preventDefault();
+                endSession();
+            }
         };
-        window.addEventListener('keydown', onEsc);
-        return () => window.removeEventListener('keydown', onEsc);
-    }, []);
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Fix 5 + 10: keep stable refs in sync with state for use in async callbacks
     useEffect(() => { lectureIdRef.current     = lectureId;     }, [lectureId]);
@@ -264,8 +293,8 @@ function App() {
             setStatsLoading(true);
             setStatsData(null);
             Promise.all([
-                axios.get(`/api/v1/lectures/${lectureId}/analytics`),
-                axios.get(`/api/v1/lectures/${lectureId}`).catch(() => ({ data: {} })),
+                api.get(`/api/v1/lectures/${lectureId}/analytics`),
+                api.get(`/api/v1/lectures/${lectureId}`).catch(() => ({ data: {} })),
             ]).then(([analyticsRes, lectureRes]) => {
                 setStatsData({ ...analyticsRes.data, _lecture: lectureRes.data });
             }).catch(() => {}).finally(() => setStatsLoading(false));
@@ -293,7 +322,7 @@ function App() {
     // Fetch recent sessions when on idle screen
     useEffect(() => {
         if (sessionStatus === 'idle') {
-            axios.get('/api/v1/lectures?limit=5')
+            api.get('/api/v1/lectures?limit=5')
                 .then(res => {
                     const list = Array.isArray(res.data) ? res.data
                                : Array.isArray(res.data?.lectures) ? res.data.lectures
@@ -342,6 +371,23 @@ function App() {
         } catch {}
     }, []);
 
+    // Load lecture from URL param (?lecture=id) — view a completed session from dashboard
+    useEffect(() => {
+        const paramId = searchParams.get('lecture');
+        if (!paramId) return;
+        api.get(`/api/v1/lectures/${paramId}`)
+            .then(res => {
+                setLectureId(paramId);
+                if (res.data.transcript) setTranscript([{ id: Date.now(), text: res.data.transcript }]);
+                const ms = res.data.master_summary || res.data.summary;
+                if (ms) setSummary(ms);
+                if (res.data.language) setDetectedLanguage(res.data.language);
+                if (res.data.topic) setDetectedTopic(res.data.topic);
+                setSessionStatus('ended');
+            })
+            .catch(() => {});
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
     // Resilience 6: persist session state to sessionStorage on every relevant change
     useEffect(() => {
         if (lectureId && sessionStatus !== 'idle') {
@@ -384,7 +430,7 @@ function App() {
         try {
             wakeLockRef.current = await navigator.wakeLock.request('screen');
         } catch (err) {
-            console.log('Wake lock denied:', err);
+            // wake lock unavailable on this device/browser
         }
     };
 
@@ -472,7 +518,7 @@ function App() {
                         return;
                     }
                     try {
-                        const res = await axios.get(`/api/v1/lectures/${lectureIdRef.current}`);
+                        const res = await api.get(`/api/v1/lectures/${lectureIdRef.current}`);
                         if (res.data.master_summary) setSummary(res.data.master_summary);
                     } catch {}
                 }, 30000);
@@ -486,7 +532,7 @@ function App() {
                 if (currentSt === 'recording' || currentSt === 'paused') {
                     connectSSE(id);
                     // Catchup: fetch latest summary immediately after reconnect
-                    axios.get(`/api/v1/lectures/${id}`).then(res => {
+                    api.get(`/api/v1/lectures/${id}`).then(res => {
                         if (res.data.master_summary) setSummary(res.data.master_summary);
                     }).catch(() => {});
                 }
@@ -509,7 +555,7 @@ function App() {
 
     const startLiveSession = async () => {
         try {
-            const res = await axios.post('/api/v1/live/start');
+            const res = await api.post('/api/v1/live/start');
             setLectureId(res.data.lecture_id);
             setTranscript([]);
             setSummary('');
@@ -610,7 +656,7 @@ function App() {
                 timerWorkerRef.current = null;
             }
             timerWorkerRef.current = new Worker(
-                new URL('../workers/timerWorker.js', import.meta.url)
+                new URL('./workers/timerWorker.js', import.meta.url)
             );
 
             const drawLoop = () => {
@@ -687,7 +733,7 @@ function App() {
         formData.append('file', new File([blob], 'chunk.webm', { type: 'audio/webm' }));
         const start = Date.now();
         try {
-            const res = await axios.post(
+            const res = await api.post(
                 `/api/v1/live/${targetId}/chunk`,
                 formData,
                 { timeout: 25000 },
@@ -700,7 +746,7 @@ function App() {
                 const rawText = res.data.chunk_transcript.trim();
                 const overlap = lastOverlapRef.current;
                 const displayText = overlap ? `${overlap} ${rawText}` : rawText;
-                setTranscript(prev => [...prev, { id: Date.now(), text: displayText }]);
+                setTranscript(prev => [...prev, { id: Date.now(), text: displayText, timestamp: fmtTs(prev.length * 12) }]);
                 lastOverlapRef.current = getLastTwoSentences(rawText);
             }
             // Use functional updates — safe in stale closures (online/offline drain effect)
@@ -769,7 +815,8 @@ function App() {
         sseReconnectRef.current = 0;
         sessionStorage.removeItem('neurativo_session');
         setSessionStatus('ended');
-        try { await axios.post(`/api/v1/live/${lectureId}/end`); } catch {}
+        setEndModal(true);
+        try { await api.post(`/api/v1/live/${lectureId}/end`); } catch {}
     };
 
     const handleExplainRequest = async () => {
@@ -777,7 +824,7 @@ function App() {
         setSelectionInfo(p => ({ ...p, show: false }));
         setExplainPanel({ show: true, loading: true, data: null });
         try {
-            const res = await axios.post(`/api/v1/explain/${lectureId}`, { text: selectionInfo.text, mode: 'simple' });
+            const res = await api.post(`/api/v1/explain/${lectureId}`, { text: selectionInfo.text, mode: 'simple' });
             setExplainPanel({ show: true, loading: false, data: res.data });
         } catch {
             setExplainPanel({ show: true, loading: false, data: { explanation: 'Failed to generate explanation.' } });
@@ -804,7 +851,7 @@ function App() {
             setExportModal(p => ({ ...p, progress: STAGES[stageIdx].pct, status: STAGES[stageIdx].msg }));
         }, 2500);
         try {
-            const res = await axios.get(`/api/v1/lectures/${lectureId}/export/pdf`, { responseType: 'blob' });
+            const res = await api.get(`/api/v1/lectures/${lectureId}/export/pdf`, { responseType: 'blob' });
             clearInterval(interval);
             setExportModal({ show: true, progress: 100, status: 'Your report is ready!', error: null });
             setTimeout(() => {
@@ -829,7 +876,7 @@ function App() {
         setQaQuestion('');
         setQaLoading(true);
         try {
-            const res = await axios.post(`/api/v1/ask/${lectureId}`, { question });
+            const res = await api.post(`/api/v1/ask/${lectureId}`, { question });
             setQaHistory(prev => [...prev, { question, answer: res.data.answer }]);
         } catch {
             setQaHistory(prev => [...prev, { question, answer: "Couldn't get an answer. Please try again." }]);
@@ -843,7 +890,7 @@ function App() {
     const Waveform = () => (
         <div ref={waveformBarsRef} className="flex items-end gap-[3px] h-4">
             {[...Array(8)].map((_, i) => (
-                <div key={i} className="w-[3px] bg-blue-500 rounded-full"
+                <div key={i} className="w-[3px] bg-[#1a1a1a] rounded-full"
                     style={{ height: '8%', opacity: 0.4, transition: 'none' }} />
             ))}
         </div>
@@ -854,12 +901,12 @@ function App() {
             onClick={() => setActiveTab(id)}
             className={`flex-1 h-8 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-1.5
                 ${activeTab === id
-                    ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
-                    : 'text-slate-500 hover:text-slate-700'}`}
+                    ? 'bg-white text-[#1a1a1a] shadow-sm border border-[#f0ede8]'
+                    : 'text-[#6b6b6b] hover:text-[#1a1a1a]'}`}
         >
             {label}
             {badge > 0 && (
-                <span className="w-4 h-4 rounded-full bg-blue-100 text-blue-600 text-[10px] flex items-center justify-center font-bold leading-none">
+                <span className="w-4 h-4 rounded-full bg-[#f0ede8] text-[#1a1a1a] text-[10px] flex items-center justify-center font-bold leading-none">
                     {badge > 9 ? '9+' : badge}
                 </span>
             )}
@@ -879,7 +926,7 @@ function App() {
         if (savedLang) setDetectedLanguage(savedLang);
         if (savedTopic) setDetectedTopic(savedTopic);
         try {
-            const res = await axios.get(`/api/v1/lectures/${savedId}`);
+            const res = await api.get(`/api/v1/lectures/${savedId}`);
             if (res.data.transcript) {
                 setTranscript([{ id: Date.now(), text: res.data.transcript }]);
             }
@@ -892,12 +939,11 @@ function App() {
 
     if (sessionStatus === 'idle') {
         return (
-            <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 relative overflow-hidden">
-                {/* Animated background blobs */}
+            <div className="min-h-screen bg-[#fafaf9] flex items-center justify-center p-6 relative overflow-hidden">
+                {/* Subtle background texture */}
                 <div className="absolute inset-0 pointer-events-none">
-                    <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-400/10 rounded-full blur-3xl animate-bg-pulse" />
-                    <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-indigo-400/10 rounded-full blur-3xl animate-bg-pulse" style={{ animationDelay: '1.5s' }} />
-                    <div className="absolute top-2/3 left-1/2 w-64 h-64 bg-teal-400/8 rounded-full blur-3xl animate-bg-pulse" style={{ animationDelay: '3s' }} />
+                    <div className="absolute top-1/3 left-1/4 w-96 h-96 bg-[#f0ede8]/60 rounded-full blur-3xl" />
+                    <div className="absolute bottom-1/4 right-1/3 w-80 h-80 bg-[#f0ede8]/40 rounded-full blur-3xl" />
                 </div>
 
                 {/* Resilience 6: Session recovery modal */}
@@ -909,19 +955,19 @@ function App() {
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
                                 </svg>
                             </div>
-                            <h2 className="text-[15px] font-bold text-slate-900 mb-1">Session interrupted</h2>
-                            <p className="text-[13px] text-slate-500 mb-5 leading-relaxed">
+                            <h2 className="text-[15px] font-bold text-[#1a1a1a] mb-1">Session interrupted</h2>
+                            <p className="text-[13px] text-[#6b6b6b] mb-5 leading-relaxed">
                                 You have an active session from before. Would you like to resume where you left off?
                             </p>
                             <div className="flex gap-2">
                                 <button
                                     onClick={handleResumeSession}
-                                    className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-[13px] font-bold rounded-xl transition-colors">
+                                    className="flex-1 py-2.5 bg-[#1a1a1a] hover:opacity-80 text-[#fafaf9] text-[13px] font-bold rounded-xl transition-colors">
                                     Resume Session
                                 </button>
                                 <button
                                     onClick={() => { setRecoverySession(null); sessionStorage.removeItem('neurativo_session'); }}
-                                    className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[13px] font-semibold rounded-xl transition-colors">
+                                    className="flex-1 py-2.5 bg-[#f0ede8] hover:bg-[#e8e4de] text-[#1a1a1a] text-[13px] font-semibold rounded-xl transition-colors">
                                     Start New
                                 </button>
                             </div>
@@ -937,21 +983,41 @@ function App() {
                 )}
 
                 <div className="relative w-full max-w-sm animate-fade-in">
-                    {/* Brand */}
+                    {/* Brand + nav */}
                     <div className="flex items-center gap-2.5 mb-8">
-                        <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center shadow-md shadow-blue-500/30">
+                        <div className="w-9 h-9 rounded-xl bg-[#1a1a1a] flex items-center justify-center ">
                             <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
                             </svg>
                         </div>
-                        <span className="text-xl font-bold text-slate-900 font-heading">Neurativo</span>
+                        <span className="text-xl font-bold text-[#1a1a1a] font-heading flex-1">Neurativo</span>
+                        {/* Dashboard link */}
+                        <button
+                            onClick={() => navigate('/app')}
+                            className="text-[12px] text-[#6b6b6b] hover:text-[#1a1a1a] transition-colors flex items-center gap-1"
+                        >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16"/>
+                            </svg>
+                            Dashboard
+                        </button>
+                        {/* User avatar */}
+                        {user && (
+                            <button
+                                onClick={async () => { await supabase.auth.signOut(); navigate('/auth'); }}
+                                title={`Signed in as ${user.email} — click to sign out`}
+                                className="w-7 h-7 rounded-full bg-[#1a1a1a] text-[#fafaf9] text-[11px] font-bold flex items-center justify-center hover:opacity-80 transition-opacity ml-1"
+                            >
+                                {user.email?.[0].toUpperCase() ?? '?'}
+                            </button>
+                        )}
                     </div>
 
                     {/* Headline */}
-                    <h1 className="text-[28px] font-bold text-slate-900 leading-tight mb-3 font-heading">
+                    <h1 className="text-[28px] font-bold text-[#1a1a1a] leading-tight mb-3 font-heading">
                         Your AI<br />lecture assistant.
                     </h1>
-                    <p className="text-slate-500 text-sm leading-relaxed mb-8">
+                    <p className="text-[#6b6b6b] text-sm leading-relaxed mb-8">
                         Record any lecture and get live transcription, real-time summaries, and instant Q&amp;A — as it happens.
                     </p>
 
@@ -965,13 +1031,13 @@ function App() {
                             { icon: 'M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z', label: 'Citation Q&A', sub: 'Grounded answers' },
                             { icon: 'M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z', label: 'Export to PDF', sub: 'Full report' },
                         ].map(({ icon, label, sub }) => (
-                            <div key={label} className="flex items-start gap-3 text-sm bg-white border border-slate-100 rounded-xl px-3.5 py-3 shadow-sm">
-                                <svg className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <div key={label} className="flex items-start gap-3 text-sm bg-white border border-[#f0ede8] rounded-xl px-3.5 py-3 shadow-sm">
+                                <svg className="w-4 h-4 text-[#6b6b6b] shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={icon} />
                                 </svg>
                                 <div>
-                                    <div className="text-[12px] font-semibold text-slate-700 leading-tight">{label}</div>
-                                    <div className="text-[11px] text-slate-400 mt-0.5">{sub}</div>
+                                    <div className="text-[12px] font-semibold text-[#1a1a1a] leading-tight">{label}</div>
+                                    <div className="text-[11px] text-[#a3a3a3] mt-0.5">{sub}</div>
                                 </div>
                             </div>
                         ))}
@@ -979,27 +1045,27 @@ function App() {
 
                     {/* CTA */}
                     <button onClick={startLiveSession}
-                        className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl transition-all active:scale-[0.98] shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2.5 text-[15px]">
+                        className="w-full py-3.5 bg-[#1a1a1a] hover:opacity-80 text-[#fafaf9] font-bold rounded-2xl transition-all active:scale-[0.98] flex items-center justify-center gap-2.5 text-[15px]">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                         </svg>
                         Start Live Session
                     </button>
-                    <p className="text-center text-xs text-slate-400 mt-3">Microphone access required</p>
+                    <p className="text-center text-xs text-[#a3a3a3] mt-3">Microphone access required</p>
 
                     {/* Recent sessions */}
                     {recentSessions.length > 0 && (
                         <div className="mt-8">
-                            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2.5">Recent Sessions</p>
+                            <p className="text-[11px] font-semibold text-[#a3a3a3] uppercase tracking-wider mb-2.5">Recent Sessions</p>
                             <div className="space-y-1.5">
                                 {recentSessions.slice(0, 3).map(session => (
-                                    <div key={session.id} className="flex items-center gap-3 bg-white border border-slate-100 rounded-xl px-4 py-2.5">
+                                    <div key={session.id} className="flex items-center gap-3 bg-white border border-[#f0ede8] rounded-xl px-4 py-2.5">
                                         <svg className="w-3.5 h-3.5 text-slate-300 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                                         </svg>
-                                        <span className="flex-1 truncate text-[13px] text-slate-600">{session.title || 'Untitled Session'}</span>
+                                        <span className="flex-1 truncate text-[13px] text-[#6b6b6b]">{session.title || 'Untitled Session'}</span>
                                         {session.created_at && (
-                                            <span className="text-[11px] text-slate-400 shrink-0">
+                                            <span className="text-[11px] text-[#a3a3a3] shrink-0">
                                                 {new Date(session.created_at).toLocaleDateString()}
                                             </span>
                                         )}
@@ -1018,7 +1084,7 @@ function App() {
     // ═══════════════════════════════════════════
 
     return (
-        <div className="h-screen bg-white flex flex-col overflow-hidden selection:bg-blue-100">
+        <div className="h-screen bg-white flex flex-col overflow-hidden selection:bg-[#f0ede8]">
 
             {/* ── Resilience 1: Offline Banner ── */}
             {!isOnline && (sessionStatus === 'recording' || sessionStatus === 'paused') && (
@@ -1039,16 +1105,16 @@ function App() {
             )}
 
             {/* ── Header ── */}
-            <header className="h-14 border-b border-slate-100 flex items-center justify-between px-4 md:px-5 shrink-0 bg-white z-30">
+            <header className="h-14 border-b border-[#f0ede8] flex items-center justify-between px-4 md:px-5 shrink-0 bg-white z-30">
                 {/* Left: brand + status */}
                 <div className="flex items-center gap-2 md:gap-4 min-w-0">
                     <div className="flex items-center gap-2 shrink-0">
-                        <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center">
+                        <div className="w-7 h-7 rounded-lg bg-[#1a1a1a] flex items-center justify-center">
                             <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
                             </svg>
                         </div>
-                        <span className="font-bold text-slate-900 font-heading text-[15px]">Neurativo</span>
+                        <span className="font-bold text-[#1a1a1a] font-heading text-[15px]">Neurativo</span>
                     </div>
 
                     <div className="h-4 w-px bg-slate-200 hidden md:block" />
@@ -1076,7 +1142,7 @@ function App() {
                         </div>
                     )}
                     {sessionStatus === 'ended' && (
-                        <div className="flex items-center gap-2 text-[13px] text-slate-400 font-medium">
+                        <div className="flex items-center gap-2 text-[13px] text-[#a3a3a3] font-medium">
                             <div className="w-2 h-2 rounded-full bg-slate-300" />
                             <span className="hidden md:inline">Session ended · {formatTime(recordingSeconds)}</span>
                         </div>
@@ -1086,7 +1152,7 @@ function App() {
                     {(detectedLanguage || detectedTopic || nastScore != null) && (
                         <div className="flex items-center gap-1.5 overflow-hidden">
                             {detectedLanguage && (
-                                <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 text-[11px] font-semibold uppercase tracking-wide border border-blue-100 shrink-0">
+                                <span className="px-2 py-0.5 rounded-md bg-[#fafaf9] text-blue-700 text-[11px] font-semibold uppercase tracking-wide border border-blue-100 shrink-0">
                                     {LANGUAGE_NAMES[detectedLanguage] || detectedLanguage.toUpperCase()}
                                 </span>
                             )}
@@ -1106,6 +1172,16 @@ function App() {
 
                 {/* Right: actions */}
                 <div className="flex items-center gap-2 shrink-0">
+                    {/* Back to dashboard */}
+                    <button
+                        onClick={() => navigate('/app')}
+                        className="hidden md:flex items-center gap-1 btn-ghost text-[12px] text-[#a3a3a3] hover:text-[#1a1a1a]"
+                        title="Back to dashboard"
+                    >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16"/>
+                        </svg>
+                    </button>
                     {sessionStatus === 'ended' && (
                         <button onClick={() => {
                                 setSessionStatus('idle');
@@ -1125,7 +1201,7 @@ function App() {
                     )}
                     {lectureId && (
                         <button onClick={handleExportPDF}
-                            className="hidden md:flex items-center gap-1.5 btn-ghost border border-slate-200">
+                            className="hidden md:flex items-center gap-1.5 btn-ghost border border-[#f0ede8]">
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                             </svg>
@@ -1134,7 +1210,7 @@ function App() {
                     )}
                     {sessionStatus !== 'ended' && (
                         <button onClick={endSession}
-                            className="px-4 py-1.5 text-sm font-semibold bg-slate-900 text-white hover:bg-slate-700 rounded-lg transition-colors">
+                            className="px-4 py-1.5 text-sm font-semibold bg-[#1a1a1a] text-white hover:bg-[#333] rounded-lg transition-colors">
                             End
                         </button>
                     )}
@@ -1145,14 +1221,14 @@ function App() {
             <div className="flex flex-1 overflow-hidden">
 
                 {/* ── LEFT: Transcript ── */}
-                <div className={`flex-1 flex flex-col border-r border-slate-100 min-w-0 ${activePanel !== 'transcript' ? 'hidden md:flex' : 'flex'}`}>
+                <div className={`flex-1 flex flex-col border-r border-[#f0ede8] min-w-0 ${activePanel !== 'transcript' ? 'hidden md:flex' : 'flex'}`}>
 
                     {/* Panel header */}
                     <div className="panel-header">
                         <div className="flex items-center gap-3 flex-1 min-w-0">
                             <span className="panel-label shrink-0">Transcript</span>
                             {!searchActive && transcript.length > 0 && (
-                                <span className="text-[11px] text-slate-400 font-mono truncate">
+                                <span className="text-[11px] text-[#a3a3a3] font-mono truncate">
                                     {transcript.length} segments · {wordCount.toLocaleString()} words
                                 </span>
                             )}
@@ -1163,22 +1239,22 @@ function App() {
                                         value={searchQuery}
                                         onChange={e => setSearchQuery(e.target.value)}
                                         placeholder="Search transcript..."
-                                        className="flex-1 bg-transparent text-[12px] text-slate-700 placeholder:text-slate-400 outline-none min-w-0"
+                                        className="flex-1 bg-transparent text-[12px] text-[#1a1a1a] placeholder:text-[#a3a3a3] outline-none min-w-0"
                                     />
                                     {searchQuery && (
-                                        <span className="text-[11px] text-slate-400 shrink-0 font-mono">
+                                        <span className="text-[11px] text-[#a3a3a3] shrink-0 font-mono">
                                             {filteredTranscript.length}/{transcript.length}
                                         </span>
                                     )}
                                     <button onClick={() => { setSearchActive(false); setSearchQuery(''); }}
-                                        className="text-slate-400 hover:text-slate-600 shrink-0 transition-colors text-xs">✕</button>
+                                        className="text-[#a3a3a3] hover:text-[#6b6b6b] shrink-0 transition-colors text-xs">✕</button>
                                 </div>
                             )}
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                             {!searchActive && (
                                 <button onClick={() => setSearchActive(true)}
-                                    className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-slate-700 rounded-lg transition-colors">
+                                    className="w-7 h-7 flex items-center justify-center text-[#a3a3a3] hover:text-[#1a1a1a] rounded-lg transition-colors">
                                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                                     </svg>
@@ -1208,18 +1284,18 @@ function App() {
                                         }
                                         parts.push(text.slice(last));
                                         return (
-                                            <div key={seg.id} className="group flex gap-4 px-3 py-3 rounded-xl hover:bg-slate-50 transition-colors animate-fade-in">
-                                                <span className="text-[11px] text-slate-300 font-mono pt-[3px] w-6 text-right shrink-0 select-none">{i + 1}</span>
-                                                <p className="flex-1 text-[15px] leading-relaxed text-slate-700 group-hover:text-slate-900 transition-colors">{parts}</p>
+                                            <div key={seg.id} className="group flex gap-4 px-3 py-3 rounded-xl hover:bg-[#fafaf9] transition-colors animate-fade-in">
+                                                <span className="text-[10px] text-[#a3a3a3] font-mono pt-[4px] shrink-0 select-none" style={{ minWidth: 36, textAlign: 'right' }}>{seg.timestamp || fmtTs(i * 12)}</span>
+                                                <p className="flex-1 text-[15px] leading-relaxed text-[#1a1a1a] group-hover:text-[#1a1a1a] transition-colors">{parts}</p>
                                             </div>
                                         );
                                     }
                                     return (
                                         <div key={seg.id}
-                                            className="group flex gap-4 px-3 py-3 rounded-xl hover:bg-slate-50 transition-colors animate-fade-in"
+                                            className="group flex gap-4 px-3 py-3 rounded-xl hover:bg-[#fafaf9] transition-colors animate-fade-in"
                                             style={{ animationDelay: `${Math.min(i, 4) * 0.04}s` }}>
-                                            <span className="text-[11px] text-slate-300 font-mono pt-[3px] w-6 text-right shrink-0 select-none">{i + 1}</span>
-                                            <p className="flex-1 text-[15px] leading-relaxed text-slate-700 group-hover:text-slate-900 transition-colors">{seg.text}</p>
+                                            <span className="text-[10px] text-[#a3a3a3] font-mono pt-[4px] shrink-0 select-none" style={{ minWidth: 36, textAlign: 'right' }}>{seg.timestamp || fmtTs(i * 12)}</span>
+                                            <p className="flex-1 text-[15px] leading-relaxed text-[#1a1a1a] group-hover:text-[#1a1a1a] transition-colors">{seg.text}</p>
                                         </div>
                                     );
                                 })}
@@ -1228,7 +1304,7 @@ function App() {
                                 {sessionStatus === 'recording' && !searchQuery && (
                                     <div className="flex gap-4 px-3 py-3">
                                         <span className="w-6" />
-                                        <div className="flex items-center gap-2 text-slate-400">
+                                        <div className="flex items-center gap-2 text-[#a3a3a3]">
                                             <div className="flex gap-1">
                                                 {[0, 1, 2].map(i => (
                                                     <div key={i} className="w-1.5 h-1.5 rounded-full bg-slate-300 animate-bounce"
@@ -1243,7 +1319,7 @@ function App() {
                                 {/* No results for search */}
                                 {searchQuery && filteredTranscript.length === 0 && (
                                     <div className="py-12 text-center">
-                                        <p className="text-sm text-slate-400">No matches for "{searchQuery}"</p>
+                                        <p className="text-sm text-[#a3a3a3]">No matches for "{searchQuery}"</p>
                                     </div>
                                 )}
                             </div>
@@ -1253,19 +1329,19 @@ function App() {
                                     <>
                                         <div className="flex items-end gap-1 h-8 mb-1">
                                             {[40, 65, 85, 55, 40].map((h, i) => (
-                                                <div key={i} className="w-1.5 rounded-full bg-blue-200 animate-pulse"
+                                                <div key={i} className="w-1.5 rounded-full bg-[#e0ddd8] animate-pulse"
                                                     style={{ height: `${h}%`, animationDelay: `${i * 0.2}s` }} />
                                             ))}
                                         </div>
-                                        <p className="text-sm font-medium text-slate-600">Listening for speech...</p>
-                                        <p className="text-xs text-slate-400">First transcript arrives in ~12 seconds</p>
+                                        <p className="text-sm font-medium text-[#6b6b6b]">Listening for speech...</p>
+                                        <p className="text-xs text-[#a3a3a3]">First transcript arrives in ~12 seconds</p>
                                     </>
                                 ) : (
                                     <>
                                         <svg className="w-10 h-10 text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                                         </svg>
-                                        <p className="text-sm text-slate-400">No transcript yet</p>
+                                        <p className="text-sm text-[#a3a3a3]">No transcript yet</p>
                                     </>
                                 )}
                             </div>
@@ -1278,7 +1354,7 @@ function App() {
                 <div className={`w-full md:w-[400px] shrink-0 flex flex-col bg-white ${activePanel === 'transcript' ? 'hidden md:flex' : 'flex'}`}>
 
                     {/* Tab bar */}
-                    <div className="h-10 flex items-center gap-1 px-2 border-b border-slate-100 bg-slate-50/80 shrink-0">
+                    <div className="h-10 flex items-center gap-1 px-2 border-b border-[#f0ede8] bg-[#fafaf9]/80 shrink-0">
                         <TabButton id="summary" label="Summary" />
                         <TabButton id="ask" label="Ask" badge={qaHistory.length} />
                         <TabButton id="stats" label="Stats" />
@@ -1289,9 +1365,9 @@ function App() {
                         <div onMouseUp={handleTextSelection} className="flex-1 flex flex-col overflow-hidden">
 
                             {/* Panel sub-header */}
-                            <div className="h-9 px-3 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
-                                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Summary</span>
-                                <div className="flex items-center gap-1 font-mono text-[11px] text-slate-400">
+                            <div className="h-9 px-3 border-b border-[#f0ede8] flex items-center justify-between shrink-0 bg-white">
+                                <span className="text-[11px] font-semibold text-[#a3a3a3] uppercase tracking-wider">Summary</span>
+                                <div className="flex items-center gap-1 font-mono text-[11px] text-[#a3a3a3]">
                                     {(() => {
                                         const count = parseSummary(summary).length;
                                         return <span>{count} section{count !== 1 ? 's' : ''}</span>;
@@ -1321,11 +1397,11 @@ function App() {
                                                     }}>
 
                                                     {/* Card header */}
-                                                    <div className="px-3 py-2 bg-slate-50 border-b border-slate-100 flex items-center gap-2">
-                                                        <span className="text-[11px] font-mono text-slate-400 shrink-0 select-none">
+                                                    <div className="px-3 py-2 bg-[#fafaf9] border-b border-[#f0ede8] flex items-center gap-2">
+                                                        <span className="text-[11px] font-mono text-[#a3a3a3] shrink-0 select-none">
                                                             {String(idx + 1).padStart(2, '0')}
                                                         </span>
-                                                        <span className="flex-1 text-[12px] font-medium text-slate-700 leading-tight min-w-0 truncate">
+                                                        <span className="flex-1 text-[12px] font-medium text-[#1a1a1a] leading-tight min-w-0 truncate">
                                                             {sec.title}
                                                         </span>
                                                         {isNew && (
@@ -1339,7 +1415,7 @@ function App() {
                                                                 idx
                                                             )}
                                                             title="Copy section"
-                                                            className="w-5 h-5 flex items-center justify-center text-slate-400 hover:text-slate-700 rounded transition-colors shrink-0">
+                                                            className="w-5 h-5 flex items-center justify-center text-[#a3a3a3] hover:text-[#1a1a1a] rounded transition-colors shrink-0">
                                                             {copiedSectionIdx === idx ? (
                                                                 <svg className="w-3 h-3 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
@@ -1356,7 +1432,7 @@ function App() {
                                                     <div className="px-3 py-3">
                                                         {/* Lead sentence — most important line */}
                                                         {sec.lead_sentence && (
-                                                            <p className="text-[13px] font-medium text-slate-900 leading-[1.6] mb-2">
+                                                            <p className="text-[13px] font-medium text-[#1a1a1a] leading-[1.6] mb-2">
                                                                 {sec.lead_sentence}
                                                             </p>
                                                         )}
@@ -1373,7 +1449,7 @@ function App() {
 
                                                         {/* Prose */}
                                                         {sec.prose && (
-                                                            <p className="text-[12px] text-slate-500 leading-[1.7] mb-2.5">
+                                                            <p className="text-[12px] text-[#6b6b6b] leading-[1.7] mb-2.5">
                                                                 {sec.prose}
                                                             </p>
                                                         )}
@@ -1381,7 +1457,7 @@ function App() {
                                                         {/* Concept pills */}
                                                         {sec.concepts.length > 0 && (
                                                             <div className="mb-2">
-                                                                <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Key concepts</p>
+                                                                <p className="text-[9px] font-semibold text-[#a3a3a3] uppercase tracking-wider mb-1.5">Key concepts</p>
                                                                 <div className="concepts-row">
                                                                     {sec.concepts.map((c, ci) => (
                                                                         <span key={ci} className="concept-pill">{c}</span>
@@ -1393,10 +1469,10 @@ function App() {
                                                         {/* Example list */}
                                                         {sec.examples.length > 0 && (
                                                             <div>
-                                                                <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Examples</p>
+                                                                <p className="text-[9px] font-semibold text-[#a3a3a3] uppercase tracking-wider mb-1.5">Examples</p>
                                                                 <div className="pl-2.5" style={{ borderLeft: '2px solid #5DCAA5' }}>
                                                                     {sec.examples.map((ex, ei) => (
-                                                                        <p key={ei} className="text-[11px] text-slate-500 leading-relaxed">
+                                                                        <p key={ei} className="text-[11px] text-[#6b6b6b] leading-relaxed">
                                                                             <span style={{ color: '#1D9E75' }}>→ </span>{ex}
                                                                         </p>
                                                                     ))}
@@ -1407,7 +1483,7 @@ function App() {
                                                 </div>
                                             );
                                         })}
-                                        <p className="text-[11px] text-slate-400 text-center py-2 italic">
+                                        <p className="text-[11px] text-[#a3a3a3] text-center py-2 italic">
                                             Select any text to get an AI explanation
                                         </p>
 
@@ -1440,7 +1516,7 @@ function App() {
                                                                     <span className="text-[10px] font-mono text-amber-400 pt-[2px] shrink-0 select-none">
                                                                         Q{qi + 1}
                                                                     </span>
-                                                                    <p className="text-[12px] text-slate-600 leading-relaxed">{q.text}</p>
+                                                                    <p className="text-[12px] text-[#6b6b6b] leading-relaxed">{q.text}</p>
                                                                 </div>
                                                             </div>
                                                         ))}
@@ -1454,7 +1530,7 @@ function App() {
                                     <div className="p-3 space-y-2.5">
                                         {[110, 80, 95].map((titleW, i) => (
                                             <div key={i} className="rounded-xl overflow-hidden" style={{ border: '0.5px solid #e2e8f0' }}>
-                                                <div className="px-3 py-2.5 bg-slate-50 border-b border-slate-100 flex items-center gap-2.5">
+                                                <div className="px-3 py-2.5 bg-[#fafaf9] border-b border-[#f0ede8] flex items-center gap-2.5">
                                                     <div className="w-6 h-2.5 rounded skeleton-shimmer shrink-0" />
                                                     <div className="h-2.5 rounded skeleton-shimmer" style={{ width: `${titleW}px` }} />
                                                 </div>
@@ -1465,7 +1541,7 @@ function App() {
                                                 </div>
                                             </div>
                                         ))}
-                                        <p className="text-[11px] text-slate-400 text-center py-1">
+                                        <p className="text-[11px] text-[#a3a3a3] text-center py-1">
                                             {sessionStatus === 'recording'
                                                 ? 'Summary builds after a few minutes of speech...'
                                                 : 'No summary yet'}
@@ -1492,7 +1568,7 @@ function App() {
                                                             <div key={q.id} className="px-3 py-2.5 bg-white animate-fade-in">
                                                                 <div className="flex items-start gap-2">
                                                                     <span className="text-[10px] font-mono text-amber-400 pt-[2px] shrink-0 select-none">Q{qi + 1}</span>
-                                                                    <p className="text-[12px] text-slate-600 leading-relaxed">{q.text}</p>
+                                                                    <p className="text-[12px] text-[#6b6b6b] leading-relaxed">{q.text}</p>
                                                                 </div>
                                                             </div>
                                                         ))}
@@ -1512,14 +1588,14 @@ function App() {
                             <div className="flex-1 overflow-y-auto p-4 space-y-3">
                                 {qaHistory.length === 0 && !qaLoading ? (
                                     <div className="h-full flex flex-col items-center justify-center text-center gap-3">
-                                        <div className="w-12 h-12 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center">
+                                        <div className="w-12 h-12 rounded-2xl bg-[#fafaf9] border border-[#f0ede8] flex items-center justify-center">
                                             <svg className="w-5 h-5 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
                                             </svg>
                                         </div>
                                         <div>
-                                            <p className="text-sm font-medium text-slate-500">Ask about the lecture</p>
-                                            <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                                            <p className="text-sm font-medium text-[#6b6b6b]">Ask about the lecture</p>
+                                            <p className="text-xs text-[#a3a3a3] mt-1 leading-relaxed">
                                                 Questions are answered using<br />the live transcript
                                             </p>
                                         </div>
@@ -1528,13 +1604,13 @@ function App() {
                                     qaHistory.map((item, i) => (
                                         <div key={i} className="space-y-2 animate-fade-in">
                                             <div className="flex justify-end">
-                                                <div className="max-w-[85%] bg-blue-600 text-white rounded-2xl rounded-tr-sm px-3.5 py-2.5 text-[13px] leading-relaxed">
+                                                <div className="max-w-[85%] bg-[#1a1a1a] text-[#fafaf9] rounded-2xl rounded-tr-sm px-3.5 py-2.5 text-[13px] leading-relaxed">
                                                     {item.question}
                                                 </div>
                                             </div>
                                             <div className="flex justify-start">
-                                                <div className="max-w-[85%] bg-slate-50 border border-slate-100 rounded-2xl rounded-tl-sm px-3.5 py-2.5 text-[13px] text-slate-700 leading-relaxed">
-                                                    {item.answer}
+                                                <div className="max-w-[85%] bg-[#fafaf9] border border-[#f0ede8] rounded-2xl rounded-tl-sm px-3.5 py-2.5">
+                                                    <QAAnswer text={item.answer} />
                                                 </div>
                                             </div>
                                         </div>
@@ -1542,7 +1618,7 @@ function App() {
                                 )}
                                 {qaLoading && (
                                     <div className="flex justify-start animate-fade-in">
-                                        <div className="bg-slate-50 border border-slate-100 rounded-2xl rounded-tl-sm px-4 py-3 flex items-center gap-1.5">
+                                        <div className="bg-[#fafaf9] border border-[#f0ede8] rounded-2xl rounded-tl-sm px-4 py-3 flex items-center gap-1.5">
                                             {[0, 1, 2].map(i => (
                                                 <div key={i} className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce"
                                                     style={{ animationDelay: `${i * 0.15}s` }} />
@@ -1554,19 +1630,19 @@ function App() {
                             </div>
 
                             {/* Input */}
-                            <div className="p-3 border-t border-slate-100 shrink-0">
+                            <div className="p-3 border-t border-[#f0ede8] shrink-0">
                                 <form onSubmit={handleAsk}
-                                    className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-400/10 transition-all">
+                                    className="flex items-center gap-2 bg-[#fafaf9] border border-[#f0ede8] rounded-xl px-3 py-2 focus-within:border-[#1a1a1a]/40 transition-all">
                                     <input
                                         value={qaQuestion}
                                         onChange={e => setQaQuestion(e.target.value)}
                                         placeholder={lectureId ? 'Ask about the lecture...' : 'Start a session first'}
                                         disabled={!lectureId}
-                                        className="flex-1 bg-transparent text-[13px] text-slate-800 placeholder:text-slate-400 outline-none"
+                                        className="flex-1 bg-transparent text-[13px] text-slate-800 placeholder:text-[#a3a3a3] outline-none"
                                     />
                                     <button type="submit"
                                         disabled={qaLoading || !lectureId || !qaQuestion.trim()}
-                                        className="w-7 h-7 flex items-center justify-center bg-blue-600 disabled:bg-slate-200 text-white disabled:text-slate-400 rounded-lg transition-colors shrink-0">
+                                        className="w-7 h-7 flex items-center justify-center bg-[#1a1a1a] disabled:bg-[#f0ede8] text-white disabled:text-[#a3a3a3] rounded-lg transition-colors shrink-0">
                                         {qaLoading
                                             ? <div className="w-3 h-3 border-[2px] border-white border-t-transparent rounded-full animate-spin" />
                                             : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1584,7 +1660,7 @@ function App() {
                         <div className="flex-1 overflow-y-auto p-4">
                             {statsLoading ? (
                                 <div className="h-full flex items-center justify-center">
-                                    <div className="w-6 h-6 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
+                                    <div className="w-6 h-6 border-2 border-[#f0ede8] border-t-[#1a1a1a] rounded-full animate-spin" />
                                 </div>
                             ) : statsData ? (() => {
                                 const lec = statsData._lecture || {};
@@ -1611,10 +1687,10 @@ function App() {
                                 const nastVal = nastScore != null ? nastScore : (statsData.nast_score ? Number(statsData.nast_score) : null);
 
                                 const StatCard = ({ label, value, sub }) => (
-                                    <div className="bg-slate-50 border border-slate-100 rounded-xl p-3">
-                                        <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">{label}</div>
-                                        <div className="text-[15px] font-bold text-slate-900 font-mono truncate">{value ?? '—'}</div>
-                                        {sub && <div className="text-[10px] text-slate-400 mt-0.5">{sub}</div>}
+                                    <div className="bg-[#fafaf9] border border-[#f0ede8] rounded-xl p-3">
+                                        <div className="text-[10px] font-semibold text-[#a3a3a3] uppercase tracking-wider mb-0.5">{label}</div>
+                                        <div className="text-[15px] font-bold text-[#1a1a1a] font-mono truncate">{value ?? '—'}</div>
+                                        {sub && <div className="text-[10px] text-[#a3a3a3] mt-0.5">{sub}</div>}
                                     </div>
                                 );
 
@@ -1622,7 +1698,7 @@ function App() {
                                     <div className="space-y-4">
                                         {/* Row 1: Recording stats */}
                                         <div>
-                                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Recording</p>
+                                            <p className="text-[10px] font-semibold text-[#a3a3a3] uppercase tracking-wider mb-2">Recording</p>
                                             <div className="grid grid-cols-2 gap-2">
                                                 <StatCard label="Duration" value={totalSecs ? formatTime(totalSecs) : '—'} />
                                                 <StatCard label="Words Spoken" value={wordCount ? wordCount.toLocaleString() : '—'} />
@@ -1633,22 +1709,22 @@ function App() {
 
                                         {/* Row 2: Processing stats */}
                                         <div>
-                                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Processing</p>
+                                            <p className="text-[10px] font-semibold text-[#a3a3a3] uppercase tracking-wider mb-2">Processing</p>
                                             <div className="grid grid-cols-2 gap-2">
                                                 <StatCard label="Sections" value={sections || '—'} />
                                                 <StatCard label="Compression" value={compressionPct != null ? `${compressionPct}%` : '—'} sub="content reduced" />
-                                                <div className="bg-slate-50 border border-slate-100 rounded-xl p-3">
-                                                    <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Topic</div>
+                                                <div className="bg-[#fafaf9] border border-[#f0ede8] rounded-xl p-3">
+                                                    <div className="text-[10px] font-semibold text-[#a3a3a3] uppercase tracking-wider mb-1">Topic</div>
                                                     {topicVal
-                                                        ? <span className="inline-block px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[11px] font-semibold border border-blue-100 capitalize">{topicVal}</span>
-                                                        : <span className="text-[15px] font-bold text-slate-900 font-mono">—</span>
+                                                        ? <span className="inline-block px-2 py-0.5 rounded-full bg-[#fafaf9] text-blue-700 text-[11px] font-semibold border border-blue-100 capitalize">{topicVal}</span>
+                                                        : <span className="text-[15px] font-bold text-[#1a1a1a] font-mono">—</span>
                                                     }
                                                 </div>
-                                                <div className="bg-slate-50 border border-slate-100 rounded-xl p-3">
-                                                    <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Language</div>
+                                                <div className="bg-[#fafaf9] border border-[#f0ede8] rounded-xl p-3">
+                                                    <div className="text-[10px] font-semibold text-[#a3a3a3] uppercase tracking-wider mb-1">Language</div>
                                                     {langVal
                                                         ? <span className="inline-block px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-[11px] font-semibold border border-indigo-100">{langVal}</span>
-                                                        : <span className="text-[15px] font-bold text-slate-900 font-mono">—</span>
+                                                        : <span className="text-[15px] font-bold text-[#1a1a1a] font-mono">—</span>
                                                     }
                                                 </div>
                                             </div>
@@ -1657,7 +1733,7 @@ function App() {
                                         {/* Row 3: Summary stats (only if master_summary exists) */}
                                         {summarySecCount > 0 && (
                                             <div>
-                                                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Summary</p>
+                                                <p className="text-[10px] font-semibold text-[#a3a3a3] uppercase tracking-wider mb-2">Summary</p>
                                                 <div className="grid grid-cols-2 gap-2">
                                                     <StatCard label="Summary Sections" value={summarySecCount} />
                                                     <StatCard label="Reading Time" value={readingMins ? `${readingMins} min` : '—'} />
@@ -1702,25 +1778,25 @@ function App() {
                                         <button onClick={() => {
                                             setStatsData(null); setStatsLoading(true);
                                             Promise.all([
-                                                axios.get(`/api/v1/lectures/${lectureId}/analytics`),
-                                                axios.get(`/api/v1/lectures/${lectureId}`).catch(() => ({ data: {} })),
+                                                api.get(`/api/v1/lectures/${lectureId}/analytics`),
+                                                api.get(`/api/v1/lectures/${lectureId}`).catch(() => ({ data: {} })),
                                             ]).then(([a, l]) => setStatsData({ ...a.data, _lecture: l.data }))
                                               .catch(() => {}).finally(() => setStatsLoading(false));
-                                        }} className="w-full py-2 text-[12px] text-slate-400 hover:text-slate-600 transition-colors border border-slate-100 rounded-xl hover:bg-slate-50">
+                                        }} className="w-full py-2 text-[12px] text-[#a3a3a3] hover:text-[#6b6b6b] transition-colors border border-[#f0ede8] rounded-xl hover:bg-[#fafaf9]">
                                             Refresh
                                         </button>
                                     </div>
                                 );
                             })() : (
                                 <div className="h-full flex flex-col items-center justify-center text-center gap-3">
-                                    <div className="w-12 h-12 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center">
+                                    <div className="w-12 h-12 rounded-2xl bg-[#fafaf9] border border-[#f0ede8] flex items-center justify-center">
                                         <svg className="w-5 h-5 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                                         </svg>
                                     </div>
                                     <div>
-                                        <p className="text-sm font-medium text-slate-500">No analytics yet</p>
-                                        <p className="text-xs text-slate-400 mt-1">Stats appear after content is recorded</p>
+                                        <p className="text-sm font-medium text-[#6b6b6b]">No analytics yet</p>
+                                        <p className="text-xs text-[#a3a3a3] mt-1">Stats appear after content is recorded</p>
                                     </div>
                                 </div>
                             )}
@@ -1730,13 +1806,13 @@ function App() {
             </div>
 
             {/* ── Control Bar ── */}
-            <div className="h-16 bg-slate-900 flex items-center justify-between px-4 md:px-6 shrink-0">
+            <div className="h-16 bg-[#1a1a1a] flex items-center justify-between px-4 md:px-6 shrink-0">
                 {/* Left: mic status + live level meter */}
                 <div className="flex items-center gap-2.5 w-36 md:w-44">
                     {isCalibrating && (
                         <div className="flex items-center gap-2 animate-fade-in">
                             <div className="w-3 h-3 border-2 border-slate-500 border-t-slate-300 rounded-full animate-spin shrink-0" />
-                            <span className="text-xs text-slate-400 font-medium hidden md:inline">Calibrating mic...</span>
+                            <span className="text-xs text-[#a3a3a3] font-medium hidden md:inline">Calibrating mic...</span>
                         </div>
                     )}
                     {sessionStatus === 'recording' && !isCalibrating && (
@@ -1757,15 +1833,15 @@ function App() {
                     {sessionStatus === 'paused' && (
                         <>
                             <div className="w-7 h-7 rounded-full bg-slate-700 flex items-center justify-center">
-                                <svg className="w-3.5 h-3.5 text-slate-400" fill="currentColor" viewBox="0 0 24 24">
+                                <svg className="w-3.5 h-3.5 text-[#a3a3a3]" fill="currentColor" viewBox="0 0 24 24">
                                     <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z" />
                                 </svg>
                             </div>
-                            <span className="text-xs text-slate-500 font-semibold">Mic off</span>
+                            <span className="text-xs text-[#6b6b6b] font-semibold">Mic off</span>
                         </>
                     )}
                     {sessionStatus === 'ended' && (
-                        <span className="text-xs text-slate-600 font-semibold">Complete</span>
+                        <span className="text-xs text-[#6b6b6b] font-semibold">Complete</span>
                     )}
                 </div>
 
@@ -1782,7 +1858,7 @@ function App() {
                     )}
                     {sessionStatus === 'paused' && (
                         <button onClick={() => startRecording(lectureId)}
-                            className="flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-semibold transition-colors">
+                            className="flex items-center gap-2 px-5 py-2 bg-[#1a1a1a] hover:opacity-80 text-[#fafaf9] rounded-xl text-sm font-semibold transition-colors">
                             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                                 <path d="M8 5v14l11-7z" />
                             </svg>
@@ -1790,7 +1866,7 @@ function App() {
                         </button>
                     )}
                     {sessionStatus === 'ended' && (
-                        <span className="text-xs text-slate-500 px-5 py-2">Listening stopped</span>
+                        <span className="text-xs text-[#6b6b6b] px-5 py-2">Listening stopped</span>
                     )}
                 </div>
 
@@ -1798,21 +1874,21 @@ function App() {
                 <div className="hidden md:flex items-center gap-5 w-36 justify-end">
                     <div className="text-right">
                         <div className="text-[13px] font-bold text-white font-mono leading-tight">{transcript.length}</div>
-                        <div className="text-[10px] text-slate-500 uppercase tracking-wider">chunks</div>
+                        <div className="text-[10px] text-[#6b6b6b] uppercase tracking-wider">chunks</div>
                     </div>
                     <div className="text-right">
                         <div className="text-[13px] font-bold text-white font-mono leading-tight">{wordCount.toLocaleString()}</div>
-                        <div className="text-[10px] text-slate-500 uppercase tracking-wider">words</div>
+                        <div className="text-[10px] text-[#6b6b6b] uppercase tracking-wider">words</div>
                     </div>
                 </div>
                 {/* Mobile: compact stats */}
                 <div className="flex md:hidden items-center gap-3 text-right">
-                    <span className="text-[12px] font-bold text-white font-mono">{wordCount.toLocaleString()} <span className="text-[10px] text-slate-500 font-normal">w</span></span>
+                    <span className="text-[12px] font-bold text-white font-mono">{wordCount.toLocaleString()} <span className="text-[10px] text-[#6b6b6b] font-normal">w</span></span>
                 </div>
             </div>
 
             {/* ── Mobile Bottom Nav ── */}
-            <nav className="md:hidden flex items-center justify-around border-t border-slate-800 bg-slate-900 h-12 shrink-0">
+            <nav className="md:hidden flex items-center justify-around border-t border-[#333] bg-[#1a1a1a] h-12 shrink-0">
                 {[
                     { id: 'transcript', label: 'Transcript', tab: null, icon: 'M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z' },
                     { id: 'summary',    label: 'Summary',    tab: 'summary', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01' },
@@ -1829,7 +1905,7 @@ function App() {
                                     setActiveTab(tab);
                                 }
                             }}
-                            className={`flex flex-col items-center gap-0.5 px-6 py-1.5 transition-colors ${isActive ? 'text-blue-400' : 'text-slate-500 hover:text-slate-400'}`}>
+                            className={`flex flex-col items-center gap-0.5 px-6 py-1.5 transition-colors ${isActive ? 'text-[#1a1a1a]' : 'text-[#6b6b6b] hover:text-[#a3a3a3]'}`}>
                             <svg className="w-4.5 h-4.5" style={{ width: '18px', height: '18px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d={icon} />
                             </svg>
@@ -1842,9 +1918,9 @@ function App() {
             {/* ── Floating Explain Button ── */}
             {selectionInfo.show && (
                 <button onClick={handleExplainRequest}
-                    className="fixed z-50 px-3 py-1.5 bg-slate-900 text-white text-xs font-bold rounded-lg shadow-2xl animate-fade-in hover:bg-blue-600 transition-colors flex items-center gap-1.5"
+                    className="fixed z-50 px-3 py-1.5 bg-[#1a1a1a] text-white text-xs font-bold rounded-lg shadow-2xl animate-fade-in hover:bg-[#333] transition-colors flex items-center gap-1.5"
                     style={{ left: selectionInfo.x, top: selectionInfo.y, transform: 'translate(-50%, -100%)' }}>
-                    <svg className="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-3.5 h-3.5 text-[#1a1a1a]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                     </svg>
                     Explain
@@ -1856,14 +1932,14 @@ function App() {
                 <div className="fixed inset-0 z-[60] flex justify-end">
                     <div className="absolute inset-0 bg-slate-950/30 backdrop-blur-sm"
                         onClick={() => setExplainPanel(p => ({ ...p, show: false }))} />
-                    <div className="relative w-full max-w-[480px] bg-white h-full shadow-2xl animate-slide-in-right flex flex-col border-l border-slate-100">
-                        <div className="h-14 px-5 flex items-center justify-between border-b border-slate-100 shrink-0">
+                    <div className="relative w-full max-w-[480px] bg-white h-full shadow-2xl animate-slide-in-right flex flex-col border-l border-[#f0ede8]">
+                        <div className="h-14 px-5 flex items-center justify-between border-b border-[#f0ede8] shrink-0">
                             <div className="flex items-center gap-2.5">
-                                <div className="w-2 h-2 rounded-full bg-blue-600" />
-                                <h3 className="font-bold text-slate-900 font-heading text-[15px]">Concept Breakdown</h3>
+                                <div className="w-2 h-2 rounded-full bg-[#1a1a1a]" />
+                                <h3 className="font-bold text-[#1a1a1a] font-heading text-[15px]">Concept Breakdown</h3>
                             </div>
                             <button onClick={() => setExplainPanel(p => ({ ...p, show: false }))}
-                                className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-50 rounded-lg transition-colors">
+                                className="w-8 h-8 flex items-center justify-center text-[#a3a3a3] hover:text-[#1a1a1a] hover:bg-[#fafaf9] rounded-lg transition-colors">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                 </svg>
@@ -1873,31 +1949,31 @@ function App() {
                         <div className="flex-1 overflow-y-auto p-6 space-y-5">
                             {explainPanel.loading ? (
                                 <div className="h-full flex flex-col items-center justify-center gap-4">
-                                    <div className="w-9 h-9 border-[3px] border-slate-100 border-t-blue-600 rounded-full animate-spin" />
-                                    <p className="text-sm text-slate-400">Analyzing concept...</p>
+                                    <div className="w-9 h-9 border-[3px] border-[#f0ede8] border-t-[#1a1a1a] rounded-full animate-spin" />
+                                    <p className="text-sm text-[#a3a3a3]">Analyzing concept...</p>
                                 </div>
                             ) : explainPanel.data ? (
                                 <div className="space-y-5 animate-fade-in">
                                     <div>
-                                        <p className="text-[11px] font-bold text-blue-600 uppercase tracking-widest mb-2">Explanation</p>
+                                        <p className="text-[11px] font-bold text-[#a3a3a3] uppercase tracking-widest mb-2">Explanation</p>
                                         <p className="text-slate-800 leading-relaxed text-[15px]">{explainPanel.data.explanation}</p>
                                     </div>
                                     {explainPanel.data.analogy && (
                                         <div className="bg-amber-50 border border-amber-100 rounded-xl p-4">
                                             <p className="text-[11px] font-bold text-amber-600 uppercase tracking-widest mb-2">Analogy</p>
-                                            <p className="text-slate-700 leading-relaxed italic text-sm">{explainPanel.data.analogy}</p>
+                                            <p className="text-[#1a1a1a] leading-relaxed italic text-sm">{explainPanel.data.analogy}</p>
                                         </div>
                                     )}
                                     {explainPanel.data.breakdown && (
                                         <div>
-                                            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">Step-by-Step</p>
+                                            <p className="text-[11px] font-bold text-[#a3a3a3] uppercase tracking-widest mb-3">Step-by-Step</p>
                                             <div className="space-y-2">
                                                 {explainPanel.data.breakdown.split('\n').filter(l => l.trim()).map((step, i) => (
-                                                    <div key={i} className="flex gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
+                                                    <div key={i} className="flex gap-3 p-3 rounded-xl bg-[#fafaf9] border border-[#f0ede8]">
                                                         <span className="text-[11px] font-bold text-slate-300 font-mono mt-0.5 shrink-0">
                                                             {String(i + 1).padStart(2, '0')}
                                                         </span>
-                                                        <p className="text-sm text-slate-600 leading-relaxed">
+                                                        <p className="text-sm text-[#6b6b6b] leading-relaxed">
                                                             {step.replace(/^\d+\.\s*/, '')}
                                                         </p>
                                                     </div>
@@ -1912,14 +1988,62 @@ function App() {
                 </div>
             )}
 
+            {/* ── Session End Modal ── */}
+            {endModal && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-950/50 backdrop-blur-md animate-fade-in">
+                    <div className="bg-white w-full max-w-sm rounded-2xl p-8 shadow-2xl animate-slide-up border border-[#f0ede8]">
+                        {/* Check icon */}
+                        <div className="flex items-center justify-center mb-5">
+                            <div className="w-14 h-14 rounded-2xl bg-emerald-50 flex items-center justify-center">
+                                <svg className="w-7 h-7 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                                </svg>
+                            </div>
+                        </div>
+                        <h3 className="text-[17px] font-bold text-[#1a1a1a] mb-1 font-heading text-center">Session complete</h3>
+                        <p className="text-[#a3a3a3] text-sm text-center mb-5">Your lecture has been saved and is ready to review.</p>
+                        {/* Stats row */}
+                        <div className="grid grid-cols-3 gap-2 mb-6">
+                            <div className="bg-[#fafaf9] border border-[#f0ede8] rounded-xl p-3 text-center">
+                                <div className="text-[15px] font-bold text-[#1a1a1a] font-mono">{formatTime(recordingSeconds)}</div>
+                                <div className="text-[10px] text-[#a3a3a3] mt-0.5">Duration</div>
+                            </div>
+                            <div className="bg-[#fafaf9] border border-[#f0ede8] rounded-xl p-3 text-center">
+                                <div className="text-[15px] font-bold text-[#1a1a1a] font-mono">{transcript.length}</div>
+                                <div className="text-[10px] text-[#a3a3a3] mt-0.5">Segments</div>
+                            </div>
+                            <div className="bg-[#fafaf9] border border-[#f0ede8] rounded-xl p-3 text-center">
+                                <div className="text-[15px] font-bold text-[#1a1a1a] font-mono">{qaHistory.length}</div>
+                                <div className="text-[10px] text-[#a3a3a3] mt-0.5">Questions</div>
+                            </div>
+                        </div>
+                        {/* Actions */}
+                        <div className="flex flex-col gap-2">
+                            {lectureId && (
+                                <button
+                                    onClick={() => { setEndModal(false); navigate(`/lecture/${lectureId}`); }}
+                                    className="w-full py-2.5 bg-[#1a1a1a] text-[#fafaf9] text-sm font-semibold rounded-xl hover:opacity-80 transition-opacity">
+                                    View full lecture →
+                                </button>
+                            )}
+                            <button
+                                onClick={() => setEndModal(false)}
+                                className="w-full py-2.5 border border-[#f0ede8] text-[#6b6b6b] text-sm rounded-xl hover:text-[#1a1a1a] transition-colors">
+                                Dismiss
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* ── Export Modal ── */}
             {exportModal.show && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-950/50 backdrop-blur-md animate-fade-in">
-                    <div className="bg-white w-full max-w-sm rounded-2xl p-8 shadow-2xl animate-slide-up border border-slate-100">
+                    <div className="bg-white w-full max-w-sm rounded-2xl p-8 shadow-2xl animate-slide-up border border-[#f0ede8]">
                         {/* Icon row */}
                         <div className="flex items-center justify-center mb-5">
                             <div className={`w-14 h-14 rounded-2xl flex items-center justify-center
-                                ${exportModal.progress === 100 ? 'bg-emerald-50' : exportModal.progress === -1 ? 'bg-red-50' : 'bg-blue-50'}`}>
+                                ${exportModal.progress === 100 ? 'bg-emerald-50' : exportModal.progress === -1 ? 'bg-red-50' : 'bg-[#fafaf9]'}`}>
                                 {exportModal.progress === 100 ? (
                                     <svg className="w-7 h-7 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
@@ -1929,26 +2053,26 @@ function App() {
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                     </svg>
                                 ) : (
-                                    <div className="w-7 h-7 border-[3px] border-blue-100 border-t-blue-600 rounded-full animate-spin" />
+                                    <div className="w-7 h-7 border-[3px] border-[#f0ede8] border-t-[#1a1a1a] rounded-full animate-spin" />
                                 )}
                             </div>
                         </div>
 
                         {/* Title + status */}
-                        <h3 className="text-[17px] font-bold text-slate-900 mb-1 font-heading text-center">
+                        <h3 className="text-[17px] font-bold text-[#1a1a1a] mb-1 font-heading text-center">
                             {exportModal.progress === 100 ? 'Export Ready' : exportModal.progress === -1 ? 'Export Failed' : 'Generating PDF'}
                         </h3>
-                        <p className="text-slate-400 text-sm text-center mb-5">{exportModal.status}</p>
+                        <p className="text-[#a3a3a3] text-sm text-center mb-5">{exportModal.status}</p>
 
                         {/* Progress bar — shown while in-progress */}
                         {exportModal.progress > 0 && exportModal.progress < 100 && (
                             <div className="mb-3">
                                 <div className="flex items-center justify-between mb-1.5">
-                                    <span className="text-[11px] text-slate-400 font-medium">Progress</span>
-                                    <span className="text-[13px] font-bold text-slate-700 font-mono">{exportModal.progress}%</span>
+                                    <span className="text-[11px] text-[#a3a3a3] font-medium">Progress</span>
+                                    <span className="text-[13px] font-bold text-[#1a1a1a] font-mono">{exportModal.progress}%</span>
                                 </div>
-                                <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                                    <div className="h-full bg-blue-600 transition-all duration-700 ease-out rounded-full"
+                                <div className="w-full bg-[#f0ede8] h-1.5 rounded-full overflow-hidden">
+                                    <div className="h-full bg-[#1a1a1a] transition-all duration-700 ease-out rounded-full"
                                         style={{ width: `${exportModal.progress}%` }} />
                                 </div>
                             </div>
@@ -1974,11 +2098,11 @@ function App() {
                                 )}
                                 <div className="flex gap-2">
                                     <button onClick={handleExportPDF}
-                                        className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition-colors">
+                                        className="flex-1 py-2 bg-[#1a1a1a] hover:opacity-80 text-[#fafaf9] text-sm font-semibold rounded-xl transition-colors">
                                         Try Again
                                     </button>
                                     <button onClick={() => setExportModal(p => ({ ...p, show: false }))}
-                                        className="flex-1 py-2 border border-slate-200 text-slate-500 hover:text-slate-700 text-sm font-medium rounded-xl transition-colors">
+                                        className="flex-1 py-2 border border-[#f0ede8] text-[#6b6b6b] hover:text-[#1a1a1a] text-sm font-medium rounded-xl transition-colors">
                                         Dismiss
                                     </button>
                                 </div>

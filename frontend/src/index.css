@@ -10,12 +10,40 @@
   --accent-secondary: #6366f1;
   --text-primary: #0f172a;
   --text-secondary: #475569;
+
+  /* Neurativo theme tokens */
+  --color-bg: #fafaf9;
+  --color-card: #ffffff;
+  --color-text: #1a1a1a;
+  --color-sec: #6b6b6b;
+  --color-muted: #a3a3a3;
+  --color-border: #f0ede8;
+  --color-border-hov: #e8e4de;
+  --color-dark: #1a1a1a;
+  --color-dark-fg: #fafaf9;
+  --dot-color: #e0ddd8;
+}
+
+.dark {
+  --color-bg: #121212;
+  --color-card: #1e1e1e;
+  --color-text: #f0ede8;
+  --color-sec: #a0a0a0;
+  --color-muted: #666666;
+  --color-border: #2c2c2c;
+  --color-border-hov: #383838;
+  --color-dark: #f0ede8;
+  --color-dark-fg: #121212;
+  --dot-color: #2a2a2a;
 }
 
 @layer base {
   body {
     @apply bg-slate-50 text-slate-900 antialiased;
     font-family: 'Inter', sans-serif;
+    background-color: var(--color-bg);
+    background-image: radial-gradient(var(--dot-color) 0.75px, transparent 0.75px);
+    background-size: 22px 22px;
   }
 
   h1, h2, h3, h4, .font-heading {

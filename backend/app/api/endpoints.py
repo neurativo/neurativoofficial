@@ -1,13 +1,14 @@
 import asyncio
 import json
 
-from fastapi import APIRouter, BackgroundTasks, UploadFile, File, HTTPException
+from fastapi import APIRouter, BackgroundTasks, UploadFile, File, HTTPException, Depends
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 import numpy as np
 from openai import OpenAI
 
 from app.core.config import settings
+from app.core.auth import get_current_user
 from app.services.openai_service import transcribe_audio
 from app.services.explanation_service import generate_explanation
 from app.services.qa_service import answer_lecture_question
@@ -47,9 +48,30 @@ from app.services.supabase_service import (
     get_lecture_transcript,
     get_client,
     get_recent_lectures,
+    get_lecture_owner,
+    delete_lecture,
     update_lecture_title,
     save_student_question,
+    generate_share_token,
+    clear_share_token,
+    get_lecture_by_share_token,
+    increment_share_views,
+    get_lecture_full,
+    get_user_profile,
+    update_user_profile,
+    delete_user_account,
+    get_monthly_lecture_count,
 )
+
+
+def _check_owner(lecture_id: str, user_id: str) -> None:
+    """
+    Raises 403 if the lecture has a user_id that doesn't match.
+    Permits access to legacy lectures (user_id is NULL) so existing data isn't locked out.
+    """
+    owner_id = get_lecture_owner(lecture_id)
+    if owner_id and str(owner_id) != str(user_id):
+        raise HTTPException(status_code=403, detail="Access denied")
 
 
 # =============================================================================
@@ -212,16 +234,12 @@ def summarize(lecture_id: str):
     return {"lecture_id": lecture_id, "summary": summary}
 
 
-@router.post("/ask/{lecture_id}")
-def ask_question(lecture_id: str, request: QuestionRequest):
-    answer = answer_lecture_question(lecture_id, request.question)
-    return {"lecture_id": lecture_id, "question": request.question, "answer": answer}
 
 
 @router.post("/live/start")
-def start_live_session():
+def start_live_session(user=Depends(get_current_user)):
     try:
-        lecture_id      = create_lecture(title="Live Session", transcript="")
+        lecture_id      = create_lecture(title="Live Session", transcript="", user_id=str(user.id))
         live_session_id = create_live_session(lecture_id)
         return {"lecture_id": lecture_id, "live_session_id": live_session_id, "status": "started"}
     except Exception as e:
@@ -421,6 +439,7 @@ async def process_live_chunk(
     lecture_id: str,
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
+    user=Depends(get_current_user),
 ):
     """
     Hot path — returns after transcription + transcript append.
@@ -430,7 +449,8 @@ async def process_live_chunk(
     Summary updates are pushed to the frontend via the SSE stream endpoint
     GET /live/{lecture_id}/stream rather than the chunk response.
     """
-    # 1. Validate session
+    # 1. Validate session + ownership
+    _check_owner(lecture_id, user.id)
     session = get_active_live_session(lecture_id)
     if not session:
         raise HTTPException(status_code=400, detail="Active live session not found")
@@ -583,11 +603,12 @@ async def stream_summary(lecture_id: str):
 
 
 @router.post("/live/{lecture_id}/end")
-def end_session_endpoint(lecture_id: str):
+def end_session_endpoint(lecture_id: str, user=Depends(get_current_user)):
     """
     Ends the live session and forces a final summary pass so the session
     always ends with a complete, up-to-date master summary.
     """
+    _check_owner(lecture_id, user.id)
     try:
         end_live_session(lecture_id)
 
@@ -632,7 +653,8 @@ def end_session_endpoint(lecture_id: str):
 
 
 @router.get("/lectures/{lecture_id}/analytics")
-def get_analytics(lecture_id: str):
+def get_analytics(lecture_id: str, user=Depends(get_current_user)):
+    _check_owner(lecture_id, user.id)
     try:
         data = get_lecture_for_summarization(lecture_id)
         if not data:
@@ -657,7 +679,8 @@ def get_analytics(lecture_id: str):
 
 
 @router.get("/lectures/{lecture_id}/export/pdf")
-async def export_pdf(lecture_id: str):
+async def export_pdf(lecture_id: str, user=Depends(get_current_user)):
+    _check_owner(lecture_id, user.id)
     try:
         pdf_bytes = await generate_lecture_pdf(lecture_id)
         return Response(
@@ -673,20 +696,172 @@ async def export_pdf(lecture_id: str):
 
 
 @router.get("/lectures")
-def get_lectures(limit: int = 5, offset: int = 0):
+def get_lectures(limit: int = 20, offset: int = 0, user=Depends(get_current_user)):
     """
-    Returns recent lectures sorted by created_at DESC.
-    Used by the frontend idle screen to display session history.
+    Returns lectures for the authenticated user sorted by created_at DESC.
+    Used by the Dashboard to display the user's lecture history.
     """
     try:
-        return get_recent_lectures(limit=limit, offset=offset)
+        return get_recent_lectures(limit=limit, offset=offset, user_id=str(user.id))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch lectures: {str(e)}")
 
 
 @router.get("/lectures/{lecture_id}")
-def get_lecture_details(lecture_id: str):
+def get_lecture_details(lecture_id: str, user=Depends(get_current_user)):
+    _check_owner(lecture_id, user.id)
     lecture = get_lecture_for_summarization(lecture_id)
     if not lecture:
         raise HTTPException(status_code=404, detail="Lecture not found")
     return lecture
+
+
+@router.post("/ask/{lecture_id}")
+def ask_question_auth(lecture_id: str, request: QuestionRequest, user=Depends(get_current_user)):
+    _check_owner(lecture_id, user.id)
+    answer = answer_lecture_question(lecture_id, request.question)
+    return {"lecture_id": lecture_id, "question": request.question, "answer": answer}
+
+
+@router.get("/lectures/{lecture_id}/full")
+def get_lecture_full_endpoint(lecture_id: str, user=Depends(get_current_user)):
+    """Returns the complete lecture data including transcript, summary, and share state."""
+    _check_owner(lecture_id, user.id)
+    lecture = get_lecture_full(lecture_id)
+    if not lecture:
+        raise HTTPException(status_code=404, detail="Lecture not found")
+    return lecture
+
+
+@router.post("/lectures/{lecture_id}/share")
+def share_lecture(lecture_id: str, user=Depends(get_current_user)):
+    """Generates (or returns existing) share token. Returns the share URL path."""
+    _check_owner(lecture_id, user.id)
+    try:
+        token = generate_share_token(lecture_id)
+        return {"share_url": f"/share/{token}"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate share link: {str(e)}")
+
+
+@router.post("/lectures/{lecture_id}/unshare")
+def unshare_lecture(lecture_id: str, user=Depends(get_current_user)):
+    """Removes the share token, making the lecture private."""
+    _check_owner(lecture_id, user.id)
+    try:
+        clear_share_token(lecture_id)
+        return {"unshared": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to unshare: {str(e)}")
+
+
+@router.get("/share/{token}")
+def get_shared_lecture(token: str):
+    """Public endpoint — no auth required. Finds lecture by share token."""
+    lecture = get_lecture_by_share_token(token)
+    if not lecture:
+        raise HTTPException(status_code=404, detail="Shared lecture not found")
+    try:
+        increment_share_views(lecture["id"])
+    except Exception:
+        pass
+    return lecture
+
+
+@router.delete("/lectures/{lecture_id}")
+def delete_lecture_endpoint(lecture_id: str, user=Depends(get_current_user)):
+    """Permanently deletes a lecture and all associated data."""
+    _check_owner(lecture_id, user.id)
+    try:
+        delete_lecture(lecture_id)
+        return {"status": "deleted", "lecture_id": lecture_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete lecture: {str(e)}")
+
+
+class TitleUpdateRequest(BaseModel):
+    title: str
+
+
+@router.patch("/lectures/{lecture_id}/title")
+def update_lecture_title_endpoint(lecture_id: str, request: TitleUpdateRequest, user=Depends(get_current_user)):
+    """Updates a lecture's title."""
+    _check_owner(lecture_id, user.id)
+    title = request.title.strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="Title cannot be empty")
+    try:
+        update_lecture_title(lecture_id, title)
+        return {"lecture_id": lecture_id, "title": title}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update title: {str(e)}")
+
+
+# =============================================================================
+#  PROFILE ENDPOINTS
+# =============================================================================
+
+class ProfileUpdateRequest(BaseModel):
+    display_name: str | None = None
+    preferred_language: str | None = None
+    pdf_auto_download: bool | None = None
+
+
+@router.get("/profile")
+def get_profile(user=Depends(get_current_user)):
+    """Returns the authenticated user's profile."""
+    try:
+        profile = get_user_profile(str(user.id))
+        profile["email"] = getattr(user, "email", None)
+        return profile
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch profile: {str(e)}")
+
+
+@router.patch("/profile")
+def patch_profile(request: ProfileUpdateRequest, user=Depends(get_current_user)):
+    """Updates the authenticated user's profile fields."""
+    data = request.model_dump(exclude_none=True)
+    if not data:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    try:
+        updated = update_user_profile(str(user.id), data)
+        return updated
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update profile: {str(e)}")
+
+
+@router.delete("/profile")
+def delete_profile(user=Depends(get_current_user)):
+    """Deletes the authenticated user's account and all associated data."""
+    try:
+        delete_user_account(str(user.id))
+        return {"status": "deleted"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete account: {str(e)}")
+
+
+@router.get("/usage")
+def get_usage(user=Depends(get_current_user)):
+    """Returns usage stats for the current month."""
+    from datetime import datetime, timezone
+    try:
+        usage = get_monthly_lecture_count(str(user.id))
+        count = usage["count"]
+        limit = 5  # free plan
+        now = datetime.now(timezone.utc)
+        # First day of next month
+        if now.month == 12:
+            resets_at = now.replace(year=now.year + 1, month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        else:
+            resets_at = now.replace(month=now.month + 1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        return {
+            "lectures_this_month": count,
+            "limit": limit,
+            "remaining": max(0, limit - count),
+            "plan_tier": "free",
+            "resets_at": resets_at.isoformat(),
+            "limit_reached": count >= limit,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch usage: {str(e)}")
