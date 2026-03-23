@@ -444,7 +444,7 @@ const IconLogo = () => (
 
 const CYCLE_WORDS = ['wish', 'need', 'deserve', 'wanted'];
 
-function Navbar() {
+function Navbar({ user }) {
     const [menuOpen, setMenuOpen] = useState(false);
     return (
         <nav className="lp-nav">
@@ -459,8 +459,17 @@ function Navbar() {
                 <a href="#faq" className="lp-nav-lnk">FAQ</a>
             </div>
             <div className="lp-nav-right">
-                <Link to="/auth" className="lp-btn-ghost-sm">Sign in</Link>
-                <Link to="/auth" className="lp-btn-dark-sm">Get started</Link>
+                {user ? (
+                    <>
+                        <Link to="/app" className="lp-btn-ghost-sm">Dashboard</Link>
+                        <Link to="/record" className="lp-btn-dark-sm">Start recording</Link>
+                    </>
+                ) : (
+                    <>
+                        <Link to="/auth" className="lp-btn-ghost-sm">Sign in</Link>
+                        <Link to="/auth" className="lp-btn-dark-sm">Get started</Link>
+                    </>
+                )}
                 <button className="lp-hamburger" onClick={() => setMenuOpen(o => !o)} aria-label="Toggle menu">
                     {menuOpen ? (
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -475,13 +484,16 @@ function Navbar() {
                 <a href="#pricing"     className="lp-mobile-menu-lnk" onClick={() => setMenuOpen(false)}>Pricing</a>
                 <a href="#how-it-works" className="lp-mobile-menu-lnk" onClick={() => setMenuOpen(false)}>How it works</a>
                 <a href="#faq"         className="lp-mobile-menu-lnk" onClick={() => setMenuOpen(false)}>FAQ</a>
-                <Link to="/auth"       className="lp-mobile-menu-lnk" onClick={() => setMenuOpen(false)}>Sign in</Link>
+                {user
+                    ? <Link to="/app" className="lp-mobile-menu-lnk" onClick={() => setMenuOpen(false)}>Dashboard</Link>
+                    : <Link to="/auth" className="lp-mobile-menu-lnk" onClick={() => setMenuOpen(false)}>Sign in</Link>
+                }
             </div>
         </nav>
     );
 }
 
-function Hero() {
+function Hero({ user }) {
     const [wordIdx, setWordIdx] = useState(0);
     const [fading, setFading]   = useState(false);
     useEffect(() => {
@@ -512,12 +524,13 @@ function Hero() {
                 summaries in real time — so you can focus on learning, not writing.
             </p>
             <div className="lp-hero-btns">
-                <Link to="/auth" className="lp-btn-dark-md">
-                    Start recording free <IconArrow />
+                <Link to={user ? "/record" : "/auth"} className="lp-btn-dark-md">
+                    {user ? "Start recording" : "Start recording free"} <IconArrow />
                 </Link>
-                <a href="#how-it-works" className="lp-btn-ghost-md">
-                    See how it works
-                </a>
+                {user
+                    ? <Link to="/app" className="lp-btn-ghost-md">Go to dashboard</Link>
+                    : <a href="#how-it-works" className="lp-btn-ghost-md">See how it works</a>
+                }
             </div>
             <p className="lp-proof">Trusted by students at 40+ universities · 10,000+ lectures transcribed</p>
         </section>
@@ -985,14 +998,14 @@ function Footer() {
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
-export default function LandingPage() {
+export default function LandingPage({ user }) {
     return (
         <>
             <style>{CSS}</style>
             <div className="lp">
-                <Navbar />
+                <Navbar user={user} />
                 <main>
-                    <Hero />
+                    <Hero user={user} />
                     <Mockup />
                     <UniversityBar />
                     <StatsBar />

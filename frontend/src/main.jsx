@@ -35,6 +35,12 @@ function Root() {
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
             const nextUser = session?.user ?? null;
             setUser(nextUser);
+            if (nextUser && (_event === 'SIGNED_IN' || _event === 'TOKEN_REFRESHED')) {
+                const path = window.location.pathname;
+                if (path === '/' || path === '/auth') {
+                    navigate('/app', { replace: true });
+                }
+            }
             if (!nextUser) {
                 const path = window.location.pathname;
                 if (path === '/app' || path === '/record' || path.startsWith('/lecture/') || path === '/profile') {
@@ -51,7 +57,7 @@ function Root() {
     return (
         <Routes>
             {/* Public */}
-            <Route path="/" element={<LandingPage />} />
+            <Route path="/" element={<LandingPage user={user} />} />
             <Route path="/auth" element={user ? <Navigate to="/app" replace /> : <AuthScreen />} />
             <Route path="/share/:token" element={<ShareView />} />
 
