@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
+import { supabase } from '../lib/supabase';
 
 // ─── CSS ─────────────────────────────────────────────────────────────────────
 const CSS = `
@@ -38,6 +39,37 @@ const CSS = `
     transition: opacity 0.15s; display: inline-block;
   }
   .lp-btn-dark-sm:hover { opacity: 0.8; }
+
+  /* ── NAV AVATAR / DROPDOWN ── */
+  .lp-avatar-wrap { position: relative; }
+  .lp-avatar {
+    width: 32px; height: 32px; border-radius: 50%; background: #1a1a1a; color: #fafaf9;
+    font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center;
+    cursor: pointer; border: none; transition: opacity 0.15s; font-family: inherit; flex-shrink: 0;
+  }
+  .lp-avatar:hover { opacity: 0.8; }
+  .lp-nav-dropdown {
+    position: absolute; right: 0; top: 42px; z-index: 100; background: #fff;
+    border: 1px solid #f0ede8; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+    width: 210px; overflow: hidden; animation: lp-dd-in 0.15s ease;
+  }
+  @keyframes lp-dd-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+  .lp-nav-dd-head { padding: 12px 14px; border-bottom: 1px solid #f0ede8; }
+  .lp-nav-dd-label { font-size: 11px; color: #a3a3a3; margin-bottom: 2px; }
+  .lp-nav-dd-email { font-size: 12px; font-weight: 500; color: #1a1a1a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lp-nav-dd-item {
+    display: block; width: 100%; text-align: left; padding: 9px 14px; font-size: 13px;
+    color: #6b6b6b; background: none; border: none; font-family: inherit; cursor: pointer;
+    transition: background 0.12s; text-decoration: none;
+  }
+  .lp-nav-dd-item:hover { background: #fafaf9; color: #1a1a1a; }
+  .lp-nav-dd-divider { height: 1px; background: #f0ede8; }
+  .lp-nav-dd-signout {
+    display: block; width: 100%; text-align: left; padding: 9px 14px; font-size: 13px;
+    color: #ef4444; background: none; border: none; cursor: pointer; font-family: inherit;
+    transition: background 0.12s;
+  }
+  .lp-nav-dd-signout:hover { background: #fff5f5; }
 
   /* ── HERO ── */
   .lp-hero {
@@ -444,6 +476,43 @@ const IconLogo = () => (
 
 const CYCLE_WORDS = ['wish', 'need', 'deserve', 'wanted'];
 
+function NavAvatar({ user }) {
+    const [open, setOpen] = useState(false);
+    const ref = useRef(null);
+    const initial = (user?.email?.[0] || '?').toUpperCase();
+
+    useEffect(() => {
+        if (!open) return;
+        const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
+    }, [open]);
+
+    const signOut = async () => {
+        await supabase.auth.signOut();
+        setOpen(false);
+    };
+
+    return (
+        <div className="lp-avatar-wrap" ref={ref}>
+            <button className="lp-avatar" onClick={() => setOpen(o => !o)}>{initial}</button>
+            {open && (
+                <div className="lp-nav-dropdown">
+                    <div className="lp-nav-dd-head">
+                        <div className="lp-nav-dd-label">Signed in as</div>
+                        <div className="lp-nav-dd-email">{user?.email}</div>
+                    </div>
+                    <Link to="/app"     className="lp-nav-dd-item" onClick={() => setOpen(false)}>Dashboard</Link>
+                    <Link to="/record"  className="lp-nav-dd-item" onClick={() => setOpen(false)}>New lecture</Link>
+                    <Link to="/profile" className="lp-nav-dd-item" onClick={() => setOpen(false)}>Profile</Link>
+                    <div className="lp-nav-dd-divider" />
+                    <button className="lp-nav-dd-signout" onClick={signOut}>Sign out</button>
+                </div>
+            )}
+        </div>
+    );
+}
+
 function Navbar({ user }) {
     const [menuOpen, setMenuOpen] = useState(false);
     return (
@@ -461,8 +530,8 @@ function Navbar({ user }) {
             <div className="lp-nav-right">
                 {user ? (
                     <>
-                        <Link to="/app" className="lp-btn-ghost-sm">Dashboard</Link>
                         <Link to="/record" className="lp-btn-dark-sm">Start recording</Link>
+                        <NavAvatar user={user} />
                     </>
                 ) : (
                     <>
