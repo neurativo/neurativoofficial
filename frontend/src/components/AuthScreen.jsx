@@ -699,8 +699,8 @@ export default function AuthScreen() {
 
                                 <p className="au-terms">
                                     By continuing you agree to our{' '}
-                                    <a href="#">Terms of Service</a> and{' '}
-                                    <a href="#">Privacy Policy</a>.
+                                    <Link to="/terms">Terms of Service</Link> and{' '}
+                                    <Link to="/privacy">Privacy Policy</Link>.
                                 </p>
                             </>
                         )}
