@@ -8,6 +8,8 @@ import LandingPage from './pages/LandingPage.jsx';
 import LectureView from './pages/LectureView.jsx';
 import ShareView from './pages/ShareView.jsx';
 import ProfilePage from './pages/ProfilePage.jsx';
+import TermsOfService from './pages/TermsOfService.jsx';
+import PrivacyPolicy from './pages/PrivacyPolicy.jsx';
 import { ToastProvider } from './components/Toast.jsx';
 import { supabase } from './lib/supabase.js';
 import './index.css';
@@ -94,6 +96,10 @@ function Root() {
                     </ProtectedRoute>
                 }
             />
+
+            {/* Legal */}
+            <Route path="/terms" element={<TermsOfService />} />
+            <Route path="/privacy" element={<PrivacyPolicy />} />
 
             {/* Fallback */}
             <Route path="*" element={<Navigate to="/" replace />} />

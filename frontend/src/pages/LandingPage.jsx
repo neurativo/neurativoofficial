@@ -1058,8 +1058,8 @@ function Footer() {
             <div className="lp-footer-lnks">
                 <a href="#features" className="lp-footer-lnk">Features</a>
                 <a href="#pricing" className="lp-footer-lnk">Pricing</a>
-                <a href="#" className="lp-footer-lnk">Privacy</a>
-                <a href="#" className="lp-footer-lnk">Terms</a>
+                <Link to="/privacy" className="lp-footer-lnk">Privacy</Link>
+                <Link to="/terms" className="lp-footer-lnk">Terms</Link>
             </div>
             <div className="lp-footer-copy">© {new Date().getFullYear()} Neurativo. All rights reserved.</div>
         </footer>
