@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { useSEO } from '../lib/useSEO';
 
 // ─── CSS ─────────────────────────────────────────────────────────────────────
 const CSS = `
@@ -1092,6 +1093,11 @@ function Footer() {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function LandingPage({ user }) {
+    useSEO({
+        title: null, // use default full title from index.html
+        description: 'Neurativo records your lecture, transcribes every word, and builds structured AI summaries in real time — so you can focus on learning, not writing. Free to start.',
+        canonicalPath: '/',
+    });
     return (
         <>
             <style>{CSS}</style>

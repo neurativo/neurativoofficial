@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { useSEO } from '../lib/useSEO';
 
 const CSS = `
   .legal *, .legal *::before, .legal *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -126,6 +127,7 @@ const SECTIONS = [
 ];
 
 export default function PrivacyPolicy() {
+    useSEO({ title: 'Privacy Policy', description: "Neurativo's Privacy Policy — how we collect, use, and protect your data when you use our AI lecture transcription service.", canonicalPath: '/privacy' });
     return (
         <>
             <style>{CSS}</style>

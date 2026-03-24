@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { useSEO } from '../lib/useSEO';
 
 const CSS = `
   .legal *, .legal *::before, .legal *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -111,6 +112,7 @@ const SECTIONS = [
 ];
 
 export default function TermsOfService() {
+    useSEO({ title: 'Terms of Service', description: 'Read the Neurativo Terms of Service — the rules, rights, and responsibilities for using our AI lecture transcription platform.', canonicalPath: '/terms' });
     return (
         <>
             <style>{CSS}</style>

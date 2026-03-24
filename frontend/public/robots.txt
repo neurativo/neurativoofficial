@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /app
+Disallow: /record
+Disallow: /lecture/
+Disallow: /profile
+
+Sitemap: https://neurativo.app/sitemap.xml

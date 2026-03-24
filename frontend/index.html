@@ -4,14 +4,180 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Neurativo — AI Lecture Assistant</title>
-  <meta name="description" content="Neurativo records your lecture, transcribes every word, and builds structured summaries in real time — so you can focus on learning, not writing." />
-  <meta property="og:title" content="Neurativo — AI Lecture Assistant" />
-  <meta property="og:description" content="Real-time transcription and hierarchical summaries for every lecture. Ask questions, get explanations, and export a PDF — all without taking a single note." />
+
+  <!-- ── Primary SEO ─────────────────────────────────────────────────────── -->
+  <title>Neurativo – AI Lecture Notes & Real-Time Transcription</title>
+  <meta name="description" content="Neurativo transcribes your lectures live, builds structured AI summaries section by section, and lets you ask questions about anything said — so you never miss what matters. Free to start." />
+  <meta name="keywords" content="AI lecture notes, real-time lecture transcription, AI note taking app, lecture summary generator, automatic lecture notes, student AI assistant, lecture recorder, AI transcription app" />
+  <meta name="author" content="Neurativo" />
+  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+  <link rel="canonical" href="https://neurativo.app/" />
+
+  <!-- ── Open Graph ──────────────────────────────────────────────────────── -->
   <meta property="og:type" content="website" />
-  <meta name="twitter:card" content="summary" />
-  <meta name="twitter:title" content="Neurativo — AI Lecture Assistant" />
-  <meta name="twitter:description" content="Real-time AI transcription and hierarchical summaries for every lecture. Free to start." />
+  <meta property="og:site_name" content="Neurativo" />
+  <meta property="og:url" content="https://neurativo.app/" />
+  <meta property="og:title" content="Neurativo – AI Lecture Notes & Real-Time Transcription" />
+  <meta property="og:description" content="Record any lecture and get a live transcript, structured AI summary, and Q&A — all in real time. No notes needed. Free to start." />
+  <meta property="og:image" content="https://neurativo.app/og.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="Neurativo — AI Lecture Assistant showing live transcript and summary panels" />
+  <meta property="og:locale" content="en_US" />
+
+  <!-- ── Twitter Card ────────────────────────────────────────────────────── -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:site" content="@neurativo" />
+  <meta name="twitter:title" content="Neurativo – AI Lecture Notes & Real-Time Transcription" />
+  <meta name="twitter:description" content="Record any lecture and get a live transcript, structured AI summary, and Q&A — all in real time. Free to start." />
+  <meta name="twitter:image" content="https://neurativo.app/og.png" />
+  <meta name="twitter:image:alt" content="Neurativo AI Lecture Assistant" />
+
+  <!-- ── PWA / App ───────────────────────────────────────────────────────── -->
+  <meta name="theme-color" content="#1a1a1a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Neurativo" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="icon" type="image/png" href="/favicon.png" />
+
+  <!-- ── Performance hints ──────────────────────────────────────────────── -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="dns-prefetch" href="https://neurativoofficial-production.up.railway.app" />
+
+  <!-- ── JSON-LD Structured Data ────────────────────────────────────────── -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "https://neurativo.app/#organization",
+        "name": "Neurativo",
+        "url": "https://neurativo.app",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://neurativo.app/og.png",
+          "width": 1200,
+          "height": 630
+        },
+        "sameAs": []
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://neurativo.app/#website",
+        "url": "https://neurativo.app",
+        "name": "Neurativo",
+        "description": "AI-powered real-time lecture transcription and summarization",
+        "publisher": { "@id": "https://neurativo.app/#organization" }
+      },
+      {
+        "@type": "SoftwareApplication",
+        "@id": "https://neurativo.app/#app",
+        "name": "Neurativo",
+        "url": "https://neurativo.app",
+        "applicationCategory": "EducationApplication",
+        "operatingSystem": "Web, iOS, Android",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD",
+          "name": "Free Plan"
+        },
+        "description": "Neurativo is an AI-powered lecture assistant that transcribes audio in real time, generates hierarchical summaries section by section, and lets students ask questions about lecture content instantly.",
+        "featureList": [
+          "Real-time audio transcription with under 3-second latency",
+          "Automatic section-by-section AI summaries",
+          "AI-powered Q&A from your own lecture notes",
+          "Smart Explain — select any text for instant concept breakdown",
+          "PDF export of full lecture notes",
+          "Shareable lecture links",
+          "Dark mode",
+          "Import audio files (MP3, M4A, WAV, MP4)"
+        ],
+        "screenshot": "https://neurativo.app/og.png",
+        "aggregateRating": {
+          "@type": "AggregateRating",
+          "ratingValue": "4.9",
+          "reviewCount": "240"
+        }
+      },
+      {
+        "@type": "FAQPage",
+        "@id": "https://neurativo.app/#faq",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "Is Neurativo free to use?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. Neurativo is free to start with 5 lectures per month. The Pro plan ($12/month) gives you unlimited lectures, full Q&A, Smart Explain, PDF export, and 90-day history."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How accurate is the transcription?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Neurativo uses state-of-the-art AI transcription technology that delivers high accuracy across accents and academic domains. Accuracy depends on audio quality and background noise."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Do I need to install anything?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No. Neurativo runs entirely in your browser. Just sign in, hit record, and start your lecture — no downloads or extensions required."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Can I export my lecture notes?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. Every lecture can be exported as a beautifully formatted PDF containing the full transcript, section summaries, and key concepts — ready to print or share."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What languages does Neurativo support?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Neurativo supports over 20 languages including English, Spanish, French, German, Arabic, Hindi, Chinese, Japanese, Korean, Portuguese, and more."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Is my audio data private?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. Audio is processed only to generate your transcript and is not retained as a permanent record. Your transcripts and summaries are stored privately and associated only with your account. We never sell your data."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Can I record lectures from my phone?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. Neurativo is fully mobile-responsive and works in any modern mobile browser. Open neurativo.app on your phone, sign in, and start recording."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Can I upload existing audio files?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. Use the Import feature on the Dashboard to upload MP3, M4A, WAV, MP4, or WebM files up to 500MB. Neurativo will transcribe and summarize them automatically."
+            }
+          }
+        ]
+      }
+    ]
+  }
+  </script>
 </head>
 
 <body>

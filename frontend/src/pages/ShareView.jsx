@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { useSEO } from '../lib/useSEO';
 
 // Public endpoint — no auth interceptor needed
 const BASE_URL = import.meta.env.VITE_API_URL || '';
@@ -120,6 +121,17 @@ export default function ShareView() {
     const [loading, setLoading]           = useState(true);
     const [notFound, setNotFound]         = useState(false);
     const [showTranscript, setShowTranscript] = useState(false);
+
+    // Dynamic SEO — updates once lecture loads
+    useSEO(lecture ? {
+        title: lecture.title || 'Shared Lecture',
+        description: `AI-generated lecture notes shared via Neurativo${lecture.topic ? ` · ${lecture.topic}` : ''}. View the full transcript and summary.`,
+        canonicalPath: `/share/${token}`,
+    } : {
+        title: 'Shared Lecture',
+        description: 'View AI-generated lecture notes shared via Neurativo — transcript, summary, and key concepts.',
+        canonicalPath: `/share/${token}`,
+    });
 
     useEffect(() => {
         fetch(`${BASE_URL}/api/v1/share/${token}`)

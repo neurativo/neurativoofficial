@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { useSEO } from '../lib/useSEO';
 
 // ─── CSS ──────────────────────────────────────────────────────────────────────
 const CSS = `
@@ -523,6 +524,8 @@ export default function AuthScreen() {
     const [magicSent, setMagicSent] = useState(false);
     const [error, setError]         = useState(null);
     const [focused, setFocused]     = useState(false);
+
+    useSEO({ title: 'Sign In', description: 'Sign in to Neurativo — your AI-powered lecture assistant. Free to start, no password needed.', canonicalPath: '/auth' });
 
     // Lock page scroll while auth screen is mounted
     React.useEffect(() => {
