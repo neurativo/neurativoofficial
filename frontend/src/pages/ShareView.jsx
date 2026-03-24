@@ -41,7 +41,8 @@ const CSS = `
   .sv-segment { display: flex; gap: 10px; }
   .sv-seg-num { font-size: 11px; color: ${C.muted}; font-family: monospace; min-width: 22px; padding-top: 2px; text-align: right; flex-shrink: 0; }
   .sv-seg-text { font-size: 13px; color: ${C.text}; line-height: 1.65; }
-  .sv-footer { border-top: 1px solid ${C.border}; padding: 20px 24px; display: flex; align-items: center; justify-content: space-between; max-width: 680px; margin: 0 auto; }
+  .sv-footer { border-top: 1px solid ${C.border}; padding: 20px 24px; }
+  .sv-footer-inner { max-width: 680px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; }
   .sv-footer-made { font-size: 12px; color: ${C.muted}; }
   .sv-footer-cta { font-size: 13px; font-weight: 500; color: ${C.text}; text-decoration: none; display: flex; align-items: center; gap: 4px; transition: opacity 0.15s; }
   .sv-footer-cta:hover { opacity: 0.7; }
@@ -49,6 +50,13 @@ const CSS = `
   .sv-404-title { font-size: 18px; font-weight: 500; color: ${C.text}; margin-bottom: 8px; }
   .sv-404-sub { font-size: 14px; color: ${C.sec}; margin-bottom: 24px; }
   .sv-btn-home { display: inline-block; padding: 10px 22px; background: ${C.dark}; color: #fafaf9; font-size: 13px; font-weight: 500; border: none; border-radius: 10px; cursor: pointer; text-decoration: none; }
+
+  @media (max-width: 600px) {
+    .sv-header { padding: 0 16px; }
+    .sv-body { padding: 32px 16px 60px; }
+    .sv-title { font-size: 22px; letter-spacing: -0.5px; }
+    .sv-footer-inner { flex-direction: column; gap: 8px; text-align: center; }
+  }
 `;
 
 function parseSummary(text) {
@@ -253,12 +261,10 @@ export default function ShareView() {
                 </div>
 
                 {/* Footer */}
-                <footer style={{ borderTop: `1px solid ${C.border}`, padding: '20px 24px' }}>
-                    <div style={{ maxWidth: 680, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <span style={{ fontSize: 12, color: C.muted }}>Made with Neurativo</span>
-                        <Link to="/" style={{ fontSize: 13, fontWeight: 500, color: C.text, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
-                            Try it free →
-                        </Link>
+                <footer className="sv-footer">
+                    <div className="sv-footer-inner">
+                        <span className="sv-footer-made">Made with Neurativo</span>
+                        <Link to="/" className="sv-footer-cta">Try it free →</Link>
                     </div>
                 </footer>
             </div>

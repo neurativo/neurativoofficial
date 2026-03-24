@@ -153,8 +153,20 @@ const CSS = `
   .pp-skeleton { height: 14px; background: var(--color-border); border-radius: 6px; animation: pp-shimmer 1.5s ease-in-out infinite; }
   @keyframes pp-shimmer { 0%,100%{opacity:0.5} 50%{opacity:1} }
 
+  @media (max-width: 600px) {
+    .pp-main { padding: 24px 16px 60px; }
+    .pp-header { padding: 0 16px; }
+    .pp-page-title { font-size: 18px; }
+    .pp-section-body { padding: 16px; }
+    .pp-section-head { padding: 14px 16px 12px; }
+    .pp-danger-body { padding: 16px; }
+    .pp-danger-head { padding: 14px 16px 12px; }
+  }
   @media (max-width: 540px) {
     .pp-stats { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 360px) {
+    .pp-stats { grid-template-columns: 1fr; }
   }
 `;
 

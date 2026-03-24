@@ -99,8 +99,24 @@ const CSS = `
   /* Mobile */
   @media (max-width: 680px) {
     .lv-body { flex-direction: column; }
-    .lv-left { width: 100%; height: 40vh; border-right: none; border-bottom: 1px solid ${C.border}; }
-    .lv-right { flex: 1; }
+    .lv-left { width: 100%; height: 42vh; border-right: none; border-bottom: 1px solid ${C.border}; }
+    .lv-right { flex: 1; min-height: 0; }
+  }
+  @media (max-width: 480px) {
+    .lv-nav { padding: 0 12px; gap: 6px; }
+    .lv-nav-title { font-size: 13px; padding: 0 6px; }
+    .lv-btn-text { display: none; }
+    .lv-btn-ghost { padding: 6px 9px; min-width: 32px; justify-content: center; }
+    .lv-panel-header { padding: 12px 14px 10px; }
+    .lv-transcript-list { padding: 12px 14px; }
+    .lv-tabs { padding: 0 12px; }
+    .lv-tab { padding: 12px 10px 10px; font-size: 12px; }
+    .lv-tab-body { padding: 14px; }
+    .lv-qa-bar { padding: 10px 12px; gap: 6px; }
+    .lv-qa-input { padding: 9px 10px; font-size: 13px; }
+    .lv-qa-send { padding: 9px 12px; font-size: 13px; }
+    .lv-stat-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+    .lv-left { height: 38vh; }
   }
 `;
 
@@ -288,11 +304,11 @@ export default function LectureView() {
                     <div className="lv-nav-right">
                         <button className="lv-btn-ghost" onClick={() => setExportOpen(true)}>
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                            Export PDF
+                            <span className="lv-btn-text">Export PDF</span>
                         </button>
                         <button className="lv-btn-ghost" onClick={handleShare}>
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-                            {lecture?.share_token ? 'Copy link' : 'Share'}
+                            <span className="lv-btn-text">{lecture?.share_token ? 'Copy link' : 'Share'}</span>
                         </button>
                     </div>
                 </nav>

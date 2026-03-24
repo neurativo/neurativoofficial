@@ -388,6 +388,7 @@ const CSS = `
     .lp-nav { padding: 0 20px; position: relative; }
     .lp-nav-center { display: none; }
     .lp-hamburger { display: block; }
+    .lp-btn-ghost-sm { display: none; } /* hide ghost "Sign in" on mobile — it's in the hamburger menu */
 
     .lp-hero { padding: 70px 24px 60px; }
     .lp-h1 { font-size: 36px; letter-spacing: -1.2px; }
@@ -419,6 +420,29 @@ const CSS = `
 
     .lp-footer { grid-template-columns: 1fr; text-align: center; justify-items: center; padding: 28px 24px; gap: 16px; }
     .lp-footer-copy { text-align: center; }
+  }
+
+  @media (max-width: 480px) {
+    .lp-nav { padding: 0 16px; }
+    .lp-hero { padding: 56px 16px 48px; }
+    .lp-h1 { font-size: 30px; letter-spacing: -1px; }
+    .lp-hero-sub { font-size: 14px; }
+    .lp-hero-eyebrow { font-size: 10px; }
+    .lp-stats-wrap { padding: 0 16px 48px; }
+    .lp-sec { padding: 0 16px 48px; }
+    .lp-sec-h2 { font-size: 22px; }
+    .lp-sec-sub { font-size: 13px; }
+    .lp-nast-wrap { padding: 0 16px 48px; }
+    .lp-uni-bar { padding: 0 16px 40px; }
+    .lp-cta-wrap { padding: 0 16px 48px; }
+    .lp-cta { padding: 32px 20px; border-radius: 18px; }
+    .lp-cta-h2 { font-size: 22px; }
+    .lp-footer { padding: 24px 16px; }
+    .lp-pricing { gap: 12px; }
+    .lp-plan, .lp-plan-feat { padding: 24px 20px; }
+    .lp-mobile-menu { padding: 12px 16px 16px; }
+    .lp-testi-grid { gap: 10px; }
+    .lp-testi-card { padding: 18px; }
   }
 `;
 

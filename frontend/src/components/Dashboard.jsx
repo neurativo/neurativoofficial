@@ -121,6 +121,21 @@ const CSS = `
   .db-no-match { font-size: 14px; color: ${C.sec}; padding: 32px 0; text-align: center; }
   .db-no-match-clear { background: none; border: none; cursor: pointer; font-family: inherit; font-size: 13px; color: ${C.sec}; text-decoration: underline; display: block; margin: 6px auto 0; }
 
+  /* ── Mobile ── */
+  @media (max-width: 600px) {
+    .db-header { padding: 0 16px; gap: 8px; }
+    .db-main { padding: 20px 16px 60px; }
+    .db-page-title { font-size: 18px; }
+    .db-btn-text { display: none; }
+    .db-btn-import { padding: 7px 9px; }
+    .db-btn-new { padding: 7px 9px; }
+    .db-menu-btn { opacity: 1 !important; }
+    .db-empty { padding: 40px 16px 24px; }
+    .db-empty-num { font-size: 52px; letter-spacing: -4px; }
+    .db-filters { gap: 6px; }
+    .db-filter-select { font-size: 12px; padding: 5px 8px; }
+  }
+
   /* Onboarding modal */
   .ob-overlay { position: fixed; inset: 0; z-index: 70; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.45); backdrop-filter: blur(6px); padding: 16px; }
   .ob-modal { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 20px; width: 100%; max-width: 480px; padding: 40px 36px 36px; box-shadow: 0 24px 64px rgba(0,0,0,0.14); text-align: center; }
@@ -488,13 +503,13 @@ export default function Dashboard({ user }) {
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
                             </svg>
-                            Import
+                            <span className="db-btn-text">Import</span>
                         </button>
                         <button className="db-btn-new" onClick={() => navigate('/record')}>
                             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                                 <line x1="12" y1="4" x2="12" y2="20"/><line x1="4" y1="12" x2="20" y2="12"/>
                             </svg>
-                            New Lecture
+                            <span className="db-btn-text">New Lecture</span>
                         </button>
                         <UserMenu user={user} onSignOut={handleSignOut} />
                     </div>
