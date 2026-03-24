@@ -113,7 +113,7 @@ const SECTIONS = [
     { id: 'how-we-use', title: 'How We Use Your Data' },
     { id: 'legal-basis', title: 'Legal Basis for Processing' },
     { id: 'sharing', title: 'How We Share Your Data' },
-    { id: 'third-parties', title: 'Third-Party Processors' },
+    { id: 'third-parties', title: 'Service Providers' },
     { id: 'audio', title: 'Audio & Transcript Data' },
     { id: 'retention', title: 'Data Retention' },
     { id: 'security', title: 'Security' },
@@ -264,51 +264,26 @@ export default function PrivacyPolicy() {
 
                     {/* 6 */}
                     <div className="legal-section" id="third-parties">
-                        <h2 className="legal-h2">6. Third-Party Processors</h2>
-                        <table className="legal-table">
-                            <thead>
-                                <tr>
-                                    <th>Provider</th>
-                                    <th>Purpose</th>
-                                    <th>Data sent</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td><strong>Supabase</strong></td>
-                                    <td>Database, authentication, file storage</td>
-                                    <td>Account data, transcripts, summaries</td>
-                                </tr>
-                                <tr>
-                                    <td><strong>OpenAI</strong></td>
-                                    <td>Audio transcription (Whisper) and language model processing (GPT-4o-mini)</td>
-                                    <td>Audio files, transcript text</td>
-                                </tr>
-                                <tr>
-                                    <td><strong>Railway</strong></td>
-                                    <td>Backend hosting infrastructure</td>
-                                    <td>Processed in-memory during requests; no persistent storage</td>
-                                </tr>
-                                <tr>
-                                    <td><strong>Vercel</strong></td>
-                                    <td>Frontend hosting and CDN</td>
-                                    <td>IP address, request logs (standard web server logs)</td>
-                                </tr>
-                            </tbody>
-                        </table>
+                        <h2 className="legal-h2">6. Service Providers</h2>
                         <p className="legal-p">
-                            Each processor is bound by their own privacy commitments and applicable data protection law. We encourage you to review their policies: <a href="https://supabase.com/privacy" target="_blank" rel="noopener noreferrer" style={{color:'inherit'}}>Supabase</a>, <a href="https://openai.com/policies/privacy-policy" target="_blank" rel="noopener noreferrer" style={{color:'inherit'}}>OpenAI</a>, <a href="https://railway.app/legal/privacy" target="_blank" rel="noopener noreferrer" style={{color:'inherit'}}>Railway</a>, <a href="https://vercel.com/legal/privacy-policy" target="_blank" rel="noopener noreferrer" style={{color:'inherit'}}>Vercel</a>.
+                            We engage carefully selected third-party service providers to help us operate and deliver the Service. These providers assist with functions including cloud infrastructure, data storage, user authentication, and AI-powered content processing.
+                        </p>
+                        <p className="legal-p">
+                            Each provider is contractually bound to process your data only as instructed by us and in accordance with applicable data protection law. They are prohibited from using your data for their own purposes beyond what is necessary to perform the services we have engaged them for.
+                        </p>
+                        <p className="legal-p">
+                            We periodically review our providers to ensure they maintain appropriate privacy and security standards. If we add or change providers in a way that materially affects how your data is processed, we will update this Policy accordingly.
                         </p>
                     </div>
 
                     {/* 7 */}
                     <div className="legal-section" id="audio">
                         <h2 className="legal-h2">7. Audio & Transcript Data</h2>
-                        <div className="legal-warning">
-                            <span className="legal-strong">Your audio is processed by OpenAI.</span> When you record or upload audio, it is sent to OpenAI's Whisper API for transcription. OpenAI's API data usage policies apply. As of our last review, OpenAI does not use API-submitted data to train its models by default, but you should review <a href="https://openai.com/policies/privacy-policy" target="_blank" rel="noopener noreferrer" style={{color:'inherit'}}>OpenAI's Privacy Policy</a> directly for the most current information.
-                        </div>
                         <p className="legal-p">
-                            Transcripts and summaries derived from your audio are stored in our Supabase database and associated with your account. You can delete individual lectures (and their associated data) from your dashboard at any time.
+                            When you record or upload audio through the Service, that audio is processed to generate a transcript. The resulting transcript, along with any summaries or AI-generated content derived from it, is stored securely and associated with your account.
+                        </p>
+                        <p className="legal-p">
+                            Raw audio is used solely for transcription purposes and is not retained as a permanent record once processing is complete. You can delete individual lectures and all associated data from your dashboard at any time.
                         </p>
                         <p className="legal-p">
                             <strong>You are solely responsible</strong> for ensuring you have the legal right to record any audio you submit — including obtaining the consent of any other speakers where required by applicable law.
@@ -339,10 +314,10 @@ export default function PrivacyPolicy() {
                             We implement industry-standard technical and organisational measures to protect your data, including:
                         </p>
                         <ul className="legal-ul">
-                            <li>Encrypted data transmission via HTTPS/TLS.</li>
-                            <li>Row-level security (RLS) on our database so users can only access their own data.</li>
-                            <li>Supabase authentication with magic-link sign-in (no password storage).</li>
-                            <li>API keys and secrets stored in environment variables, never committed to source code.</li>
+                            <li>Encrypted data transmission via HTTPS/TLS for all communications.</li>
+                            <li>Access controls ensuring users can only access their own data.</li>
+                            <li>Passwordless authentication reducing the risk of credential-based attacks.</li>
+                            <li>Secure storage and handling of all credentials and sensitive configuration.</li>
                         </ul>
                         <p className="legal-p">
                             No method of transmission over the internet or electronic storage is 100% secure. While we strive to protect your data, we cannot guarantee its absolute security. If you believe your account has been compromised, contact us immediately.
@@ -387,9 +362,9 @@ export default function PrivacyPolicy() {
                             Neurativo uses browser <strong>localStorage</strong> (not traditional cookies) to store:
                         </p>
                         <ul className="legal-ul">
-                            <li><code style={{fontSize:'12px', background:'var(--color-card,#fff)', padding:'1px 5px', borderRadius:'4px', border:'1px solid var(--color-border,#f0ede8)'}}>neurativo_theme</code> — your dark/light mode preference.</li>
-                            <li><code style={{fontSize:'12px', background:'var(--color-card,#fff)', padding:'1px 5px', borderRadius:'4px', border:'1px solid var(--color-border,#f0ede8)'}}>neurativo_onboarded</code> — whether you have completed the onboarding flow.</li>
-                            <li>Supabase authentication session tokens (managed by the Supabase client library).</li>
+                            <li>Your display preferences (e.g., light or dark mode).</li>
+                            <li>Onboarding state, so we know whether to show introductory guidance.</li>
+                            <li>Authentication session tokens, so you stay signed in between visits.</li>
                         </ul>
                         <p className="legal-p">
                             These are functional items necessary for the Service to work correctly. We do not use third-party tracking cookies or advertising pixels.
@@ -400,7 +375,7 @@ export default function PrivacyPolicy() {
                     <div className="legal-section" id="international">
                         <h2 className="legal-h2">13. International Transfers</h2>
                         <p className="legal-p">
-                            Your data may be transferred to and processed in countries outside your country of residence, including the United States, where our third-party processors (OpenAI, Supabase, Railway, Vercel) operate. These countries may have data protection laws that differ from those in your country.
+                            Your data may be transferred to and processed in countries outside your country of residence, including the United States, where our service providers operate. These countries may have data protection laws that differ from those in your country.
                         </p>
                         <p className="legal-p">
                             Where required, we rely on appropriate transfer mechanisms (such as Standard Contractual Clauses for EU data transfers) to ensure adequate protection for your data. By using the Service, you consent to such transfers.

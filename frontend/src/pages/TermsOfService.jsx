@@ -259,10 +259,10 @@ export default function TermsOfService() {
                     <div className="legal-section" id="third-party">
                         <h2 className="legal-h2">9. Third-Party Services</h2>
                         <p className="legal-p">
-                            The Service integrates with third-party providers including OpenAI (for transcription and language model processing) and Supabase (for data storage and authentication). Your use of the Service is also subject to those providers' terms of service and privacy policies. We are not responsible for the acts or omissions of third-party service providers, and their terms may change independently of ours.
+                            The Service relies on third-party infrastructure and technology providers to deliver its functionality, including cloud hosting, data storage, authentication, and AI processing. Your use of the Service is subject to those providers' terms of service and privacy policies. We are not responsible for the acts, omissions, or policies of third-party service providers, and their terms may change independently of ours.
                         </p>
                         <p className="legal-p">
-                            Audio data submitted to the Service may be transmitted to OpenAI's API for transcription processing. By using the Service, you consent to this transmission and acknowledge that OpenAI's <a href="https://openai.com/policies/privacy-policy" target="_blank" rel="noopener noreferrer" style={{color:'inherit'}}>Privacy Policy</a> and <a href="https://openai.com/policies/usage-policies" target="_blank" rel="noopener noreferrer" style={{color:'inherit'}}>Usage Policies</a> apply to that processing.
+                            By using the Service, you acknowledge that content you submit — including audio recordings — may be processed by our technology partners solely for the purpose of delivering the features you have requested. We take reasonable steps to ensure our providers handle your data in accordance with applicable law.
                         </p>
                     </div>
 
