@@ -355,8 +355,8 @@ export default function TermsOfService() {
                         <p className="legal-p">If you have questions about these Terms, please contact us:</p>
                         <div className="legal-contact">
                             <strong>Neurativo</strong><br />
-                            Email: <a href="mailto:legal@neurativo.app">legal@neurativo.app</a><br />
-                            Website: <Link to="/" style={{color:'inherit'}}>neurativo.app</Link>
+                            Email: <a href="mailto:legal@neurativo.com">legal@neurativo.com</a><br />
+                            Website: <Link to="/" style={{color:'inherit'}}>neurativo.com</Link>
                         </div>
                     </div>
                 </div>

@@ -745,7 +745,7 @@ function Mockup() {
                     </div>
                     <div className="lp-url-bar">
                         <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#a3a3a3" strokeWidth="2.5" strokeLinecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                        <span className="lp-url-text">neurativo.app/record</span>
+                        <span className="lp-url-text">neurativo.com/record</span>
                     </div>
                 </div>
                 {/* Body */}

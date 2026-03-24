@@ -7,10 +7,10 @@ export function useSEO({ title, description, canonicalPath, ogImage } = {}) {
     if (typeof document === 'undefined') return;
 
     const siteTitle = 'Neurativo';
-    const fullTitle = title ? `${title} – ${siteTitle}` : `${siteTitle} – AI Lecture Notes & Real-Time Transcription`;
-    const desc = description || 'Neurativo transcribes your lectures live and builds structured AI summaries in real time — so you can focus on learning, not writing.';
-    const canonical = canonicalPath ? `https://neurativo.app${canonicalPath}` : 'https://neurativo.app/';
-    const image = ogImage || 'https://neurativo.app/og.png';
+    const fullTitle = title ? `${title} – ${siteTitle}` : `${siteTitle} — AI Lecture Assistant`;
+    const desc = description || 'Record any lecture and get live transcription, AI summaries, and instant Q&A in any language. The smartest way to study.';
+    const canonical = canonicalPath ? `https://neurativo.com${canonicalPath}` : 'https://neurativo.com/';
+    const image = ogImage || 'https://neurativo.com/og.png';
 
     // Update title
     document.title = fullTitle;

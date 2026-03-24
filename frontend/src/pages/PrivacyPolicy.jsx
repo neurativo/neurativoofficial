@@ -342,7 +342,7 @@ export default function PrivacyPolicy() {
                             <li><strong>Withdraw consent</strong> — where processing is based on consent, you may withdraw it at any time without affecting the lawfulness of prior processing.</li>
                         </ul>
                         <p className="legal-p">
-                            To exercise any of these rights, contact us at <a href="mailto:privacy@neurativo.app" style={{color:'inherit'}}>privacy@neurativo.app</a>. We will respond within 30 days. We may need to verify your identity before fulfilling a request.
+                            To exercise any of these rights, contact us at <a href="mailto:privacy@neurativo.com" style={{color:'inherit'}}>privacy@neurativo.com</a>. We will respond within 30 days. We may need to verify your identity before fulfilling a request.
                         </p>
                         <p className="legal-p">
                             If you are in the EU/EEA and believe we are processing your data unlawfully, you have the right to lodge a complaint with your local data protection authority.
@@ -398,9 +398,9 @@ export default function PrivacyPolicy() {
                         <p className="legal-p">For privacy questions, data access requests, or to report a concern:</p>
                         <div className="legal-contact">
                             <strong>Neurativo — Privacy</strong><br />
-                            Email: <a href="mailto:privacy@neurativo.app">privacy@neurativo.app</a><br />
-                            Legal: <a href="mailto:legal@neurativo.app">legal@neurativo.app</a><br />
-                            Website: <Link to="/" style={{color:'inherit'}}>neurativo.app</Link>
+                            Email: <a href="mailto:privacy@neurativo.com">privacy@neurativo.com</a><br />
+                            Legal: <a href="mailto:legal@neurativo.com">legal@neurativo.com</a><br />
+                            Website: <Link to="/" style={{color:'inherit'}}>neurativo.com</Link>
                         </div>
                     </div>
                 </div>
