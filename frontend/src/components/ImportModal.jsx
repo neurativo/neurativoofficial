@@ -77,7 +77,12 @@ export default function ImportModal({ onClose }) {
     const [drag, setDrag]       = useState(false);
     const [stage, setStage]     = useState(null); // null | 'uploading' | 'transcribing' | 'summarizing' | 'done'
     const [error, setError]     = useState('');
+    const [usage, setUsage]     = useState(null);
     const inputRef = useRef(null);
+
+    useEffect(() => {
+        api.get('/api/v1/usage').then(res => setUsage(res.data)).catch(() => {});
+    }, []);
 
     const stageInfo = STAGES.find(s => s.key === stage);
 
@@ -137,7 +142,20 @@ export default function ImportModal({ onClose }) {
             await new Promise(r => setTimeout(r, 600));
             navigate(`/lecture/${lectureId}`);
         } catch (err) {
-            const msg = err?.response?.data?.detail || err?.message || 'Import failed. Please try again.';
+            const status = err?.response?.status;
+            const detail = err?.response?.data?.detail;
+            let msg;
+            if (status === 403 && detail?.error === 'upload_limit_reached') {
+                const resetDate = detail.resets_at
+                    ? new Date(detail.resets_at).toLocaleDateString(undefined, { month: 'long', day: 'numeric' })
+                    : 'next month';
+                msg = `You've used all ${detail.limit} free imports this month. Imports reset on ${resetDate}.`;
+            } else if (status === 413 && detail?.error === 'file_too_large') {
+                const mb = detail.max_bytes ? Math.round(detail.max_bytes / (1024 * 1024)) : 500;
+                msg = `This file exceeds your plan limit of ${mb} MB. Upgrade to import larger files.`;
+            } else {
+                msg = (typeof detail === 'string' ? detail : null) || err?.message || 'Import failed. Please try again.';
+            }
             setError(msg);
             setStage(null);
         }
@@ -188,6 +206,18 @@ export default function ImportModal({ onClose }) {
                                 <p className="im-drop-title">{file ? 'Drop to replace' : 'Drag & drop your audio file'}</p>
                                 <p className="im-drop-sub">or <b>click to browse</b></p>
                             </div>
+                        )}
+
+                        {/* Plan limit hint */}
+                        {!busy && usage && (
+                            <p style={{ fontSize: 12, color: C.muted, marginTop: 10, textAlign: 'center' }}>
+                                {usage.plan_tier === 'free'
+                                    ? `Free plan: up to ${usage.upload_max_duration_label || '60 min'} audio · ${usage.uploads_limit} imports/month (${usage.uploads_this_month} used)`
+                                    : usage.plan_tier === 'student'
+                                    ? `Student plan: up to ${usage.upload_max_duration_label || '4 hours'} · ${usage.uploads_limit} imports/month (${usage.uploads_this_month} used)`
+                                    : 'Pro plan: unlimited imports · any file size'
+                                }
+                            </p>
                         )}
 
                         {/* Selected file info */}

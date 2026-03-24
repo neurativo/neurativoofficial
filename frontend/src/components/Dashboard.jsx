@@ -121,6 +121,23 @@ const CSS = `
   .db-no-match { font-size: 14px; color: ${C.sec}; padding: 32px 0; text-align: center; }
   .db-no-match-clear { background: none; border: none; cursor: pointer; font-family: inherit; font-size: 13px; color: ${C.sec}; text-decoration: underline; display: block; margin: 6px auto 0; }
 
+  /* Usage banner */
+  .db-usage-banner { background: var(--color-card); border-bottom: 1px solid var(--color-border); padding: 10px 24px; }
+  .db-usage-inner { max-width: 980px; margin: 0 auto; display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
+  .db-usage-row { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 180px; }
+  .db-usage-label { font-size: 12px; color: var(--color-sec); white-space: nowrap; }
+  .db-usage-bar { flex: 1; height: 4px; background: var(--color-border); border-radius: 4px; overflow: hidden; min-width: 60px; }
+  .db-usage-fill-blue { height: 100%; background: #3b82f6; border-radius: 4px; transition: width 0.5s ease; }
+  .db-usage-fill-blue.warn { background: #f59e0b; }
+  .db-usage-fill-blue.full { background: #ef4444; }
+  .db-usage-fill-purple { height: 100%; background: #7c3aed; border-radius: 4px; transition: width 0.5s ease; }
+  .db-usage-fill-purple.warn { background: #f59e0b; }
+  .db-usage-fill-purple.full { background: #ef4444; }
+  .db-usage-count { font-size: 11px; color: var(--color-muted); font-family: monospace; white-space: nowrap; }
+  .db-usage-resets { font-size: 11px; color: var(--color-muted); margin-left: auto; white-space: nowrap; }
+  .db-usage-upgrade { font-size: 12px; color: var(--color-text); font-weight: 500; text-decoration: none; white-space: nowrap; }
+  .db-usage-upgrade:hover { text-decoration: underline; }
+
   /* ── Mobile ── */
   @media (max-width: 600px) {
     .db-header { padding: 0 16px; gap: 8px; }
@@ -385,6 +402,7 @@ export default function Dashboard({ user }) {
 
     const [lectures, setLectures] = useState([]);
     const [loading, setLoading]   = useState(true);
+    const [usage, setUsage]       = useState(null);
     const [search, setSearch]     = useState('');
     const [topicFilter, setTopicFilter] = useState('');
     const [langFilter,  setLangFilter]  = useState('');
@@ -401,6 +419,10 @@ export default function Dashboard({ user }) {
         await supabase.auth.signOut();
         navigate('/auth');
     };
+
+    useEffect(() => {
+        api.get('/api/v1/usage').then(res => setUsage(res.data)).catch(() => {});
+    }, []);
 
     useEffect(() => {
         api.get('/api/v1/lectures?limit=50')
@@ -514,6 +536,39 @@ export default function Dashboard({ user }) {
                         <UserMenu user={user} onSignOut={handleSignOut} />
                     </div>
                 </header>
+
+                {/* ── Free plan usage banner ── */}
+                {usage && usage.plan_tier === 'free' && (
+                    <div className="db-usage-banner">
+                        <div className="db-usage-inner">
+                            <div className="db-usage-row">
+                                <span className="db-usage-label">Live lectures</span>
+                                <div className="db-usage-bar">
+                                    <div
+                                        className={`db-usage-fill-blue${usage.lectures_this_month >= usage.lectures_limit ? ' full' : usage.lectures_this_month >= usage.lectures_limit * 0.8 ? ' warn' : ''}`}
+                                        style={{ width: `${Math.min(100, (usage.lectures_this_month / usage.lectures_limit) * 100)}%` }}
+                                    />
+                                </div>
+                                <span className="db-usage-count">{usage.lectures_this_month} / {usage.lectures_limit}</span>
+                            </div>
+                            <div className="db-usage-row">
+                                <span className="db-usage-label">Imports</span>
+                                <div className="db-usage-bar">
+                                    <div
+                                        className={`db-usage-fill-purple${usage.uploads_this_month >= usage.uploads_limit ? ' full' : usage.uploads_this_month >= usage.uploads_limit * 0.8 ? ' warn' : ''}`}
+                                        style={{ width: `${Math.min(100, (usage.uploads_this_month / usage.uploads_limit) * 100)}%` }}
+                                    />
+                                </div>
+                                <span className="db-usage-count">{usage.uploads_this_month} / {usage.uploads_limit}</span>
+                            </div>
+                            {usage.month_resets_at && (
+                                <span className="db-usage-resets">
+                                    Resets {new Date(usage.month_resets_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                )}
 
                 <main className="db-main">
                     <h1 className="db-page-title">Your lectures</h1>

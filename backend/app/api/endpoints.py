@@ -9,6 +9,7 @@ from openai import OpenAI
 
 from app.core.config import settings
 from app.core.auth import get_current_user
+from app.core.plans import get_limits, is_unlimited
 from app.services.openai_service import transcribe_audio
 from app.services.explanation_service import generate_explanation
 from app.services.qa_service import answer_lecture_question
@@ -61,7 +62,19 @@ from app.services.supabase_service import (
     update_user_profile,
     delete_user_account,
     get_monthly_lecture_count,
+    increment_uploads_this_month,
 )
+
+
+def _next_month_iso() -> str:
+    """Returns ISO timestamp for the first second of next calendar month (UTC)."""
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    if now.month == 12:
+        resets = now.replace(year=now.year + 1, month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+    else:
+        resets = now.replace(month=now.month + 1, day=1, hour=0, minute=0, second=0, microsecond=0)
+    return resets.isoformat()
 
 
 def _check_owner(lecture_id: str, user_id: str) -> None:
@@ -211,17 +224,50 @@ def explain_text(lecture_id: str, request: ExplainRequest):
 
 
 @router.post("/transcribe")
-async def transcribe(file: UploadFile = File(...)):
+async def transcribe(file: UploadFile = File(...), user=Depends(get_current_user)):
     allowed_extensions = ('.mp3', '.wav', '.m4a', '.mp4', '.mpeg', '.mpga', '.webm')
     if not file.filename.lower().endswith(allowed_extensions):
         raise HTTPException(
             status_code=400,
             detail=f"Invalid file format. Supported formats: {', '.join(allowed_extensions)}"
         )
+
+    # Fetch plan limits
+    profile = get_user_profile(str(user.id))
+    plan_tier = profile.get("plan_tier") or "free"
+    limits = get_limits(plan_tier)
+
+    # Check monthly upload count
+    if not is_unlimited(limits["uploads_per_month"]):
+        uploads_count = profile.get("uploads_this_month") or 0
+        if uploads_count >= limits["uploads_per_month"]:
+            raise HTTPException(status_code=403, detail={
+                "error": "upload_limit_reached",
+                "limit": limits["uploads_per_month"],
+                "plan": plan_tier,
+                "resets_at": _next_month_iso(),
+            })
+
+    # Check file size
+    if not is_unlimited(limits["upload_max_bytes"]):
+        file_bytes = await file.read()
+        file_size = len(file_bytes)
+        if file_size > limits["upload_max_bytes"]:
+            raise HTTPException(status_code=413, detail={
+                "error": "file_too_large",
+                "max_bytes": limits["upload_max_bytes"],
+                "plan": plan_tier,
+            })
+        await file.seek(0)
+
     transcript_text, language = await transcribe_audio(file)
     try:
         title = file.filename.rsplit('.', 1)[0]
-        lecture_id = save_lecture(title=title, transcript=transcript_text, language=language)
+        lecture_id = save_lecture(title=title, transcript=transcript_text, language=language, user_id=str(user.id))
+        try:
+            increment_uploads_this_month(str(user.id))
+        except Exception:
+            pass
         return {"lecture_id": lecture_id, "transcript": transcript_text, "language": language}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save lecture: {str(e)}")
@@ -239,9 +285,35 @@ def summarize(lecture_id: str):
 @router.post("/live/start")
 def start_live_session(user=Depends(get_current_user)):
     try:
+        profile = get_user_profile(str(user.id))
+        plan_tier = profile.get("plan_tier") or "free"
+        limits = get_limits(plan_tier)
+
+        # Check monthly live lecture limit
+        if not is_unlimited(limits["live_lectures_per_month"]):
+            usage = get_monthly_lecture_count(str(user.id))
+            if usage["count"] >= limits["live_lectures_per_month"]:
+                raise HTTPException(status_code=403, detail={
+                    "error": "live_limit_reached",
+                    "limit": limits["live_lectures_per_month"],
+                    "plan": plan_tier,
+                    "resets_at": _next_month_iso(),
+                })
+
         lecture_id      = create_lecture(title="Live Session", transcript="", user_id=str(user.id))
         live_session_id = create_live_session(lecture_id)
-        return {"lecture_id": lecture_id, "live_session_id": live_session_id, "status": "started"}
+        max_dur = limits["live_max_duration_seconds"]
+        return {
+            "lecture_id": lecture_id,
+            "live_session_id": live_session_id,
+            "status": "started",
+            "limits": {
+                "max_duration_seconds": max_dur,
+                "is_unlimited": is_unlimited(max_dur),
+            },
+        }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to start live session: {str(e)}")
 
@@ -455,6 +527,11 @@ async def process_live_chunk(
     if not session:
         raise HTTPException(status_code=400, detail="Active live session not found")
 
+    # Fetch plan limits once per chunk (one lightweight DB call)
+    profile = get_user_profile(str(user.id))
+    plan_tier = profile.get("plan_tier") or "free"
+    limits = get_limits(plan_tier)
+
     # Fix 4: serialize per-lecture so two overlapping chunks never race through
     # transcription + transcript-append for the same lecture simultaneously.
     async with _get_lecture_lock(lecture_id):
@@ -519,7 +596,8 @@ async def process_live_chunk(
         cif_confidence=cif_result["confidence"],
     )
 
-    return {
+    # Duration limit check
+    base_response = {
         "lecture_id":             lecture_id,
         "chunk_transcript":       chunk_text,
         "full_transcript_length": full_transcript_length,
@@ -528,6 +606,18 @@ async def process_live_chunk(
         "cif_type":               cif_result["type"],
         "cif_confidence":         cif_result["confidence"],
     }
+
+    if not is_unlimited(limits["live_max_duration_seconds"]):
+        total_seconds = (lecture_data or {}).get("total_duration_seconds", 0) or 0
+        max_seconds = limits["live_max_duration_seconds"]
+        if total_seconds >= max_seconds:
+            end_live_session(lecture_id)
+            return {**base_response, "session_auto_ended": True, "reason": "duration_limit_reached", "plan": plan_tier, "limit_seconds": max_seconds}
+        warning_threshold = max_seconds - 300
+        if total_seconds >= warning_threshold:
+            return {**base_response, "duration_warning": True, "seconds_remaining": max_seconds - total_seconds}
+
+    return base_response
 
 
 @router.get("/live/{lecture_id}/stream")
@@ -843,25 +933,46 @@ def delete_profile(user=Depends(get_current_user)):
 
 @router.get("/usage")
 def get_usage(user=Depends(get_current_user)):
-    """Returns usage stats for the current month."""
-    from datetime import datetime, timezone
+    """Returns comprehensive usage stats for the current month."""
     try:
-        usage = get_monthly_lecture_count(str(user.id))
-        count = usage["count"]
-        limit = 5  # free plan
-        now = datetime.now(timezone.utc)
-        # First day of next month
-        if now.month == 12:
-            resets_at = now.replace(year=now.year + 1, month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
-        else:
-            resets_at = now.replace(month=now.month + 1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        profile = get_user_profile(str(user.id))
+        plan_tier = profile.get("plan_tier") or "free"
+        limits = get_limits(plan_tier)
+
+        lectures_count = get_monthly_lecture_count(str(user.id))["count"]
+        uploads_count  = profile.get("uploads_this_month") or 0
+
+        live_limit   = limits["live_lectures_per_month"]
+        upload_limit = limits["uploads_per_month"]
+        max_live_dur = limits["live_max_duration_seconds"]
+        max_up_dur   = limits["upload_max_duration_seconds"]
+
+        def _dur_label(secs):
+            if secs is None: return "Unlimited"
+            m = secs // 60
+            h = m // 60
+            if h >= 1 and m % 60 == 0: return f"{h} hour{'s' if h > 1 else ''}"
+            if h >= 1: return f"{h}h {m % 60}m"
+            return f"{m} min"
+
+        resets_at = _next_month_iso()
         return {
-            "lectures_this_month": count,
-            "limit": limit,
-            "remaining": max(0, limit - count),
-            "plan_tier": "free",
-            "resets_at": resets_at.isoformat(),
-            "limit_reached": count >= limit,
+            "lectures_this_month":       lectures_count,
+            "lectures_limit":            live_limit,
+            "lectures_remaining":        max(0, live_limit - lectures_count) if live_limit is not None else None,
+            "uploads_this_month":        uploads_count,
+            "uploads_limit":             upload_limit,
+            "uploads_remaining":         max(0, upload_limit - uploads_count) if upload_limit is not None else None,
+            "live_max_duration_seconds": max_live_dur,
+            "live_max_duration_label":   _dur_label(max_live_dur),
+            "upload_max_duration_label": _dur_label(max_up_dur),
+            "plan_tier":                 plan_tier,
+            "month_resets_at":           resets_at,
+            # Legacy fields kept for backwards-compat
+            "limit":                     live_limit,
+            "remaining":                 max(0, live_limit - lectures_count) if live_limit is not None else None,
+            "resets_at":                 resets_at,
+            "limit_reached":             live_limit is not None and lectures_count >= live_limit,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch usage: {str(e)}")

@@ -950,8 +950,8 @@ function FAQ() {
             a: 'Your lectures are stored in your personal account and are private by default. You can optionally share a lecture via a unique link — recipients can only view, not edit. You can revoke sharing at any time.',
         },
         {
-            q: "What's the difference between Free and Pro?",
-            a: 'The Free plan allows 5 lectures per month with 7-day history. Pro gives unlimited lectures, full Q&A and Smart Explain features, PDF export, and 90-day history for $12/month.',
+            q: "What's the difference between Free, Student, and Pro?",
+            a: 'Free gives 5 live lectures and 3 imports/month. Student ($8/mo) gives unlimited live lectures up to 3 hours each, plus 20 imports/month. Pro ($18/mo) removes all limits — unlimited everything.',
         },
     ];
     return (
@@ -1004,54 +1004,60 @@ function Pricing() {
                     <div className="lp-price-mo">forever</div>
                     <div className="lp-plan-div" />
                     <ul className="lp-plan-items">
-                        <PlanItem text="5 lectures per month" />
-                        <PlanItem text="Real-time transcription" />
-                        <PlanItem text="Section summaries" />
-                        <PlanItem text="7-day history" />
+                        <PlanItem text="5 live lectures per month" />
+                        <PlanItem text="30 min max per live lecture" />
+                        <PlanItem text="3 audio imports per month" />
+                        <PlanItem text="Up to 60 min audio files" />
+                        <PlanItem text="PDF export included" />
+                        <PlanItem text="All 40+ languages" />
                     </ul>
                     <Link to="/auth" className="lp-btn-plan-outline">Get started free</Link>
                 </div>
 
-                {/* Pro — featured */}
+                {/* Student — featured */}
                 <div className="lp-plan-feat">
                     <div className="lp-plan-badge">Popular</div>
-                    <div className="lp-plan-name">Pro</div>
+                    <div className="lp-plan-name">Student</div>
                     <div className="lp-plan-tagline">For serious students</div>
                     <div className="lp-price-row">
                         <span className="lp-price-sign">$</span>
-                        <span className="lp-price-big">12</span>
+                        <span className="lp-price-big">8</span>
                     </div>
                     <div className="lp-price-mo">per month</div>
                     <div className="lp-plan-div" />
                     <ul className="lp-plan-items">
-                        <PlanItem text="Unlimited lectures" />
-                        <PlanItem text="Real-time master summary" />
-                        <PlanItem text="AI Q&A + Smart Explain" />
-                        <PlanItem text="PDF export" />
-                        <PlanItem text="90-day history" />
+                        <PlanItem text="Unlimited live lectures" />
+                        <PlanItem text="Up to 3 hours per live lecture" />
+                        <PlanItem text="20 audio imports per month" />
+                        <PlanItem text="Up to 4 hours audio files" />
+                        <PlanItem text="Everything in Free" />
+                        <PlanItem text="Share lecture links" />
                         <PlanItem text="Priority processing" />
                     </ul>
-                    <Link to="/auth" className="lp-btn-plan-dark">Start Pro</Link>
+                    <Link to="/auth" className="lp-btn-plan-dark">Start Student</Link>
                 </div>
 
-                {/* Teams */}
+                {/* Pro */}
                 <div className="lp-plan">
-                    <div className="lp-plan-name">Teams</div>
-                    <div className="lp-plan-tagline">For study groups</div>
+                    <div className="lp-plan-name">Pro</div>
+                    <div className="lp-plan-tagline">For power users</div>
                     <div className="lp-price-row">
                         <span className="lp-price-sign">$</span>
-                        <span className="lp-price-big">29</span>
+                        <span className="lp-price-big">18</span>
                     </div>
                     <div className="lp-price-mo">per month</div>
                     <div className="lp-plan-div" />
                     <ul className="lp-plan-items">
-                        <PlanItem text="Everything in Pro" />
-                        <PlanItem text="Up to 5 seats" />
-                        <PlanItem text="Shared lecture library" />
-                        <PlanItem text="Admin dashboard" />
-                        <PlanItem text="SSO support" />
+                        <PlanItem text="Unlimited live lectures" />
+                        <PlanItem text="No duration limit" />
+                        <PlanItem text="Unlimited audio imports" />
+                        <PlanItem text="Any file size" />
+                        <PlanItem text="Everything in Student" />
+                        <PlanItem text="Bulk PDF export" />
+                        <PlanItem text="API access" />
+                        <PlanItem text="Early feature access" />
                     </ul>
-                    <Link to="/auth" className="lp-btn-plan-outline">Start Teams</Link>
+                    <Link to="/auth" className="lp-btn-plan-outline">Start Pro</Link>
                 </div>
 
             </div>

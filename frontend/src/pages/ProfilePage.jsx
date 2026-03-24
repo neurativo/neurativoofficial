@@ -149,6 +149,17 @@ const CSS = `
   }
   .pp-modal-delete:disabled { opacity: 0.45; cursor: not-allowed; }
 
+  /* Plan limits table */
+  .pp-limits-title { font-size: 11px; font-weight: 600; color: var(--color-muted); letter-spacing: 0.06em; text-transform: uppercase; margin: 0 0 12px; }
+  .pp-limits-table { width: 100%; border-collapse: collapse; }
+  .pp-limits-table tr { border-bottom: 1px solid var(--color-border); }
+  .pp-limits-table tr:last-child { border-bottom: none; }
+  .pp-limits-table td { padding: 9px 0; font-size: 13px; }
+  .pp-limits-table td:first-child { color: var(--color-sec); }
+  .pp-limits-table td:last-child { color: var(--color-text); font-weight: 500; text-align: right; }
+  .pp-upgrade-link { display: inline-block; margin-top: 16px; font-size: 13px; font-weight: 500; color: var(--color-text); text-decoration: none; }
+  .pp-upgrade-link:hover { text-decoration: underline; }
+
   /* Loading skeleton */
   .pp-skeleton { height: 14px; background: var(--color-border); border-radius: 6px; animation: pp-shimmer 1.5s ease-in-out infinite; }
   @keyframes pp-shimmer { 0%,100%{opacity:0.5} 50%{opacity:1} }
@@ -318,7 +329,7 @@ export default function ProfilePage({ user }) {
                     <div className="pp-section">
                         <div className="pp-section-head">
                             <div className="pp-section-title">Usage this month</div>
-                            <div className="pp-section-sub">Free plan · resets on the 1st</div>
+                            <div className="pp-section-sub">{usage ? (usage.plan_tier || 'free').charAt(0).toUpperCase() + (usage.plan_tier || 'free').slice(1) : 'Free'} plan · resets on the 1st</div>
                         </div>
                         <div className="pp-section-body">
                             {loading ? (
@@ -326,21 +337,77 @@ export default function ProfilePage({ user }) {
                             ) : (
                                 <>
                                     <div className="pp-usage-row">
-                                        <span className="pp-usage-label">Lectures recorded</span>
-                                        <span className="pp-usage-count">{usage?.lectures_this_month ?? 0} / {usage?.limit ?? 5}</span>
+                                        <span className="pp-usage-label">Live lectures</span>
+                                        <span className="pp-usage-count">
+                                            {usage?.lectures_this_month ?? 0} / {usage?.lectures_limit != null ? usage.lectures_limit : '∞'}
+                                        </span>
                                     </div>
                                     <div className="pp-bar-bg">
                                         <div className={`pp-bar-fill ${usageClass}`} style={{ width: `${usagePct}%` }} />
                                     </div>
-                                    <p className="pp-usage-note">
+                                    {usage?.uploads_limit != null && (
+                                        <>
+                                            <div className="pp-usage-row" style={{ marginTop: 14 }}>
+                                                <span className="pp-usage-label">Audio imports</span>
+                                                <span className="pp-usage-count">{usage.uploads_this_month ?? 0} / {usage.uploads_limit}</span>
+                                            </div>
+                                            <div className="pp-bar-bg">
+                                                <div
+                                                    className={`pp-bar-fill${(usage.uploads_this_month / usage.uploads_limit) >= 1 ? ' full' : (usage.uploads_this_month / usage.uploads_limit) >= 0.8 ? ' warn' : ''}`}
+                                                    style={{ width: `${Math.min(100, (usage.uploads_this_month / usage.uploads_limit) * 100)}%`, background: '#7c3aed' }}
+                                                />
+                                            </div>
+                                        </>
+                                    )}
+                                    <p className="pp-usage-note" style={{ marginTop: 8 }}>
                                         {usage?.remaining > 0
-                                            ? `${usage.remaining} lecture${usage.remaining === 1 ? '' : 's'} remaining this month`
-                                            : 'Limit reached — upgrade to Pro for unlimited lectures'}
+                                            ? `${usage.remaining} live lecture${usage.remaining === 1 ? '' : 's'} remaining this month`
+                                            : usage?.lectures_limit != null
+                                            ? 'Live lecture limit reached this month'
+                                            : 'Unlimited live lectures on your plan'}
                                     </p>
                                 </>
                             )}
                         </div>
                     </div>
+
+                    {/* Plan limits */}
+                    {usage && (
+                        <div className="pp-section">
+                            <div className="pp-section-head">
+                                <div className="pp-section-title">Your plan limits</div>
+                                <div className="pp-section-sub">{(usage.plan_tier || 'free').charAt(0).toUpperCase() + (usage.plan_tier || 'free').slice(1)} plan</div>
+                            </div>
+                            <div className="pp-section-body">
+                                <p className="pp-limits-title">Your plan limits</p>
+                                <table className="pp-limits-table">
+                                    <tbody>
+                                        <tr>
+                                            <td>Live lectures</td>
+                                            <td>{usage.lectures_limit != null ? `${usage.lectures_limit} per month` : 'Unlimited'}</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Max live duration</td>
+                                            <td>{usage.live_max_duration_label || 'Unlimited'}</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Audio imports</td>
+                                            <td>{usage.uploads_limit != null ? `${usage.uploads_limit} per month` : 'Unlimited'}</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Max import size</td>
+                                            <td>{usage.plan_tier === 'free' ? '60 min / 500 MB' : usage.plan_tier === 'student' ? '4 hours / 2 GB' : 'Unlimited'}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                                {(usage.plan_tier === 'free' || usage.plan_tier === 'student') && (
+                                    <a href="#" className="pp-upgrade-link">
+                                        {usage.plan_tier === 'free' ? 'Upgrade to Student →' : 'Upgrade to Pro →'}
+                                    </a>
+                                )}
+                            </div>
+                        </div>
+                    )}
 
                     {/* Stats */}
                     <div className="pp-section">

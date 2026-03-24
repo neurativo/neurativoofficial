@@ -673,6 +673,8 @@ def get_user_profile(user_id: str) -> dict:
                 "pdf_auto_download":    row.get("pdf_auto_download") if row.get("pdf_auto_download") is not None else True,
                 "total_hours_recorded": row.get("total_hours_recorded") or 0,
                 "total_words_transcribed": row.get("total_words_transcribed") or 0,
+                "plan_tier":            row.get("plan_tier") or "free",
+                "uploads_this_month":   row.get("uploads_this_month") or 0,
             }
     except Exception as e:
         print(f"[profile] get_user_profile error (non-fatal): {e}")
@@ -684,6 +686,8 @@ def get_user_profile(user_id: str) -> dict:
         "pdf_auto_download": True,
         "total_hours_recorded": 0,
         "total_words_transcribed": 0,
+        "plan_tier": "free",
+        "uploads_this_month": 0,
     }
 
 
@@ -718,6 +722,21 @@ def delete_user_account(user_id: str) -> None:
         supabase.table("profiles").delete().eq("id", user_id).execute()
     except Exception as e:
         print(f"[profile] delete profile error (non-fatal): {e}")
+
+
+def increment_uploads_this_month(user_id: str) -> None:
+    """Increments uploads_this_month counter in profiles by 1."""
+    if not supabase:
+        return
+    try:
+        resp = supabase.table("profiles").select("uploads_this_month").eq("id", user_id).execute()
+        if hasattr(resp, "data") and resp.data:
+            current = resp.data[0].get("uploads_this_month") or 0
+            supabase.table("profiles").update({"uploads_this_month": current + 1}).eq("id", user_id).execute()
+        else:
+            supabase.table("profiles").upsert({"id": user_id, "uploads_this_month": 1}, on_conflict="id").execute()
+    except Exception as e:
+        print(f"[usage] increment_uploads_this_month error (non-fatal): {e}")
 
 
 def get_monthly_lecture_count(user_id: str) -> dict:

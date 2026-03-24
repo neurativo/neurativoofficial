@@ -164,6 +164,12 @@ function App({ user }) {
     const [studentQuestions, setStudentQuestions] = useState([]);
     const [questionsOpen, setQuestionsOpen]       = useState(true);
 
+    // ── Plan limits ───────────────────────────────────────
+    const [maxDurationSeconds, setMaxDurationSeconds] = useState(null);
+    const [isUnlimitedDuration, setIsUnlimitedDuration] = useState(true);
+    const [planTier, setPlanTier]                     = useState('free');
+    const [limitModal, setLimitModal]                 = useState({ show: false, reason: '', plan: '', limit: 0, limitLabel: '', resetsAt: '' });
+
     // ── Resilience state ──────────────────────────────────
     const [isOnline, setIsOnline]               = useState(navigator.onLine);
     const [connQuality, setConnQuality]         = useState('good'); // 'good' | 'poor' | 'offline'
@@ -556,6 +562,11 @@ function App({ user }) {
     const startLiveSession = async () => {
         try {
             const res = await api.post('/api/v1/live/start');
+            // Store plan limits from response
+            const limits = res.data.limits || {};
+            setMaxDurationSeconds(limits.max_duration_seconds || null);
+            setIsUnlimitedDuration(limits.is_unlimited !== false);
+
             setLectureId(res.data.lecture_id);
             setTranscript([]);
             setSummary('');
@@ -578,8 +589,16 @@ function App({ user }) {
             connectSSE(res.data.lecture_id);
             startRecording(res.data.lecture_id);
         } catch (err) {
-            const detail = err?.response?.data?.detail || err?.message || 'Unknown error';
-            showError(`Failed to start session: ${detail}`, 0);
+            if (err?.response?.status === 403 && err?.response?.data?.detail?.error === 'live_limit_reached') {
+                const d = err.response.data.detail;
+                const resetDate = d.resets_at
+                    ? new Date(d.resets_at).toLocaleDateString(undefined, { month: 'long', day: 'numeric' })
+                    : 'next month';
+                setLimitModal({ show: true, reason: 'monthly', plan: d.plan, limit: d.limit, limitLabel: '', resetsAt: resetDate });
+            } else {
+                const detail = err?.response?.data?.detail || err?.message || 'Unknown error';
+                showError(`Failed to start session: ${detail}`, 0);
+            }
         }
     };
 
@@ -760,6 +779,27 @@ function App({ user }) {
                         text: res.data.chunk_transcript.trim(),
                     }]);
                 }
+            }
+            // Duration auto-end
+            if (res.data.session_auto_ended) {
+                isRecordingRef.current = false;
+                stopAudioMonitoring();
+                setSessionStatus('ended');
+                const limitSecs = res.data.limit_seconds || 0;
+                setLimitModal({
+                    show: true,
+                    reason: 'duration',
+                    plan: res.data.plan || planTier,
+                    limit: limitSecs,
+                    limitLabel: formatTime(limitSecs),
+                    resetsAt: '',
+                });
+                return;
+            }
+            // Duration warning
+            if (res.data.duration_warning) {
+                const mins = Math.ceil(res.data.seconds_remaining / 60);
+                showError(`${mins} minute${mins !== 1 ? 's' : ''} remaining on your ${res.data.plan || planTier} plan`, 0);
             }
         } catch (err) {
             if (attempt < 2 && navigator.onLine) {
@@ -1121,8 +1161,19 @@ function App({ user }) {
 
                     {sessionStatus === 'recording' && (
                         <div className="flex items-center gap-2 text-sm font-semibold text-red-600">
-                            <div className="w-2 h-2 rounded-full bg-red-500 pulse-red" />
+                            {maxDurationSeconds && !isUnlimitedDuration && recordingSeconds >= maxDurationSeconds - 60
+                                ? <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                                : <div className="w-2 h-2 rounded-full bg-red-500 pulse-red" />
+                            }
                             <span className="font-mono text-[13px]">{formatTime(recordingSeconds)}</span>
+                            {maxDurationSeconds && !isUnlimitedDuration && (
+                                <span className={`font-mono text-[13px] ${
+                                    recordingSeconds >= maxDurationSeconds - 60  ? 'text-red-500' :
+                                    recordingSeconds >= maxDurationSeconds - 300 ? 'text-amber-500' :
+                                    'text-[#a3a3a3]'}`}>
+                                    / {formatTime(maxDurationSeconds)}
+                                </span>
+                            )}
                             {/* Resilience 4: connection quality dot */}
                             <div
                                 className={`w-2 h-2 rounded-full shrink-0 ${
@@ -1984,6 +2035,67 @@ function App({ user }) {
                                 </div>
                             ) : null}
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Limit Modal ── */}
+            {limitModal.show && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-950/50 backdrop-blur-md animate-fade-in">
+                    <div className="bg-white w-full max-w-sm rounded-2xl p-8 shadow-2xl animate-slide-up border border-[#f0ede8]">
+                        <div className="flex items-center justify-center mb-5">
+                            <div className="w-14 h-14 rounded-2xl bg-amber-50 flex items-center justify-center">
+                                <svg className="w-7 h-7 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                            </div>
+                        </div>
+
+                        {limitModal.reason === 'duration' ? (
+                            <>
+                                <h3 className="text-[17px] font-bold text-[#1a1a1a] mb-1 font-heading text-center">Session ended</h3>
+                                <p className="text-[#a3a3a3] text-sm text-center mb-6 leading-relaxed">
+                                    Your <strong className="text-[#1a1a1a]">{limitModal.plan}</strong> plan includes up to <strong className="text-[#1a1a1a]">{limitModal.limitLabel}</strong> per live lecture. Your session has been saved.
+                                </p>
+                                <div className="flex flex-col gap-2">
+                                    {lectureId && (
+                                        <button
+                                            onClick={() => { setLimitModal(p => ({ ...p, show: false })); handleExportPDF(); }}
+                                            className="w-full py-2.5 border border-[#f0ede8] text-[#6b6b6b] text-sm rounded-xl hover:text-[#1a1a1a] transition-colors">
+                                            Export PDF
+                                        </button>
+                                    )}
+                                    <button
+                                        onClick={() => { setLimitModal(p => ({ ...p, show: false })); navigate('/app'); }}
+                                        className="w-full py-2.5 bg-[#1a1a1a] text-[#fafaf9] text-sm font-semibold rounded-xl hover:opacity-80 transition-opacity">
+                                        Back to Dashboard
+                                    </button>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <h3 className="text-[17px] font-bold text-[#1a1a1a] mb-1 font-heading text-center">Monthly limit reached</h3>
+                                <p className="text-[#a3a3a3] text-sm text-center mb-6 leading-relaxed">
+                                    You've used all <strong className="text-[#1a1a1a]">{limitModal.limit}</strong> live lectures this month.
+                                    {limitModal.resetsAt && <> Your limit resets on <strong className="text-[#1a1a1a]">{limitModal.resetsAt}</strong>.</>}
+                                </p>
+                                <div className="flex flex-col gap-2">
+                                    <button
+                                        onClick={() => { setLimitModal(p => ({ ...p, show: false })); navigate('/app'); }}
+                                        className="w-full py-2.5 bg-[#1a1a1a] text-[#fafaf9] text-sm font-semibold rounded-xl hover:opacity-80 transition-opacity">
+                                        View my lectures
+                                    </button>
+                                    <div className="relative w-full">
+                                        <button
+                                            disabled
+                                            className="w-full py-2.5 border border-[#f0ede8] text-[#a3a3a3] text-sm rounded-xl cursor-not-allowed">
+                                            Upgrade
+                                        </button>
+                                        <span className="absolute -top-5 left-1/2 -translate-x-1/2 text-[10px] text-[#a3a3a3] whitespace-nowrap">Coming soon</span>
+                                    </div>
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
             )}
