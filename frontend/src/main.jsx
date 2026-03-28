@@ -11,6 +11,7 @@ import ShareView from './pages/ShareView.jsx';
 import ProfilePage from './pages/ProfilePage.jsx';
 import TermsOfService from './pages/TermsOfService.jsx';
 import PrivacyPolicy from './pages/PrivacyPolicy.jsx';
+import NotFoundPage from './pages/NotFoundPage.jsx';
 import AuthScreen from './components/AuthScreen.jsx';
 import { ToastProvider } from './components/Toast.jsx';
 import './index.css';
@@ -86,7 +87,7 @@ function Root() {
             <Route path="/privacy" element={<PrivacyPolicy />} />
 
             {/* Fallback */}
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="*" element={<NotFoundPage />} />
         </Routes>
     );
 }
