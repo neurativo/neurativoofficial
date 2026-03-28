@@ -1,18 +1,17 @@
 /**
  * Axios instance pre-configured with:
- * - Auth interceptor: attaches Bearer token from active Supabase session
+ * - Auth interceptor: attaches Bearer token from active Clerk session
  * - 401 handler: signs out + redirects to /auth on expired/invalid token
  */
 import axios from 'axios';
-import { supabase } from './supabase';
 
 const api = axios.create();
 
-// Request: attach access token from active session
+// Request: attach access token from active Clerk session
 api.interceptors.request.use(async (config) => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.access_token) {
-        config.headers['Authorization'] = `Bearer ${session.access_token}`;
+    const token = await window.Clerk?.session?.getToken();
+    if (token) {
+        config.headers['Authorization'] = `Bearer ${token}`;
     }
     return config;
 }, (error) => Promise.reject(error));
@@ -22,7 +21,7 @@ api.interceptors.response.use(
     (response) => response,
     async (error) => {
         if (error.response?.status === 401) {
-            await supabase.auth.signOut();
+            await window.Clerk?.signOut();
             window.location.href = '/auth';
         }
         return Promise.reject(error);

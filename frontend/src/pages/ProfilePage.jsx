@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../lib/api';
-import { supabase } from '../lib/supabase';
+import { useClerk } from '@clerk/react';
 
 const CSS = `
   .pp * { box-sizing: border-box; }
@@ -183,6 +183,7 @@ const CSS = `
 
 export default function ProfilePage({ user }) {
     const navigate = useNavigate();
+    const { signOut } = useClerk();
 
     const [profile, setProfile]       = useState(null);
     const [usage,   setUsage]         = useState(null);
@@ -232,7 +233,7 @@ export default function ProfilePage({ user }) {
         setDeleting(true);
         try {
             await api.delete('/api/v1/profile');
-            await supabase.auth.signOut();
+            await signOut();
             navigate('/', { replace: true });
         } catch {
             setDeleting(false);

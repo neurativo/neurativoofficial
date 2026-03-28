@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { useClerk } from '@clerk/react';
 import { useSEO } from '../lib/useSEO';
 
 // ─── CSS ─────────────────────────────────────────────────────────────────────
@@ -505,6 +505,7 @@ function NavAvatar({ user }) {
     const [open, setOpen] = useState(false);
     const ref = useRef(null);
     const initial = (user?.email?.[0] || '?').toUpperCase();
+    const { signOut } = useClerk();
 
     useEffect(() => {
         if (!open) return;
@@ -513,8 +514,8 @@ function NavAvatar({ user }) {
         return () => document.removeEventListener('mousedown', handler);
     }, [open]);
 
-    const signOut = async () => {
-        await supabase.auth.signOut();
+    const handleSignOut = async () => {
+        await signOut();
         setOpen(false);
     };
 
@@ -531,7 +532,7 @@ function NavAvatar({ user }) {
                     <Link to="/record"  className="lp-nav-dd-item" onClick={() => setOpen(false)}>New lecture</Link>
                     <Link to="/profile" className="lp-nav-dd-item" onClick={() => setOpen(false)}>Profile</Link>
                     <div className="lp-nav-dd-divider" />
-                    <button className="lp-nav-dd-signout" onClick={signOut}>Sign out</button>
+                    <button className="lp-nav-dd-signout" onClick={handleSignOut}>Sign out</button>
                 </div>
             )}
         </div>

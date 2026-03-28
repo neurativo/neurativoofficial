@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { ClerkProvider, useUser } from '@clerk/react';
 import App from './App.jsx';
-import AuthScreen from './components/AuthScreen.jsx';
 import Dashboard from './components/Dashboard.jsx';
 import LandingPage from './pages/LandingPage.jsx';
 import LectureView from './pages/LectureView.jsx';
@@ -10,8 +10,8 @@ import ShareView from './pages/ShareView.jsx';
 import ProfilePage from './pages/ProfilePage.jsx';
 import TermsOfService from './pages/TermsOfService.jsx';
 import PrivacyPolicy from './pages/PrivacyPolicy.jsx';
+import AuthScreen from './components/AuthScreen.jsx';
 import { ToastProvider } from './components/Toast.jsx';
-import { supabase } from './lib/supabase.js';
 import './index.css';
 
 // Apply saved theme immediately (before first render to avoid flash)
@@ -19,55 +19,35 @@ if (localStorage.getItem('neurativo_theme') === 'dark') {
     document.documentElement.classList.add('dark');
 }
 
-function ProtectedRoute({ children, user }) {
-    if (user === undefined) return null; // still loading
-    if (!user) return <Navigate to="/auth" replace />;
+function ProtectedRoute({ children }) {
+    const { isLoaded, isSignedIn } = useUser();
+    if (!isLoaded) return null;
+    if (!isSignedIn) return <Navigate to="/auth" replace />;
     return children;
 }
 
 function Root() {
-    const [user, setUser] = useState(undefined); // undefined = loading
-    const navigate = useNavigate();
+    const { isLoaded, isSignedIn, user: clerkUser } = useUser();
 
-    useEffect(() => {
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            setUser(session?.user ?? null);
-        });
+    if (!isLoaded) return null;
 
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-            const nextUser = session?.user ?? null;
-            setUser(nextUser);
-            if (nextUser && (_event === 'SIGNED_IN' || _event === 'TOKEN_REFRESHED')) {
-                const path = window.location.pathname;
-                if (path === '/' || path === '/auth') {
-                    navigate('/app', { replace: true });
-                }
-            }
-            if (!nextUser) {
-                const path = window.location.pathname;
-                if (path === '/app' || path === '/record' || path.startsWith('/lecture/') || path === '/profile') {
-                    navigate('/auth', { replace: true });
-                }
-            }
-        });
-
-        return () => subscription.unsubscribe();
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-    if (user === undefined) return null;
+    // Normalize Clerk user to the shape the rest of the app expects
+    const user = clerkUser
+        ? { id: clerkUser.id, email: clerkUser.primaryEmailAddress?.emailAddress }
+        : null;
 
     return (
         <Routes>
             {/* Public */}
             <Route path="/" element={<LandingPage user={user} />} />
-            <Route path="/auth" element={user ? <Navigate to="/app" replace /> : <AuthScreen />} />
+            <Route path="/auth/*" element={isSignedIn ? <Navigate to="/app" replace /> : <AuthScreen />} />
             <Route path="/share/:token" element={<ShareView />} />
 
             {/* Protected */}
             <Route
                 path="/app"
                 element={
-                    <ProtectedRoute user={user}>
+                    <ProtectedRoute>
                         <Dashboard user={user} />
                     </ProtectedRoute>
                 }
@@ -75,7 +55,7 @@ function Root() {
             <Route
                 path="/record"
                 element={
-                    <ProtectedRoute user={user}>
+                    <ProtectedRoute>
                         <App user={user} />
                     </ProtectedRoute>
                 }
@@ -83,7 +63,7 @@ function Root() {
             <Route
                 path="/lecture/:id"
                 element={
-                    <ProtectedRoute user={user}>
+                    <ProtectedRoute>
                         <LectureView user={user} />
                     </ProtectedRoute>
                 }
@@ -91,7 +71,7 @@ function Root() {
             <Route
                 path="/profile"
                 element={
-                    <ProtectedRoute user={user}>
+                    <ProtectedRoute>
                         <ProfilePage user={user} />
                     </ProtectedRoute>
                 }
@@ -109,10 +89,12 @@ function Root() {
 
 ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>
-        <BrowserRouter>
-            <ToastProvider>
-                <Root />
-            </ToastProvider>
-        </BrowserRouter>
+        <ClerkProvider publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY} afterSignOutUrl="/">
+            <BrowserRouter>
+                <ToastProvider>
+                    <Root />
+                </ToastProvider>
+            </BrowserRouter>
+        </ClerkProvider>
     </React.StrictMode>
 );

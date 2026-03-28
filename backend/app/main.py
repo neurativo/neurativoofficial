@@ -1,40 +1,75 @@
 import time
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 from app.api.endpoints import router as api_router
 from app.core.config import settings
+from app.core.rate_limit import limiter
 
 _start_time = time.time()
 
-app = FastAPI(title=settings.PROJECT_NAME)
+app = FastAPI(
+    title=settings.PROJECT_NAME,
+    # Disable automatic docs in production to reduce attack surface
+    docs_url="/docs" if settings.ENVIRONMENT != "production" else None,
+    redoc_url="/redoc" if settings.ENVIRONMENT != "production" else None,
+    openapi_url="/openapi.json" if settings.ENVIRONMENT != "production" else None,
+)
 
-# Configure CORS - Allow all for development simplicity, restrict in production
+# Rate limiting
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# ---------------------------------------------------------------------------
+# CORS — only allow known frontend origins, never wildcard with credentials
+# ---------------------------------------------------------------------------
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept"],
 )
+
+
+# ---------------------------------------------------------------------------
+# Security headers middleware
+# ---------------------------------------------------------------------------
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response: Response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "connect-src 'self' https://*.supabase.co; "
+        "script-src 'self'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: https:; "
+        "frame-ancestors 'none';"
+    )
+    # Remove server fingerprinting header
+    response.headers.pop("server", None)
+    return response
+
 
 app.include_router(api_router, prefix="/api/v1")
 
 
 @app.get("/")
 async def root():
-    return {"message": "AI Lecture Assistant Backend is running", "docs_url": "/docs"}
+    return {"message": "OK"}
 
 
 @app.get("/health")
 async def health():
-    """
-    Liveness + dependency check.
-    Returns overall status, uptime, and connectivity for Supabase and OpenAI.
-    'ok'       — all dependencies reachable
-    'degraded' — one or more dependencies unavailable
-    """
-    # Supabase: attempt a lightweight read
+    """Basic liveness check — does not expose infrastructure details."""
     supabase_ok = False
     try:
         from app.services.supabase_service import supabase as _sb
@@ -44,7 +79,6 @@ async def health():
     except Exception:
         pass
 
-    # OpenAI: client initialised means the key is set; no network call needed
     openai_ok = False
     try:
         from app.services.openai_service import client as _oai
@@ -53,10 +87,4 @@ async def health():
         pass
 
     overall = "ok" if (supabase_ok and openai_ok) else "degraded"
-
-    return {
-        "status":         overall,
-        "uptime_seconds": round(time.time() - _start_time, 1),
-        "supabase":       "ok" if supabase_ok else "unavailable",
-        "openai":         "ok" if openai_ok  else "unavailable",
-    }
+    return {"status": overall}

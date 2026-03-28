@@ -1,15 +1,16 @@
 import asyncio
 import json
 
-from fastapi import APIRouter, BackgroundTasks, UploadFile, File, HTTPException, Depends
+from fastapi import APIRouter, BackgroundTasks, UploadFile, File, HTTPException, Depends, Request
 from fastapi.responses import Response, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import numpy as np
 from openai import OpenAI
 
 from app.core.config import settings
 from app.core.auth import get_current_user
 from app.core.plans import get_limits, is_unlimited
+from app.core.rate_limit import limiter
 from app.services.openai_service import transcribe_audio
 from app.services.explanation_service import generate_explanation
 from app.services.qa_service import answer_lecture_question
@@ -186,11 +187,11 @@ def should_trigger_section(pending_chunks: list) -> tuple:
 # =============================================================================
 
 class QuestionRequest(BaseModel):
-    question: str
+    question: str = Field(..., min_length=1, max_length=2000)
 
 class ExplainRequest(BaseModel):
-    text: str
-    mode: str = "simple"
+    text: str = Field(..., min_length=1, max_length=5000)
+    mode: str = Field("simple", pattern=r'^(simple|detailed|step|analogy)$')
 
 
 router = APIRouter()
@@ -212,9 +213,14 @@ def _get_lecture_lock(lecture_id: str) -> asyncio.Lock:
 # =============================================================================
 
 @router.post("/explain/{lecture_id}")
-def explain_text(lecture_id: str, request: ExplainRequest):
+@limiter.limit("20/minute")
+def explain_text(http_request: Request, lecture_id: str, request: ExplainRequest, user=Depends(get_current_user)):
+    _check_owner(lecture_id, user.id)
     topic = get_lecture_topic(lecture_id)
-    explanation_data = generate_explanation(request.text, request.mode, topic=topic)
+    try:
+        explanation_data = generate_explanation(request.text, request.mode, topic=topic)
+    except Exception:
+        raise HTTPException(status_code=500, detail="Explanation generation failed")
     return {
         "lecture_id":  lecture_id,
         "explanation": explanation_data.get("explanation"),
@@ -223,14 +229,37 @@ def explain_text(lecture_id: str, request: ExplainRequest):
     }
 
 
+_ALLOWED_AUDIO_EXTENSIONS = ('.mp3', '.wav', '.m4a', '.mp4', '.mpeg', '.mpga', '.webm')
+
+# Audio/video MIME signatures (offset, bytes)
+_AUDIO_MAGIC: list[tuple[int, bytes]] = [
+    (0, b'ID3'),               # MP3 with ID3 tag
+    (0, b'\xff\xfb'),          # MP3 frame sync
+    (0, b'\xff\xf3'),          # MP3 frame sync
+    (0, b'\xff\xf2'),          # MP3 frame sync
+    (0, b'RIFF'),              # WAV
+    (0, b'\x1a\x45\xdf\xa3'), # WebM / MKV
+    (0, b'OggS'),              # OGG
+    (4, b'ftyp'),              # MP4 / M4A
+]
+
+
+async def _check_audio_magic(file: UploadFile) -> bool:
+    """Reads the first 12 bytes to verify audio magic bytes, then rewinds."""
+    header = await file.read(12)
+    await file.seek(0)
+    for offset, sig in _AUDIO_MAGIC:
+        if header[offset : offset + len(sig)] == sig:
+            return True
+    return False
+
+
 @router.post("/transcribe")
-async def transcribe(file: UploadFile = File(...), user=Depends(get_current_user)):
-    allowed_extensions = ('.mp3', '.wav', '.m4a', '.mp4', '.mpeg', '.mpga', '.webm')
-    if not file.filename.lower().endswith(allowed_extensions):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid file format. Supported formats: {', '.join(allowed_extensions)}"
-        )
+@limiter.limit("5/minute")
+async def transcribe(http_request: Request, file: UploadFile = File(...), user=Depends(get_current_user)):
+    # Extension check
+    if not file.filename.lower().endswith(_ALLOWED_AUDIO_EXTENSIONS):
+        raise HTTPException(status_code=400, detail="Invalid file format")
 
     # Fetch plan limits
     profile = get_user_profile(str(user.id))
@@ -248,29 +277,39 @@ async def transcribe(file: UploadFile = File(...), user=Depends(get_current_user
                 "resets_at": _next_month_iso(),
             })
 
-    # Check file size
+    # Magic bytes check — reads only 12 bytes, then rewinds (cheap, always run)
+    if not await _check_audio_magic(file):
+        raise HTTPException(status_code=400, detail="Invalid file format")
+
+    # File size check — only read full file when the plan actually has a size cap
     if not is_unlimited(limits["upload_max_bytes"]):
         file_bytes = await file.read()
         file_size = len(file_bytes)
+        await file.seek(0)
         if file_size > limits["upload_max_bytes"]:
             raise HTTPException(status_code=413, detail={
                 "error": "file_too_large",
                 "max_bytes": limits["upload_max_bytes"],
                 "plan": plan_tier,
             })
-        await file.seek(0)
 
-    transcript_text, language = await transcribe_audio(file)
     try:
-        title = file.filename.rsplit('.', 1)[0]
+        transcript_text, language = await transcribe_audio(file)
+    except Exception:
+        raise HTTPException(status_code=500, detail="Transcription failed")
+
+    try:
+        title = file.filename.rsplit('.', 1)[0][:200]  # cap title length
         lecture_id = save_lecture(title=title, transcript=transcript_text, language=language, user_id=str(user.id))
-        try:
-            increment_uploads_this_month(str(user.id))
-        except Exception:
-            pass
-        return {"lecture_id": lecture_id, "transcript": transcript_text, "language": language}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to save lecture: {str(e)}")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to save lecture")
+
+    try:
+        increment_uploads_this_month(str(user.id))
+    except Exception:
+        pass
+
+    return {"lecture_id": lecture_id, "transcript": transcript_text, "language": language}
 
 
 @router.get("/summarize/{lecture_id}")
@@ -283,7 +322,8 @@ def summarize(lecture_id: str):
 
 
 @router.post("/live/start")
-def start_live_session(user=Depends(get_current_user)):
+@limiter.limit("10/minute")
+def start_live_session(http_request: Request, user=Depends(get_current_user)):
     try:
         profile = get_user_profile(str(user.id))
         plan_tier = profile.get("plan_tier") or "free"
@@ -314,8 +354,8 @@ def start_live_session(user=Depends(get_current_user)):
         }
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to start live session: {str(e)}")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to start live session")
 
 
 _openai_client = OpenAI(api_key=settings.OPENAI_API_KEY) if settings.OPENAI_API_KEY else None
@@ -507,7 +547,9 @@ def _run_summarization(
 
 
 @router.post("/live/{lecture_id}/chunk")
+@limiter.limit("30/minute")
 async def process_live_chunk(
+    http_request: Request,
     lecture_id: str,
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
@@ -538,8 +580,8 @@ async def process_live_chunk(
         # 2. Transcribe
         try:
             chunk_text, detected_language = await transcribe_audio(file)
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
+        except Exception:
+            raise HTTPException(status_code=500, detail="Transcription failed")
 
         if not chunk_text:
             return {"lecture_id": lecture_id, "chunk_transcript": "", "message": "Empty transcription"}
@@ -556,8 +598,8 @@ async def process_live_chunk(
             full_transcript_length = append_lecture_transcript(lecture_id, chunk_text)
             update_live_session_timestamp(session['id'])
             update_lecture_analytics(lecture_id, chunk_duration=12)
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to update lecture: {str(e)}")
+        except Exception:
+            raise HTTPException(status_code=500, detail="Failed to update lecture")
 
     # 5. Compute chunk_idx (needed by background task and topic detection)
     lecture_data = get_lecture_for_summarization(lecture_id)
@@ -738,8 +780,8 @@ def end_session_endpoint(lecture_id: str, user=Depends(get_current_user)):
 
         return {"status": "ended", "lecture_id": lecture_id}
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to end session: {str(e)}")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to end session")
 
 
 @router.get("/lectures/{lecture_id}/analytics")
@@ -765,11 +807,12 @@ def get_analytics(lecture_id: str, user=Depends(get_current_user)):
         raise
     except Exception as e:
         print(f"Error in get_analytics: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to fetch analytics: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to fetch analytics")
 
 
 @router.get("/lectures/{lecture_id}/export/pdf")
-async def export_pdf(lecture_id: str, user=Depends(get_current_user)):
+@limiter.limit("3/minute")
+async def export_pdf(http_request: Request, lecture_id: str, user=Depends(get_current_user)):
     _check_owner(lecture_id, user.id)
     try:
         pdf_bytes = await generate_lecture_pdf(lecture_id)
@@ -782,7 +825,7 @@ async def export_pdf(lecture_id: str, user=Depends(get_current_user)):
         raise
     except Exception as e:
         print(f"Error in export_pdf: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to generate PDF: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to generate PDF")
 
 
 @router.get("/lectures")
@@ -793,8 +836,8 @@ def get_lectures(limit: int = 20, offset: int = 0, user=Depends(get_current_user
     """
     try:
         return get_recent_lectures(limit=limit, offset=offset, user_id=str(user.id))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch lectures: {str(e)}")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to fetch lectures")
 
 
 @router.get("/lectures/{lecture_id}")
@@ -807,9 +850,13 @@ def get_lecture_details(lecture_id: str, user=Depends(get_current_user)):
 
 
 @router.post("/ask/{lecture_id}")
-def ask_question_auth(lecture_id: str, request: QuestionRequest, user=Depends(get_current_user)):
+@limiter.limit("20/minute")
+def ask_question_auth(http_request: Request, lecture_id: str, request: QuestionRequest, user=Depends(get_current_user)):
     _check_owner(lecture_id, user.id)
-    answer = answer_lecture_question(lecture_id, request.question)
+    try:
+        answer = answer_lecture_question(lecture_id, request.question)
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to answer question")
     return {"lecture_id": lecture_id, "question": request.question, "answer": answer}
 
 
@@ -830,8 +877,8 @@ def share_lecture(lecture_id: str, user=Depends(get_current_user)):
     try:
         token = generate_share_token(lecture_id)
         return {"share_url": f"/share/{token}"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to generate share link: {str(e)}")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to generate share link")
 
 
 @router.post("/lectures/{lecture_id}/unshare")
@@ -841,8 +888,8 @@ def unshare_lecture(lecture_id: str, user=Depends(get_current_user)):
     try:
         clear_share_token(lecture_id)
         return {"unshared": True}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to unshare: {str(e)}")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to unshare")
 
 
 @router.get("/share/{token}")
@@ -865,12 +912,12 @@ def delete_lecture_endpoint(lecture_id: str, user=Depends(get_current_user)):
     try:
         delete_lecture(lecture_id)
         return {"status": "deleted", "lecture_id": lecture_id}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to delete lecture: {str(e)}")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to delete lecture")
 
 
 class TitleUpdateRequest(BaseModel):
-    title: str
+    title: str = Field(..., min_length=1, max_length=200)
 
 
 @router.patch("/lectures/{lecture_id}/title")
@@ -883,8 +930,8 @@ def update_lecture_title_endpoint(lecture_id: str, request: TitleUpdateRequest, 
     try:
         update_lecture_title(lecture_id, title)
         return {"lecture_id": lecture_id, "title": title}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to update title: {str(e)}")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to update title")
 
 
 # =============================================================================
@@ -892,8 +939,8 @@ def update_lecture_title_endpoint(lecture_id: str, request: TitleUpdateRequest, 
 # =============================================================================
 
 class ProfileUpdateRequest(BaseModel):
-    display_name: str | None = None
-    preferred_language: str | None = None
+    display_name: str | None = Field(None, max_length=100)
+    preferred_language: str | None = Field(None, max_length=10)
     pdf_auto_download: bool | None = None
 
 
@@ -904,8 +951,8 @@ def get_profile(user=Depends(get_current_user)):
         profile = get_user_profile(str(user.id))
         profile["email"] = getattr(user, "email", None)
         return profile
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch profile: {str(e)}")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to fetch profile")
 
 
 @router.patch("/profile")
@@ -917,8 +964,8 @@ def patch_profile(request: ProfileUpdateRequest, user=Depends(get_current_user))
     try:
         updated = update_user_profile(str(user.id), data)
         return updated
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to update profile: {str(e)}")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to update profile")
 
 
 @router.delete("/profile")
@@ -927,8 +974,8 @@ def delete_profile(user=Depends(get_current_user)):
     try:
         delete_user_account(str(user.id))
         return {"status": "deleted"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to delete account: {str(e)}")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to delete account")
 
 
 @router.get("/usage")
@@ -974,5 +1021,5 @@ def get_usage(user=Depends(get_current_user)):
             "resets_at":                 resets_at,
             "limit_reached":             live_limit is not None and lectures_count >= live_limit,
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch usage: {str(e)}")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to fetch usage")

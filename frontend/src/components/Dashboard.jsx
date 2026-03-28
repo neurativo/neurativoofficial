@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { useClerk } from '@clerk/react';
 import api from '../lib/api';
 import { useToast } from './Toast';
 import ExportModal from './ExportModal';
@@ -399,6 +399,7 @@ function LectureCard({ lecture, onDelete, onShare, onExport }) {
 export default function Dashboard({ user }) {
     const navigate = useNavigate();
     const addToast  = useToast();
+    const { signOut } = useClerk();
 
     const [lectures, setLectures] = useState([]);
     const [loading, setLoading]   = useState(true);
@@ -416,7 +417,7 @@ export default function Dashboard({ user }) {
     const searchRef = useRef(null);
 
     const handleSignOut = async () => {
-        await supabase.auth.signOut();
+        await signOut();
         navigate('/auth');
     };
 
