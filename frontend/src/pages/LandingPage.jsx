@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useClerk } from '@clerk/react';
+import { useAuthModal } from '../components/AuthModal';
 import { useSEO } from '../lib/useSEO';
 
 // ─── CSS ─────────────────────────────────────────────────────────────────────
@@ -541,6 +542,7 @@ function NavAvatar({ user }) {
 
 function Navbar({ user }) {
     const [menuOpen, setMenuOpen] = useState(false);
+    const { openSignIn, openSignUp } = useAuthModal();
     return (
         <nav className="lp-nav">
             <Link to="/" className="lp-nav-logo">
@@ -561,8 +563,8 @@ function Navbar({ user }) {
                     </>
                 ) : (
                     <>
-                        <Link to="/auth" className="lp-btn-ghost-sm">Sign in</Link>
-                        <Link to="/auth" className="lp-btn-dark-sm">Get started</Link>
+                        <button className="lp-btn-ghost-sm" onClick={openSignIn}>Sign in</button>
+                        <button className="lp-btn-dark-sm"  onClick={openSignUp}>Get started</button>
                     </>
                 )}
                 <button className="lp-hamburger" onClick={() => setMenuOpen(o => !o)} aria-label="Toggle menu">
@@ -581,7 +583,7 @@ function Navbar({ user }) {
                 <a href="#faq"         className="lp-mobile-menu-lnk" onClick={() => setMenuOpen(false)}>FAQ</a>
                 {user
                     ? <Link to="/app" className="lp-mobile-menu-lnk" onClick={() => setMenuOpen(false)}>Dashboard</Link>
-                    : <Link to="/auth" className="lp-mobile-menu-lnk" onClick={() => setMenuOpen(false)}>Sign in</Link>
+                    : <button className="lp-mobile-menu-lnk" onClick={() => { setMenuOpen(false); openSignIn(); }}>Sign in</button>
                 }
             </div>
         </nav>
@@ -591,6 +593,7 @@ function Navbar({ user }) {
 function Hero({ user }) {
     const [wordIdx, setWordIdx] = useState(0);
     const [fading, setFading]   = useState(false);
+    const { openSignUp } = useAuthModal();
     useEffect(() => {
         const t = setInterval(() => {
             setFading(true);
@@ -619,9 +622,11 @@ function Hero({ user }) {
                 summaries in real time — so you can focus on learning, not writing.
             </p>
             <div className="lp-hero-btns">
-                <Link to={user ? "/record" : "/auth"} className="lp-btn-dark-md">
-                    {user ? "Start recording" : "Start recording free"} <IconArrow />
-                </Link>
+                {user ? (
+                    <Link to="/record" className="lp-btn-dark-md">Start recording <IconArrow /></Link>
+                ) : (
+                    <button className="lp-btn-dark-md" onClick={openSignUp}>Start recording free <IconArrow /></button>
+                )}
                 {user
                     ? <Link to="/app" className="lp-btn-ghost-md">Go to dashboard</Link>
                     : <a href="#how-it-works" className="lp-btn-ghost-md">See how it works</a>
@@ -987,6 +992,7 @@ function PlanItem({ text }) {
 }
 
 function Pricing() {
+    const { openSignUp } = useAuthModal();
     return (
         <section id="pricing" className="lp-sec">
             <div className="lp-sec-eye">Pricing</div>
@@ -1012,7 +1018,7 @@ function Pricing() {
                         <PlanItem text="PDF export included" />
                         <PlanItem text="All 40+ languages" />
                     </ul>
-                    <Link to="/auth" className="lp-btn-plan-outline">Get started free</Link>
+                    <button className="lp-btn-plan-outline" onClick={openSignUp}>Get started free</button>
                 </div>
 
                 {/* Student — featured */}
@@ -1035,7 +1041,7 @@ function Pricing() {
                         <PlanItem text="Share lecture links" />
                         <PlanItem text="Priority processing" />
                     </ul>
-                    <Link to="/auth" className="lp-btn-plan-dark">Start Student</Link>
+                    <button className="lp-btn-plan-dark" onClick={openSignUp}>Start Student</button>
                 </div>
 
                 {/* Pro */}
@@ -1058,7 +1064,7 @@ function Pricing() {
                         <PlanItem text="API access" />
                         <PlanItem text="Early feature access" />
                     </ul>
-                    <Link to="/auth" className="lp-btn-plan-outline">Start Pro</Link>
+                    <button className="lp-btn-plan-outline" onClick={openSignUp}>Start Pro</button>
                 </div>
 
             </div>
@@ -1067,6 +1073,7 @@ function Pricing() {
 }
 
 function CTASection() {
+    const { openSignUp } = useAuthModal();
     return (
         <div className="lp-cta-wrap">
             <div className="lp-cta">
@@ -1074,7 +1081,7 @@ function CTASection() {
                 <p className="lp-cta-sub">
                     Join thousands of students who never miss a detail. Free to start, no credit card required.
                 </p>
-                <Link to="/auth" className="lp-btn-light">Start recording free</Link>
+                <button className="lp-btn-light" onClick={openSignUp}>Start recording free</button>
             </div>
         </div>
     );

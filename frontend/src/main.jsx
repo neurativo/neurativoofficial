@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ClerkProvider, useUser } from '@clerk/react';
+import { AuthModalProvider } from './components/AuthModal.jsx';
 import App from './App.jsx';
 import Dashboard from './components/Dashboard.jsx';
 import LandingPage from './pages/LandingPage.jsx';
@@ -91,9 +92,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>
         <ClerkProvider publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY} afterSignOutUrl="/">
             <BrowserRouter>
-                <ToastProvider>
-                    <Root />
-                </ToastProvider>
+                <AuthModalProvider>
+                    <ToastProvider>
+                        <Root />
+                    </ToastProvider>
+                </AuthModalProvider>
             </BrowserRouter>
         </ClerkProvider>
     </React.StrictMode>
