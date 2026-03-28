@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { ClerkProvider, useUser } from '@clerk/react';
+import { ClerkProvider, useUser, AuthenticateWithRedirectCallback } from '@clerk/react';
 import { AuthModalProvider } from './components/AuthModal.jsx';
 import App from './App.jsx';
 import Dashboard from './components/Dashboard.jsx';
@@ -77,6 +77,9 @@ function Root() {
                     </ProtectedRoute>
                 }
             />
+
+            {/* OAuth callback — Google redirects here after login */}
+            <Route path="/sso-callback" element={<AuthenticateWithRedirectCallback />} />
 
             {/* Legal */}
             <Route path="/terms" element={<TermsOfService />} />
