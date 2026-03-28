@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ClerkProvider, useUser, useSignUp, HandleSSOCallback } from '@clerk/react';
 import { AuthModalProvider } from './components/AuthModal.jsx';
 import App from './App.jsx';
@@ -21,11 +21,9 @@ if (localStorage.getItem('neurativo_theme') === 'dark') {
 }
 
 function SSOCallback() {
-    const navigate = useNavigate();
     const { signUp } = useSignUp();
 
     const handleSignUp = () => {
-        // Google OAuth provides all required fields — finalize to activate the session
         (async () => {
             try {
                 if (signUp?.status === 'complete') {
@@ -34,14 +32,17 @@ function SSOCallback() {
             } catch (e) {
                 console.error('[Neurativo] SSO finalize error:', e);
             }
-            navigate('/app', { replace: true });
+            window.location.replace('/app');
         })();
     };
 
     return (
         <HandleSSOCallback
-            navigateToApp={() => navigate('/app', { replace: true })}
-            navigateToSignIn={() => navigate('/app', { replace: true })}
+            navigateToApp={({ decorateUrl }) => {
+                const url = decorateUrl('/app');
+                window.location.href = url;
+            }}
+            navigateToSignIn={() => window.location.replace('/app')}
             navigateToSignUp={handleSignUp}
         />
     );
