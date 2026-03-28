@@ -55,22 +55,25 @@ function ProtectedRoute({ children }) {
 }
 
 function Root() {
-    const { isLoaded, isSignedIn, user: clerkUser } = useUser();
-
-    if (!isLoaded) return null;
+    const { isLoaded, user: clerkUser } = useUser();
 
     // Normalize Clerk user to the shape the rest of the app expects
-    const user = clerkUser
+    const user = isLoaded && clerkUser
         ? { id: clerkUser.id, email: clerkUser.primaryEmailAddress?.emailAddress }
         : null;
 
     return (
         <Routes>
-            {/* Public */}
+            {/* Public — render immediately, no Clerk load dependency */}
             <Route path="/" element={<LandingPage user={user} />} />
             <Route path="/share/:token" element={<ShareView />} />
+            <Route path="/terms" element={<TermsOfService />} />
+            <Route path="/privacy" element={<PrivacyPolicy />} />
 
-            {/* Protected */}
+            {/* OAuth callback — MUST render before Clerk is loaded (Clerk processes handshake here) */}
+            <Route path="/sso-callback" element={<SSOCallback />} />
+
+            {/* Protected — ProtectedRoute waits for isLoaded internally */}
             <Route
                 path="/app"
                 element={
@@ -104,15 +107,8 @@ function Root() {
                 }
             />
 
-            {/* OAuth callback — Google redirects here after login */}
-            <Route path="/sso-callback" element={<SSOCallback />} />
-
-            {/* Legal */}
-            <Route path="/terms" element={<TermsOfService />} />
-            <Route path="/privacy" element={<PrivacyPolicy />} />
-
             {/* Fallback */}
-            <Route path="*" element={<NotFoundPage />} />
+            <Route path="*" element={isLoaded ? <NotFoundPage /> : null} />
         </Routes>
     );
 }
