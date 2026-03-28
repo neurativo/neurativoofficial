@@ -439,22 +439,24 @@ function AuthForm({ mode, onToggle }) {
         setStage('idle'); setEmail(''); setError(null);
     }, [mode]);
 
-    // ── Google OAuth ──────────────────────────────────────────────────────────
+    // ── Google OAuth — Clerk v6 uses signIn.sso() ─────────────────────────────
     const handleGoogle = async () => {
         if (gLoading) return;
         setError(null);
         setGLoading(true);
         try {
             if (!signIn) throw new Error('Auth not ready — please refresh and try again.');
-            await signIn.authenticateWithRedirect({
+            const { error: ssoErr } = await signIn.sso({
                 strategy: 'oauth_google',
                 redirectUrl: `${window.location.origin}/sso-callback`,
-                redirectUrlComplete: `${window.location.origin}/app`,
+                redirectCallbackUrl: `${window.location.origin}/app`,
             });
-            // page redirects here — gLoading stays true intentionally
+            if (ssoErr) throw ssoErr;
+            // page will redirect — gLoading stays true intentionally
         } catch (err) {
             console.error('[Neurativo] Google OAuth error:', err);
             const msg =
+                err?.longMessage ||
                 err?.errors?.[0]?.longMessage ||
                 err?.errors?.[0]?.message ||
                 err?.message ||
@@ -464,7 +466,7 @@ function AuthForm({ mode, onToggle }) {
         }
     };
 
-    // ── Email magic link ──────────────────────────────────────────────────────
+    // ── Email magic link — Clerk v6 API ───────────────────────────────────────
     const handleEmail = async (e) => {
         e.preventDefault();
         if (!email.trim() || loading) return;
@@ -472,27 +474,37 @@ function AuthForm({ mode, onToggle }) {
         setLoading(true);
         try {
             if (mode === 'signin') {
-                await signIn.create({
-                    identifier: email.trim(),
-                    strategy: 'email_link',
-                    redirectUrl: `${window.location.origin}/app`,
+                // v6: create sign-in then send link via emailLink.sendLink()
+                await signIn.create({ identifier: email.trim() });
+                const { error: linkErr } = await signIn.emailLink.sendLink({
+                    verificationUrl: `${window.location.origin}/app`,
+                    emailAddress: email.trim(),
                 });
+                if (linkErr) throw linkErr;
             } else {
-                await signUp.create({ emailAddress: email.trim() });
-                await signUp.prepareEmailAddressVerification({
-                    strategy: 'email_link',
-                    redirectUrl: `${window.location.origin}/app`,
+                // v6: create sign-up then call signUp.sendEmailLink()
+                const { error: createErr } = await signUp.create({ emailAddress: email.trim() });
+                if (createErr) throw createErr;
+                const { error: linkErr } = await signUp.sendEmailLink({
+                    verificationUrl: `${window.location.origin}/app`,
                 });
+                if (linkErr) throw linkErr;
             }
             setStage('sent');
         } catch (err) {
-            const code = err.errors?.[0]?.code;
+            console.error('[Neurativo] Email link error:', err);
+            const code = err?.code || err?.errors?.[0]?.code;
             if (code === 'form_identifier_not_found') {
-                setError("No account found. Try signing up instead.");
+                setError('No account found with that email. Try signing up instead.');
             } else if (code === 'form_identifier_exists') {
-                setError("Email already registered. Try signing in instead.");
+                setError('Email already registered. Try signing in instead.');
             } else {
-                setError(err.errors?.[0]?.longMessage || 'Something went wrong. Please try again.');
+                const msg =
+                    err?.longMessage ||
+                    err?.errors?.[0]?.longMessage ||
+                    err?.message ||
+                    'Something went wrong. Please try again.';
+                setError(msg);
             }
         } finally {
             setLoading(false);
