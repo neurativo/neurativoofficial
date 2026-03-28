@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import { ClerkProvider, useUser, HandleSSOCallback } from '@clerk/react';
+import { ClerkProvider, useUser, useSignUp, HandleSSOCallback } from '@clerk/react';
 import { AuthModalProvider } from './components/AuthModal.jsx';
 import App from './App.jsx';
 import Dashboard from './components/Dashboard.jsx';
@@ -12,7 +12,6 @@ import ProfilePage from './pages/ProfilePage.jsx';
 import TermsOfService from './pages/TermsOfService.jsx';
 import PrivacyPolicy from './pages/PrivacyPolicy.jsx';
 import NotFoundPage from './pages/NotFoundPage.jsx';
-import AuthScreen from './components/AuthScreen.jsx';
 import { ToastProvider } from './components/Toast.jsx';
 import './index.css';
 
@@ -23,11 +22,27 @@ if (localStorage.getItem('neurativo_theme') === 'dark') {
 
 function SSOCallback() {
     const navigate = useNavigate();
+    const { signUp } = useSignUp();
+
+    const handleSignUp = () => {
+        // Google OAuth provides all required fields — finalize to activate the session
+        (async () => {
+            try {
+                if (signUp?.status === 'complete') {
+                    await signUp.finalize();
+                }
+            } catch (e) {
+                console.error('[Neurativo] SSO finalize error:', e);
+            }
+            navigate('/app', { replace: true });
+        })();
+    };
+
     return (
         <HandleSSOCallback
             navigateToApp={() => navigate('/app', { replace: true })}
-            navigateToSignIn={() => navigate('/auth', { replace: true })}
-            navigateToSignUp={() => navigate('/auth', { replace: true })}
+            navigateToSignIn={() => navigate('/app', { replace: true })}
+            navigateToSignUp={handleSignUp}
         />
     );
 }
@@ -35,7 +50,7 @@ function SSOCallback() {
 function ProtectedRoute({ children }) {
     const { isLoaded, isSignedIn } = useUser();
     if (!isLoaded) return null;
-    if (!isSignedIn) return <Navigate to="/auth" replace />;
+    if (!isSignedIn) return <Navigate to="/" replace />;
     return children;
 }
 
@@ -53,7 +68,6 @@ function Root() {
         <Routes>
             {/* Public */}
             <Route path="/" element={<LandingPage user={user} />} />
-            <Route path="/auth/*" element={isSignedIn ? <Navigate to="/app" replace /> : <AuthScreen />} />
             <Route path="/share/:token" element={<ShareView />} />
 
             {/* Protected */}
