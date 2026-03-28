@@ -441,18 +441,25 @@ function AuthForm({ mode, onToggle }) {
 
     // ── Google OAuth ──────────────────────────────────────────────────────────
     const handleGoogle = async () => {
-        if (!signInLoaded || gLoading) return;
+        if (gLoading) return;
         setError(null);
         setGLoading(true);
         try {
+            if (!signIn) throw new Error('Auth not ready — please refresh and try again.');
             await signIn.authenticateWithRedirect({
                 strategy: 'oauth_google',
                 redirectUrl: `${window.location.origin}/sso-callback`,
                 redirectUrlComplete: `${window.location.origin}/app`,
             });
-            // Page will redirect — no need to reset gLoading
+            // page redirects here — gLoading stays true intentionally
         } catch (err) {
-            setError(err.errors?.[0]?.longMessage || 'Google sign-in failed. Please try again.');
+            console.error('[Neurativo] Google OAuth error:', err);
+            const msg =
+                err?.errors?.[0]?.longMessage ||
+                err?.errors?.[0]?.message ||
+                err?.message ||
+                'Google sign-in failed. Please try again.';
+            setError(msg);
             setGLoading(false);
         }
     };
