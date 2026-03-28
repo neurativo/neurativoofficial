@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { ClerkProvider, useUser, HandleSSOCallback } from '@clerk/react';
 import { AuthModalProvider } from './components/AuthModal.jsx';
 import App from './App.jsx';
@@ -19,6 +19,17 @@ import './index.css';
 // Apply saved theme immediately (before first render to avoid flash)
 if (localStorage.getItem('neurativo_theme') === 'dark') {
     document.documentElement.classList.add('dark');
+}
+
+function SSOCallback() {
+    const navigate = useNavigate();
+    return (
+        <HandleSSOCallback
+            navigateToApp={() => navigate('/app', { replace: true })}
+            navigateToSignIn={() => navigate('/auth', { replace: true })}
+            navigateToSignUp={() => navigate('/auth', { replace: true })}
+        />
+    );
 }
 
 function ProtectedRoute({ children }) {
@@ -80,7 +91,7 @@ function Root() {
             />
 
             {/* OAuth callback — Google redirects here after login */}
-            <Route path="/sso-callback" element={<HandleSSOCallback />} />
+            <Route path="/sso-callback" element={<SSOCallback />} />
 
             {/* Legal */}
             <Route path="/terms" element={<TermsOfService />} />
