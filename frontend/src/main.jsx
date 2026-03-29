@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { ClerkProvider, useUser, useSignUp, HandleSSOCallback } from '@clerk/react';
 import { AuthModalProvider } from './components/AuthModal.jsx';
 import App from './App.jsx';
@@ -21,17 +21,17 @@ if (localStorage.getItem('neurativo_theme') === 'dark') {
 }
 
 function SSOCallback() {
+    const navigate = useNavigate();
     const { isLoaded, isSignedIn } = useUser();
     const { signUp } = useSignUp();
-    const [redirecting, setRedirecting] = React.useState(false);
 
-    // Backup: if Clerk session activates but navigateToApp didn't fire
+    // When Clerk activates the session, navigate via React Router (no page reload)
+    // This preserves Clerk's in-memory session state — a full page reload would lose it
     React.useEffect(() => {
-        if (isLoaded && isSignedIn && !redirecting) {
-            setRedirecting(true);
-            window.location.replace('/app');
+        if (isLoaded && isSignedIn) {
+            navigate('/app', { replace: true });
         }
-    }, [isLoaded, isSignedIn, redirecting]);
+    }, [isLoaded, isSignedIn, navigate]);
 
     const handleSignUp = () => {
         (async () => {
@@ -42,26 +42,14 @@ function SSOCallback() {
             } catch (e) {
                 console.error('[Neurativo] SSO finalize error:', e);
             }
-            // After finalize, session should be active — redirect
-            window.location.replace('/app');
+            // After finalize, isSignedIn will flip to true and useEffect above handles redirect
         })();
     };
 
-    if (redirecting) {
-        return null;
-    }
-
     return (
         <HandleSSOCallback
-            navigateToApp={({ decorateUrl }) => {
-                // decorateUrl adds __clerk_db_jwt for proper cookie persistence
-                setRedirecting(true);
-                window.location.href = decorateUrl('/app');
-            }}
-            navigateToSignIn={() => {
-                setRedirecting(true);
-                window.location.replace('/');
-            }}
+            navigateToApp={() => navigate('/app', { replace: true })}
+            navigateToSignIn={() => navigate('/', { replace: true })}
             navigateToSignUp={handleSignUp}
         />
     );
@@ -69,21 +57,9 @@ function SSOCallback() {
 
 function ProtectedRoute({ children }) {
     const { isLoaded, isSignedIn } = useUser();
-    const [waited, setWaited] = React.useState(false);
-
-    React.useEffect(() => {
-        // Give Clerk a moment to restore the session from cookies after page reload
-        if (isLoaded && !isSignedIn && !waited) {
-            const t = setTimeout(() => setWaited(true), 1500);
-            return () => clearTimeout(t);
-        }
-    }, [isLoaded, isSignedIn, waited]);
-
     if (!isLoaded) return null;
-    if (isSignedIn) return children;
-    // Don't redirect until we've waited for Clerk to settle
-    if (!waited) return null;
-    return <Navigate to="/" replace />;
+    if (!isSignedIn) return <Navigate to="/" replace />;
+    return children;
 }
 
 function Root() {
