@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ClerkProvider, useUser, useSignUp, HandleSSOCallback } from '@clerk/react';
@@ -21,7 +21,15 @@ if (localStorage.getItem('neurativo_theme') === 'dark') {
 }
 
 function SSOCallback() {
+    const { isLoaded, isSignedIn } = useUser();
     const { signUp } = useSignUp();
+
+    // Safety net: if Clerk creates the session but doesn't fire the nav callback, redirect anyway
+    useEffect(() => {
+        if (isLoaded && isSignedIn) {
+            window.location.replace('/app');
+        }
+    }, [isLoaded, isSignedIn]);
 
     const handleSignUp = () => {
         (async () => {
@@ -38,10 +46,7 @@ function SSOCallback() {
 
     return (
         <HandleSSOCallback
-            navigateToApp={({ decorateUrl }) => {
-                const url = decorateUrl('/app');
-                window.location.href = url;
-            }}
+            navigateToApp={() => window.location.replace('/app')}
             navigateToSignIn={() => window.location.replace('/app')}
             navigateToSignUp={handleSignUp}
         />
