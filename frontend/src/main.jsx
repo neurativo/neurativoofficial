@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import { ClerkProvider, useUser, useSignUp, HandleSSOCallback } from '@clerk/react';
+import { ClerkProvider, useUser, HandleSSOCallback } from '@clerk/react';
 import { AuthModalProvider } from './components/AuthModal.jsx';
 import App from './App.jsx';
 import Dashboard from './components/Dashboard.jsx';
@@ -23,34 +23,27 @@ if (localStorage.getItem('neurativo_theme') === 'dark') {
 function SSOCallback() {
     const navigate = useNavigate();
     const { isLoaded, isSignedIn } = useUser();
-    const { signUp } = useSignUp();
 
-    // When Clerk activates the session, navigate via React Router (no page reload)
-    // This preserves Clerk's in-memory session state — a full page reload would lose it
+    // Clerk's finalize() calls setActive() then our navigateToApp callback.
+    // But React signals may not have propagated yet when navigate fires synchronously.
+    // This useEffect is the ONLY navigation trigger — it waits for isSignedIn to be true,
+    // guaranteeing ProtectedRoute will also see isSignedIn=true on the same render cycle.
     React.useEffect(() => {
         if (isLoaded && isSignedIn) {
             navigate('/app', { replace: true });
         }
     }, [isLoaded, isSignedIn, navigate]);
 
-    const handleSignUp = () => {
-        (async () => {
-            try {
-                if (signUp?.status === 'complete') {
-                    await signUp.finalize();
-                }
-            } catch (e) {
-                console.error('[Neurativo] SSO finalize error:', e);
-            }
-            // After finalize, isSignedIn will flip to true and useEffect above handles redirect
-        })();
-    };
-
     return (
         <HandleSSOCallback
-            navigateToApp={() => navigate('/app', { replace: true })}
+            navigateToApp={() => {
+                // No-op: let the useEffect above handle navigation after signals propagate
+            }}
             navigateToSignIn={() => navigate('/', { replace: true })}
-            navigateToSignUp={handleSignUp}
+            navigateToSignUp={() => {
+                // No-op: finalize() is called by HandleSSOCallback internally,
+                // which triggers setActive → isSignedIn=true → useEffect navigates
+            }}
         />
     );
 }
