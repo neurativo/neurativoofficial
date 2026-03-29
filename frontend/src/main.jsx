@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { ClerkProvider, useUser, AuthenticateWithRedirectCallback } from '@clerk/react';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { ClerkProvider, useUser, useClerk } from '@clerk/react';
 import { AuthModalProvider } from './components/AuthModal.jsx';
 import App from './App.jsx';
 import Dashboard from './components/Dashboard.jsx';
@@ -20,21 +20,65 @@ if (localStorage.getItem('neurativo_theme') === 'dark') {
     document.documentElement.classList.add('dark');
 }
 
-// Clerk's official OAuth callback handler.
-// AuthenticateWithRedirectCallback calls clerk.handleRedirectCallback() which:
-//   1. Exchanges the OAuth code for a session
-//   2. Persists the session to storage (localStorage / cookies)
-//   3. Hard-navigates to afterSignInUrl / afterSignUpUrl
-// No manual state coordination needed — Clerk handles everything.
+// ─── OAuth callback page ────────────────────────────────────────────────────
+// Strategy: call clerk.handleRedirectCallback() directly (no helper components).
+// This is Clerk's own implementation — it exchanges the OAuth code, persists the
+// session to storage, then navigates to afterSignInUrl / afterSignUpUrl.
+//
+// Two navigation paths:
+//   A) Clerk hard-redirects to /app via window.location (the normal path).
+//      Session is in storage by then so ProtectedRoute sees isSignedIn=true.
+//   B) isSignedIn becomes true in React context before the hard redirect —
+//      we catch this and navigate via React Router (no reload needed).
+//
+// Fallback: if nothing happens in 10 s, redirect to home.
 function SSOCallback() {
+    const clerk = useClerk();
+    const { isLoaded, isSignedIn } = useUser();
+    const navigate = useNavigate();
+    const invoked = React.useRef(false);
+
+    // Invoke handleRedirectCallback exactly once.
+    // If Clerk isn't loaded yet, the SDK queues the call internally and fires
+    // it as soon as clerk-js finishes loading — no dep on clerk.loaded needed.
+    React.useEffect(() => {
+        if (invoked.current) return;
+        invoked.current = true;
+        clerk.handleRedirectCallback({
+            afterSignInUrl: '/app',
+            afterSignUpUrl: '/app',
+        });
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Path B: session appeared in context before hard redirect fired.
+    React.useEffect(() => {
+        if (isLoaded && isSignedIn) {
+            navigate('/app', { replace: true });
+        }
+    }, [isLoaded, isSignedIn, navigate]);
+
+    // Fallback: something went wrong, send user home after 10 s.
+    React.useEffect(() => {
+        const t = setTimeout(() => navigate('/', { replace: true }), 10000);
+        return () => clearTimeout(t);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
     return (
-        <AuthenticateWithRedirectCallback
-            afterSignInUrl="/app"
-            afterSignUpUrl="/app"
-        />
+        <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: '100vh',
+            fontFamily: 'Inter, -apple-system, sans-serif',
+            color: '#888',
+            fontSize: '14px',
+        }}>
+            Signing you in…
+        </div>
     );
 }
 
+// ─── Route guard ────────────────────────────────────────────────────────────
 function ProtectedRoute({ children }) {
     const { isLoaded, isSignedIn } = useUser();
     if (!isLoaded) return null;
@@ -42,60 +86,27 @@ function ProtectedRoute({ children }) {
     return children;
 }
 
+// ─── Route tree ─────────────────────────────────────────────────────────────
 function Root() {
     const { isLoaded, user: clerkUser } = useUser();
 
-    // Normalize Clerk user to the shape the rest of the app expects
     const user = isLoaded && clerkUser
         ? { id: clerkUser.id, email: clerkUser.primaryEmailAddress?.emailAddress }
         : null;
 
     return (
         <Routes>
-            {/* Public — render immediately, no Clerk load dependency */}
-            <Route path="/" element={<LandingPage user={user} />} />
-            <Route path="/share/:token" element={<ShareView />} />
-            <Route path="/terms" element={<TermsOfService />} />
-            <Route path="/privacy" element={<PrivacyPolicy />} />
+            <Route path="/"               element={<LandingPage user={user} />} />
+            <Route path="/share/:token"   element={<ShareView />} />
+            <Route path="/terms"          element={<TermsOfService />} />
+            <Route path="/privacy"        element={<PrivacyPolicy />} />
+            <Route path="/sso-callback"   element={<SSOCallback />} />
 
-            {/* OAuth callback — Clerk processes the handshake and redirects to /app */}
-            <Route path="/sso-callback" element={<SSOCallback />} />
+            <Route path="/app"     element={<ProtectedRoute><Dashboard user={user} /></ProtectedRoute>} />
+            <Route path="/record"  element={<ProtectedRoute><App user={user} /></ProtectedRoute>} />
+            <Route path="/lecture/:id" element={<ProtectedRoute><LectureView user={user} /></ProtectedRoute>} />
+            <Route path="/profile" element={<ProtectedRoute><ProfilePage user={user} /></ProtectedRoute>} />
 
-            {/* Protected — ProtectedRoute waits for isLoaded internally */}
-            <Route
-                path="/app"
-                element={
-                    <ProtectedRoute>
-                        <Dashboard user={user} />
-                    </ProtectedRoute>
-                }
-            />
-            <Route
-                path="/record"
-                element={
-                    <ProtectedRoute>
-                        <App user={user} />
-                    </ProtectedRoute>
-                }
-            />
-            <Route
-                path="/lecture/:id"
-                element={
-                    <ProtectedRoute>
-                        <LectureView user={user} />
-                    </ProtectedRoute>
-                }
-            />
-            <Route
-                path="/profile"
-                element={
-                    <ProtectedRoute>
-                        <ProfilePage user={user} />
-                    </ProtectedRoute>
-                }
-            />
-
-            {/* Fallback */}
             <Route path="*" element={isLoaded ? <NotFoundPage /> : null} />
         </Routes>
     );
