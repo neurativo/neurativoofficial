@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ClerkProvider, useUser, useSignUp, HandleSSOCallback } from '@clerk/react';
@@ -24,14 +24,14 @@ function SSOCallback() {
     const { isLoaded, isSignedIn } = useUser();
     const { signUp } = useSignUp();
 
-    // Safety net: if Clerk creates the session but doesn't fire the nav callback, redirect anyway
-    useEffect(() => {
-        if (isLoaded && isSignedIn) {
-            window.location.replace('/app');
-        }
-    }, [isLoaded, isSignedIn]);
+    // Once Clerk activates the session (from handshake or finalize), redirect via React Router
+    // This avoids a full page reload which would cause Clerk to re-initialize and lose session state
+    if (isLoaded && isSignedIn) {
+        return <Navigate to="/app" replace />;
+    }
 
     const handleSignUp = () => {
+        // Google OAuth sign-up — finalize to activate the session, then re-render triggers Navigate above
         (async () => {
             try {
                 if (signUp?.status === 'complete') {
@@ -40,14 +40,13 @@ function SSOCallback() {
             } catch (e) {
                 console.error('[Neurativo] SSO finalize error:', e);
             }
-            window.location.replace('/app');
         })();
     };
 
     return (
         <HandleSSOCallback
-            navigateToApp={() => window.location.replace('/app')}
-            navigateToSignIn={() => window.location.replace('/app')}
+            navigateToApp={() => {}}
+            navigateToSignIn={() => {}}
             navigateToSignUp={handleSignUp}
         />
     );
