@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import { ClerkProvider, useUser, HandleSSOCallback } from '@clerk/react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { ClerkProvider, useUser, AuthenticateWithRedirectCallback } from '@clerk/react';
 import { AuthModalProvider } from './components/AuthModal.jsx';
 import App from './App.jsx';
 import Dashboard from './components/Dashboard.jsx';
@@ -20,29 +20,17 @@ if (localStorage.getItem('neurativo_theme') === 'dark') {
     document.documentElement.classList.add('dark');
 }
 
+// Clerk's official OAuth callback handler.
+// AuthenticateWithRedirectCallback calls clerk.handleRedirectCallback() which:
+//   1. Exchanges the OAuth code for a session
+//   2. Persists the session to storage (localStorage / cookies)
+//   3. Hard-navigates to afterSignInUrl / afterSignUpUrl
+// No manual state coordination needed — Clerk handles everything.
 function SSOCallback() {
-    const navigate = useNavigate();
-    const { isLoaded, isSignedIn } = useUser();
-    // Set to true when HandleSSOCallback calls navigateToApp/navigateToSignUp,
-    // meaning finalize() completed and setActive() was called.
-    const [clerkDone, setClerkDone] = React.useState(false);
-
-    // Only navigate once BOTH conditions are met:
-    //   1. Clerk's finalize() called navigateToApp (session established in memory)
-    //   2. isSignedIn is true in React state (setActive propagated)
-    // This prevents navigating before the session is ready AND prevents Clerk
-    // from falling back to a hard window.location redirect (no-ops cause that).
-    React.useEffect(() => {
-        if (clerkDone && isLoaded && isSignedIn) {
-            navigate('/app', { replace: true });
-        }
-    }, [clerkDone, isLoaded, isSignedIn, navigate]);
-
     return (
-        <HandleSSOCallback
-            navigateToApp={() => setClerkDone(true)}
-            navigateToSignIn={() => navigate('/', { replace: true })}
-            navigateToSignUp={() => setClerkDone(true)}
+        <AuthenticateWithRedirectCallback
+            afterSignInUrl="/app"
+            afterSignUpUrl="/app"
         />
     );
 }
@@ -70,7 +58,7 @@ function Root() {
             <Route path="/terms" element={<TermsOfService />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
 
-            {/* OAuth callback — MUST render before Clerk is loaded (Clerk processes handshake here) */}
+            {/* OAuth callback — Clerk processes the handshake and redirects to /app */}
             <Route path="/sso-callback" element={<SSOCallback />} />
 
             {/* Protected — ProtectedRoute waits for isLoaded internally */}
