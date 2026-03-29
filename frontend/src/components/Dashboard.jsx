@@ -200,17 +200,7 @@ function ThemeToggle() {
 // ─── OnboardingModal ───────────────────────────────────────────────────────────
 function OnboardingModal({ onDone }) {
     const navigate = useNavigate();
-    const [step, setStep] = useState(0); // 0 | 1 | 2
-    const [micStatus, setMicStatus] = useState('idle'); // idle | granted | denied
-
-    const requestMic = async () => {
-        try {
-            await navigator.mediaDevices.getUserMedia({ audio: true });
-            setMicStatus('granted');
-        } catch {
-            setMicStatus('denied');
-        }
-    };
+    const [step, setStep] = useState(0); // 0 | 1
 
     const finish = () => {
         localStorage.setItem('neurativo_onboarded', '1');
@@ -231,33 +221,8 @@ function OnboardingModal({ onDone }) {
             <button className="ob-btn-primary" onClick={() => setStep(1)}>Get started →</button>
         </div>,
 
-        // Step 1 — Microphone
+        // Step 1 — Ready
         <div key="1">
-            <div className={`ob-mic-icon${micStatus === 'granted' ? ' ob-mic-granted' : micStatus === 'denied' ? ' ob-mic-denied' : ''}`}>
-                {micStatus === 'denied'
-                    ? <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 005.12 2.12M15 9.34V4a3 3 0 00-5.94-.6"/><path d="M17 16.95A7 7 0 015 12v-2m14 0v2a7 7 0 01-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-                    : <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-                }
-            </div>
-            <h2 className="ob-step-title">Allow microphone access</h2>
-            <p className="ob-step-sub">Neurativo needs access to your microphone to transcribe lectures in real time. Your audio is never stored beyond the session.</p>
-            {micStatus === 'idle' && <button className="ob-btn-primary" onClick={requestMic}>Allow microphone</button>}
-            {micStatus === 'granted' && (
-                <>
-                    <p className="ob-mic-status" style={{ color: '#16a34a' }}>Microphone access granted</p>
-                    <button className="ob-btn-primary" onClick={() => setStep(2)}>Continue →</button>
-                </>
-            )}
-            {micStatus === 'denied' && (
-                <>
-                    <p className="ob-mic-status" style={{ color: '#ef4444' }}>Access denied — you can enable it in your browser settings</p>
-                    <button className="ob-btn-primary" onClick={() => setStep(2)}>Continue anyway →</button>
-                </>
-            )}
-        </div>,
-
-        // Step 2 — Ready
-        <div key="2">
             <div className="ob-checkmark">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="20 6 9 17 4 12"/>
@@ -274,7 +239,7 @@ function OnboardingModal({ onDone }) {
             <div className="ob-modal">
                 {steps[step]}
                 <div className="ob-dots">
-                    {[0, 1, 2].map(i => <div key={i} className={`ob-dot${step === i ? ' active' : ''}`} />)}
+                    {[0, 1].map(i => <div key={i} className={`ob-dot${step === i ? ' active' : ''}`} />)}
                 </div>
             </div>
         </div>
