@@ -147,7 +147,7 @@ def answer_lecture_question(lecture_id: str, question: str) -> str:
         raise
     except Exception as e:
         print(f"Error in NRQA process: {e}")
-        raise HTTPException(status_code=500, detail=f"QA failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="QA failed")
 
 
 # =============================================================================
@@ -187,8 +187,8 @@ def _expand_query(question: str) -> list[str]:
 
 
 def _hash(text: str) -> str:
-    """MD5 hex digest of chunk text — used as a stable cache key."""
-    return hashlib.md5(text.encode("utf-8")).hexdigest()
+    """SHA-256 hex digest of chunk text — used as a stable cache key."""
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def _sentence_aware_chunks(text: str, max_words: int = 1500) -> list[str]:

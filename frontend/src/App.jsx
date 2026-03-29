@@ -478,9 +478,12 @@ function App({ user }) {
 
     // ── SSE helpers ───────────────────────────────────────
 
-    const connectSSE = (id) => {
+    const connectSSE = async (id) => {
         if (sseRef.current) sseRef.current.close();
-        const es = new EventSource(`/api/v1/live/${id}/stream`);
+        // Pass auth token as query param since EventSource can't set headers
+        const token = await window.Clerk?.session?.getToken();
+        const qs = token ? `?token=${encodeURIComponent(token)}` : '';
+        const es = new EventSource(`/api/v1/live/${id}/stream${qs}`);
 
         es.onmessage = (e) => {
             // Resilience 10: reset reconnect counter on any successful message

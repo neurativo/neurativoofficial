@@ -117,4 +117,4 @@ def generate_explanation(selected_text: str, mode: str = "simple", topic: str = 
 
     except Exception as e:
         print(f"Error generating explanation: {e}")
-        raise HTTPException(status_code=500, detail=f"Explanation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Explanation failed")

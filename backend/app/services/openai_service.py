@@ -58,7 +58,7 @@ async def transcribe_audio(file: UploadFile) -> tuple[str, str]:
 
     except Exception as e:
         print(f"Error during transcription: {e}")
-        raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Transcription failed")
 
 
 def get_language_display_name(language_code: str) -> str:

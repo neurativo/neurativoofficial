@@ -1,7 +1,8 @@
 import asyncio
 import json
+import re
 
-from fastapi import APIRouter, BackgroundTasks, UploadFile, File, HTTPException, Depends, Request
+from fastapi import APIRouter, BackgroundTasks, UploadFile, File, HTTPException, Depends, Request, Query
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 import numpy as np
@@ -78,13 +79,30 @@ def _next_month_iso() -> str:
     return resets.isoformat()
 
 
+_UUID_RE = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.I)
+
+
+def _validate_uuid(lecture_id: str) -> None:
+    """Raises 400 if lecture_id is not a valid UUID."""
+    if not _UUID_RE.match(lecture_id):
+        raise HTTPException(status_code=400, detail="Invalid lecture ID")
+
+
 def _check_owner(lecture_id: str, user_id: str) -> None:
     """
+    Raises 404 if the lecture doesn't exist.
     Raises 403 if the lecture has a user_id that doesn't match.
-    Permits access to legacy lectures (user_id is NULL) so existing data isn't locked out.
     """
+    _validate_uuid(lecture_id)
     owner_id = get_lecture_owner(lecture_id)
-    if owner_id and str(owner_id) != str(user_id):
+    if owner_id is None:
+        # Lecture doesn't exist or has no owner — check if the lecture actually exists
+        lecture = get_lecture_for_summarization(lecture_id)
+        if not lecture:
+            raise HTTPException(status_code=404, detail="Lecture not found")
+        # Legacy lecture (no owner) — deny access to prevent unauthorized access
+        raise HTTPException(status_code=403, detail="Access denied")
+    if str(owner_id) != str(user_id):
         raise HTTPException(status_code=403, detail="Access denied")
 
 
@@ -214,11 +232,11 @@ def _get_lecture_lock(lecture_id: str) -> asyncio.Lock:
 
 @router.post("/explain/{lecture_id}")
 @limiter.limit("20/minute")
-def explain_text(http_request: Request, lecture_id: str, request: ExplainRequest, user=Depends(get_current_user)):
+def explain_text(request: Request, lecture_id: str, body: ExplainRequest, user=Depends(get_current_user)):
     _check_owner(lecture_id, user.id)
     topic = get_lecture_topic(lecture_id)
     try:
-        explanation_data = generate_explanation(request.text, request.mode, topic=topic)
+        explanation_data = generate_explanation(body.text, body.mode, topic=topic)
     except Exception:
         raise HTTPException(status_code=500, detail="Explanation generation failed")
     return {
@@ -256,7 +274,7 @@ async def _check_audio_magic(file: UploadFile) -> bool:
 
 @router.post("/transcribe")
 @limiter.limit("5/minute")
-async def transcribe(http_request: Request, file: UploadFile = File(...), user=Depends(get_current_user)):
+async def transcribe(request: Request, file: UploadFile = File(...), user=Depends(get_current_user)):
     # Extension check
     if not file.filename.lower().endswith(_ALLOWED_AUDIO_EXTENSIONS):
         raise HTTPException(status_code=400, detail="Invalid file format")
@@ -313,8 +331,11 @@ async def transcribe(http_request: Request, file: UploadFile = File(...), user=D
 
 
 @router.get("/summarize/{lecture_id}")
-def summarize(lecture_id: str):
+def summarize(lecture_id: str, user=Depends(get_current_user)):
+    _check_owner(lecture_id, user.id)
     lecture = get_lecture_for_summarization(lecture_id)
+    if not lecture:
+        raise HTTPException(status_code=404, detail="Lecture not found")
     summary = lecture.get("master_summary") or lecture.get("summary") or "Processing..."
     return {"lecture_id": lecture_id, "summary": summary}
 
@@ -323,7 +344,7 @@ def summarize(lecture_id: str):
 
 @router.post("/live/start")
 @limiter.limit("10/minute")
-def start_live_session(http_request: Request, user=Depends(get_current_user)):
+def start_live_session(request: Request, user=Depends(get_current_user)):
     try:
         profile = get_user_profile(str(user.id))
         plan_tier = profile.get("plan_tier") or "free"
@@ -549,7 +570,7 @@ def _run_summarization(
 @router.post("/live/{lecture_id}/chunk")
 @limiter.limit("30/minute")
 async def process_live_chunk(
-    http_request: Request,
+    request: Request,
     lecture_id: str,
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
@@ -568,6 +589,16 @@ async def process_live_chunk(
     session = get_active_live_session(lecture_id)
     if not session:
         raise HTTPException(status_code=400, detail="Active live session not found")
+
+    # Validate audio chunk — magic bytes check (rejects non-audio uploads)
+    if not await _check_audio_magic(file):
+        raise HTTPException(status_code=400, detail="Invalid audio format")
+
+    # Hard file size limit for chunks — 12s WebM is typically 50-200KB, cap at 5MB
+    chunk_bytes = await file.read()
+    if len(chunk_bytes) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Audio chunk too large")
+    await file.seek(0)
 
     # Fetch plan limits once per chunk (one lightweight DB call)
     profile = get_user_profile(str(user.id))
@@ -663,9 +694,10 @@ async def process_live_chunk(
 
 
 @router.get("/live/{lecture_id}/stream")
-async def stream_summary(lecture_id: str):
+async def stream_summary(lecture_id: str, token: str = Query(None)):
     """
     Server-Sent Events stream for live summary + topic updates.
+    Requires a Bearer token passed as ?token= query param (EventSource can't set headers).
     Polls Supabase every 2 s and pushes a JSON event whenever master_summary
     or topic changes.  The frontend connects on session start and closes the
     EventSource on session end.
@@ -674,6 +706,11 @@ async def stream_summary(lecture_id: str):
     Each field is only included when it has changed.
     A ": heartbeat" comment is sent every ~30 s to keep proxies from timing out.
     """
+    # Authenticate via query param since EventSource doesn't support custom headers
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    user = await get_current_user(f"Bearer {token}")
+    _check_owner(lecture_id, user.id)
     async def event_generator():
         last_summary  = None
         last_topic    = None
@@ -812,7 +849,7 @@ def get_analytics(lecture_id: str, user=Depends(get_current_user)):
 
 @router.get("/lectures/{lecture_id}/export/pdf")
 @limiter.limit("3/minute")
-async def export_pdf(http_request: Request, lecture_id: str, user=Depends(get_current_user)):
+async def export_pdf(request: Request, lecture_id: str, user=Depends(get_current_user)):
     _check_owner(lecture_id, user.id)
     try:
         pdf_bytes = await generate_lecture_pdf(lecture_id)
@@ -829,7 +866,11 @@ async def export_pdf(http_request: Request, lecture_id: str, user=Depends(get_cu
 
 
 @router.get("/lectures")
-def get_lectures(limit: int = 20, offset: int = 0, user=Depends(get_current_user)):
+def get_lectures(
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    user=Depends(get_current_user),
+):
     """
     Returns lectures for the authenticated user sorted by created_at DESC.
     Used by the Dashboard to display the user's lecture history.
@@ -851,13 +892,13 @@ def get_lecture_details(lecture_id: str, user=Depends(get_current_user)):
 
 @router.post("/ask/{lecture_id}")
 @limiter.limit("20/minute")
-def ask_question_auth(http_request: Request, lecture_id: str, request: QuestionRequest, user=Depends(get_current_user)):
+def ask_question_auth(request: Request, lecture_id: str, body: QuestionRequest, user=Depends(get_current_user)):
     _check_owner(lecture_id, user.id)
     try:
-        answer = answer_lecture_question(lecture_id, request.question)
+        answer = answer_lecture_question(lecture_id, body.question)
     except Exception:
         raise HTTPException(status_code=500, detail="Failed to answer question")
-    return {"lecture_id": lecture_id, "question": request.question, "answer": answer}
+    return {"lecture_id": lecture_id, "question": body.question, "answer": answer}
 
 
 @router.get("/lectures/{lecture_id}/full")
@@ -871,7 +912,8 @@ def get_lecture_full_endpoint(lecture_id: str, user=Depends(get_current_user)):
 
 
 @router.post("/lectures/{lecture_id}/share")
-def share_lecture(lecture_id: str, user=Depends(get_current_user)):
+@limiter.limit("20/minute")
+def share_lecture(request: Request, lecture_id: str, user=Depends(get_current_user)):
     """Generates (or returns existing) share token. Returns the share URL path."""
     _check_owner(lecture_id, user.id)
     try:
@@ -893,7 +935,8 @@ def unshare_lecture(lecture_id: str, user=Depends(get_current_user)):
 
 
 @router.get("/share/{token}")
-def get_shared_lecture(token: str):
+@limiter.limit("30/minute")
+def get_shared_lecture(request: Request, token: str):
     """Public endpoint — no auth required. Finds lecture by share token."""
     lecture = get_lecture_by_share_token(token)
     if not lecture:
@@ -906,7 +949,8 @@ def get_shared_lecture(token: str):
 
 
 @router.delete("/lectures/{lecture_id}")
-def delete_lecture_endpoint(lecture_id: str, user=Depends(get_current_user)):
+@limiter.limit("10/minute")
+def delete_lecture_endpoint(request: Request, lecture_id: str, user=Depends(get_current_user)):
     """Permanently deletes a lecture and all associated data."""
     _check_owner(lecture_id, user.id)
     try:
@@ -956,9 +1000,10 @@ def get_profile(user=Depends(get_current_user)):
 
 
 @router.patch("/profile")
-def patch_profile(request: ProfileUpdateRequest, user=Depends(get_current_user)):
+@limiter.limit("20/minute")
+def patch_profile(request: Request, body: ProfileUpdateRequest, user=Depends(get_current_user)):
     """Updates the authenticated user's profile fields."""
-    data = request.model_dump(exclude_none=True)
+    data = body.model_dump(exclude_none=True)
     if not data:
         raise HTTPException(status_code=400, detail="No fields to update")
     try:
@@ -969,7 +1014,8 @@ def patch_profile(request: ProfileUpdateRequest, user=Depends(get_current_user))
 
 
 @router.delete("/profile")
-def delete_profile(user=Depends(get_current_user)):
+@limiter.limit("3/hour")
+def delete_profile(request: Request, user=Depends(get_current_user)):
     """Deletes the authenticated user's account and all associated data."""
     try:
         delete_user_account(str(user.id))
