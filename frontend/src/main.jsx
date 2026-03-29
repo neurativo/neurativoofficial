@@ -23,27 +23,26 @@ if (localStorage.getItem('neurativo_theme') === 'dark') {
 function SSOCallback() {
     const navigate = useNavigate();
     const { isLoaded, isSignedIn } = useUser();
+    // Set to true when HandleSSOCallback calls navigateToApp/navigateToSignUp,
+    // meaning finalize() completed and setActive() was called.
+    const [clerkDone, setClerkDone] = React.useState(false);
 
-    // Clerk's finalize() calls setActive() then our navigateToApp callback.
-    // But React signals may not have propagated yet when navigate fires synchronously.
-    // This useEffect is the ONLY navigation trigger — it waits for isSignedIn to be true,
-    // guaranteeing ProtectedRoute will also see isSignedIn=true on the same render cycle.
+    // Only navigate once BOTH conditions are met:
+    //   1. Clerk's finalize() called navigateToApp (session established in memory)
+    //   2. isSignedIn is true in React state (setActive propagated)
+    // This prevents navigating before the session is ready AND prevents Clerk
+    // from falling back to a hard window.location redirect (no-ops cause that).
     React.useEffect(() => {
-        if (isLoaded && isSignedIn) {
+        if (clerkDone && isLoaded && isSignedIn) {
             navigate('/app', { replace: true });
         }
-    }, [isLoaded, isSignedIn, navigate]);
+    }, [clerkDone, isLoaded, isSignedIn, navigate]);
 
     return (
         <HandleSSOCallback
-            navigateToApp={() => {
-                // No-op: let the useEffect above handle navigation after signals propagate
-            }}
+            navigateToApp={() => setClerkDone(true)}
             navigateToSignIn={() => navigate('/', { replace: true })}
-            navigateToSignUp={() => {
-                // No-op: finalize() is called by HandleSSOCallback internally,
-                // which triggers setActive → isSignedIn=true → useEffect navigates
-            }}
+            navigateToSignUp={() => setClerkDone(true)}
         />
     );
 }

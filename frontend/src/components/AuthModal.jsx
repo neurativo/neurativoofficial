@@ -449,7 +449,6 @@ function AuthForm({ mode, onToggle }) {
             const { error: ssoErr } = await signIn.sso({
                 strategy: 'oauth_google',
                 redirectUrl: `${window.location.origin}/sso-callback`,
-                redirectCallbackUrl: `${window.location.origin}/app`,
             });
             if (ssoErr) throw ssoErr;
             // page will redirect — gLoading stays true intentionally
