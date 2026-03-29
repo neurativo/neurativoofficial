@@ -23,15 +23,17 @@ if (localStorage.getItem('neurativo_theme') === 'dark') {
 function SSOCallback() {
     const { isLoaded, isSignedIn } = useUser();
     const { signUp } = useSignUp();
+    const [redirecting, setRedirecting] = React.useState(false);
 
-    // Once Clerk activates the session (from handshake or finalize), redirect via React Router
-    // This avoids a full page reload which would cause Clerk to re-initialize and lose session state
-    if (isLoaded && isSignedIn) {
-        return <Navigate to="/app" replace />;
-    }
+    // Backup: if Clerk session activates but navigateToApp didn't fire
+    React.useEffect(() => {
+        if (isLoaded && isSignedIn && !redirecting) {
+            setRedirecting(true);
+            window.location.replace('/app');
+        }
+    }, [isLoaded, isSignedIn, redirecting]);
 
     const handleSignUp = () => {
-        // Google OAuth sign-up — finalize to activate the session, then re-render triggers Navigate above
         (async () => {
             try {
                 if (signUp?.status === 'complete') {
@@ -40,13 +42,26 @@ function SSOCallback() {
             } catch (e) {
                 console.error('[Neurativo] SSO finalize error:', e);
             }
+            // After finalize, session should be active — redirect
+            window.location.replace('/app');
         })();
     };
 
+    if (redirecting) {
+        return null;
+    }
+
     return (
         <HandleSSOCallback
-            navigateToApp={() => {}}
-            navigateToSignIn={() => {}}
+            navigateToApp={({ decorateUrl }) => {
+                // decorateUrl adds __clerk_db_jwt for proper cookie persistence
+                setRedirecting(true);
+                window.location.href = decorateUrl('/app');
+            }}
+            navigateToSignIn={() => {
+                setRedirecting(true);
+                window.location.replace('/');
+            }}
             navigateToSignUp={handleSignUp}
         />
     );
@@ -54,9 +69,21 @@ function SSOCallback() {
 
 function ProtectedRoute({ children }) {
     const { isLoaded, isSignedIn } = useUser();
+    const [waited, setWaited] = React.useState(false);
+
+    React.useEffect(() => {
+        // Give Clerk a moment to restore the session from cookies after page reload
+        if (isLoaded && !isSignedIn && !waited) {
+            const t = setTimeout(() => setWaited(true), 1500);
+            return () => clearTimeout(t);
+        }
+    }, [isLoaded, isSignedIn, waited]);
+
     if (!isLoaded) return null;
-    if (!isSignedIn) return <Navigate to="/" replace />;
-    return children;
+    if (isSignedIn) return children;
+    // Don't redirect until we've waited for Clerk to settle
+    if (!waited) return null;
+    return <Navigate to="/" replace />;
 }
 
 function Root() {
