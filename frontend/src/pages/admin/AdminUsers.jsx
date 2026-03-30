@@ -67,6 +67,7 @@ export default function AdminUsers() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [saving, setSaving] = useState({});
+    const [toast, setToast] = useState('');
 
     const load = useCallback(() => {
         setLoading(true);
@@ -79,11 +80,22 @@ export default function AdminUsers() {
 
     useEffect(() => { load(); }, [load]);
 
-    async function changePlan(userId, plan_tier) {
+    function showToast(msg) {
+        setToast(msg);
+        setTimeout(() => setToast(''), 3000);
+    }
+
+    async function changePlan(userId, plan_tier, userName) {
         setSaving(s => ({ ...s, [userId]: true }));
         try {
             await adminApi.updateUserPlan(userId, plan_tier);
-            load();
+            setData(d => ({
+                ...d,
+                users: d.users.map(u => u.id === userId ? { ...u, plan_tier } : u)
+            }));
+            showToast(`${userName || userId.slice(0, 12)} → ${plan_tier}`);
+        } catch (e) {
+            showToast('Failed to update plan');
         } finally {
             setSaving(s => ({ ...s, [userId]: false }));
         }
@@ -119,32 +131,34 @@ export default function AdminUsers() {
                 <table className="adm-table">
                     <thead>
                         <tr>
-                            <th>User ID</th>
-                            <th>Email / Name</th>
+                            <th>User</th>
                             <th>Plan</th>
                             <th>Lectures</th>
                             <th>Joined</th>
+                            <th>Last Sign In</th>
                             <th>Change Plan</th>
                         </tr>
                     </thead>
                     <tbody>
                         {loading && !users.length && (
-                            <tr><td colSpan={5} className="adm-empty">Loading…</td></tr>
+                            <tr><td colSpan={6} className="adm-empty">Loading…</td></tr>
                         )}
                         {!loading && !users.length && (
-                            <tr><td colSpan={5} className="adm-empty">No users found.</td></tr>
+                            <tr><td colSpan={6} className="adm-empty">No users found.</td></tr>
                         )}
                         {users.map(u => (
                             <tr key={u.id} className="adm-row-link">
                                 <td onClick={() => navigate(`/admin/users/${u.id}`)}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                         {u.image_url
-                                            ? <img src={u.image_url} style={{ width: 26, height: 26, borderRadius: '50%', flexShrink: 0 }} />
-                                            : <div style={{ width: 26, height: 26, borderRadius: '50%', background: '#2a2a2a', flexShrink: 0 }} />
+                                            ? <img src={u.image_url} alt="" style={{ width: 28, height: 28, borderRadius: '50%', flexShrink: 0 }} />
+                                            : <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#2a2a2a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#555', flexShrink: 0 }}>
+                                                {(u.display_name || u.email || '?')[0].toUpperCase()}
+                                              </div>
                                         }
                                         <div>
-                                            <div style={{ fontSize: 13, color: '#c8c8c8' }}>{u.display_name || <span style={{ color: '#444' }}>—</span>}</div>
-                                            <div style={{ fontSize: 11, color: '#555' }}>{u.email}</div>
+                                            <div style={{ fontSize: 13, color: '#c8c8c8' }}>{u.display_name || <span style={{ color: '#444' }}>No name</span>}</div>
+                                            <div style={{ fontSize: 11, color: '#555' }}>{u.email || u.id.slice(0, 18) + '…'}</div>
                                         </div>
                                     </div>
                                 </td>
@@ -152,23 +166,27 @@ export default function AdminUsers() {
                                     <PlanPill tier={u.plan_tier} />
                                 </td>
                                 <td onClick={() => navigate(`/admin/users/${u.id}`)}>
-                                    {u.lecture_count ?? '—'}
+                                    {u.lecture_count ?? 0}
                                 </td>
                                 <td onClick={() => navigate(`/admin/users/${u.id}`)}>
                                     {fmtDate(u.created_at_ms)}
+                                </td>
+                                <td onClick={() => navigate(`/admin/users/${u.id}`)}>
+                                    {fmtDate(u.last_sign_in_ms)}
                                 </td>
                                 <td>
                                     <select
                                         className="adm-plan-select"
                                         value={u.plan_tier || 'free'}
                                         disabled={saving[u.id]}
-                                        onChange={e => changePlan(u.id, e.target.value)}
+                                        onChange={e => changePlan(u.id, e.target.value, u.display_name || u.email)}
                                         onClick={e => e.stopPropagation()}
                                     >
                                         <option value="free">Free</option>
                                         <option value="student">Student</option>
                                         <option value="pro">Pro</option>
                                     </select>
+                                    {saving[u.id] && <span style={{ marginLeft: 6, fontSize: 11, color: '#555' }}>saving…</span>}
                                 </td>
                             </tr>
                         ))}
@@ -181,6 +199,12 @@ export default function AdminUsers() {
                 <span>Page {page} of {totalPages}</span>
                 <button className="adm-pag-btn" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Next →</button>
             </div>
+
+            {toast && (
+                <div style={{ position: 'fixed', bottom: 24, right: 24, background: '#1e1e1e', border: '1px solid #2a2a2a', borderRadius: 8, padding: '12px 18px', fontSize: 13, color: '#e8e8e8', zIndex: 9999, boxShadow: '0 4px 20px #00000088' }}>
+                    {toast}
+                </div>
+            )}
         </div>
     );
 }

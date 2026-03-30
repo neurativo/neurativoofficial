@@ -686,29 +686,12 @@ def get_lecture_full(lecture_id: str):
 
 def get_user_profile(user_id: str) -> dict:
     """
-    Returns profile data for a user from the profiles table.
-    Gracefully handles missing optional columns.
+    Returns profile data for a user. Merges profiles table (settings/stats)
+    with user_plans table (plan_tier, which uses TEXT key compatible with Clerk IDs).
     """
     if not supabase:
         return {}
-    try:
-        response = supabase.table("profiles").select("*").eq("id", user_id).execute()
-        if hasattr(response, "data") and response.data:
-            row = response.data[0]
-            return {
-                "id":                   row.get("id"),
-                "display_name":         row.get("display_name") or row.get("full_name") or "",
-                "avatar_url":           row.get("avatar_url"),
-                "preferred_language":   row.get("preferred_language") or "en",
-                "pdf_auto_download":    row.get("pdf_auto_download") if row.get("pdf_auto_download") is not None else True,
-                "total_hours_recorded": row.get("total_hours_recorded") or 0,
-                "total_words_transcribed": row.get("total_words_transcribed") or 0,
-                "plan_tier":            row.get("plan_tier") or "free",
-                "uploads_this_month":   row.get("uploads_this_month") or 0,
-            }
-    except Exception as e:
-        print(f"[profile] get_user_profile error (non-fatal): {e}")
-    return {
+    profile: dict = {
         "id": user_id,
         "display_name": "",
         "avatar_url": None,
@@ -719,6 +702,31 @@ def get_user_profile(user_id: str) -> dict:
         "plan_tier": "free",
         "uploads_this_month": 0,
     }
+    try:
+        response = supabase.table("profiles").select("*").eq("id", user_id).execute()
+        if hasattr(response, "data") and response.data:
+            row = response.data[0]
+            profile.update({
+                "id":                      row.get("id") or user_id,
+                "display_name":            row.get("display_name") or row.get("full_name") or "",
+                "avatar_url":              row.get("avatar_url"),
+                "preferred_language":      row.get("preferred_language") or "en",
+                "pdf_auto_download":       row.get("pdf_auto_download") if row.get("pdf_auto_download") is not None else True,
+                "total_hours_recorded":    row.get("total_hours_recorded") or 0,
+                "total_words_transcribed": row.get("total_words_transcribed") or 0,
+                "plan_tier":               row.get("plan_tier") or "free",
+                "uploads_this_month":      row.get("uploads_this_month") or 0,
+            })
+    except Exception as e:
+        print(f"[profile] get_user_profile error (non-fatal): {e}")
+    # Override plan_tier from user_plans (TEXT primary key, Clerk-ID compatible)
+    try:
+        plan_resp = supabase.table("user_plans").select("plan_tier").eq("user_id", user_id).execute()
+        if plan_resp.data:
+            profile["plan_tier"] = plan_resp.data[0].get("plan_tier") or profile["plan_tier"]
+    except Exception as e:
+        print(f"[profile] get_user_plan override error (non-fatal): {e}")
+    return profile
 
 
 def ensure_user_profile(user_id: str, email: str = "") -> None:
@@ -806,7 +814,8 @@ def get_total_lecture_count(user_id: str) -> int:
 def get_user_plan(user_ids: list) -> dict:
     """
     Returns a dict of {user_id: plan_tier} for a list of user IDs.
-    Users with no profile row default to 'free'.
+    Reads from user_plans table (TEXT primary key, works with Clerk string IDs).
+    Users with no row default to 'free'.
     """
     if not supabase or not user_ids:
         return {}
@@ -814,9 +823,9 @@ def get_user_plan(user_ids: list) -> dict:
     try:
         for i in range(0, len(user_ids), 100):
             batch = user_ids[i:i + 100]
-            resp = supabase.table("profiles").select("id, plan_tier").in_("id", batch).execute()
+            resp = supabase.table("user_plans").select("user_id, plan_tier").in_("user_id", batch).execute()
             for row in (resp.data or []):
-                result[row["id"]] = row.get("plan_tier") or "free"
+                result[row["user_id"]] = row.get("plan_tier") or "free"
     except Exception as e:
         print(f"[admin] get_user_plan error (non-fatal): {e}")
     return result
@@ -841,11 +850,13 @@ def admin_lecture_counts_by_user(user_ids: list) -> dict:
 
 
 def set_user_plan(user_id: str, plan_tier: str) -> None:
-    """Sets a user's plan tier. Used by admin endpoint until Stripe is ready."""
+    """Sets a user's plan tier in user_plans table (TEXT primary key, works with Clerk string IDs)."""
     if not supabase:
         raise Exception("Supabase not initialized")
-    supabase.table("profiles").upsert(
-        {"id": user_id, "plan_tier": plan_tier}, on_conflict="id"
+    from datetime import datetime, timezone
+    supabase.table("user_plans").upsert(
+        {"user_id": user_id, "plan_tier": plan_tier, "updated_at": datetime.now(timezone.utc).isoformat()},
+        on_conflict="user_id"
     ).execute()
 
 
@@ -871,11 +882,14 @@ def admin_get_stats() -> dict:
         sessions_resp = supabase.table("live_sessions").select("id", count="exact").eq("is_active", True).execute()
         active_sessions = sessions_resp.count or 0
 
-        plan_resp = supabase.table("profiles").select("plan_tier").execute()
         plan_dist = {"free": 0, "student": 0, "pro": 0}
-        for row in (plan_resp.data or []):
-            tier = row.get("plan_tier") or "free"
-            plan_dist[tier] = plan_dist.get(tier, 0) + 1
+        try:
+            plan_resp = supabase.table("user_plans").select("plan_tier").execute()
+            for row in (plan_resp.data or []):
+                tier = row.get("plan_tier") or "free"
+                plan_dist[tier] = plan_dist.get(tier, 0) + 1
+        except Exception:
+            pass
 
         # Recent users: get latest unique user_ids from lectures, then fetch their profiles
         recent_lec_resp = (
@@ -1035,6 +1049,13 @@ def admin_get_user_detail(user_id: str) -> dict:
         profile["id"] = profile.get("id") or user_id
         profile.setdefault("plan_tier", "free")
         profile.setdefault("display_name", "")
+        # Override plan from user_plans (TEXT key, Clerk-ID compatible)
+        try:
+            plan_row = supabase.table("user_plans").select("plan_tier").eq("user_id", user_id).execute()
+            if plan_row.data:
+                profile["plan_tier"] = plan_row.data[0].get("plan_tier") or profile["plan_tier"]
+        except Exception:
+            pass
 
         lectures_resp = (
             supabase.table("lectures")

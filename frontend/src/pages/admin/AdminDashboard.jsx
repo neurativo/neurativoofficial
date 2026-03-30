@@ -55,6 +55,7 @@ function fmtDate(iso) {
 
 export default function AdminDashboard() {
     const [stats, setStats] = useState(null);
+    const [recentUsers, setRecentUsers] = useState([]);
     const [error, setError] = useState('');
     const navigate = useNavigate();
 
@@ -62,6 +63,9 @@ export default function AdminDashboard() {
         adminApi.getStats()
             .then(setStats)
             .catch(e => setError(e?.response?.data?.detail || e.message || 'Failed to load stats'));
+        adminApi.listUsers({ page: 1, page_size: 8 })
+            .then(d => setRecentUsers(d.users || []))
+            .catch(() => {});
     }, []);
 
     const planDist = stats?.plan_distribution || { free: 0, student: 0, pro: 0 };
@@ -136,32 +140,51 @@ export default function AdminDashboard() {
 
             <div className="adm-two-col" style={{ marginTop: 28 }}>
                 <div>
-                    <div className="adm-section-title">Recent Users</div>
+                    <div className="adm-section-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span>Recent Users</span>
+                        <span style={{ fontSize: 11, color: '#555', cursor: 'pointer', textTransform: 'none', fontWeight: 400 }} onClick={() => navigate('/admin/users')}>View all →</span>
+                    </div>
                     <div className="adm-table-wrap">
                         <table className="adm-table">
-                            <thead><tr><th>User</th><th>Plan</th><th>Joined</th></tr></thead>
+                            <thead><tr><th>User</th><th>Plan</th><th>Lectures</th></tr></thead>
                             <tbody>
-                                {(stats?.recent_users || []).map(u => (
+                                {recentUsers.map(u => (
                                     <tr key={u.id} className="adm-link-row" onClick={() => navigate(`/admin/users/${u.id}`)}>
-                                        <td style={{ fontFamily: 'monospace', fontSize: 11 }}>{u.id?.slice(0, 16)}…</td>
+                                        <td>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                                                {u.image_url
+                                                    ? <img src={u.image_url} alt="" style={{ width: 22, height: 22, borderRadius: '50%' }} />
+                                                    : <div style={{ width: 22, height: 22, borderRadius: '50%', background: '#2a2a2a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#555' }}>
+                                                        {(u.display_name || u.email || '?')[0].toUpperCase()}
+                                                      </div>
+                                                }
+                                                <div>
+                                                    <div style={{ fontSize: 12, color: '#c8c8c8' }}>{u.display_name || <span style={{ color: '#444' }}>No name</span>}</div>
+                                                    <div style={{ fontSize: 10, color: '#555' }}>{u.email}</div>
+                                                </div>
+                                            </div>
+                                        </td>
                                         <td><PlanPill tier={u.plan_tier} /></td>
-                                        <td>{fmtDate(u.created_at)}</td>
+                                        <td style={{ color: '#888' }}>{u.lecture_count ?? 0}</td>
                                     </tr>
                                 ))}
-                                {!stats && <tr><td colSpan={3} style={{ color: '#444', textAlign: 'center' }}>Loading…</td></tr>}
+                                {!recentUsers.length && <tr><td colSpan={3} style={{ color: '#444', textAlign: 'center', padding: 20 }}>Loading…</td></tr>}
                             </tbody>
                         </table>
                     </div>
                 </div>
 
                 <div>
-                    <div className="adm-section-title">Recent Lectures</div>
+                    <div className="adm-section-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span>Recent Lectures</span>
+                        <span style={{ fontSize: 11, color: '#555', cursor: 'pointer', textTransform: 'none', fontWeight: 400 }} onClick={() => navigate('/admin/lectures')}>View all →</span>
+                    </div>
                     <div className="adm-table-wrap">
                         <table className="adm-table">
                             <thead><tr><th>Title</th><th>Duration</th><th>Date</th></tr></thead>
                             <tbody>
                                 {(stats?.recent_lectures || []).map(l => (
-                                    <tr key={l.id}>
+                                    <tr key={l.id} className="adm-link-row" onClick={() => navigate(`/admin/lectures/${l.id}`)}>
                                         <td style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                             {l.title || 'Untitled'}
                                         </td>
@@ -169,7 +192,7 @@ export default function AdminDashboard() {
                                         <td>{fmtDate(l.created_at)}</td>
                                     </tr>
                                 ))}
-                                {!stats && <tr><td colSpan={3} style={{ color: '#444', textAlign: 'center' }}>Loading…</td></tr>}
+                                {!stats && <tr><td colSpan={3} style={{ color: '#444', textAlign: 'center', padding: 20 }}>Loading…</td></tr>}
                             </tbody>
                         </table>
                     </div>

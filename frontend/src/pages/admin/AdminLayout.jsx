@@ -238,7 +238,10 @@ export default function AdminLayout() {
                     ))}
                 </nav>
                 <div className="adm-sidebar-footer">
-                    {user?.primaryEmailAddress?.emailAddress}
+                    <div style={{ marginBottom: 8 }}>{user?.primaryEmailAddress?.emailAddress}</div>
+                    <div style={{ cursor: 'pointer', color: '#444', fontSize: 11 }} onClick={() => navigate('/app')}>
+                        ← Back to App
+                    </div>
                 </div>
             </aside>
 
