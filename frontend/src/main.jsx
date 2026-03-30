@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { ClerkProvider, useUser, useClerk } from '@clerk/react';
+import { ClerkProvider, useUser } from '@clerk/react';
 import { AuthModalProvider } from './components/AuthModal.jsx';
 import App from './App.jsx';
 import Dashboard from './components/Dashboard.jsx';
@@ -23,10 +23,10 @@ if (localStorage.getItem('neurativo_theme') === 'dark') {
 // ─── Route guard ────────────────────────────────────────────────────────────
 function ProtectedRoute({ children }) {
     const { isLoaded, isSignedIn } = useUser();
-    const clerk = useClerk();
     if (!isLoaded) return null;
     if (!isSignedIn) {
-        clerk.redirectToSignIn({ afterSignInUrl: window.location.pathname });
+        const after = encodeURIComponent('https://neurativo.com' + window.location.pathname);
+        window.location.href = `https://accounts.neurativo.com/sign-in?redirect_url=${after}`;
         return null;
     }
     return children;

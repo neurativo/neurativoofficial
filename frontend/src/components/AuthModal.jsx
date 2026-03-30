@@ -1,23 +1,24 @@
 import { createContext, useContext, useCallback } from 'react';
-import { useClerk } from '@clerk/react';
+
+const SIGN_IN_URL = 'https://accounts.neurativo.com/sign-in';
+const SIGN_UP_URL = 'https://accounts.neurativo.com/sign-up';
+const AFTER_AUTH  = 'https://neurativo.com/app';
 
 // ─── Context ──────────────────────────────────────────────────────────────────
 const AuthModalCtx = createContext(null);
 export function useAuthModal() { return useContext(AuthModalCtx); }
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
-// No custom modal — delegates entirely to Clerk's hosted auth pages
-// (accounts.neurativo.com). Clerk handles email OTP + magic link.
+// Redirects to Clerk's hosted Account Portal on accounts.neurativo.com.
+// redirect_url tells Clerk where to send the user after successful auth.
 export function AuthModalProvider({ children }) {
-    const clerk = useClerk();
-
     const openSignIn = useCallback(() => {
-        clerk.redirectToSignIn({ afterSignInUrl: '/app' });
-    }, [clerk]);
+        window.location.href = `${SIGN_IN_URL}?redirect_url=${encodeURIComponent(AFTER_AUTH)}`;
+    }, []);
 
     const openSignUp = useCallback(() => {
-        clerk.redirectToSignUp({ afterSignUpUrl: '/app' });
-    }, [clerk]);
+        window.location.href = `${SIGN_UP_URL}?redirect_url=${encodeURIComponent(AFTER_AUTH)}`;
+    }, []);
 
     const closeModal = useCallback(() => {}, []);
 
