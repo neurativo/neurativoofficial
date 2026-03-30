@@ -769,6 +769,32 @@ def increment_uploads_this_month(user_id: str) -> None:
         print(f"[usage] increment_uploads_this_month error (non-fatal): {e}")
 
 
+def get_total_lecture_count(user_id: str) -> int:
+    """Returns all-time lecture count for a user."""
+    if not supabase:
+        return 0
+    try:
+        response = (
+            supabase.table("lectures")
+            .select("id", count="exact")
+            .eq("user_id", user_id)
+            .execute()
+        )
+        return response.count if response.count is not None else 0
+    except Exception as e:
+        print(f"[usage] get_total_lecture_count error (non-fatal): {e}")
+        return 0
+
+
+def set_user_plan(user_id: str, plan_tier: str) -> None:
+    """Sets a user's plan tier. Used by admin endpoint until Stripe is ready."""
+    if not supabase:
+        raise Exception("Supabase not initialized")
+    supabase.table("profiles").upsert(
+        {"id": user_id, "plan_tier": plan_tier}, on_conflict="id"
+    ).execute()
+
+
 def get_monthly_lecture_count(user_id: str) -> dict:
     """
     Returns lectures_this_month count for a user.

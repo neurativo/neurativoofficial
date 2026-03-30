@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import re
 
 from fastapi import APIRouter, BackgroundTasks, UploadFile, File, HTTPException, Depends, Request, Query
@@ -65,6 +66,8 @@ from app.services.supabase_service import (
     update_user_profile,
     delete_user_account,
     get_monthly_lecture_count,
+    get_total_lecture_count,
+    set_user_plan,
     increment_uploads_this_month,
 )
 
@@ -1036,8 +1039,9 @@ def get_usage(user=Depends(get_current_user)):
         plan_tier = profile.get("plan_tier") or "free"
         limits = get_limits(plan_tier)
 
-        lectures_count = get_monthly_lecture_count(str(user.id))["count"]
-        uploads_count  = profile.get("uploads_this_month") or 0
+        lectures_count       = get_monthly_lecture_count(str(user.id))["count"]
+        total_lectures_count = get_total_lecture_count(str(user.id))
+        uploads_count        = profile.get("uploads_this_month") or 0
 
         live_limit   = limits["live_lectures_per_month"]
         upload_limit = limits["uploads_per_month"]
@@ -1065,6 +1069,7 @@ def get_usage(user=Depends(get_current_user)):
             "upload_max_duration_label": _dur_label(max_up_dur),
             "plan_tier":                 plan_tier,
             "month_resets_at":           resets_at,
+            "total_lectures_all_time":   total_lectures_count,
             # Legacy fields kept for backwards-compat
             "limit":                     live_limit,
             "remaining":                 max(0, live_limit - lectures_count) if live_limit is not None else None,
@@ -1073,3 +1078,29 @@ def get_usage(user=Depends(get_current_user)):
         }
     except Exception:
         raise HTTPException(status_code=500, detail="Failed to fetch usage")
+
+
+# ─── Admin ────────────────────────────────────────────────────────────────────
+
+class SetPlanRequest(BaseModel):
+    user_id: str
+    plan_tier: str  # "free" | "student" | "pro"
+
+@router.patch("/admin/set-plan")
+def admin_set_plan(body: SetPlanRequest, request: Request):
+    """
+    Manually sets a user's plan tier. Protected by ADMIN_SECRET env var.
+    Used until Stripe is integrated.
+    """
+    admin_secret = os.getenv("ADMIN_SECRET")
+    if not admin_secret:
+        raise HTTPException(status_code=503, detail="Admin endpoint not configured")
+    if request.headers.get("X-Admin-Key") != admin_secret:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    if body.plan_tier not in ("free", "student", "pro"):
+        raise HTTPException(status_code=400, detail="Invalid plan tier")
+    try:
+        set_user_plan(body.user_id, body.plan_tier)
+        return {"status": "ok", "user_id": body.user_id, "plan_tier": body.plan_tier}
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to set plan")

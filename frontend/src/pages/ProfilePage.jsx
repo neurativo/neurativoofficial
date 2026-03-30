@@ -3,6 +3,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 import { useClerk } from '@clerk/react';
 
+const PLAN_COLORS = { free: '#6b7280', student: '#7c3aed', pro: '#0ea5e9' };
+const PLAN_LABELS = { free: 'Free', student: 'Student', pro: 'Pro' };
+
 const CSS = `
   .pp * { box-sizing: border-box; }
   .pp {
@@ -27,6 +30,13 @@ const CSS = `
     font-size: 13px; color: var(--color-muted); text-decoration: none; transition: color 0.15s;
   }
   .pp-back:hover { color: var(--color-text); }
+  .pp-signout {
+    margin-left: 16px; padding: 6px 14px;
+    background: none; border: 1px solid var(--color-border); border-radius: 8px;
+    font-size: 12px; font-weight: 500; color: var(--color-muted);
+    cursor: pointer; font-family: inherit; transition: color 0.15s, border-color 0.15s;
+  }
+  .pp-signout:hover { color: #ef4444; border-color: #fecaca; }
 
   /* Main */
   .pp-main { max-width: 640px; margin: 0 auto; padding: 40px 24px 80px; }
@@ -35,7 +45,7 @@ const CSS = `
 
   /* Section */
   .pp-section { background: var(--color-card); border: 1px solid var(--color-border); border-radius: 16px; margin-bottom: 16px; overflow: hidden; }
-  .pp-section-head { padding: 18px 20px 14px; border-bottom: 1px solid var(--color-border); }
+  .pp-section-head { padding: 18px 20px 14px; border-bottom: 1px solid var(--color-border); display: flex; align-items: center; justify-content: space-between; }
   .pp-section-title { font-size: 13px; font-weight: 600; color: var(--color-text); letter-spacing: -0.2px; }
   .pp-section-sub { font-size: 12px; color: var(--color-muted); margin-top: 2px; }
   .pp-section-body { padding: 20px; }
@@ -62,6 +72,15 @@ const CSS = `
   .pp-input:focus { border-color: var(--color-border-hov); background: var(--color-card); }
   .pp-input:disabled { color: var(--color-muted); cursor: not-allowed; }
 
+  /* Manage account link */
+  .pp-manage-link {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 12px; color: var(--color-muted); text-decoration: none;
+    transition: color 0.15s; margin-top: 12px; border-top: 1px solid var(--color-border);
+    padding-top: 12px; width: 100%;
+  }
+  .pp-manage-link:hover { color: var(--color-text); }
+
   /* Save button */
   .pp-btn-save {
     padding: 9px 20px; background: var(--color-dark); color: var(--color-dark-fg); font-size: 13px;
@@ -71,6 +90,51 @@ const CSS = `
   .pp-btn-save:hover { opacity: 0.82; }
   .pp-btn-save:disabled { opacity: 0.45; cursor: not-allowed; }
   .pp-save-msg { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #22c55e; margin-left: 12px; }
+
+  /* Plan badge */
+  .pp-plan-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 10px; border-radius: 99px; font-size: 11px; font-weight: 600;
+    letter-spacing: 0.03em; text-transform: uppercase;
+  }
+  .pp-plan-badge-dot { width: 6px; height: 6px; border-radius: 50%; }
+
+  /* Plan current card */
+  .pp-plan-current {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px; border-radius: 12px; border: 1px solid var(--color-border);
+    background: var(--color-bg); margin-bottom: 16px;
+  }
+  .pp-plan-current-left { display: flex; flex-direction: column; gap: 3px; }
+  .pp-plan-current-name { font-size: 15px; font-weight: 600; color: var(--color-text); letter-spacing: -0.3px; }
+  .pp-plan-current-desc { font-size: 12px; color: var(--color-muted); }
+
+  /* Plan comparison */
+  .pp-plan-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 4px; }
+  .pp-plan-card {
+    border: 1px solid var(--color-border); border-radius: 12px; padding: 14px 12px;
+    display: flex; flex-direction: column; gap: 10px;
+    transition: border-color 0.15s;
+  }
+  .pp-plan-card.current { border-color: var(--color-text); }
+  .pp-plan-card-name { font-size: 12px; font-weight: 600; letter-spacing: -0.1px; }
+  .pp-plan-card-price { font-size: 18px; font-weight: 700; letter-spacing: -0.5px; color: var(--color-text); }
+  .pp-plan-card-price span { font-size: 11px; font-weight: 400; color: var(--color-muted); }
+  .pp-plan-card-features { display: flex; flex-direction: column; gap: 5px; flex: 1; }
+  .pp-plan-card-feat { font-size: 11px; color: var(--color-sec); display: flex; gap: 5px; align-items: flex-start; line-height: 1.4; }
+  .pp-plan-card-feat-dot { width: 4px; height: 4px; border-radius: 50%; background: var(--color-muted); flex-shrink: 0; margin-top: 5px; }
+  .pp-plan-btn {
+    width: 100%; padding: 8px; border-radius: 8px; font-size: 12px; font-weight: 500;
+    cursor: pointer; font-family: inherit; transition: opacity 0.15s; border: none;
+    text-align: center; text-decoration: none; display: block;
+  }
+  .pp-plan-btn-current {
+    background: var(--color-border); color: var(--color-muted); cursor: default;
+  }
+  .pp-plan-btn-upgrade {
+    background: var(--color-dark); color: var(--color-dark-fg);
+  }
+  .pp-plan-btn-upgrade:hover { opacity: 0.82; }
 
   /* Stats grid */
   .pp-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
@@ -149,17 +213,6 @@ const CSS = `
   }
   .pp-modal-delete:disabled { opacity: 0.45; cursor: not-allowed; }
 
-  /* Plan limits table */
-  .pp-limits-title { font-size: 11px; font-weight: 600; color: var(--color-muted); letter-spacing: 0.06em; text-transform: uppercase; margin: 0 0 12px; }
-  .pp-limits-table { width: 100%; border-collapse: collapse; }
-  .pp-limits-table tr { border-bottom: 1px solid var(--color-border); }
-  .pp-limits-table tr:last-child { border-bottom: none; }
-  .pp-limits-table td { padding: 9px 0; font-size: 13px; }
-  .pp-limits-table td:first-child { color: var(--color-sec); }
-  .pp-limits-table td:last-child { color: var(--color-text); font-weight: 500; text-align: right; }
-  .pp-upgrade-link { display: inline-block; margin-top: 16px; font-size: 13px; font-weight: 500; color: var(--color-text); text-decoration: none; }
-  .pp-upgrade-link:hover { text-decoration: underline; }
-
   /* Loading skeleton */
   .pp-skeleton { height: 14px; background: var(--color-border); border-radius: 6px; animation: pp-shimmer 1.5s ease-in-out infinite; }
   @keyframes pp-shimmer { 0%,100%{opacity:0.5} 50%{opacity:1} }
@@ -172,6 +225,7 @@ const CSS = `
     .pp-section-head { padding: 14px 16px 12px; }
     .pp-danger-body { padding: 16px; }
     .pp-danger-head { padding: 14px 16px 12px; }
+    .pp-plan-grid { grid-template-columns: 1fr; }
   }
   @media (max-width: 540px) {
     .pp-stats { grid-template-columns: repeat(2, 1fr); }
@@ -181,24 +235,59 @@ const CSS = `
   }
 `;
 
+const PLANS = [
+    {
+        key: 'free',
+        name: 'Free',
+        price: '$0',
+        period: '',
+        features: ['5 live lectures/month', '30 min max per lecture', '3 audio imports/month', '60 min / 500 MB import'],
+    },
+    {
+        key: 'student',
+        name: 'Student',
+        price: '$9',
+        period: '/mo',
+        features: ['Unlimited live lectures', '3 hours max per lecture', '20 audio imports/month', '4 hours / 2 GB import'],
+    },
+    {
+        key: 'pro',
+        name: 'Pro',
+        price: '$19',
+        period: '/mo',
+        features: ['Unlimited live lectures', 'Unlimited duration', 'Unlimited audio imports', 'Unlimited import size'],
+    },
+];
+
+function PlanBadge({ tier }) {
+    const color = PLAN_COLORS[tier] || PLAN_COLORS.free;
+    const label = PLAN_LABELS[tier] || 'Free';
+    return (
+        <span className="pp-plan-badge" style={{ background: color + '18', color }}>
+            <span className="pp-plan-badge-dot" style={{ background: color }} />
+            {label}
+        </span>
+    );
+}
+
 export default function ProfilePage({ user }) {
     const navigate = useNavigate();
     const { signOut } = useClerk();
 
-    const [profile, setProfile]       = useState(null);
-    const [usage,   setUsage]         = useState(null);
-    const [loading, setLoading]       = useState(true);
-    const [darkMode, setDarkMode]     = useState(() => document.documentElement.classList.contains('dark'));
+    const [profile, setProfile]   = useState(null);
+    const [usage,   setUsage]     = useState(null);
+    const [loading, setLoading]   = useState(true);
+    const [darkMode, setDarkMode] = useState(() => document.documentElement.classList.contains('dark'));
 
-    const [displayName, setDisplayName]           = useState('');
-    const [prefLang,    setPrefLang]              = useState('en');
-    const [pdfAuto,     setPdfAuto]               = useState(true);
-    const [saving,      setSaving]                = useState(false);
-    const [savedMsg,    setSavedMsg]              = useState(false);
+    const [displayName, setDisplayName] = useState('');
+    const [prefLang,    setPrefLang]    = useState('en');
+    const [pdfAuto,     setPdfAuto]     = useState(true);
+    const [saving,      setSaving]      = useState(false);
+    const [savedMsg,    setSavedMsg]    = useState(false);
 
-    const [showDeleteModal, setShowDeleteModal]   = useState(false);
-    const [deleteConfirm,   setDeleteConfirm]     = useState('');
-    const [deleting,        setDeleting]          = useState(false);
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [deleteConfirm,   setDeleteConfirm]   = useState('');
+    const [deleting,        setDeleting]        = useState(false);
 
     useEffect(() => {
         Promise.all([
@@ -240,6 +329,11 @@ export default function ProfilePage({ user }) {
         }
     };
 
+    const handleSignOut = async () => {
+        await signOut();
+        navigate('/', { replace: true });
+    };
+
     const toggleDarkMode = () => {
         const next = !darkMode;
         setDarkMode(next);
@@ -247,14 +341,15 @@ export default function ProfilePage({ user }) {
         localStorage.setItem('neurativo_theme', next ? 'dark' : 'light');
     };
 
-    const initials = (profile?.display_name || user?.email || '?')[0].toUpperCase();
-    const usagePct = usage ? Math.min(100, (usage.lectures_this_month / usage.limit) * 100) : 0;
-    const usageClass = usagePct >= 100 ? 'full' : usagePct >= 80 ? 'warn' : '';
-
-    // Total lectures from usage + analytics
-    const totalLectures  = usage ? usage.lectures_this_month : 0;
-    const hoursRecorded  = profile ? Math.round((profile.total_hours_recorded || 0) * 10) / 10 : 0;
-    const wordsTranscribed = profile ? (profile.total_words_transcribed || 0) : 0;
+    const planTier      = usage?.plan_tier || 'free';
+    const initials      = (profile?.display_name || user?.email || '?')[0].toUpperCase();
+    const livePct       = usage?.lectures_limit != null ? Math.min(100, (usage.lectures_this_month / usage.lectures_limit) * 100) : 0;
+    const liveClass     = livePct >= 100 ? 'full' : livePct >= 80 ? 'warn' : '';
+    const uploadPct     = usage?.uploads_limit != null ? Math.min(100, (usage.uploads_this_month / usage.uploads_limit) * 100) : 0;
+    const uploadClass   = uploadPct >= 100 ? 'full' : uploadPct >= 80 ? 'warn' : '';
+    const totalLectures = usage?.total_lectures_all_time ?? 0;
+    const hoursRecorded = profile ? Math.round((profile.total_hours_recorded || 0) * 10) / 10 : 0;
+    const wordsTotal    = profile ? (profile.total_words_transcribed || 0) : 0;
 
     return (
         <>
@@ -276,16 +371,20 @@ export default function ProfilePage({ user }) {
                         </svg>
                         Dashboard
                     </Link>
+                    <button className="pp-signout" onClick={handleSignOut}>Sign out</button>
                 </header>
 
                 <main className="pp-main">
                     <h1 className="pp-page-title">Profile</h1>
                     <p className="pp-page-sub">Manage your account and preferences</p>
 
-                    {/* Avatar + identity */}
+                    {/* Account */}
                     <div className="pp-section">
                         <div className="pp-section-head">
-                            <div className="pp-section-title">Account</div>
+                            <div>
+                                <div className="pp-section-title">Account</div>
+                            </div>
+                            {!loading && <PlanBadge tier={planTier} />}
                         </div>
                         <div className="pp-section-body">
                             <div className="pp-avatar-row">
@@ -323,20 +422,92 @@ export default function ProfilePage({ user }) {
                                     </span>
                                 )}
                             </div>
+                            <a
+                                href="https://accounts.neurativo.com/user"
+                                target="_blank"
+                                rel="noreferrer"
+                                className="pp-manage-link"
+                            >
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                                    <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+                                </svg>
+                                Manage account on Clerk (email, security)
+                            </a>
                         </div>
                     </div>
 
-                    {/* Usage */}
+                    {/* Plan */}
                     <div className="pp-section">
                         <div className="pp-section-head">
-                            <div className="pp-section-title">Usage this month</div>
-                            <div className="pp-section-sub">{usage ? (usage.plan_tier || 'free').charAt(0).toUpperCase() + (usage.plan_tier || 'free').slice(1) : 'Free'} plan · resets on the 1st</div>
+                            <div>
+                                <div className="pp-section-title">Plan</div>
+                                <div className="pp-section-sub">
+                                    {planTier === 'pro' ? 'You have full access' : 'Upgrade anytime to unlock more'}
+                                </div>
+                            </div>
+                        </div>
+                        <div className="pp-section-body">
+                            {loading ? (
+                                <div className="pp-skeleton" style={{ width: '60%', marginBottom: 12 }} />
+                            ) : (
+                                <div className="pp-plan-grid">
+                                    {PLANS.map(plan => {
+                                        const isCurrent = plan.key === planTier;
+                                        const isDowngrade = PLANS.findIndex(p => p.key === plan.key) < PLANS.findIndex(p => p.key === planTier);
+                                        return (
+                                            <div key={plan.key} className={`pp-plan-card${isCurrent ? ' current' : ''}`}>
+                                                <div>
+                                                    <div className="pp-plan-card-name" style={{ color: PLAN_COLORS[plan.key] }}>{plan.name}</div>
+                                                    <div className="pp-plan-card-price">
+                                                        {plan.price}<span>{plan.period}</span>
+                                                    </div>
+                                                </div>
+                                                <div className="pp-plan-card-features">
+                                                    {plan.features.map(f => (
+                                                        <div key={f} className="pp-plan-card-feat">
+                                                            <span className="pp-plan-card-feat-dot" />
+                                                            {f}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                                {isCurrent ? (
+                                                    <span className="pp-plan-btn pp-plan-btn-current">Current plan</span>
+                                                ) : isDowngrade ? null : (
+                                                    <a
+                                                        href={`mailto:support@neurativo.com?subject=Upgrade to ${plan.name} plan`}
+                                                        className="pp-plan-btn pp-plan-btn-upgrade"
+                                                    >
+                                                        Upgrade to {plan.name}
+                                                    </a>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                            {!loading && planTier !== 'pro' && (
+                                <p style={{ fontSize: 11, color: 'var(--color-muted)', marginTop: 12 }}>
+                                    Payments via Stripe coming soon — email us to upgrade manually in the meantime.
+                                </p>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Usage this month */}
+                    <div className="pp-section">
+                        <div className="pp-section-head">
+                            <div>
+                                <div className="pp-section-title">Usage this month</div>
+                                <div className="pp-section-sub">{PLAN_LABELS[planTier] || 'Free'} plan · resets on the 1st</div>
+                            </div>
                         </div>
                         <div className="pp-section-body">
                             {loading ? (
                                 <div className="pp-skeleton" style={{ width: '100%', height: 6, marginBottom: 8 }} />
                             ) : (
                                 <>
+                                    {/* Live lectures */}
                                     <div className="pp-usage-row">
                                         <span className="pp-usage-label">Live lectures</span>
                                         <span className="pp-usage-count">
@@ -344,27 +515,28 @@ export default function ProfilePage({ user }) {
                                         </span>
                                     </div>
                                     <div className="pp-bar-bg">
-                                        <div className={`pp-bar-fill ${usageClass}`} style={{ width: `${usagePct}%` }} />
+                                        <div className={`pp-bar-fill ${liveClass}`} style={{ width: usage?.lectures_limit != null ? `${livePct}%` : '0%' }} />
                                     </div>
-                                    {usage?.uploads_limit != null && (
-                                        <>
-                                            <div className="pp-usage-row" style={{ marginTop: 14 }}>
-                                                <span className="pp-usage-label">Audio imports</span>
-                                                <span className="pp-usage-count">{usage.uploads_this_month ?? 0} / {usage.uploads_limit}</span>
-                                            </div>
-                                            <div className="pp-bar-bg">
-                                                <div
-                                                    className={`pp-bar-fill${(usage.uploads_this_month / usage.uploads_limit) >= 1 ? ' full' : (usage.uploads_this_month / usage.uploads_limit) >= 0.8 ? ' warn' : ''}`}
-                                                    style={{ width: `${Math.min(100, (usage.uploads_this_month / usage.uploads_limit) * 100)}%`, background: '#7c3aed' }}
-                                                />
-                                            </div>
-                                        </>
-                                    )}
+
+                                    {/* Audio imports */}
+                                    <div className="pp-usage-row" style={{ marginTop: 14 }}>
+                                        <span className="pp-usage-label">Audio imports</span>
+                                        <span className="pp-usage-count">
+                                            {usage?.uploads_this_month ?? 0} / {usage?.uploads_limit != null ? usage.uploads_limit : '∞'}
+                                        </span>
+                                    </div>
+                                    <div className="pp-bar-bg">
+                                        <div
+                                            className={`pp-bar-fill ${uploadClass}`}
+                                            style={{ width: usage?.uploads_limit != null ? `${uploadPct}%` : '0%', background: '#7c3aed' }}
+                                        />
+                                    </div>
+
                                     <p className="pp-usage-note" style={{ marginTop: 8 }}>
-                                        {usage?.remaining > 0
-                                            ? `${usage.remaining} live lecture${usage.remaining === 1 ? '' : 's'} remaining this month`
-                                            : usage?.lectures_limit != null
-                                            ? 'Live lecture limit reached this month'
+                                        {usage?.lectures_limit != null
+                                            ? usage.lectures_this_month >= usage.lectures_limit
+                                                ? 'Live lecture limit reached — resets on the 1st'
+                                                : `${usage.lectures_limit - usage.lectures_this_month} live lecture${usage.lectures_limit - usage.lectures_this_month === 1 ? '' : 's'} remaining`
                                             : 'Unlimited live lectures on your plan'}
                                     </p>
                                 </>
@@ -372,45 +544,7 @@ export default function ProfilePage({ user }) {
                         </div>
                     </div>
 
-                    {/* Plan limits */}
-                    {usage && (
-                        <div className="pp-section">
-                            <div className="pp-section-head">
-                                <div className="pp-section-title">Your plan limits</div>
-                                <div className="pp-section-sub">{(usage.plan_tier || 'free').charAt(0).toUpperCase() + (usage.plan_tier || 'free').slice(1)} plan</div>
-                            </div>
-                            <div className="pp-section-body">
-                                <p className="pp-limits-title">Your plan limits</p>
-                                <table className="pp-limits-table">
-                                    <tbody>
-                                        <tr>
-                                            <td>Live lectures</td>
-                                            <td>{usage.lectures_limit != null ? `${usage.lectures_limit} per month` : 'Unlimited'}</td>
-                                        </tr>
-                                        <tr>
-                                            <td>Max live duration</td>
-                                            <td>{usage.live_max_duration_label || 'Unlimited'}</td>
-                                        </tr>
-                                        <tr>
-                                            <td>Audio imports</td>
-                                            <td>{usage.uploads_limit != null ? `${usage.uploads_limit} per month` : 'Unlimited'}</td>
-                                        </tr>
-                                        <tr>
-                                            <td>Max import size</td>
-                                            <td>{usage.plan_tier === 'free' ? '60 min / 500 MB' : usage.plan_tier === 'student' ? '4 hours / 2 GB' : 'Unlimited'}</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                                {(usage.plan_tier === 'free' || usage.plan_tier === 'student') && (
-                                    <a href="#" className="pp-upgrade-link">
-                                        {usage.plan_tier === 'free' ? 'Upgrade to Student →' : 'Upgrade to Pro →'}
-                                    </a>
-                                )}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Stats */}
+                    {/* All-time stats */}
                     <div className="pp-section">
                         <div className="pp-section-head">
                             <div className="pp-section-title">All-time stats</div>
@@ -419,14 +553,14 @@ export default function ProfilePage({ user }) {
                             <div className="pp-stats">
                                 <div className="pp-stat">
                                     <div className="pp-stat-n">{loading ? '—' : totalLectures}</div>
-                                    <div className="pp-stat-l">Lectures this month</div>
+                                    <div className="pp-stat-l">Total lectures</div>
                                 </div>
                                 <div className="pp-stat">
-                                    <div className="pp-stat-n">{loading ? '—' : hoursRecorded}h</div>
+                                    <div className="pp-stat-n">{loading ? '—' : `${hoursRecorded}h`}</div>
                                     <div className="pp-stat-l">Hours recorded</div>
                                 </div>
                                 <div className="pp-stat">
-                                    <div className="pp-stat-n">{loading ? '—' : wordsTranscribed > 999 ? `${Math.round(wordsTranscribed / 1000)}k` : wordsTranscribed}</div>
+                                    <div className="pp-stat-n">{loading ? '—' : wordsTotal > 999 ? `${Math.round(wordsTotal / 1000)}k` : wordsTotal}</div>
                                     <div className="pp-stat-l">Words transcribed</div>
                                 </div>
                             </div>
@@ -439,6 +573,17 @@ export default function ProfilePage({ user }) {
                             <div className="pp-section-title">Preferences</div>
                         </div>
                         <div className="pp-section-body" style={{ paddingTop: 8, paddingBottom: 8 }}>
+                            <div className="pp-toggle-row">
+                                <div className="pp-toggle-info">
+                                    <div className="pp-toggle-title">Dark mode</div>
+                                    <div className="pp-toggle-desc">Use a dark theme across the entire app</div>
+                                </div>
+                                <button
+                                    className={`pp-toggle ${darkMode ? 'on' : ''}`}
+                                    onClick={toggleDarkMode}
+                                    aria-label="Toggle dark mode"
+                                />
+                            </div>
                             <div className="pp-toggle-row">
                                 <div className="pp-toggle-info">
                                     <div className="pp-toggle-title">Auto-download PDF</div>
@@ -477,27 +622,6 @@ export default function ProfilePage({ user }) {
                         </div>
                     </div>
 
-                    {/* Appearance */}
-                    <div className="pp-section">
-                        <div className="pp-section-head">
-                            <div className="pp-section-title">Appearance</div>
-                        </div>
-                        <div className="pp-section-body" style={{ paddingTop: 8, paddingBottom: 8 }}>
-                            <div className="pp-toggle-row">
-                                <div className="pp-toggle-info">
-                                    <div className="pp-toggle-title">Dark mode</div>
-                                    <div className="pp-toggle-desc">Use a dark theme across the entire app</div>
-                                </div>
-                                <button
-                                    className={`pp-toggle ${darkMode ? 'on' : ''}`}
-                                    onClick={toggleDarkMode}
-                                    aria-label="Toggle dark mode"
-                                />
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Save preferences button */}
                     <div style={{ marginBottom: 24, display: 'flex', alignItems: 'center' }}>
                         <button className="pp-btn-save" onClick={handleSave} disabled={saving || loading}>
                             {saving ? 'Saving…' : 'Save preferences'}
