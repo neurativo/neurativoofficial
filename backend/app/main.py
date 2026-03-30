@@ -48,7 +48,8 @@ async def add_security_headers(request: Request, call_next):
     response.headers["Permissions-Policy"] = "geolocation=(), camera=()"
     response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload"
     # Remove server fingerprinting header
-    response.headers.pop("server", None)
+    if "server" in response.headers:
+        del response.headers["server"]
     return response
 
 
