@@ -380,8 +380,8 @@ def start_live_session(request: Request, user=Depends(get_current_user)):
         }
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to start live session: {e}")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to start live session")
 
 
 _openai_client = OpenAI(api_key=settings.OPENAI_API_KEY) if settings.OPENAI_API_KEY else None
@@ -885,8 +885,8 @@ def get_lectures(
     """
     try:
         return get_recent_lectures(limit=limit, offset=offset, user_id=str(user.id))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch lectures: {e}")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to fetch lectures")
 
 
 @router.get("/lectures/{lecture_id}")
