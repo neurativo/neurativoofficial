@@ -25,8 +25,7 @@ function ProtectedRoute({ children }) {
     const { isLoaded, isSignedIn } = useUser();
     if (!isLoaded) return null;
     if (!isSignedIn) {
-        const after = encodeURIComponent('https://neurativo.com' + window.location.pathname);
-        window.location.href = `https://accounts.neurativo.com/sign-in?redirect_url=${after}`;
+        window.location.href = 'https://accounts.neurativo.com/sign-in';
         return null;
     }
     return children;

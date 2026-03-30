@@ -2,7 +2,6 @@ import { createContext, useContext, useCallback } from 'react';
 
 const SIGN_IN_URL = 'https://accounts.neurativo.com/sign-in';
 const SIGN_UP_URL = 'https://accounts.neurativo.com/sign-up';
-const AFTER_AUTH  = 'https://neurativo.com/app';
 
 // ─── Context ──────────────────────────────────────────────────────────────────
 const AuthModalCtx = createContext(null);
@@ -13,11 +12,11 @@ export function useAuthModal() { return useContext(AuthModalCtx); }
 // redirect_url tells Clerk where to send the user after successful auth.
 export function AuthModalProvider({ children }) {
     const openSignIn = useCallback(() => {
-        window.location.href = `${SIGN_IN_URL}?redirect_url=${encodeURIComponent(AFTER_AUTH)}`;
+        window.location.href = SIGN_IN_URL;
     }, []);
 
     const openSignUp = useCallback(() => {
-        window.location.href = `${SIGN_UP_URL}?redirect_url=${encodeURIComponent(AFTER_AUTH)}`;
+        window.location.href = SIGN_UP_URL;
     }, []);
 
     const closeModal = useCallback(() => {}, []);
