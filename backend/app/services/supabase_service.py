@@ -854,10 +854,13 @@ def set_user_plan(user_id: str, plan_tier: str) -> None:
     if not supabase:
         raise Exception("Supabase not initialized")
     from datetime import datetime, timezone
-    supabase.table("user_plans").upsert(
+    resp = supabase.table("user_plans").upsert(
         {"user_id": user_id, "plan_tier": plan_tier, "updated_at": datetime.now(timezone.utc).isoformat()},
         on_conflict="user_id"
     ).execute()
+    # supabase-py v2 raises on error, but guard against silent failures too
+    if hasattr(resp, "error") and resp.error:
+        raise Exception(str(resp.error))
 
 
 # =============================================================================

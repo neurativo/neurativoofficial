@@ -95,7 +95,8 @@ export default function AdminUsers() {
             }));
             showToast(`${userName || userId.slice(0, 12)} → ${plan_tier}`);
         } catch (e) {
-            showToast('Failed to update plan');
+            const detail = e?.response?.data?.detail || e?.message || 'Unknown error';
+            showToast(`Plan error: ${detail}`);
         } finally {
             setSaving(s => ({ ...s, [userId]: false }));
         }

@@ -88,8 +88,9 @@ export default function AdminUserDetail() {
             await adminApi.updateUserPlan(userId, planValue);
             setDetail(d => ({ ...d, profile: { ...d.profile, plan_tier: planValue } }));
             showToast(`Plan updated to ${planValue}`);
-        } catch {
-            showToast('Failed to update plan');
+        } catch (e) {
+            const detail = e?.response?.data?.detail || e?.message || 'Unknown error';
+            showToast(`Plan error: ${detail}`);
         } finally {
             setSavingPlan(false);
         }
