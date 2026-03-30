@@ -55,7 +55,14 @@ function Root() {
 
 ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>
-        <ClerkProvider publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY} afterSignOutUrl="/">
+        <ClerkProvider
+                publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY}
+                afterSignOutUrl="/"
+                signInUrl="https://accounts.neurativo.com/sign-in"
+                signUpUrl="https://accounts.neurativo.com/sign-up"
+                afterSignInUrl="/app"
+                afterSignUpUrl="/app"
+            >
             <BrowserRouter>
                 <AuthModalProvider>
                     <ToastProvider>
