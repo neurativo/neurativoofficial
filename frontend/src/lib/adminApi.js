@@ -4,7 +4,7 @@
  */
 import axios from 'axios';
 
-const BASE = `${import.meta.env.VITE_API_URL || ''}/api/v1/admin`;
+const BASE = `${import.meta.env.VITE_API_URL || 'https://neurativoofficial-production.up.railway.app'}/api/v1/admin`;
 
 async function _token() {
     return (await window.Clerk?.session?.getToken()) || '';
