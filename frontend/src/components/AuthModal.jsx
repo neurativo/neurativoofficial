@@ -439,19 +439,22 @@ function AuthForm({ mode, onToggle }) {
         setStage('idle'); setEmail(''); setError(null);
     }, [mode]);
 
-    // ── Google OAuth — Clerk v6 uses signIn.sso() ─────────────────────────────
+    // ── Google OAuth — Clerk v6: authenticateWithRedirect ────────────────────
     const handleGoogle = async () => {
         if (gLoading) return;
         setError(null);
         setGLoading(true);
         try {
             if (!signIn) throw new Error('Auth not ready — please refresh and try again.');
-            const { error: ssoErr } = await signIn.sso({
+            // authenticateWithRedirect is the correct Clerk v6 API for OAuth.
+            // redirectUrlComplete is encoded in the OAuth state so handleRedirectCallback
+            // knows exactly where to navigate (and when to call setActive) after
+            // exchanging the code — for both sign-in and new sign-up.
+            await signIn.authenticateWithRedirect({
                 strategy: 'oauth_google',
                 redirectUrl: `${window.location.origin}/sso-callback`,
-                redirectCallbackUrl: `${window.location.origin}/app`,
+                redirectUrlComplete: `${window.location.origin}/app`,
             });
-            if (ssoErr) throw ssoErr;
             // page will redirect — gLoading stays true intentionally
         } catch (err) {
             console.error('[Neurativo] Google OAuth error:', err);
