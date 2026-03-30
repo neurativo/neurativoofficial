@@ -12,6 +12,12 @@ import ProfilePage from './pages/ProfilePage.jsx';
 import TermsOfService from './pages/TermsOfService.jsx';
 import PrivacyPolicy from './pages/PrivacyPolicy.jsx';
 import NotFoundPage from './pages/NotFoundPage.jsx';
+import AdminLayout from './pages/admin/AdminLayout.jsx';
+import AdminDashboard from './pages/admin/AdminDashboard.jsx';
+import AdminUsers from './pages/admin/AdminUsers.jsx';
+import AdminUserDetail from './pages/admin/AdminUserDetail.jsx';
+import AdminLectures from './pages/admin/AdminLectures.jsx';
+import AdminSystem from './pages/admin/AdminSystem.jsx';
 import { ToastProvider } from './components/Toast.jsx';
 import './index.css';
 
@@ -47,6 +53,14 @@ function Root() {
             <Route path="/record"  element={<ProtectedRoute><App user={user} /></ProtectedRoute>} />
             <Route path="/lecture/:id" element={<ProtectedRoute><LectureView user={user} /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><ProfilePage user={user} /></ProtectedRoute>} />
+
+            <Route path="/admin" element={<AdminLayout />}>
+                <Route index element={<AdminDashboard />} />
+                <Route path="users" element={<AdminUsers />} />
+                <Route path="users/:userId" element={<AdminUserDetail />} />
+                <Route path="lectures" element={<AdminLectures />} />
+                <Route path="system" element={<AdminSystem />} />
+            </Route>
 
             <Route path="*" element={isLoaded ? <NotFoundPage /> : null} />
         </Routes>

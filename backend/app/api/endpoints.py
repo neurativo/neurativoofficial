@@ -1079,28 +1079,3 @@ def get_usage(user=Depends(get_current_user)):
     except Exception:
         raise HTTPException(status_code=500, detail="Failed to fetch usage")
 
-
-# ─── Admin ────────────────────────────────────────────────────────────────────
-
-class SetPlanRequest(BaseModel):
-    user_id: str
-    plan_tier: str  # "free" | "student" | "pro"
-
-@router.patch("/admin/set-plan")
-def admin_set_plan(body: SetPlanRequest, request: Request):
-    """
-    Manually sets a user's plan tier. Protected by ADMIN_SECRET env var.
-    Used until Stripe is integrated.
-    """
-    admin_secret = os.getenv("ADMIN_SECRET")
-    if not admin_secret:
-        raise HTTPException(status_code=503, detail="Admin endpoint not configured")
-    if request.headers.get("X-Admin-Key") != admin_secret:
-        raise HTTPException(status_code=403, detail="Forbidden")
-    if body.plan_tier not in ("free", "student", "pro"):
-        raise HTTPException(status_code=400, detail="Invalid plan tier")
-    try:
-        set_user_plan(body.user_id, body.plan_tier)
-        return {"status": "ok", "user_id": body.user_id, "plan_tier": body.plan_tier}
-    except Exception:
-        raise HTTPException(status_code=500, detail="Failed to set plan")

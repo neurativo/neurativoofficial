@@ -31,6 +31,12 @@ class Settings:
         ).split(",")
         if o.strip()
     ]
+    # Comma-separated Clerk user IDs with admin access (e.g. user_abc123,user_def456)
+    ADMIN_USER_IDS: list = [
+        u.strip()
+        for u in os.getenv("ADMIN_USER_IDS", "").split(",")
+        if u.strip()
+    ]
 
 
 settings = Settings()

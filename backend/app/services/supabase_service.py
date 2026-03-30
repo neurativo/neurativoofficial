@@ -795,6 +795,143 @@ def set_user_plan(user_id: str, plan_tier: str) -> None:
     ).execute()
 
 
+# =============================================================================
+#  ADMIN QUERIES
+# =============================================================================
+
+def admin_get_stats() -> dict:
+    """Platform-wide stats for the admin dashboard."""
+    if not supabase:
+        return {}
+    try:
+        users_resp = supabase.table("profiles").select("id", count="exact").execute()
+        total_users = users_resp.count or 0
+
+        lectures_resp = supabase.table("lectures").select("id", count="exact").execute()
+        total_lectures = lectures_resp.count or 0
+
+        sessions_resp = supabase.table("live_sessions").select("id", count="exact").eq("is_active", True).execute()
+        active_sessions = sessions_resp.count or 0
+
+        plan_resp = supabase.table("profiles").select("plan_tier").execute()
+        plan_dist = {"free": 0, "student": 0, "pro": 0}
+        for row in (plan_resp.data or []):
+            tier = row.get("plan_tier") or "free"
+            plan_dist[tier] = plan_dist.get(tier, 0) + 1
+
+        recent_users = (
+            supabase.table("profiles")
+            .select("id, display_name, plan_tier, created_at")
+            .order("created_at", desc=True)
+            .limit(10)
+            .execute()
+        ).data or []
+
+        recent_lectures = (
+            supabase.table("lectures")
+            .select("id, title, user_id, total_duration_seconds, created_at")
+            .order("created_at", desc=True)
+            .limit(10)
+            .execute()
+        ).data or []
+
+        return {
+            "total_users": total_users,
+            "total_lectures": total_lectures,
+            "active_sessions": active_sessions,
+            "plan_distribution": plan_dist,
+            "recent_users": recent_users,
+            "recent_lectures": recent_lectures,
+        }
+    except Exception as e:
+        print(f"[admin] admin_get_stats error: {e}")
+        return {}
+
+
+def admin_list_users(search: str = "", plan_filter: str = "", page: int = 1, page_size: int = 20) -> dict:
+    """Paginated user list with optional search and plan filter."""
+    if not supabase:
+        return {"users": [], "total": 0}
+    try:
+        offset = (page - 1) * page_size
+        query = supabase.table("profiles").select("*", count="exact")
+        if plan_filter and plan_filter in ("free", "student", "pro"):
+            query = query.eq("plan_tier", plan_filter)
+        resp = query.order("created_at", desc=True).range(offset, offset + page_size - 1).execute()
+        users = resp.data or []
+        total = resp.count or 0
+
+        # Attach lecture count per user (separate query, assemble in Python)
+        if users:
+            user_ids = [u["id"] for u in users]
+            lec_resp = supabase.table("lectures").select("user_id", count="exact").in_("user_id", user_ids).execute()
+            counts: dict = {}
+            for row in (lec_resp.data or []):
+                uid = row.get("user_id")
+                counts[uid] = counts.get(uid, 0) + 1
+            for u in users:
+                u["lecture_count"] = counts.get(u["id"], 0)
+
+        # If search provided, filter client-side (profiles has no text-search index)
+        if search:
+            sl = search.lower()
+            users = [u for u in users if sl in (u.get("display_name") or "").lower() or sl in (u.get("id") or "").lower()]
+            total = len(users)
+
+        return {"users": users, "total": total, "page": page, "page_size": page_size}
+    except Exception as e:
+        print(f"[admin] admin_list_users error: {e}")
+        return {"users": [], "total": 0}
+
+
+def admin_get_user_detail(user_id: str) -> dict:
+    """Full profile + lectures for a single user."""
+    if not supabase:
+        return {}
+    try:
+        profile_resp = supabase.table("profiles").select("*").eq("id", user_id).execute()
+        profile = (profile_resp.data or [{}])[0]
+
+        lectures_resp = (
+            supabase.table("lectures")
+            .select("id, title, topic, language, total_chunks, total_duration_seconds, created_at")
+            .eq("user_id", user_id)
+            .order("created_at", desc=True)
+            .execute()
+        )
+        lectures = lectures_resp.data or []
+        return {"profile": profile, "lectures": lectures}
+    except Exception as e:
+        print(f"[admin] admin_get_user_detail error: {e}")
+        return {}
+
+
+def admin_list_lectures(search: str = "", user_id_filter: str = "", page: int = 1, page_size: int = 20) -> dict:
+    """Paginated all-lectures view for admin."""
+    if not supabase:
+        return {"lectures": [], "total": 0}
+    try:
+        offset = (page - 1) * page_size
+        query = supabase.table("lectures").select(
+            "id, title, user_id, topic, language, total_chunks, total_duration_seconds, created_at",
+            count="exact"
+        )
+        if user_id_filter:
+            query = query.eq("user_id", user_id_filter)
+        if search:
+            query = query.ilike("title", f"%{search}%")
+        resp = query.order("created_at", desc=True).range(offset, offset + page_size - 1).execute()
+        return {
+            "lectures": resp.data or [],
+            "total": resp.count or 0,
+            "page": page,
+            "page_size": page_size,
+        }
+    except Exception as e:
+        print(f"[admin] admin_list_lectures error: {e}")
+        return {"lectures": [], "total": 0}
+
+
 def get_monthly_lecture_count(user_id: str) -> dict:
     """
     Returns lectures_this_month count for a user.

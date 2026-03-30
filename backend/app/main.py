@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from app.api.endpoints import router as api_router
+from app.api.admin import router as admin_router
 from app.core.config import settings
 from app.core.rate_limit import limiter
 
@@ -52,6 +53,7 @@ async def add_security_headers(request: Request, call_next):
 
 
 app.include_router(api_router, prefix="/api/v1")
+app.include_router(admin_router, prefix="/api/v1")
 
 
 @app.get("/")

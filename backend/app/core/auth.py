@@ -81,3 +81,14 @@ async def get_current_user(authorization: str = Header(None)) -> User:
         raise HTTPException(status_code=401, detail="Invalid token")
     except Exception:
         raise HTTPException(status_code=401, detail="Authentication failed")
+
+
+async def get_admin_user(authorization: str = Header(None)) -> User:
+    """
+    FastAPI dependency — verifies the Clerk Bearer token AND checks that
+    the user is in the ADMIN_USER_IDS allowlist. Raises 403 if not admin.
+    """
+    user = await get_current_user(authorization)
+    if user.id not in settings.ADMIN_USER_IDS:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user
