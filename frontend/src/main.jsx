@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import { ClerkProvider, useUser, useClerk } from '@clerk/react';
+import { ClerkProvider, useUser, useClerk, useSignIn, useSignUp } from '@clerk/react';
 import { AuthModalProvider } from './components/AuthModal.jsx';
 import App from './App.jsx';
 import Dashboard from './components/Dashboard.jsx';
@@ -22,25 +22,25 @@ if (localStorage.getItem('neurativo_theme') === 'dark') {
 
 // ─── OAuth callback page ────────────────────────────────────────────────────
 // Strategy: call clerk.handleRedirectCallback() directly (no helper components).
-// This is Clerk's own implementation — it exchanges the OAuth code, persists the
-// session to storage, then navigates to afterSignInUrl / afterSignUpUrl.
 //
-// Two navigation paths:
-//   A) Clerk hard-redirects to /app via window.location (the normal path).
-//      Session is in storage by then so ProtectedRoute sees isSignedIn=true.
-//   B) isSignedIn becomes true in React context before the hard redirect —
-//      we catch this and navigate via React Router (no reload needed).
+// Three paths to /app:
+//   A) Clerk hard-redirects via window.location — normal flow, session in storage.
+//   B) isSignedIn flips true in React context before the hard redirect fires.
+//   C) Fallback: handleRedirectCallback creates the account (sign-up) but doesn't
+//      call setActive() automatically. We detect createdSessionId on signUp/signIn
+//      and call setActive() explicitly, then navigate client-side.
 //
 // Fallback: if nothing happens in 10 s, redirect to home.
 function SSOCallback() {
     const clerk = useClerk();
     const { isLoaded, isSignedIn } = useUser();
+    const { signIn, isLoaded: signInLoaded } = useSignIn();
+    const { signUp, isLoaded: signUpLoaded } = useSignUp();
     const navigate = useNavigate();
     const invoked = React.useRef(false);
+    const activated = React.useRef(false);
 
     // Invoke handleRedirectCallback exactly once.
-    // If Clerk isn't loaded yet, the SDK queues the call internally and fires
-    // it as soon as clerk-js finishes loading — no dep on clerk.loaded needed.
     React.useEffect(() => {
         if (invoked.current) return;
         invoked.current = true;
@@ -56,6 +56,21 @@ function SSOCallback() {
             navigate('/app', { replace: true });
         }
     }, [isLoaded, isSignedIn, navigate]);
+
+    // Path C: handleRedirectCallback created the account but didn't call setActive.
+    // Detect createdSessionId on signUp or signIn and activate it manually.
+    React.useEffect(() => {
+        if (!signUpLoaded || !signInLoaded) return;
+        if (isSignedIn || activated.current) return;
+
+        const sessionId = signUp?.createdSessionId || signIn?.createdSessionId;
+        if (!sessionId) return;
+
+        activated.current = true;
+        clerk.setActive({ session: sessionId })
+            .then(() => navigate('/app', { replace: true }))
+            .catch(() => navigate('/', { replace: true }));
+    }, [signUpLoaded, signInLoaded, signUp?.createdSessionId, signIn?.createdSessionId, isSignedIn]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Fallback: something went wrong, send user home after 10 s.
     React.useEffect(() => {
