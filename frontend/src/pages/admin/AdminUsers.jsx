@@ -51,9 +51,11 @@ function PlanPill({ tier }) {
     return <span className={`adm-plan-pill adm-plan-${tier || 'free'}`}>{tier || 'free'}</span>;
 }
 
-function fmtDate(iso) {
-    if (!iso) return '—';
-    return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+function fmtDate(val) {
+    if (!val) return '—';
+    // Clerk returns milliseconds epoch
+    const d = typeof val === 'number' ? new Date(val) : new Date(val);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 export default function AdminUsers() {
@@ -134,13 +136,17 @@ export default function AdminUsers() {
                         )}
                         {users.map(u => (
                             <tr key={u.id} className="adm-row-link">
-                                <td onClick={() => navigate(`/admin/users/${u.id}`)}
-                                    style={{ fontFamily: 'monospace', fontSize: 11 }}>
-                                    {u.id?.slice(0, 18)}…
-                                </td>
                                 <td onClick={() => navigate(`/admin/users/${u.id}`)}>
-                                    <div style={{ fontSize: 13, color: '#c8c8c8' }}>{u.display_name || <span style={{ color: '#444' }}>—</span>}</div>
-                                    {u.email && <div style={{ fontSize: 11, color: '#555' }}>{u.email}</div>}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        {u.image_url
+                                            ? <img src={u.image_url} style={{ width: 26, height: 26, borderRadius: '50%', flexShrink: 0 }} />
+                                            : <div style={{ width: 26, height: 26, borderRadius: '50%', background: '#2a2a2a', flexShrink: 0 }} />
+                                        }
+                                        <div>
+                                            <div style={{ fontSize: 13, color: '#c8c8c8' }}>{u.display_name || <span style={{ color: '#444' }}>—</span>}</div>
+                                            <div style={{ fontSize: 11, color: '#555' }}>{u.email}</div>
+                                        </div>
+                                    </div>
                                 </td>
                                 <td onClick={() => navigate(`/admin/users/${u.id}`)}>
                                     <PlanPill tier={u.plan_tier} />
@@ -149,7 +155,7 @@ export default function AdminUsers() {
                                     {u.lecture_count ?? '—'}
                                 </td>
                                 <td onClick={() => navigate(`/admin/users/${u.id}`)}>
-                                    {fmtDate(u.created_at)}
+                                    {fmtDate(u.created_at_ms)}
                                 </td>
                                 <td>
                                     <select

@@ -22,6 +22,7 @@ class Settings:
     SUPABASE_KEY: str = os.getenv("SUPABASE_KEY")
     CLERK_JWKS_URL: str = _require_env("CLERK_JWKS_URL")
     CLERK_JWT_ISSUER: str = os.getenv("CLERK_JWT_ISSUER", "")
+    CLERK_SECRET_KEY: str = os.getenv("CLERK_SECRET_KEY", "")
     # Comma-separated list of allowed CORS origins — set in .env for production
     ALLOWED_ORIGINS: list = [
         o.strip()

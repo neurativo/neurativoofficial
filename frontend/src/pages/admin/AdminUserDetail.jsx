@@ -55,9 +55,10 @@ function fmtDuration(secs) {
     return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60}m`;
 }
 
-function fmtDate(iso) {
-    if (!iso) return '—';
-    return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+function fmtDate(val) {
+    if (!val) return '—';
+    const d = typeof val === 'number' ? new Date(val) : new Date(val);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 export default function AdminUserDetail() {
@@ -146,10 +147,22 @@ export default function AdminUserDetail() {
                                 <div className="adm-field-label">Current Plan</div>
                                 <div style={{ marginTop: 4 }}><PlanPill tier={profile.plan_tier} /></div>
                             </div>
+                            {profile.email && (
+                                <div className="adm-field">
+                                    <div className="adm-field-label">Email</div>
+                                    <div className="adm-field-value">{profile.email}</div>
+                                </div>
+                            )}
                             <div className="adm-field">
                                 <div className="adm-field-label">Joined</div>
-                                <div className="adm-field-value">{fmtDate(profile.created_at)}</div>
+                                <div className="adm-field-value">{fmtDate(profile.created_at_ms || profile.created_at)}</div>
                             </div>
+                            {profile.last_sign_in_ms && (
+                                <div className="adm-field">
+                                    <div className="adm-field-label">Last Sign In</div>
+                                    <div className="adm-field-value">{fmtDate(profile.last_sign_in_ms)}</div>
+                                </div>
+                            )}
                             <div className="adm-field">
                                 <div className="adm-field-label">Uploads This Month</div>
                                 <div className="adm-field-value">{profile.uploads_this_month ?? 0}</div>

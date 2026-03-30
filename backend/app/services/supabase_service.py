@@ -803,6 +803,43 @@ def get_total_lecture_count(user_id: str) -> int:
         return 0
 
 
+def get_user_plan(user_ids: list) -> dict:
+    """
+    Returns a dict of {user_id: plan_tier} for a list of user IDs.
+    Users with no profile row default to 'free'.
+    """
+    if not supabase or not user_ids:
+        return {}
+    result = {}
+    try:
+        for i in range(0, len(user_ids), 100):
+            batch = user_ids[i:i + 100]
+            resp = supabase.table("profiles").select("id, plan_tier").in_("id", batch).execute()
+            for row in (resp.data or []):
+                result[row["id"]] = row.get("plan_tier") or "free"
+    except Exception as e:
+        print(f"[admin] get_user_plan error (non-fatal): {e}")
+    return result
+
+
+def admin_lecture_counts_by_user(user_ids: list) -> dict:
+    """Returns {user_id: lecture_count} for a list of user IDs."""
+    if not supabase or not user_ids:
+        return {}
+    counts: dict = {}
+    try:
+        for i in range(0, len(user_ids), 100):
+            batch = user_ids[i:i + 100]
+            resp = supabase.table("lectures").select("user_id").in_("user_id", batch).execute()
+            for row in (resp.data or []):
+                uid = row.get("user_id")
+                if uid:
+                    counts[uid] = counts.get(uid, 0) + 1
+    except Exception as e:
+        print(f"[admin] admin_lecture_counts_by_user error (non-fatal): {e}")
+    return counts
+
+
 def set_user_plan(user_id: str, plan_tier: str) -> None:
     """Sets a user's plan tier. Used by admin endpoint until Stripe is ready."""
     if not supabase:

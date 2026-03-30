@@ -17,9 +17,9 @@ from pydantic import BaseModel
 
 from app.core.auth import get_admin_user, User
 from app.core.plans import PLAN_LIMITS
+from app.services.clerk_service import clerk_list_users, clerk_get_user, clerk_get_user_count
 from app.services.supabase_service import (
     admin_get_stats,
-    admin_list_users,
     admin_get_user_detail,
     admin_get_lecture_detail,
     admin_list_lectures,
@@ -28,6 +28,7 @@ from app.services.supabase_service import (
     delete_user_account,
     delete_lecture,
     cleanup_old_chunks,
+    get_user_plan,
 )
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -69,8 +70,10 @@ async def verify_admin(admin: User = Depends(get_admin_user)):
 async def get_stats(admin: User = Depends(get_admin_user)):
     """Platform-wide statistics: user counts, plan distribution, recent activity."""
     stats = admin_get_stats()
-    if not stats:
-        raise HTTPException(status_code=500, detail="Failed to fetch stats")
+    # Override total_users with authoritative count from Clerk
+    clerk_count = clerk_get_user_count()
+    if clerk_count:
+        stats["total_users"] = clerk_count
     return stats
 
 
@@ -82,17 +85,83 @@ async def list_users(
     page_size: int = Query(20, ge=1, le=100),
     admin: User = Depends(get_admin_user),
 ):
-    """Paginated user list with optional search and plan filter."""
-    return admin_list_users(search=search, plan_filter=plan, page=page, page_size=page_size)
+    """
+    Paginated user list sourced from Clerk (authoritative) merged with
+    local plan tier and lecture count from Supabase.
+    """
+    # Fetch all users from Clerk (up to 500; paginate if needed)
+    offset = (page - 1) * page_size
+    clerk_users = clerk_list_users(limit=500, offset=0)
+
+    if not clerk_users:
+        return {"users": [], "total": 0, "page": page, "page_size": page_size,
+                "error": "CLERK_SECRET_KEY not configured or Clerk API unavailable"}
+
+    # Fetch plan tiers for all user IDs from Supabase in one pass
+    user_ids = [u["id"] for u in clerk_users]
+    plans_map = get_user_plan(user_ids)
+
+    # Fetch lecture counts per user
+    from app.services.supabase_service import admin_lecture_counts_by_user
+    counts_map = admin_lecture_counts_by_user(user_ids)
+
+    # Build merged list
+    merged = []
+    for u in clerk_users:
+        uid = u["id"]
+        merged.append({
+            "id": uid,
+            "email": u["email"],
+            "display_name": u["display_name"],
+            "first_name": u["first_name"],
+            "last_name": u["last_name"],
+            "image_url": u["image_url"],
+            "plan_tier": plans_map.get(uid, "free"),
+            "lecture_count": counts_map.get(uid, 0),
+            "created_at_ms": u["created_at_ms"],
+            "last_sign_in_ms": u["last_sign_in_ms"],
+        })
+
+    # Search
+    if search:
+        sl = search.lower()
+        merged = [u for u in merged if
+                  sl in (u["email"] or "").lower() or
+                  sl in (u["display_name"] or "").lower() or
+                  sl in u["id"].lower()]
+
+    # Plan filter
+    if plan in ("free", "student", "pro"):
+        merged = [u for u in merged if u["plan_tier"] == plan]
+
+    total = len(merged)
+    page_users = merged[offset: offset + page_size]
+    return {"users": page_users, "total": total, "page": page, "page_size": page_size}
 
 
 @router.get("/users/{user_id}")
 async def get_user(user_id: str, admin: User = Depends(get_admin_user)):
-    """Full user profile + their lectures."""
-    detail = admin_get_user_detail(user_id)
-    if not detail:
+    """Full user detail: Clerk profile + plan + lectures."""
+    clerk_user = clerk_get_user(user_id)
+    supabase_detail = admin_get_user_detail(user_id)
+    if not clerk_user and not supabase_detail:
         raise HTTPException(status_code=404, detail="User not found")
-    return detail
+
+    profile = supabase_detail.get("profile", {}) if supabase_detail else {}
+    profile.update({
+        "id": user_id,
+        "email": clerk_user.get("email") or profile.get("email", ""),
+        "display_name": clerk_user.get("display_name") or profile.get("display_name", ""),
+        "image_url": clerk_user.get("image_url", ""),
+        "created_at_ms": clerk_user.get("created_at_ms"),
+        "last_sign_in_ms": clerk_user.get("last_sign_in_ms"),
+        "plan_tier": profile.get("plan_tier") or "free",
+    })
+
+    return {
+        "profile": profile,
+        "lectures": supabase_detail.get("lectures", []) if supabase_detail else [],
+    }
 
 
 @router.patch("/users/{user_id}/plan")
