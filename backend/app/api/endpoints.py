@@ -41,6 +41,7 @@ from app.services.supabase_service import (
     get_latest_section_count,
     get_unsummarized_chunks,
     end_live_session,
+    cleanup_old_chunks,
     update_lecture_analytics,
     update_lecture_language,
     get_lecture_language,
@@ -772,7 +773,7 @@ async def stream_summary(lecture_id: str, token: str = Query(None)):
 
 
 @router.post("/live/{lecture_id}/end")
-def end_session_endpoint(lecture_id: str, user=Depends(get_current_user)):
+def end_session_endpoint(lecture_id: str, background_tasks: BackgroundTasks, user=Depends(get_current_user)):
     """
     Ends the live session and forces a final summary pass so the session
     always ends with a complete, up-to-date master summary.
@@ -811,9 +812,12 @@ def end_session_endpoint(lecture_id: str, user=Depends(get_current_user)):
         except Exception as e:
             print(f"Final summary on end (non-fatal): {e}")
 
-        # Fix 4: release per-lecture lock so memory doesn't grow unbounded
+        # Release per-lecture lock so memory doesn't grow unbounded
         if lecture_id in _lecture_locks:
             del _lecture_locks[lecture_id]
+
+        # Purge chunks older than 30 days (completed lectures only) in background
+        background_tasks.add_task(cleanup_old_chunks, 30)
 
         return {"status": "ended", "lecture_id": lecture_id}
 
