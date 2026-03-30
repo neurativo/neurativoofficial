@@ -26,6 +26,7 @@ from app.services.summarization_service import (
 from app.services.embedding_service import get_embeddings, cosine_similarity
 from app.services.cif_service import classify_chunk
 from app.services.supabase_service import (
+    ensure_user_profile,
     save_lecture,
     create_lecture,
     create_live_session,
@@ -1034,6 +1035,8 @@ def delete_profile(request: Request, user=Depends(get_current_user)):
 @router.get("/usage")
 def get_usage(user=Depends(get_current_user)):
     """Returns comprehensive usage stats for the current month."""
+    # Ensure a profile row exists so every signed-up user appears in admin
+    ensure_user_profile(str(user.id), getattr(user, "email", "") or "")
     try:
         profile = get_user_profile(str(user.id))
         plan_tier = profile.get("plan_tier") or "free"

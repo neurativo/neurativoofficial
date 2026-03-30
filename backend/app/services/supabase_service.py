@@ -721,6 +721,23 @@ def get_user_profile(user_id: str) -> dict:
     }
 
 
+def ensure_user_profile(user_id: str, email: str = "") -> None:
+    """
+    Creates a profile row if one doesn't exist yet.
+    Called on every authenticated request so every signed-up user is visible in admin.
+    Uses upsert with on_conflict so existing rows are never overwritten.
+    """
+    if not supabase:
+        return
+    try:
+        payload = {"id": user_id}
+        if email:
+            payload["email"] = email
+        supabase.table("profiles").upsert(payload, on_conflict="id", ignore_duplicates=True).execute()
+    except Exception as e:
+        print(f"[profile] ensure_user_profile error (non-fatal): {e}")
+
+
 def update_user_profile(user_id: str, data: dict) -> dict:
     """
     Upserts profile data. Accepts display_name, preferred_language, pdf_auto_download.
@@ -804,10 +821,12 @@ def admin_get_stats() -> dict:
     if not supabase:
         return {}
     try:
-        # Count unique users from lectures (more reliable than profiles table)
-        users_lec_resp = supabase.table("lectures").select("user_id").not_.is_("user_id", "null").execute()
-        unique_users = len({r["user_id"] for r in (users_lec_resp.data or []) if r.get("user_id")})
-        total_users = unique_users
+        # Count unique users: union of profiles + lecture user_ids
+        prof_ids_resp = supabase.table("profiles").select("id").execute()
+        prof_ids = {r["id"] for r in (prof_ids_resp.data or [])}
+        lec_ids_resp = supabase.table("lectures").select("user_id").not_.is_("user_id", "null").execute()
+        lec_ids = {r["user_id"] for r in (lec_ids_resp.data or []) if r.get("user_id")}
+        total_users = len(prof_ids | lec_ids)
 
         lectures_resp = supabase.table("lectures").select("id", count="exact").execute()
         total_lectures = lectures_resp.count or 0
@@ -888,13 +907,20 @@ def admin_get_stats() -> dict:
 
 def admin_list_users(search: str = "", plan_filter: str = "", page: int = 1, page_size: int = 20) -> dict:
     """
-    Paginated user list sourced from lectures table (every user who has ever
-    recorded/uploaded appears here, even without a profile row).
+    Paginated user list that unions profiles + lectures so ALL users appear:
+    - Users who signed up and opened the app (have a profile row via ensure_user_profile)
+    - Users who created lectures (have a user_id in lectures)
+    No user is missed regardless of what they have or haven't done.
     """
     if not supabase:
         return {"users": [], "total": 0}
     try:
-        # Get all lectures to find every unique user_id
+        # Source 1: all profile rows (anyone who opened the dashboard)
+        prof_resp = supabase.table("profiles").select("id, display_name, full_name, email, plan_tier, uploads_this_month, total_hours_recorded, created_at").execute()
+        prof_rows = prof_resp.data or []
+        prof_map: dict = {p["id"]: p for p in prof_rows}
+
+        # Source 2: unique user_ids from lectures (anyone who recorded/uploaded)
         lec_resp = (
             supabase.table("lectures")
             .select("user_id, created_at")
@@ -902,55 +928,53 @@ def admin_list_users(search: str = "", plan_filter: str = "", page: int = 1, pag
             .order("created_at", desc=True)
             .execute()
         )
-        rows = lec_resp.data or []
+        lec_rows = lec_resp.data or []
 
-        # Build ordered unique list (first seen = most recent lecture)
-        uid_first_seen: dict = {}
-        for r in rows:
-            uid = r.get("user_id")
-            if uid and uid not in uid_first_seen:
-                uid_first_seen[uid] = r.get("created_at")
-        all_uids = list(uid_first_seen.keys())
-
-        # Fetch all profiles in one query, build map
-        prof_map: dict = {}
-        if all_uids:
-            for i in range(0, len(all_uids), 100):
-                batch = all_uids[i:i + 100]
-                pr = supabase.table("profiles").select("*").in_("id", batch).execute()
-                for p in (pr.data or []):
-                    prof_map[p["id"]] = p
-
-        # Lecture counts per user
-        counts: dict = {}
-        for r in rows:
+        # Lecture counts and first-seen date per user
+        lec_counts: dict = {}
+        lec_first_seen: dict = {}
+        for r in lec_rows:
             uid = r.get("user_id")
             if uid:
-                counts[uid] = counts.get(uid, 0) + 1
+                lec_counts[uid] = lec_counts.get(uid, 0) + 1
+                if uid not in lec_first_seen:
+                    lec_first_seen[uid] = r.get("created_at")
 
-        # Build user list, merging profile data with lecture-derived data
+        # Union: start from profiles, add any lecture-only users not yet in profiles
+        all_uids_ordered = [p["id"] for p in prof_rows]  # profiles first (have created_at)
+        for uid in lec_first_seen:
+            if uid not in prof_map:
+                all_uids_ordered.append(uid)
+
+        # Build merged user list
         users = []
-        for uid in all_uids:
+        for uid in all_uids_ordered:
             p = prof_map.get(uid, {})
-            user = {
+            users.append({
                 "id": uid,
                 "display_name": p.get("display_name") or p.get("full_name") or "",
+                "email": p.get("email") or "",
                 "plan_tier": p.get("plan_tier") or "free",
                 "uploads_this_month": p.get("uploads_this_month") or 0,
                 "total_hours_recorded": p.get("total_hours_recorded") or 0,
-                "created_at": uid_first_seen.get(uid),
-                "lecture_count": counts.get(uid, 0),
-            }
-            users.append(user)
+                "created_at": p.get("created_at") or lec_first_seen.get(uid),
+                "lecture_count": lec_counts.get(uid, 0),
+            })
+
+        # Sort by created_at descending (newest first)
+        users.sort(key=lambda u: u.get("created_at") or "", reverse=True)
 
         # Apply plan filter
         if plan_filter in ("free", "student", "pro"):
             users = [u for u in users if u["plan_tier"] == plan_filter]
 
-        # Apply search
+        # Apply search (by display_name, email, or user ID)
         if search:
             sl = search.lower()
-            users = [u for u in users if sl in (u.get("display_name") or "").lower() or sl in (u.get("id") or "").lower()]
+            users = [u for u in users if
+                     sl in (u.get("display_name") or "").lower() or
+                     sl in (u.get("email") or "").lower() or
+                     sl in (u.get("id") or "").lower()]
 
         total = len(users)
         offset = (page - 1) * page_size

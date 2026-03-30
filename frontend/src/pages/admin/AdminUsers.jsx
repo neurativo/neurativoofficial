@@ -118,6 +118,7 @@ export default function AdminUsers() {
                     <thead>
                         <tr>
                             <th>User ID</th>
+                            <th>Email / Name</th>
                             <th>Plan</th>
                             <th>Lectures</th>
                             <th>Joined</th>
@@ -135,7 +136,11 @@ export default function AdminUsers() {
                             <tr key={u.id} className="adm-row-link">
                                 <td onClick={() => navigate(`/admin/users/${u.id}`)}
                                     style={{ fontFamily: 'monospace', fontSize: 11 }}>
-                                    {u.id?.slice(0, 20)}…
+                                    {u.id?.slice(0, 18)}…
+                                </td>
+                                <td onClick={() => navigate(`/admin/users/${u.id}`)}>
+                                    <div style={{ fontSize: 13, color: '#c8c8c8' }}>{u.display_name || <span style={{ color: '#444' }}>—</span>}</div>
+                                    {u.email && <div style={{ fontSize: 11, color: '#555' }}>{u.email}</div>}
                                 </td>
                                 <td onClick={() => navigate(`/admin/users/${u.id}`)}>
                                     <PlanPill tier={u.plan_tier} />
