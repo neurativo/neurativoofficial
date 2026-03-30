@@ -21,7 +21,9 @@ from app.services.supabase_service import (
     admin_get_stats,
     admin_list_users,
     admin_get_user_detail,
+    admin_get_lecture_detail,
     admin_list_lectures,
+    admin_list_sessions,
     set_user_plan,
     delete_user_account,
     delete_lecture,
@@ -121,6 +123,16 @@ async def delete_user(user_id: str, admin: User = Depends(get_admin_user)):
     return {"ok": True, "deleted_user_id": user_id}
 
 
+@router.get("/sessions")
+async def list_sessions(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    admin: User = Depends(get_admin_user),
+):
+    """All live sessions — active and historical."""
+    return admin_list_sessions(page=page, page_size=page_size)
+
+
 @router.get("/lectures")
 async def list_lectures(
     search: str = Query("", max_length=200),
@@ -136,6 +148,15 @@ async def list_lectures(
         page=page,
         page_size=page_size,
     )
+
+
+@router.get("/lectures/{lecture_id}")
+async def get_lecture_detail(lecture_id: str, admin: User = Depends(get_admin_user)):
+    """Full lecture detail: transcript, summary, sections, student questions, sessions."""
+    detail = admin_get_lecture_detail(lecture_id)
+    if not detail:
+        raise HTTPException(status_code=404, detail="Lecture not found")
+    return detail
 
 
 @router.delete("/lectures/{lecture_id}")

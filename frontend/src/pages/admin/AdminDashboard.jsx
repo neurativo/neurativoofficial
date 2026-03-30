@@ -98,6 +98,21 @@ export default function AdminDashboard() {
                     <div className="adm-card-value">{stats ? ((planDist.student || 0) + (planDist.pro || 0)) : '—'}</div>
                     <div className="adm-card-sub">student + pro</div>
                 </div>
+                <div className="adm-card">
+                    <div className="adm-card-label">Hours Recorded</div>
+                    <div className="adm-card-value">{stats ? (stats.total_hours_recorded || 0).toLocaleString() : '—'}</div>
+                    <div className="adm-card-sub">across all users</div>
+                </div>
+                <div className="adm-card">
+                    <div className="adm-card-label">Shared Lectures</div>
+                    <div className="adm-card-value">{stats ? (stats.shared_lectures || 0) : '—'}</div>
+                    <div className="adm-card-sub">{stats ? (stats.total_share_views || 0) : '—'} views</div>
+                </div>
+                <div className="adm-card">
+                    <div className="adm-card-label">Questions Detected</div>
+                    <div className="adm-card-value">{stats ? (stats.total_questions_detected || 0) : '—'}</div>
+                    <div className="adm-card-sub">by CIF system</div>
+                </div>
             </div>
 
             <div className="adm-two-col">

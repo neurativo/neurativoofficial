@@ -835,6 +835,22 @@ def admin_get_stats() -> dict:
             .execute()
         ).data or []
 
+        # Total shared lectures and share views
+        shared_resp = supabase.table("lectures").select("share_views").not_.is_("share_token", "null").execute()
+        shared_count = len(shared_resp.data or [])
+        total_share_views = sum((r.get("share_views") or 0) for r in (shared_resp.data or []))
+
+        # Total hours recorded across all users
+        hours_resp = supabase.table("profiles").select("total_hours_recorded").execute()
+        total_hours = sum((r.get("total_hours_recorded") or 0) for r in (hours_resp.data or []))
+
+        # Total questions detected (CIF)
+        try:
+            q_resp = supabase.table("lecture_questions").select("id", count="exact").execute()
+            total_questions = q_resp.count or 0
+        except Exception:
+            total_questions = 0
+
         return {
             "total_users": total_users,
             "total_lectures": total_lectures,
@@ -842,6 +858,10 @@ def admin_get_stats() -> dict:
             "plan_distribution": plan_dist,
             "recent_users": recent_users,
             "recent_lectures": recent_lectures,
+            "shared_lectures": shared_count,
+            "total_share_views": total_share_views,
+            "total_hours_recorded": round(total_hours, 1),
+            "total_questions_detected": total_questions,
         }
     except Exception as e:
         print(f"[admin] admin_get_stats error: {e}")
@@ -904,6 +924,72 @@ def admin_get_user_detail(user_id: str) -> dict:
     except Exception as e:
         print(f"[admin] admin_get_user_detail error: {e}")
         return {}
+
+
+def admin_get_lecture_detail(lecture_id: str) -> dict:
+    """Full lecture detail for admin: all fields + sections + questions + session info."""
+    if not supabase:
+        return {}
+    try:
+        lec_resp = supabase.table("lectures").select(
+            "id, title, user_id, topic, language, transcript, summary, master_summary, "
+            "total_chunks, total_sections, total_duration_seconds, last_summarized_length, "
+            "share_token, share_views, created_at"
+        ).eq("id", lecture_id).execute()
+        if not (lec_resp.data):
+            return {}
+        lecture = lec_resp.data[0]
+
+        sections_resp = supabase.table("lecture_sections").select(
+            "id, section_index, chunk_range_start, chunk_range_end, section_summary, created_at"
+        ).eq("lecture_id", lecture_id).order("section_index").execute()
+        lecture["sections"] = sections_resp.data or []
+
+        try:
+            q_resp = supabase.table("lecture_questions").select(
+                "id, question_text, detected_at"
+            ).eq("lecture_id", lecture_id).order("detected_at", desc=True).execute()
+            lecture["questions"] = q_resp.data or []
+        except Exception:
+            lecture["questions"] = []
+
+        session_resp = supabase.table("live_sessions").select(
+            "id, is_active, last_chunk_at, created_at"
+        ).eq("lecture_id", lecture_id).execute()
+        lecture["sessions"] = session_resp.data or []
+
+        return lecture
+    except Exception as e:
+        print(f"[admin] admin_get_lecture_detail error: {e}")
+        return {}
+
+
+def admin_list_sessions(page: int = 1, page_size: int = 20) -> dict:
+    """All live sessions (active + historical) for admin."""
+    if not supabase:
+        return {"sessions": [], "total": 0}
+    try:
+        offset = (page - 1) * page_size
+        resp = supabase.table("live_sessions").select(
+            "id, lecture_id, is_active, last_chunk_at, created_at",
+            count="exact"
+        ).order("created_at", desc=True).range(offset, offset + page_size - 1).execute()
+        sessions = resp.data or []
+
+        # Attach lecture title for context
+        if sessions:
+            lec_ids = list({s["lecture_id"] for s in sessions if s.get("lecture_id")})
+            lec_resp = supabase.table("lectures").select("id, title, user_id").in_("id", lec_ids).execute()
+            lec_map = {l["id"]: l for l in (lec_resp.data or [])}
+            for s in sessions:
+                lec = lec_map.get(s.get("lecture_id"), {})
+                s["lecture_title"] = lec.get("title") or "Untitled"
+                s["user_id"] = lec.get("user_id")
+
+        return {"sessions": sessions, "total": resp.count or 0, "page": page, "page_size": page_size}
+    except Exception as e:
+        print(f"[admin] admin_list_sessions error: {e}")
+        return {"sessions": [], "total": 0}
 
 
 def admin_list_lectures(search: str = "", user_id_filter: str = "", page: int = 1, page_size: int = 20) -> dict:

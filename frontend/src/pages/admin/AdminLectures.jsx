@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { adminApi } from '../../lib/adminApi.js';
 
 const CSS = `
@@ -35,6 +36,7 @@ function fmtDate(iso) {
 }
 
 export default function AdminLectures() {
+    const navigate = useNavigate();
     const [search, setSearch] = useState('');
     const [userFilter, setUserFilter] = useState('');
     const [page, setPage] = useState(1);
@@ -114,8 +116,8 @@ export default function AdminLectures() {
                             <tr><td colSpan={7} className="adm-empty">No lectures found.</td></tr>
                         )}
                         {lectures.map(l => (
-                            <tr key={l.id}>
-                                <td style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            <tr key={l.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/admin/lectures/${l.id}`)}>
+                                <td style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#a78bfa' }}>
                                     {l.title || 'Untitled'}
                                 </td>
                                 <td style={{ fontFamily: 'monospace', fontSize: 11, color: '#666' }}>
@@ -126,7 +128,7 @@ export default function AdminLectures() {
                                 <td>{l.total_chunks ?? '—'}</td>
                                 <td>{fmtDate(l.created_at)}</td>
                                 <td>
-                                    <button className="adm-btn-danger" onClick={() => deleteLecture(l.id)}>Delete</button>
+                                    <button className="adm-btn-danger" onClick={e => { e.stopPropagation(); deleteLecture(l.id); }}>Delete</button>
                                 </td>
                             </tr>
                         ))}
