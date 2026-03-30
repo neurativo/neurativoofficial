@@ -44,11 +44,14 @@ export default function AdminSessions() {
     const [page, setPage] = useState(1);
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
 
     const load = useCallback(() => {
         setLoading(true);
+        setError('');
         adminApi.listSessions({ page, page_size: 20 })
             .then(setData)
+            .catch(e => setError(e?.response?.data?.detail || e.message || 'Failed to load sessions'))
             .finally(() => setLoading(false));
     }, [page]);
 
@@ -64,6 +67,7 @@ export default function AdminSessions() {
             <style>{CSS}</style>
             <div className="adm-page-title">Live Sessions</div>
 
+            {error && <div style={{ color: '#ef4444', fontSize: 13, marginBottom: 12, padding: '10px 14px', background: '#7f1d1d22', borderRadius: 7, border: '1px solid #7f1d1d44' }}>Error: {error}</div>}
             <div className="adm-toolbar">
                 {activeSessions > 0 && (
                     <span style={{ fontSize: 13, color: '#34d399' }}>

@@ -61,7 +61,7 @@ export default function AdminDashboard() {
     useEffect(() => {
         adminApi.getStats()
             .then(setStats)
-            .catch(() => setError('Failed to load stats'));
+            .catch(e => setError(e?.response?.data?.detail || e.message || 'Failed to load stats'));
     }, []);
 
     const planDist = stats?.plan_distribution || { free: 0, student: 0, pro: 0 };
@@ -75,7 +75,7 @@ export default function AdminDashboard() {
             <style>{CSS}</style>
             <div className="adm-page-title">Dashboard</div>
 
-            {error && <div className="adm-error">{error}</div>}
+            {error && <div style={{ color: '#ef4444', fontSize: 13, marginBottom: 16, padding: '10px 14px', background: '#7f1d1d22', borderRadius: 7, border: '1px solid #7f1d1d44' }}>Error: {error}</div>}
 
             <div className="adm-cards">
                 <div className="adm-card">

@@ -804,8 +804,10 @@ def admin_get_stats() -> dict:
     if not supabase:
         return {}
     try:
-        users_resp = supabase.table("profiles").select("id", count="exact").execute()
-        total_users = users_resp.count or 0
+        # Count unique users from lectures (more reliable than profiles table)
+        users_lec_resp = supabase.table("lectures").select("user_id").not_.is_("user_id", "null").execute()
+        unique_users = len({r["user_id"] for r in (users_lec_resp.data or []) if r.get("user_id")})
+        total_users = unique_users
 
         lectures_resp = supabase.table("lectures").select("id", count="exact").execute()
         total_lectures = lectures_resp.count or 0
@@ -819,13 +821,29 @@ def admin_get_stats() -> dict:
             tier = row.get("plan_tier") or "free"
             plan_dist[tier] = plan_dist.get(tier, 0) + 1
 
-        recent_users = (
-            supabase.table("profiles")
-            .select("id, display_name, plan_tier, created_at")
+        # Recent users: get latest unique user_ids from lectures, then fetch their profiles
+        recent_lec_resp = (
+            supabase.table("lectures")
+            .select("user_id, created_at")
+            .not_.is_("user_id", "null")
             .order("created_at", desc=True)
-            .limit(10)
+            .limit(50)
             .execute()
         ).data or []
+        seen_uids = []
+        for r in recent_lec_resp:
+            uid = r.get("user_id")
+            if uid and uid not in seen_uids:
+                seen_uids.append(uid)
+            if len(seen_uids) >= 10:
+                break
+        recent_users = []
+        if seen_uids:
+            prof_resp = supabase.table("profiles").select("id, display_name, plan_tier, created_at").in_("id", seen_uids).execute()
+            prof_map = {p["id"]: p for p in (prof_resp.data or [])}
+            for uid in seen_uids:
+                p = prof_map.get(uid, {"id": uid, "display_name": "", "plan_tier": "free", "created_at": None})
+                recent_users.append(p)
 
         recent_lectures = (
             supabase.table("lectures")
@@ -869,48 +887,93 @@ def admin_get_stats() -> dict:
 
 
 def admin_list_users(search: str = "", plan_filter: str = "", page: int = 1, page_size: int = 20) -> dict:
-    """Paginated user list with optional search and plan filter."""
+    """
+    Paginated user list sourced from lectures table (every user who has ever
+    recorded/uploaded appears here, even without a profile row).
+    """
     if not supabase:
         return {"users": [], "total": 0}
     try:
-        offset = (page - 1) * page_size
-        query = supabase.table("profiles").select("*", count="exact")
-        if plan_filter and plan_filter in ("free", "student", "pro"):
-            query = query.eq("plan_tier", plan_filter)
-        resp = query.order("created_at", desc=True).range(offset, offset + page_size - 1).execute()
-        users = resp.data or []
-        total = resp.count or 0
+        # Get all lectures to find every unique user_id
+        lec_resp = (
+            supabase.table("lectures")
+            .select("user_id, created_at")
+            .not_.is_("user_id", "null")
+            .order("created_at", desc=True)
+            .execute()
+        )
+        rows = lec_resp.data or []
 
-        # Attach lecture count per user (separate query, assemble in Python)
-        if users:
-            user_ids = [u["id"] for u in users]
-            lec_resp = supabase.table("lectures").select("user_id", count="exact").in_("user_id", user_ids).execute()
-            counts: dict = {}
-            for row in (lec_resp.data or []):
-                uid = row.get("user_id")
+        # Build ordered unique list (first seen = most recent lecture)
+        uid_first_seen: dict = {}
+        for r in rows:
+            uid = r.get("user_id")
+            if uid and uid not in uid_first_seen:
+                uid_first_seen[uid] = r.get("created_at")
+        all_uids = list(uid_first_seen.keys())
+
+        # Fetch all profiles in one query, build map
+        prof_map: dict = {}
+        if all_uids:
+            for i in range(0, len(all_uids), 100):
+                batch = all_uids[i:i + 100]
+                pr = supabase.table("profiles").select("*").in_("id", batch).execute()
+                for p in (pr.data or []):
+                    prof_map[p["id"]] = p
+
+        # Lecture counts per user
+        counts: dict = {}
+        for r in rows:
+            uid = r.get("user_id")
+            if uid:
                 counts[uid] = counts.get(uid, 0) + 1
-            for u in users:
-                u["lecture_count"] = counts.get(u["id"], 0)
 
-        # If search provided, filter client-side (profiles has no text-search index)
+        # Build user list, merging profile data with lecture-derived data
+        users = []
+        for uid in all_uids:
+            p = prof_map.get(uid, {})
+            user = {
+                "id": uid,
+                "display_name": p.get("display_name") or p.get("full_name") or "",
+                "plan_tier": p.get("plan_tier") or "free",
+                "uploads_this_month": p.get("uploads_this_month") or 0,
+                "total_hours_recorded": p.get("total_hours_recorded") or 0,
+                "created_at": uid_first_seen.get(uid),
+                "lecture_count": counts.get(uid, 0),
+            }
+            users.append(user)
+
+        # Apply plan filter
+        if plan_filter in ("free", "student", "pro"):
+            users = [u for u in users if u["plan_tier"] == plan_filter]
+
+        # Apply search
         if search:
             sl = search.lower()
             users = [u for u in users if sl in (u.get("display_name") or "").lower() or sl in (u.get("id") or "").lower()]
-            total = len(users)
+
+        total = len(users)
+        offset = (page - 1) * page_size
+        users = users[offset: offset + page_size]
 
         return {"users": users, "total": total, "page": page, "page_size": page_size}
     except Exception as e:
         print(f"[admin] admin_list_users error: {e}")
-        return {"users": [], "total": 0}
+        import traceback; traceback.print_exc()
+        return {"users": [], "total": 0, "error": str(e)}
 
 
 def admin_get_user_detail(user_id: str) -> dict:
-    """Full profile + lectures for a single user."""
+    """Full profile + lectures for a single user. Works even with no profile row."""
     if not supabase:
         return {}
     try:
         profile_resp = supabase.table("profiles").select("*").eq("id", user_id).execute()
-        profile = (profile_resp.data or [{}])[0]
+        profile = (profile_resp.data or [{}])[0] if (profile_resp.data) else {}
+        # Ensure id is always present
+        profile["id"] = profile.get("id") or user_id
+        profile.setdefault("plan_tier", "free")
+        profile.setdefault("display_name", "")
 
         lectures_resp = (
             supabase.table("lectures")
@@ -923,7 +986,7 @@ def admin_get_user_detail(user_id: str) -> dict:
         return {"profile": profile, "lectures": lectures}
     except Exception as e:
         print(f"[admin] admin_get_user_detail error: {e}")
-        return {}
+        return {"profile": {"id": user_id, "plan_tier": "free"}, "lectures": []}
 
 
 def admin_get_lecture_detail(lecture_id: str) -> dict:

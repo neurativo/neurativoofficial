@@ -63,12 +63,15 @@ export default function AdminUsers() {
     const [page, setPage] = useState(1);
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
     const [saving, setSaving] = useState({});
 
     const load = useCallback(() => {
         setLoading(true);
+        setError('');
         adminApi.listUsers({ search, plan: planFilter, page, page_size: 20 })
-            .then(setData)
+            .then(d => { setData(d); if (d.error) setError(d.error); })
+            .catch(e => setError(e?.response?.data?.detail || e.message || 'Failed to load users'))
             .finally(() => setLoading(false));
     }, [search, planFilter, page]);
 
@@ -93,6 +96,7 @@ export default function AdminUsers() {
             <style>{CSS}</style>
             <div className="adm-page-title">Users</div>
 
+            {error && <div style={{ color: '#ef4444', fontSize: 13, marginBottom: 12, padding: '10px 14px', background: '#7f1d1d22', borderRadius: 7, border: '1px solid #7f1d1d44' }}>Error: {error}</div>}
             <div className="adm-toolbar">
                 <input
                     className="adm-input adm-input-search"
