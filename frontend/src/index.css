@@ -213,26 +213,26 @@
 }
 
 .orb-1 {
-  width: 420px; height: 420px;
-  background: radial-gradient(circle, rgba(99, 102, 241, 0.13) 0%, transparent 70%);
+  width: 500px; height: 500px;
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.22) 0%, transparent 70%);
   animation: orb-drift-1 14s ease-in-out infinite;
 }
 
 .orb-2 {
-  width: 360px; height: 360px;
-  background: radial-gradient(circle, rgba(20, 184, 166, 0.10) 0%, transparent 70%);
+  width: 440px; height: 440px;
+  background: radial-gradient(circle, rgba(20, 184, 166, 0.18) 0%, transparent 70%);
   animation: orb-drift-2 18s ease-in-out infinite;
 }
 
 .orb-3 {
-  width: 300px; height: 300px;
-  background: radial-gradient(circle, rgba(139, 92, 246, 0.09) 0%, transparent 70%);
+  width: 380px; height: 380px;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.16) 0%, transparent 70%);
   animation: orb-drift-3 22s ease-in-out infinite;
 }
 
-.dark .orb-1 { background: radial-gradient(circle, rgba(99, 102, 241, 0.18) 0%, transparent 70%); }
-.dark .orb-2 { background: radial-gradient(circle, rgba(20, 184, 166, 0.14) 0%, transparent 70%); }
-.dark .orb-3 { background: radial-gradient(circle, rgba(139, 92, 246, 0.14) 0%, transparent 70%); }
+.dark .orb-1 { background: radial-gradient(circle, rgba(99, 102, 241, 0.28) 0%, transparent 70%); }
+.dark .orb-2 { background: radial-gradient(circle, rgba(20, 184, 166, 0.22) 0%, transparent 70%); }
+.dark .orb-3 { background: radial-gradient(circle, rgba(139, 92, 246, 0.22) 0%, transparent 70%); }
 
 /* ========================
    SCROLLBAR
