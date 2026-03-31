@@ -71,6 +71,16 @@ function Root() {
     );
 }
 
+function GradientOrbs() {
+    return (
+        <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 9999, overflow: 'hidden' }}>
+            <div className="orb orb-1" style={{ top: 0, left: 0 }} />
+            <div className="orb orb-2" style={{ bottom: 0, right: 0 }} />
+            <div className="orb orb-3" style={{ top: '35%', right: '8%' }} />
+        </div>
+    );
+}
+
 ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>
         <ClerkProvider
@@ -84,6 +94,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <BrowserRouter>
                 <AuthModalProvider>
                     <ToastProvider>
+                        <GradientOrbs />
                         <Root />
                     </ToastProvider>
                 </AuthModalProvider>

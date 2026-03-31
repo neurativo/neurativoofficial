@@ -984,10 +984,6 @@ function App({ user }) {
     if (sessionStatus === 'idle') {
         return (
             <div className="min-h-screen bg-[#fafaf9] flex items-center justify-center p-6 relative overflow-hidden">
-                {/* Animated gradient orbs */}
-                <div className="orb orb-1" style={{ top: '0px', left: '0px' }} />
-                <div className="orb orb-2" style={{ bottom: '0px', right: '0px' }} />
-                <div className="orb orb-3" style={{ top: '35%', right: '8%' }} />
 
                 {/* Resilience 6: Session recovery modal */}
                 {recoverySession && (
@@ -1128,11 +1124,6 @@ function App({ user }) {
 
     return (
         <div className="h-screen bg-white flex flex-col overflow-hidden selection:bg-[#f0ede8] relative">
-            {/* Animated gradient orbs */}
-            <div className="orb orb-1" style={{ top: '0px', left: '0px' }} />
-            <div className="orb orb-2" style={{ bottom: '0px', right: '0px' }} />
-            <div className="orb orb-3" style={{ top: '30%', right: '5%' }} />
-
             {/* ── Resilience 1: Offline Banner ── */}
             {!isOnline && (sessionStatus === 'recording' || sessionStatus === 'paused') && (
                 <div className="bg-amber-400 text-amber-900 text-xs font-semibold px-4 py-1.5 text-center shrink-0 z-40">
