@@ -302,7 +302,7 @@ export default function AuthScreen() {
                 {/* ── LEFT PANEL ── */}
                 <div className="au-left">
                     <Link to="/" className="au-left-logo">
-                        <div className="au-left-logo-icon"><LogoIcon /></div>
+                        <img src="/logo.png" alt="Neurativo" style={{ width: 26, height: 26, borderRadius: 7 }} />
                         <span className="au-left-wordmark">Neurativo</span>
                     </Link>
 
@@ -348,9 +348,7 @@ export default function AuthScreen() {
 
                     {/* Mobile logo — hidden on desktop */}
                     <Link to="/" className="au-mobile-logo">
-                        <div className="au-mobile-logo-icon">
-                            <LogoIcon color="#fafaf9" />
-                        </div>
+                        <img src="/logo.png" alt="Neurativo" style={{ width: 26, height: 26, borderRadius: 7 }} />
                         <span className="au-mobile-wordmark">Neurativo</span>
                     </Link>
 

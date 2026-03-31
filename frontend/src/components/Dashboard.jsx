@@ -478,11 +478,7 @@ export default function Dashboard({ user }) {
                 {/* ── Header ── */}
                 <header className="db-header">
                     <Link to="/" className="db-logo">
-                        <div className="db-logo-icon">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fafaf9" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M13 10V3L4 14h7v7l9-11h-7z"/>
-                            </svg>
-                        </div>
+                        <img src="/logo.png" alt="Neurativo" style={{ width: 24, height: 24, borderRadius: 6 }} />
                         <span className="db-wordmark">Neurativo</span>
                     </Link>
                     <div className="db-header-right">

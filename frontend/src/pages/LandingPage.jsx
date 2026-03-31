@@ -546,7 +546,7 @@ function Navbar({ user }) {
     return (
         <nav className="lp-nav">
             <Link to="/" className="lp-nav-logo">
-                <div className="lp-nav-logo-icon"><IconLogo /></div>
+                <img src="/logo.png" alt="Neurativo" style={{ width: 28, height: 28, borderRadius: 7 }} />
                 <span className="lp-nav-wordmark">Neurativo</span>
             </Link>
             <div className="lp-nav-center">
@@ -1091,7 +1091,7 @@ function Footer() {
     return (
         <footer className="lp-footer">
             <Link to="/" className="lp-footer-brand-wrap">
-                <div className="lp-footer-icon"><IconLogo /></div>
+                <img src="/logo.png" alt="Neurativo" style={{ width: 26, height: 26, borderRadius: 6 }} />
                 <span className="lp-footer-name">Neurativo</span>
             </Link>
             <div className="lp-footer-lnks">
