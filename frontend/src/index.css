@@ -207,26 +207,27 @@
 .orb {
   position: absolute;
   border-radius: 50%;
-  filter: blur(80px);
+  filter: blur(70px);
   pointer-events: none;
-  z-index: 0;
+  z-index: 1;
+  mix-blend-mode: multiply;
 }
 
 .orb-1 {
-  width: 500px; height: 500px;
-  background: radial-gradient(circle, rgba(99, 102, 241, 0.22) 0%, transparent 70%);
+  width: 600px; height: 600px;
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.45) 0%, transparent 70%);
   animation: orb-drift-1 14s ease-in-out infinite;
 }
 
 .orb-2 {
-  width: 440px; height: 440px;
-  background: radial-gradient(circle, rgba(20, 184, 166, 0.18) 0%, transparent 70%);
+  width: 520px; height: 520px;
+  background: radial-gradient(circle, rgba(20, 184, 166, 0.38) 0%, transparent 70%);
   animation: orb-drift-2 18s ease-in-out infinite;
 }
 
 .orb-3 {
-  width: 380px; height: 380px;
-  background: radial-gradient(circle, rgba(139, 92, 246, 0.16) 0%, transparent 70%);
+  width: 460px; height: 460px;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.35) 0%, transparent 70%);
   animation: orb-drift-3 22s ease-in-out infinite;
 }
 
