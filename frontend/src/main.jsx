@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ClerkProvider, useUser } from '@clerk/react';
 import { AuthModalProvider } from './components/AuthModal.jsx';
 import App from './App.jsx';
@@ -72,9 +72,6 @@ function Root() {
 }
 
 function GradientOrbs() {
-    const { pathname } = useLocation();
-    const appRoutes = ['/app', '/record', '/lecture', '/profile', '/admin'];
-    if (!appRoutes.some(r => pathname.startsWith(r))) return null;
     return (
         <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 9999, overflow: 'hidden' }}>
             <div className="orb orb-1" style={{ top: 0, left: 0 }} />
