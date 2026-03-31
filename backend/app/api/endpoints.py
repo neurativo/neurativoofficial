@@ -67,6 +67,8 @@ from app.services.supabase_service import (
     update_user_profile,
     delete_user_account,
     get_monthly_lecture_count,
+    get_monthly_usage,
+    increment_monthly_live,
     get_total_lecture_count,
     set_user_plan,
     increment_uploads_this_month,
@@ -289,9 +291,9 @@ async def transcribe(request: Request, file: UploadFile = File(...), user=Depend
     plan_tier = profile.get("plan_tier") or "free"
     limits = get_limits(plan_tier)
 
-    # Check monthly upload count
+    # Check monthly upload count (from monthly_usage — not affected by deletes)
     if not is_unlimited(limits["uploads_per_month"]):
-        uploads_count = profile.get("uploads_this_month") or 0
+        uploads_count = get_monthly_usage(str(user.id))["uploads"]
         if uploads_count >= limits["uploads_per_month"]:
             raise HTTPException(status_code=403, detail={
                 "error": "upload_limit_reached",
@@ -368,6 +370,11 @@ def start_live_session(request: Request, user=Depends(get_current_user)):
 
         lecture_id      = create_lecture(title="Live Session", transcript="", user_id=str(user.id))
         live_session_id = create_live_session(lecture_id)
+        # Increment monotonic counter — not affected by later deletes
+        try:
+            increment_monthly_live(str(user.id))
+        except Exception:
+            pass
         max_dur = limits["live_max_duration_seconds"]
         return {
             "lecture_id": lecture_id,
@@ -1042,9 +1049,10 @@ def get_usage(user=Depends(get_current_user)):
         plan_tier = profile.get("plan_tier") or "free"
         limits = get_limits(plan_tier)
 
-        lectures_count       = get_monthly_lecture_count(str(user.id))["count"]
+        monthly              = get_monthly_usage(str(user.id))
+        lectures_count       = monthly["live_lectures"]
+        uploads_count        = monthly["uploads"]
         total_lectures_count = get_total_lecture_count(str(user.id))
-        uploads_count        = profile.get("uploads_this_month") or 0
 
         live_limit   = limits["live_lectures_per_month"]
         upload_limit = limits["uploads_per_month"]

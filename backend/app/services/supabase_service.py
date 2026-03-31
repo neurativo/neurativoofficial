@@ -779,17 +779,74 @@ def delete_user_account(user_id: str) -> None:
         print(f"[profile] delete profile error (non-fatal): {e}")
 
 
-def increment_uploads_this_month(user_id: str) -> None:
-    """Increments uploads_this_month counter in profiles by 1."""
+def _current_year_month() -> str:
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).strftime("%Y-%m")
+
+
+def get_monthly_usage(user_id: str) -> dict:
+    """Returns {live_lectures, uploads} for the current calendar month.
+    Uses the monthly_usage table — never decremented, so deleting lectures
+    cannot reset quota.
+    """
+    if not supabase:
+        return {"live_lectures": 0, "uploads": 0}
+    try:
+        resp = (
+            supabase.table("monthly_usage")
+            .select("live_lectures, uploads")
+            .eq("user_id", user_id)
+            .eq("year_month", _current_year_month())
+            .execute()
+        )
+        if resp.data:
+            return {"live_lectures": resp.data[0].get("live_lectures") or 0,
+                    "uploads": resp.data[0].get("uploads") or 0}
+    except Exception as e:
+        print(f"[usage] get_monthly_usage error (non-fatal): {e}")
+    return {"live_lectures": 0, "uploads": 0}
+
+
+def increment_monthly_live(user_id: str) -> None:
+    """Atomically increments live_lectures counter for current month."""
     if not supabase:
         return
+    ym = _current_year_month()
     try:
-        resp = supabase.table("profiles").select("uploads_this_month").eq("id", user_id).execute()
-        if hasattr(resp, "data") and resp.data:
-            current = resp.data[0].get("uploads_this_month") or 0
-            supabase.table("profiles").update({"uploads_this_month": current + 1}).eq("id", user_id).execute()
+        existing = (
+            supabase.table("monthly_usage")
+            .select("live_lectures")
+            .eq("user_id", user_id)
+            .eq("year_month", ym)
+            .execute()
+        )
+        if existing.data:
+            new_val = (existing.data[0].get("live_lectures") or 0) + 1
+            supabase.table("monthly_usage").update({"live_lectures": new_val}).eq("user_id", user_id).eq("year_month", ym).execute()
         else:
-            supabase.table("profiles").upsert({"id": user_id, "uploads_this_month": 1}, on_conflict="id").execute()
+            supabase.table("monthly_usage").insert({"user_id": user_id, "year_month": ym, "live_lectures": 1, "uploads": 0}).execute()
+    except Exception as e:
+        print(f"[usage] increment_monthly_live error (non-fatal): {e}")
+
+
+def increment_uploads_this_month(user_id: str) -> None:
+    """Atomically increments uploads counter for current month."""
+    if not supabase:
+        return
+    ym = _current_year_month()
+    try:
+        existing = (
+            supabase.table("monthly_usage")
+            .select("uploads")
+            .eq("user_id", user_id)
+            .eq("year_month", ym)
+            .execute()
+        )
+        if existing.data:
+            new_val = (existing.data[0].get("uploads") or 0) + 1
+            supabase.table("monthly_usage").update({"uploads": new_val}).eq("user_id", user_id).eq("year_month", ym).execute()
+        else:
+            supabase.table("monthly_usage").insert({"user_id": user_id, "year_month": ym, "live_lectures": 0, "uploads": 1}).execute()
     except Exception as e:
         print(f"[usage] increment_uploads_this_month error (non-fatal): {e}")
 
@@ -1167,26 +1224,8 @@ def admin_list_lectures(search: str = "", user_id_filter: str = "", page: int = 
 
 
 def get_monthly_lecture_count(user_id: str) -> dict:
+    """Returns live lecture count for the current month from monthly_usage.
+    Uses the monotonic counter — deleting lectures does NOT reduce this count.
     """
-    Returns lectures_this_month count for a user.
-    Free plan limit is 5/month.
-    """
-    if not supabase:
-        return {"count": 0}
-    from datetime import datetime, timezone
-    now = datetime.now(timezone.utc)
-    # First day of current month in ISO format
-    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
-    try:
-        response = (
-            supabase.table("lectures")
-            .select("id", count="exact")
-            .eq("user_id", user_id)
-            .gte("created_at", month_start)
-            .execute()
-        )
-        count = response.count if response.count is not None else 0
-        return {"count": count}
-    except Exception as e:
-        print(f"[usage] get_monthly_lecture_count error (non-fatal): {e}")
-        return {"count": 0}
+    usage = get_monthly_usage(user_id)
+    return {"count": usage["live_lectures"]}
