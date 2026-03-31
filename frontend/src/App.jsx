@@ -984,11 +984,10 @@ function App({ user }) {
     if (sessionStatus === 'idle') {
         return (
             <div className="min-h-screen bg-[#fafaf9] flex items-center justify-center p-6 relative overflow-hidden">
-                {/* Subtle background texture */}
-                <div className="absolute inset-0 pointer-events-none">
-                    <div className="absolute top-1/3 left-1/4 w-96 h-96 bg-[#f0ede8]/60 rounded-full blur-3xl" />
-                    <div className="absolute bottom-1/4 right-1/3 w-80 h-80 bg-[#f0ede8]/40 rounded-full blur-3xl" />
-                </div>
+                {/* Animated gradient orbs */}
+                <div className="orb orb-1" style={{ top: '-100px', left: '-80px' }} />
+                <div className="orb orb-2" style={{ bottom: '-80px', right: '-60px' }} />
+                <div className="orb orb-3" style={{ top: '40%', right: '10%' }} />
 
                 {/* Resilience 6: Session recovery modal */}
                 {recoverySession && (
@@ -1128,7 +1127,11 @@ function App({ user }) {
     // ═══════════════════════════════════════════
 
     return (
-        <div className="h-screen bg-white flex flex-col overflow-hidden selection:bg-[#f0ede8]">
+        <div className="h-screen bg-white flex flex-col overflow-hidden selection:bg-[#f0ede8] relative">
+            {/* Animated gradient orbs */}
+            <div className="orb orb-1" style={{ top: '-120px', left: '-100px' }} />
+            <div className="orb orb-2" style={{ bottom: '-100px', right: '-80px' }} />
+            <div className="orb orb-3" style={{ top: '35%', right: '5%' }} />
 
             {/* ── Resilience 1: Offline Banner ── */}
             {!isOnline && (sessionStatus === 'recording' || sessionStatus === 'paused') && (
