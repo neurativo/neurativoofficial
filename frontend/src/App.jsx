@@ -1216,11 +1216,21 @@ function App({ user }) {
                                     {detectedTopic}
                                 </span>
                             )}
-                            {nastScore != null && (
-                                <span className={`px-2 py-0.5 rounded-md bg-teal-50 text-teal-700 text-[11px] font-semibold tracking-wide border border-teal-100 shrink-0 hidden md:inline ${isSummaryUpdating ? 'nast-glow' : ''}`}>
-                                    N.A.S.T. {nastScore.toFixed(2)}
+                            {isSummaryUpdating && (
+                                <span className="px-2 py-0.5 rounded-md bg-teal-50 text-teal-700 text-[11px] font-semibold tracking-wide border border-teal-100 shrink-0 hidden md:inline nast-glow">
+                                    Summarizing…
                                 </span>
                             )}
+                            {!isSummaryUpdating && nastScore != null && (() => {
+                                const sections = summary.split('## ').filter(s => s.trim());
+                                const count = sections.length;
+                                if (count === 0) return null;
+                                return (
+                                    <span className="px-2 py-0.5 rounded-md bg-teal-50 text-teal-700 text-[11px] font-semibold tracking-wide border border-teal-100 shrink-0 hidden md:inline">
+                                        {count} {count === 1 ? 'section' : 'sections'}
+                                    </span>
+                                );
+                            })()}
                         </div>
                     )}
                 </div>
@@ -1798,33 +1808,24 @@ function App({ user }) {
                                             </div>
                                         )}
 
-                                        {/* N.A.S.T. explainer */}
+                                        {/* Section intelligence summary */}
                                         {nastVal != null && (
                                             <div className="bg-teal-50 border border-teal-100 rounded-xl p-4">
-                                                <div className="flex items-center justify-between mb-3">
-                                                    <div>
-                                                        <p className="text-[11px] font-bold text-teal-700 uppercase tracking-wider">N.A.S.T. Score</p>
-                                                        <p className="text-[10px] text-teal-600 mt-0.5">Novelty-Aware Section Trigger</p>
-                                                    </div>
-                                                    <span className="text-[22px] font-bold text-teal-700 font-mono">{nastVal.toFixed(2)}</span>
+                                                <p className="text-[11px] font-bold text-teal-700 uppercase tracking-wider mb-1">Topic Flow</p>
+                                                <p className="text-[12px] text-teal-800 font-medium mb-2">
+                                                    {statsData.total_sections > 0
+                                                        ? `Lecture split into ${statsData.total_sections} section${statsData.total_sections === 1 ? '' : 's'} based on topic shifts`
+                                                        : 'Monitoring for topic shifts…'}
+                                                </p>
+                                                <div className="w-full bg-teal-100 h-1.5 rounded-full overflow-hidden mb-2">
+                                                    <div className="h-full bg-teal-400 rounded-full transition-all" style={{ width: `${Math.min(100, Math.round(nastVal * 100))}%` }} />
                                                 </div>
-                                                {[
-                                                    { label: 'Semantic Divergence', pct: Math.min(100, Math.round(nastVal * 100 * 0.9)), color: 'bg-teal-400', weight: '50%' },
-                                                    { label: 'Novelty Drift',        pct: Math.min(100, Math.round(nastVal * 100 * 0.75)), color: 'bg-teal-300', weight: '30%' },
-                                                    { label: 'Momentum',             pct: Math.min(100, Math.round(nastVal * 100 * 0.6)), color: 'bg-teal-200', weight: '20%' },
-                                                ].map(({ label, pct, color, weight }) => (
-                                                    <div key={label} className="mb-2 last:mb-0">
-                                                        <div className="flex items-center justify-between mb-0.5">
-                                                            <span className="text-[10px] text-teal-700 font-medium">{label}</span>
-                                                            <span className="text-[10px] text-teal-500">{weight}</span>
-                                                        </div>
-                                                        <div className="w-full bg-teal-100 h-1 rounded-full overflow-hidden">
-                                                            <div className={`h-full ${color} rounded-full transition-all`} style={{ width: `${pct}%` }} />
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                                <p className="text-[10px] text-teal-600 mt-3 leading-relaxed">
-                                                    Fires a new section when the composite score exceeds 0.55. Higher = more semantic novelty in the lecture flow.
+                                                <p className="text-[10px] text-teal-600 leading-relaxed">
+                                                    {nastVal >= 0.55
+                                                        ? 'High topic variation — lecture is covering diverse material.'
+                                                        : nastVal >= 0.3
+                                                        ? 'Moderate topic variation — content is evolving steadily.'
+                                                        : 'Low topic variation — lecture is staying on a focused topic.'}
                                                 </p>
                                             </div>
                                         )}
