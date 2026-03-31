@@ -4,29 +4,29 @@
   "description": "Real-time AI lecture transcription, summaries, and Q&A. Free to start.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#fafaf9",
+  "background_color": "#1e1b4b",
   "theme_color": "#1a1a1a",
   "orientation": "any",
   "scope": "/",
   "icons": [
     {
-      "src": "/icon-192.png",
-      "sizes": "192x192",
+      "src": "/logo.png",
+      "sizes": "500x500",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
-      "src": "/icon-512.png",
-      "sizes": "512x512",
+      "src": "/apple-touch-icon.png",
+      "sizes": "500x500",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "maskable"
     }
   ],
   "categories": ["education", "productivity"],
   "screenshots": [
     {
       "src": "/og.png",
-      "sizes": "1200x630",
+      "sizes": "500x500",
       "type": "image/png"
     }
   ]
