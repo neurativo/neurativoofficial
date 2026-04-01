@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ClerkProvider, useUser } from '@clerk/react';
 import { AuthModalProvider } from './components/AuthModal.jsx';
 import App from './App.jsx';
@@ -28,6 +28,19 @@ if (localStorage.getItem('neurativo_theme') === 'dark') {
     document.documentElement.classList.add('dark');
 }
 
+// ─── Section redirect — /features, /pricing etc → landing page + scroll ─────
+function SectionRedirect({ sectionId }) {
+    const navigate = useNavigate();
+    React.useEffect(() => {
+        navigate('/', { replace: true });
+        // Wait for landing page to mount then scroll
+        setTimeout(() => {
+            document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth' });
+        }, 120);
+    }, []);
+    return null;
+}
+
 // ─── Route guard ────────────────────────────────────────────────────────────
 function ProtectedRoute({ children }) {
     const { isLoaded, isSignedIn } = useUser();
@@ -47,6 +60,10 @@ function Root() {
     return (
         <Routes>
             <Route path="/"               element={<LandingPage user={user} />} />
+            <Route path="/features"       element={<SectionRedirect sectionId="features" />} />
+            <Route path="/how-it-works"   element={<SectionRedirect sectionId="how-it-works" />} />
+            <Route path="/pricing"        element={<SectionRedirect sectionId="pricing" />} />
+            <Route path="/faq"            element={<SectionRedirect sectionId="faq" />} />
             <Route path="/share/:token"   element={<ShareView />} />
             <Route path="/terms"          element={<TermsOfService />} />
             <Route path="/privacy"        element={<PrivacyPolicy />} />
