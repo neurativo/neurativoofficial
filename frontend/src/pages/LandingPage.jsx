@@ -279,42 +279,33 @@ const CSS = `
   .lp-btn-light:hover { opacity: 0.88; }
 
   /* ── ABOUT ── */
-  .lp-about-wrap {
-    background: #111; padding: 80px 40px;
+  .lp-about-quote {
+    border-left: 2px solid #1a1a1a; padding-left: 20px; margin-bottom: 44px;
   }
-  .lp-about { max-width: 960px; margin: 0 auto; }
-  .lp-about-eye {
-    font-size: 10px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase;
-    color: rgba(255,255,255,0.28); margin-bottom: 18px;
+  .lp-about-quote-text {
+    font-size: 28px; font-weight: 600; color: #1a1a1a;
+    letter-spacing: -0.8px; line-height: 1.25; margin-bottom: 8px;
   }
-  .lp-about-mission {
-    font-size: 42px; font-weight: 700; color: #fff;
-    letter-spacing: -1.5px; line-height: 1.1; margin-bottom: 12px;
-  }
-  .lp-about-tagline {
-    font-size: 15px; color: rgba(255,255,255,0.42); line-height: 1.7; margin-bottom: 52px; max-width: 520px;
-  }
+  .lp-about-quote-sub { font-size: 14px; color: #a3a3a3; line-height: 1.6; }
   .lp-about-cols {
     display: grid; grid-template-columns: 1fr 1fr; gap: 1px;
-    background: rgba(255,255,255,0.07);
-    border: 1px solid rgba(255,255,255,0.07); border-radius: 14px; overflow: hidden;
-    margin-bottom: 36px;
+    background: #f0ede8; border: 1px solid #f0ede8;
+    border-radius: 14px; overflow: hidden; margin-bottom: 28px;
   }
-  .lp-about-col { padding: 32px; background: #161616; }
+  .lp-about-col { background: #fff; padding: 28px; }
   .lp-about-col-label {
     font-size: 10px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase;
-    color: rgba(255,255,255,0.28); margin-bottom: 14px;
+    color: #a3a3a3; margin-bottom: 12px;
   }
-  .lp-about-col-text { font-size: 14px; color: rgba(255,255,255,0.58); line-height: 1.8; }
+  .lp-about-col-text { font-size: 13.5px; color: #6b6b6b; line-height: 1.8; }
   .lp-about-founders {
-    font-size: 12px; color: rgba(255,255,255,0.25);
-    border-top: 1px solid rgba(255,255,255,0.07); padding-top: 24px;
+    font-size: 12px; color: #a3a3a3;
+    border-top: 1px solid #f0ede8; padding-top: 20px;
   }
-  .lp-about-founders span { color: rgba(255,255,255,0.45); }
+  .lp-about-founders span { color: #6b6b6b; }
   @media (max-width: 640px) {
-    .lp-about-wrap { padding: 60px 20px; }
-    .lp-about-mission { font-size: 30px; letter-spacing: -1px; }
     .lp-about-cols { grid-template-columns: 1fr; }
+    .lp-about-quote-text { font-size: 22px; }
   }
 
   /* ── FOOTER ── */
@@ -1133,32 +1124,30 @@ function CTASection() {
 
 function About() {
     return (
-        <div id="about" className="lp-about-wrap">
-            <div className="lp-about">
-                <p className="lp-about-eye">About Neurativo</p>
-                <h2 className="lp-about-mission">The AI teacher for the world.</h2>
-                <p className="lp-about-tagline">
-                    Delivering live, lecture-quality education on any topic, anywhere.
-                </p>
-                <div className="lp-about-cols">
-                    <div className="lp-about-col">
-                        <p className="lp-about-col-label">The Problem</p>
-                        <p className="lp-about-col-text">
-                            Access to a great teacher is the single greatest predictor of learning outcomes — yet it remains one of the world's most unequally distributed resources. Billions of learners rely on static textbooks, passive videos, or overcrowded classrooms. There is no intelligent system that can teach a subject from first principles, adapt to the learner in real time, and do so at the depth and rigor of a world-class university lecture.
-                        </p>
-                    </div>
-                    <div className="lp-about-col">
-                        <p className="lp-about-col-label">Our Solution</p>
-                        <p className="lp-about-col-text">
-                            Neurativo is an AI educator platform that generates live, lecture-based summaries and high-quality academic content on any topic — combining the clarity of a great teacher with the depth of a research library. We are building toward a fully autonomous AI teacher: capable of structuring curricula, explaining concepts from first principles, and adapting to each learner in real time.
-                        </p>
-                    </div>
-                </div>
-                <p className="lp-about-founders">
-                    Founded by <span>Shazad Arshad</span> &amp; <span>Shariff Ahamed</span> · Sri Lanka
-                </p>
+        <section id="about" className="lp-sec">
+            <p className="lp-sec-eye">About Neurativo</p>
+            <div className="lp-about-quote">
+                <h2 className="lp-about-quote-text">The AI teacher for the world.</h2>
+                <p className="lp-about-quote-sub">Delivering live, lecture-quality education on any topic, anywhere.</p>
             </div>
-        </div>
+            <div className="lp-about-cols">
+                <div className="lp-about-col">
+                    <p className="lp-about-col-label">The Problem</p>
+                    <p className="lp-about-col-text">
+                        Access to a great teacher is the single greatest predictor of learning outcomes — yet it remains one of the world's most unequally distributed resources. Billions of learners rely on static textbooks, passive videos, or overcrowded classrooms. There is no intelligent system that can teach a subject from first principles, adapt to the learner in real time, and do so at the depth and rigor of a world-class university lecture.
+                    </p>
+                </div>
+                <div className="lp-about-col">
+                    <p className="lp-about-col-label">Our Solution</p>
+                    <p className="lp-about-col-text">
+                        Neurativo is an AI educator platform that generates live, lecture-based summaries and high-quality academic content on any topic — combining the clarity of a great teacher with the depth of a research library. We are building toward a fully autonomous AI teacher: capable of structuring curricula, explaining concepts from first principles, and adapting to each learner in real time.
+                    </p>
+                </div>
+            </div>
+            <p className="lp-about-founders">
+                Founded by <span>Shazad Arshad</span> &amp; <span>Shariff Ahamed</span> · Sri Lanka
+            </p>
+        </section>
     );
 }
 
