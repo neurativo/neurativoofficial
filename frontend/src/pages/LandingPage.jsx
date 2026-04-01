@@ -582,10 +582,10 @@ function Navbar({ user }) {
             </Link>
             <div className="lp-nav-center">
                 <Link to="/features" className="lp-nav-lnk">Features</Link>
-                <Link to="/pricing" className="lp-nav-lnk">Pricing</Link>
                 <Link to="/how-it-works" className="lp-nav-lnk">How it works</Link>
-                <Link to="/faq" className="lp-nav-lnk">FAQ</Link>
+                <Link to="/pricing" className="lp-nav-lnk">Pricing</Link>
                 <Link to="/about" className="lp-nav-lnk">About</Link>
+                <Link to="/faq" className="lp-nav-lnk">FAQ</Link>
             </div>
             <div className="lp-nav-right">
                 {user ? (
@@ -609,11 +609,11 @@ function Navbar({ user }) {
             </div>
             {/* Mobile menu */}
             <div className={`lp-mobile-menu ${menuOpen ? 'open' : ''}`}>
-                <Link to="/features"    className="lp-mobile-menu-lnk" onClick={() => setMenuOpen(false)}>Features</Link>
-                <Link to="/pricing"     className="lp-mobile-menu-lnk" onClick={() => setMenuOpen(false)}>Pricing</Link>
+                <Link to="/features"     className="lp-mobile-menu-lnk" onClick={() => setMenuOpen(false)}>Features</Link>
                 <Link to="/how-it-works" className="lp-mobile-menu-lnk" onClick={() => setMenuOpen(false)}>How it works</Link>
-                <Link to="/faq"         className="lp-mobile-menu-lnk" onClick={() => setMenuOpen(false)}>FAQ</Link>
-                <Link to="/about"       className="lp-mobile-menu-lnk" onClick={() => setMenuOpen(false)}>About</Link>
+                <Link to="/pricing"      className="lp-mobile-menu-lnk" onClick={() => setMenuOpen(false)}>Pricing</Link>
+                <Link to="/about"        className="lp-mobile-menu-lnk" onClick={() => setMenuOpen(false)}>About</Link>
+                <Link to="/faq"          className="lp-mobile-menu-lnk" onClick={() => setMenuOpen(false)}>FAQ</Link>
                 {user
                     ? <Link to="/app" className="lp-mobile-menu-lnk" onClick={() => setMenuOpen(false)}>Dashboard</Link>
                     : <button className="lp-mobile-menu-lnk" onClick={() => { setMenuOpen(false); openSignIn(); }}>Sign in</button>
