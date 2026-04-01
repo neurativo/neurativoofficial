@@ -795,68 +795,82 @@ def _current_year_month() -> str:
 
 
 def get_monthly_usage(user_id: str) -> dict:
-    """Returns {live_lectures, uploads} for the current calendar month.
-    Uses the monthly_usage table — never decremented, so deleting lectures
-    cannot reset quota.
-    """
+    """Returns {live_lectures, uploads, total_minutes_used} for the current calendar month."""
     if not supabase:
-        return {"live_lectures": 0, "uploads": 0}
+        return {"live_lectures": 0, "uploads": 0, "total_minutes_used": 0}
     try:
         resp = (
             supabase.table("monthly_usage")
-            .select("live_lectures, uploads")
+            .select("live_lectures, uploads, total_minutes_used")
             .eq("user_id", user_id)
             .eq("year_month", _current_year_month())
             .execute()
         )
         if resp.data:
-            return {"live_lectures": resp.data[0].get("live_lectures") or 0,
-                    "uploads": resp.data[0].get("uploads") or 0}
+            return {
+                "live_lectures":      resp.data[0].get("live_lectures") or 0,
+                "uploads":            resp.data[0].get("uploads") or 0,
+                "total_minutes_used": resp.data[0].get("total_minutes_used") or 0,
+            }
     except Exception as e:
         print(f"[usage] get_monthly_usage error (non-fatal): {e}")
-    return {"live_lectures": 0, "uploads": 0}
+    return {"live_lectures": 0, "uploads": 0, "total_minutes_used": 0}
 
 
-def increment_monthly_live(user_id: str) -> None:
-    """Atomically increments live_lectures counter for current month."""
+def increment_monthly_live(user_id: str, duration_seconds: int = 0) -> None:
+    """Atomically increments live_lectures counter and total_minutes_used for current month."""
     if not supabase:
         return
     ym = _current_year_month()
+    minutes = max(1, (duration_seconds or 0) // 60)
     try:
         existing = (
             supabase.table("monthly_usage")
-            .select("live_lectures")
+            .select("live_lectures, total_minutes_used")
             .eq("user_id", user_id)
             .eq("year_month", ym)
             .execute()
         )
         if existing.data:
-            new_val = (existing.data[0].get("live_lectures") or 0) + 1
-            supabase.table("monthly_usage").update({"live_lectures": new_val}).eq("user_id", user_id).eq("year_month", ym).execute()
+            row = existing.data[0]
+            supabase.table("monthly_usage").update({
+                "live_lectures": (row.get("live_lectures") or 0) + 1,
+                "total_minutes_used": (row.get("total_minutes_used") or 0) + minutes,
+            }).eq("user_id", user_id).eq("year_month", ym).execute()
         else:
-            supabase.table("monthly_usage").insert({"user_id": user_id, "year_month": ym, "live_lectures": 1, "uploads": 0}).execute()
+            supabase.table("monthly_usage").insert({
+                "user_id": user_id, "year_month": ym,
+                "live_lectures": 1, "uploads": 0, "total_minutes_used": minutes,
+            }).execute()
     except Exception as e:
         print(f"[usage] increment_monthly_live error (non-fatal): {e}")
 
 
-def increment_uploads_this_month(user_id: str) -> None:
-    """Atomically increments uploads counter for current month."""
+def increment_uploads_this_month(user_id: str, duration_minutes: int = 0) -> None:
+    """Atomically increments uploads counter and total_minutes_used for current month."""
     if not supabase:
         return
     ym = _current_year_month()
+    minutes = max(0, duration_minutes or 0)
     try:
         existing = (
             supabase.table("monthly_usage")
-            .select("uploads")
+            .select("uploads, total_minutes_used")
             .eq("user_id", user_id)
             .eq("year_month", ym)
             .execute()
         )
         if existing.data:
-            new_val = (existing.data[0].get("uploads") or 0) + 1
-            supabase.table("monthly_usage").update({"uploads": new_val}).eq("user_id", user_id).eq("year_month", ym).execute()
+            row = existing.data[0]
+            supabase.table("monthly_usage").update({
+                "uploads": (row.get("uploads") or 0) + 1,
+                "total_minutes_used": (row.get("total_minutes_used") or 0) + minutes,
+            }).eq("user_id", user_id).eq("year_month", ym).execute()
         else:
-            supabase.table("monthly_usage").insert({"user_id": user_id, "year_month": ym, "live_lectures": 0, "uploads": 1}).execute()
+            supabase.table("monthly_usage").insert({
+                "user_id": user_id, "year_month": ym,
+                "live_lectures": 0, "uploads": 1, "total_minutes_used": minutes,
+            }).execute()
     except Exception as e:
         print(f"[usage] increment_uploads_this_month error (non-fatal): {e}")
 

@@ -1,32 +1,34 @@
 PLAN_LIMITS = {
     "free": {
-        # 5 lectures × 45 min = 225 min Whisper = ~$1.35 worst case/month
-        "live_lectures_per_month":    5,
-        "live_max_duration_seconds":  2700,   # 45 min — covers a standard class
-        # 2 uploads × 60 min = 120 min Whisper = ~$0.72 worst case/month
-        "uploads_per_month":          2,
-        "upload_max_duration_seconds": 3600,  # 60 min
-        "upload_max_bytes":           300 * 1024 * 1024,  # 300 MB
+        # 5 live × 30 min + 3 imports × 60 min avg = ~330 min max = ~$1.98 Whisper worst case
+        "live_lectures_per_month":     5,
+        "live_max_duration_seconds":   1800,    # 30 min per lecture
+        "uploads_per_month":           3,
+        "upload_max_duration_seconds": 3600,    # 60 min per file
+        "upload_max_bytes":            300 * 1024 * 1024,   # 300 MB
+        "total_minutes_per_month":     150,     # 2.5 hrs hard ceiling = $0.90 Whisper max
     },
     "student": {
-        # 20 lectures × 90 min avg = 1800 min = ~$10.80 worst case/month
-        # Expected avg (~60 min): 20 × 60 = 1200 min = ~$7.20
-        "live_lectures_per_month":    20,
-        "live_max_duration_seconds":  5400,   # 90 min — covers most university lectures
-        # 10 uploads × 2h = 1200 min = ~$7.20 worst case/month
-        "uploads_per_month":          10,
-        "upload_max_duration_seconds": 7200,  # 2 hours
-        "upload_max_bytes":           1 * 1024 * 1024 * 1024,  # 1 GB
+        # $19/month — target margin: ~55% at average usage
+        # 25 hrs total cap = 1500 min = $9.00 Whisper max → $10 margin worst case
+        # Expected avg (15 hrs): $5.40 Whisper + ~$2 GPT = $7.40 cost → $11.60 margin (61%)
+        "live_lectures_per_month":     None,    # unlimited count
+        "live_max_duration_seconds":   10800,   # 3 hours per lecture
+        "uploads_per_month":           20,
+        "upload_max_duration_seconds": 10800,   # 3 hours per file
+        "upload_max_bytes":            1 * 1024 * 1024 * 1024,  # 1 GB
+        "total_minutes_per_month":     1500,    # 25 hrs hard ceiling = $9.00 Whisper max
     },
     "pro": {
-        # 40 lectures × 2h avg = 4800 min = ~$28.80 worst case/month
-        # Expected avg (~70 min): 40 × 70 = 2800 min = ~$16.80
-        "live_lectures_per_month":    40,
-        "live_max_duration_seconds":  7200,   # 2 hours — covers even long seminars
-        # 20 uploads × 2h = 2400 min = ~$14.40 worst case/month
-        "uploads_per_month":          20,
-        "upload_max_duration_seconds": 7200,  # 2 hours
-        "upload_max_bytes":           2 * 1024 * 1024 * 1024,  # 2 GB
+        # $39/month — target margin: ~45% at average usage
+        # 60 hrs total cap = 3600 min = $21.60 Whisper max → $17.40 margin worst case
+        # Expected avg (35 hrs): $12.60 Whisper + ~$4 GPT = $16.60 cost → $22.40 margin (57%)
+        "live_lectures_per_month":     None,    # unlimited
+        "live_max_duration_seconds":   None,    # unlimited per lecture
+        "uploads_per_month":           None,    # unlimited
+        "upload_max_duration_seconds": None,    # unlimited per file
+        "upload_max_bytes":            5 * 1024 * 1024 * 1024,  # 5 GB
+        "total_minutes_per_month":     3600,    # 60 hrs hard ceiling = $21.60 Whisper max
     },
 }
 

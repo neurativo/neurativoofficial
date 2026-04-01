@@ -280,7 +280,7 @@ async def _check_audio_magic(file: UploadFile) -> bool:
     return False
 
 
-async def _transcribe_background(file_bytes: bytes, filename: str, lecture_id: str) -> None:
+async def _transcribe_background(file_bytes: bytes, filename: str, lecture_id: str, user_id: str) -> None:
     """
     Background task: transcribe audio bytes, update the lecture, then summarize.
     Not bound by HTTP timeout — runs until completion or failure.
@@ -288,10 +288,15 @@ async def _transcribe_background(file_bytes: bytes, filename: str, lecture_id: s
     try:
         transcript_text, language = await transcribe_audio_bytes(file_bytes, filename)
         update_lecture_transcript(lecture_id, transcript_text, language)
-        print(f"[bg_transcribe] done lecture={lecture_id} lang={language} chars={len(transcript_text)}")
+        word_count = len(transcript_text.split())
+        estimated_minutes = max(1, word_count // 150)
+        try:
+            increment_uploads_this_month(user_id, duration_minutes=estimated_minutes)
+        except Exception:
+            pass
+        print(f"[bg_transcribe] done lecture={lecture_id} lang={language} ~{estimated_minutes}min")
     except Exception as e:
         print(f"[bg_transcribe] transcription failed for lecture={lecture_id}: {e}")
-        # Leave transcript empty — frontend will time out and show an error
         return
     # Auto-summarize after transcription completes
     try:
@@ -321,16 +326,25 @@ async def transcribe(
     plan_tier = profile.get("plan_tier") or "free"
     limits = get_limits(plan_tier)
 
-    # Check monthly upload count
+    # Check monthly upload count + total hours cap
+    monthly_usage_data = get_monthly_usage(str(user.id))
     if not is_unlimited(limits["uploads_per_month"]):
-        uploads_count = get_monthly_usage(str(user.id))["uploads"]
-        if uploads_count >= limits["uploads_per_month"]:
+        if monthly_usage_data["uploads"] >= limits["uploads_per_month"]:
             raise HTTPException(status_code=403, detail={
                 "error": "upload_limit_reached",
                 "limit": limits["uploads_per_month"],
                 "plan": plan_tier,
                 "resets_at": _next_month_iso(),
             })
+    total_min_limit = limits.get("total_minutes_per_month")
+    if total_min_limit is not None and monthly_usage_data["total_minutes_used"] >= total_min_limit:
+        raise HTTPException(status_code=403, detail={
+            "error": "hours_limit_reached",
+            "limit_hours": total_min_limit // 60,
+            "used_hours": round(monthly_usage_data["total_minutes_used"] / 60, 1),
+            "plan": plan_tier,
+            "resets_at": _next_month_iso(),
+        })
 
     # Magic bytes check
     if not await _check_audio_magic(file):
@@ -363,7 +377,7 @@ async def transcribe(
         pass
 
     # Schedule transcription + summarization as a background task (not bound by HTTP timeout)
-    background_tasks.add_task(_transcribe_background, file_bytes, filename, lecture_id)
+    background_tasks.add_task(_transcribe_background, file_bytes, filename, lecture_id, str(user.id))
 
     return {"lecture_id": lecture_id, "status": "processing"}
 
@@ -388,10 +402,11 @@ def start_live_session(request: Request, user=Depends(get_current_user)):
         plan_tier = profile.get("plan_tier") or "free"
         limits = get_limits(plan_tier)
 
-        # Check monthly live lecture limit
+        monthly = get_monthly_usage(str(user.id))
+
+        # Check monthly live lecture count limit
         if not is_unlimited(limits["live_lectures_per_month"]):
-            usage = get_monthly_lecture_count(str(user.id))
-            if usage["count"] >= limits["live_lectures_per_month"]:
+            if monthly["live_lectures"] >= limits["live_lectures_per_month"]:
                 raise HTTPException(status_code=403, detail={
                     "error": "live_limit_reached",
                     "limit": limits["live_lectures_per_month"],
@@ -399,9 +414,20 @@ def start_live_session(request: Request, user=Depends(get_current_user)):
                     "resets_at": _next_month_iso(),
                 })
 
+        # Check total monthly hours cap
+        total_min_limit = limits.get("total_minutes_per_month")
+        if total_min_limit is not None:
+            if monthly["total_minutes_used"] >= total_min_limit:
+                raise HTTPException(status_code=403, detail={
+                    "error": "hours_limit_reached",
+                    "limit_hours": total_min_limit // 60,
+                    "used_hours": round(monthly["total_minutes_used"] / 60, 1),
+                    "plan": plan_tier,
+                    "resets_at": _next_month_iso(),
+                })
+
         lecture_id      = create_lecture(title="Live Session", transcript="", user_id=str(user.id))
         live_session_id = create_live_session(lecture_id)
-        # Increment monotonic counter — not affected by later deletes
         try:
             increment_monthly_live(str(user.id))
         except Exception:
