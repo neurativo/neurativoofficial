@@ -4,5 +4,6 @@ Disallow: /app
 Disallow: /record
 Disallow: /lecture/
 Disallow: /profile
+Disallow: /admin
 
 Sitemap: https://neurativo.com/sitemap.xml

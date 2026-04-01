@@ -71,9 +71,41 @@
         "url": "https://neurativo.com",
         "logo": {
           "@type": "ImageObject",
+          "@id": "https://neurativo.com/#logo",
           "url": "https://neurativo.com/logo.png",
+          "contentUrl": "https://neurativo.com/logo.png",
           "width": 500,
-          "height": 500
+          "height": 500,
+          "caption": "Neurativo"
+        },
+        "image": { "@id": "https://neurativo.com/#logo" },
+        "description": "Neurativo is an AI-powered lecture assistant built in Sri Lanka. Record any lecture and get real-time transcription, intelligent summaries, and instant Q&A.",
+        "email": "hello@neurativo.com",
+        "addressCountry": "LK",
+        "foundingLocation": {
+          "@type": "Place",
+          "addressCountry": "LK",
+          "name": "Sri Lanka"
+        },
+        "founders": [
+          {
+            "@type": "Person",
+            "name": "Shazad Arshad",
+            "jobTitle": "Co-Founder",
+            "worksFor": { "@id": "https://neurativo.com/#organization" }
+          },
+          {
+            "@type": "Person",
+            "name": "Shariff Ahamed",
+            "jobTitle": "Co-Founder",
+            "worksFor": { "@id": "https://neurativo.com/#organization" }
+          }
+        ],
+        "contactPoint": {
+          "@type": "ContactPoint",
+          "email": "hello@neurativo.com",
+          "contactType": "customer support",
+          "availableLanguage": ["English"]
         },
         "sameAs": []
       },
@@ -82,23 +114,73 @@
         "@id": "https://neurativo.com/#website",
         "url": "https://neurativo.com",
         "name": "Neurativo",
-        "description": "AI-powered real-time lecture transcription and summarization",
-        "publisher": { "@id": "https://neurativo.com/#organization" }
+        "description": "AI-powered real-time lecture transcription, summaries, and Q&A for students",
+        "publisher": { "@id": "https://neurativo.com/#organization" },
+        "potentialAction": {
+          "@type": "SearchAction",
+          "target": {
+            "@type": "EntryPoint",
+            "urlTemplate": "https://neurativo.com/?q={search_term_string}"
+          },
+          "query-input": "required name=search_term_string"
+        }
+      },
+      {
+        "@type": "WebPage",
+        "@id": "https://neurativo.com/#webpage",
+        "url": "https://neurativo.com",
+        "name": "Neurativo — AI Lecture Assistant",
+        "isPartOf": { "@id": "https://neurativo.com/#website" },
+        "about": { "@id": "https://neurativo.com/#organization" },
+        "description": "Record any lecture and get live transcription, AI summaries, and instant Q&A in any language. Free to start.",
+        "breadcrumb": {
+          "@type": "BreadcrumbList",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://neurativo.com"
+            }
+          ]
+        }
       },
       {
         "@type": "SoftwareApplication",
         "@id": "https://neurativo.com/#app",
         "name": "Neurativo",
+        "alternateName": ["Neurativo AI", "Neurativo Lecture Assistant"],
         "url": "https://neurativo.com",
         "applicationCategory": "EducationApplication",
+        "applicationSubCategory": "Note Taking",
         "operatingSystem": "Web, iOS, Android",
-        "offers": {
-          "@type": "Offer",
-          "price": "0",
-          "priceCurrency": "USD",
-          "name": "Free Plan"
-        },
-        "description": "Neurativo is an AI-powered lecture assistant that transcribes audio in real time, generates hierarchical summaries section by section, and lets students ask questions about lecture content instantly.",
+        "browserRequirements": "Requires a modern browser with microphone access",
+        "offers": [
+          {
+            "@type": "Offer",
+            "name": "Free Plan",
+            "price": "0",
+            "priceCurrency": "USD",
+            "description": "5 live lectures per month (30 min each), 3 audio imports, 2.5 hrs total"
+          },
+          {
+            "@type": "Offer",
+            "name": "Student Plan",
+            "price": "19",
+            "priceCurrency": "USD",
+            "billingIncrement": "month",
+            "description": "Unlimited live lectures up to 3 hours each, 20 imports, 25 hrs/month total"
+          },
+          {
+            "@type": "Offer",
+            "name": "Pro Plan",
+            "price": "39",
+            "priceCurrency": "USD",
+            "billingIncrement": "month",
+            "description": "Unlimited lectures and imports, up to 60 hrs/month"
+          }
+        ],
+        "description": "Neurativo is an AI-powered lecture assistant that transcribes audio in real time, generates hierarchical section-by-section summaries, and lets students ask questions about lecture content instantly.",
         "featureList": [
           "Real-time audio transcription with under 3-second latency",
           "Automatic section-by-section AI summaries",
@@ -107,14 +189,10 @@
           "PDF export of full lecture notes",
           "Shareable lecture links",
           "Dark mode",
-          "Import audio files (MP3, M4A, WAV, MP4)"
+          "Import audio files (MP3, M4A, WAV, MP4, WebM)"
         ],
         "screenshot": "https://neurativo.com/og.png",
-        "aggregateRating": {
-          "@type": "AggregateRating",
-          "ratingValue": "4.9",
-          "reviewCount": "240"
-        }
+        "creator": { "@id": "https://neurativo.com/#organization" }
       },
       {
         "@type": "FAQPage",
@@ -125,7 +203,7 @@
             "name": "Is Neurativo free to use?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Yes. Neurativo is free to start with 5 lectures per month. The Pro plan ($12/month) gives you unlimited lectures, full Q&A, Smart Explain, PDF export, and 90-day history."
+              "text": "Yes. Neurativo is free to start — no credit card needed. The free plan gives you 5 live lectures per month (up to 30 min each) and 3 audio imports. The Student plan ($19/month) gives unlimited live lectures up to 3 hours each, 20 imports, and 25 hours per month total. The Pro plan ($39/month) gives unlimited lectures and imports with a 60 hours/month ceiling."
             }
           },
           {
@@ -133,7 +211,7 @@
             "name": "How accurate is the transcription?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Neurativo uses state-of-the-art AI transcription technology that delivers high accuracy across accents and academic domains. Accuracy depends on audio quality and background noise."
+              "text": "Neurativo uses OpenAI Whisper — one of the most accurate speech recognition models available — which performs well across accents, academic vocabulary, and multiple languages. Accuracy depends on audio quality and background noise."
             }
           },
           {
@@ -141,7 +219,7 @@
             "name": "Do I need to install anything?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "No. Neurativo runs entirely in your browser. Just sign in, hit record, and start your lecture — no downloads or extensions required."
+              "text": "No. Neurativo runs entirely in your browser. Just open neurativo.com, sign in, and start recording — no downloads, extensions, or app installs required."
             }
           },
           {
@@ -149,7 +227,7 @@
             "name": "Can I export my lecture notes?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Yes. Every lecture can be exported as a beautifully formatted PDF containing the full transcript, section summaries, and key concepts — ready to print or share."
+              "text": "Yes. Every lecture can be exported as a formatted PDF containing the full transcript, section summaries, and key concepts — ready to download, print, or share."
             }
           },
           {
@@ -157,7 +235,7 @@
             "name": "What languages does Neurativo support?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Neurativo supports over 20 languages including English, Spanish, French, German, Arabic, Hindi, Chinese, Japanese, Korean, Portuguese, and more."
+              "text": "Neurativo supports over 20 languages including English, Spanish, French, German, Arabic, Hindi, Chinese, Japanese, Korean, Portuguese, Italian, Russian, and more."
             }
           },
           {
@@ -165,7 +243,7 @@
             "name": "Is my audio data private?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Yes. Audio is processed only to generate your transcript and is not retained as a permanent record. Your transcripts and summaries are stored privately and associated only with your account. We never sell your data."
+              "text": "Yes. Audio is processed only to generate your transcript and is not stored permanently. Your transcripts and summaries are stored privately, associated only with your account. We never sell your data. See our Privacy Policy at neurativo.com/privacy."
             }
           },
           {
@@ -173,7 +251,7 @@
             "name": "Can I record lectures from my phone?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Yes. Neurativo is fully mobile-responsive and works in any modern mobile browser. Open neurativo.com on your phone, sign in, and start recording."
+              "text": "Yes. Neurativo is fully mobile-responsive and works in any modern mobile browser including Safari and Chrome on iOS and Android. Open neurativo.com on your phone, sign in, and start recording."
             }
           },
           {
@@ -181,7 +259,15 @@
             "name": "Can I upload existing audio files?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Yes. Use the Import feature on the Dashboard to upload MP3, M4A, WAV, MP4, or WebM files up to 500MB. Neurativo will transcribe and summarize them automatically."
+              "text": "Yes. Use the Import feature on the Dashboard to upload MP3, M4A, WAV, MP4, or WebM audio files. Neurativo will transcribe and summarize them automatically in the background."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Who built Neurativo?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Neurativo was founded by Shazad Arshad and Shariff Ahamed, a team based in Sri Lanka. Contact us at hello@neurativo.com."
             }
           }
         ]
