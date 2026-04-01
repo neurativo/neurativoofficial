@@ -492,6 +492,16 @@ def update_lecture_title(lecture_id: str, title: str):
     supabase.table("lectures").update({"title": title}).eq("id", lecture_id).execute()
 
 
+def update_lecture_transcript(lecture_id: str, transcript: str, language: str) -> None:
+    """Updates transcript and language on an existing lecture (used after background transcription)."""
+    if not supabase:
+        return
+    supabase.table("lectures").update({
+        "transcript": transcript,
+        "language": language,
+    }).eq("id", lecture_id).execute()
+
+
 def save_student_question(lecture_id: str, question_text: str) -> None:
     """
     Inserts a CIF-detected student question into lecture_questions.

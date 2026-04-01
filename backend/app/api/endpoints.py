@@ -13,7 +13,7 @@ from app.core.config import settings
 from app.core.auth import get_current_user
 from app.core.plans import get_limits, is_unlimited
 from app.core.rate_limit import limiter
-from app.services.openai_service import transcribe_audio
+from app.services.openai_service import transcribe_audio, transcribe_audio_bytes
 from app.services.explanation_service import generate_explanation
 from app.services.qa_service import answer_lecture_question
 from app.services.pdf_service import generate_lecture_pdf
@@ -57,6 +57,7 @@ from app.services.supabase_service import (
     get_lecture_owner,
     delete_lecture,
     update_lecture_title,
+    update_lecture_transcript,
     save_student_question,
     generate_share_token,
     clear_share_token,
@@ -279,9 +280,38 @@ async def _check_audio_magic(file: UploadFile) -> bool:
     return False
 
 
+async def _transcribe_background(file_bytes: bytes, filename: str, lecture_id: str) -> None:
+    """
+    Background task: transcribe audio bytes, update the lecture, then summarize.
+    Not bound by HTTP timeout — runs until completion or failure.
+    """
+    try:
+        transcript_text, language = await transcribe_audio_bytes(file_bytes, filename)
+        update_lecture_transcript(lecture_id, transcript_text, language)
+        print(f"[bg_transcribe] done lecture={lecture_id} lang={language} chars={len(transcript_text)}")
+    except Exception as e:
+        print(f"[bg_transcribe] transcription failed for lecture={lecture_id}: {e}")
+        # Leave transcript empty — frontend will time out and show an error
+        return
+    # Auto-summarize after transcription completes
+    try:
+        from app.services.summarization_service import generate_master_summary
+        import asyncio as _asyncio
+        summary = await _asyncio.to_thread(generate_master_summary, transcript_text)
+        update_lecture_summary_only(lecture_id, summary)
+        print(f"[bg_transcribe] summary done lecture={lecture_id}")
+    except Exception as e:
+        print(f"[bg_transcribe] summarization failed for lecture={lecture_id}: {e}")
+
+
 @router.post("/transcribe")
 @limiter.limit("5/minute")
-async def transcribe(request: Request, file: UploadFile = File(...), user=Depends(get_current_user)):
+async def transcribe(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    user=Depends(get_current_user),
+):
     # Extension check
     if not file.filename.lower().endswith(_ALLOWED_AUDIO_EXTENSIONS):
         raise HTTPException(status_code=400, detail="Invalid file format")
@@ -291,7 +321,7 @@ async def transcribe(request: Request, file: UploadFile = File(...), user=Depend
     plan_tier = profile.get("plan_tier") or "free"
     limits = get_limits(plan_tier)
 
-    # Check monthly upload count (from monthly_usage — not affected by deletes)
+    # Check monthly upload count
     if not is_unlimited(limits["uploads_per_month"]):
         uploads_count = get_monthly_usage(str(user.id))["uploads"]
         if uploads_count >= limits["uploads_per_month"]:
@@ -302,39 +332,40 @@ async def transcribe(request: Request, file: UploadFile = File(...), user=Depend
                 "resets_at": _next_month_iso(),
             })
 
-    # Magic bytes check — reads only 12 bytes, then rewinds (cheap, always run)
+    # Magic bytes check
     if not await _check_audio_magic(file):
         raise HTTPException(status_code=400, detail="Invalid file format")
 
-    # File size check — only read full file when the plan actually has a size cap
+    # Read full file into memory (needed for size check + background task)
+    file_bytes = await file.read()
+    filename = file.filename
+
+    # File size check
     if not is_unlimited(limits["upload_max_bytes"]):
-        file_bytes = await file.read()
-        file_size = len(file_bytes)
-        await file.seek(0)
-        if file_size > limits["upload_max_bytes"]:
+        if len(file_bytes) > limits["upload_max_bytes"]:
             raise HTTPException(status_code=413, detail={
                 "error": "file_too_large",
                 "max_bytes": limits["upload_max_bytes"],
                 "plan": plan_tier,
             })
 
+    # Create lecture record immediately with empty transcript
+    title = filename.rsplit('.', 1)[0][:200]
     try:
-        transcript_text, language = await transcribe_audio(file)
+        lecture_id = save_lecture(title=title, transcript="", language="en", user_id=str(user.id))
     except Exception:
-        raise HTTPException(status_code=500, detail="Transcription failed")
+        raise HTTPException(status_code=500, detail="Failed to create lecture")
 
-    try:
-        title = file.filename.rsplit('.', 1)[0][:200]  # cap title length
-        lecture_id = save_lecture(title=title, transcript=transcript_text, language=language, user_id=str(user.id))
-    except Exception:
-        raise HTTPException(status_code=500, detail="Failed to save lecture")
-
+    # Increment upload counter now (non-reversible — uploading counts even if transcription fails)
     try:
         increment_uploads_this_month(str(user.id))
     except Exception:
         pass
 
-    return {"lecture_id": lecture_id, "transcript": transcript_text, "language": language}
+    # Schedule transcription + summarization as a background task (not bound by HTTP timeout)
+    background_tasks.add_task(_transcribe_background, file_bytes, filename, lecture_id)
+
+    return {"lecture_id": lecture_id, "status": "processing"}
 
 
 @router.get("/summarize/{lecture_id}")

@@ -22,6 +22,12 @@ client = OpenAI(
     timeout=httpx.Timeout(30.0, connect=5.0),
 ) if settings.OPENAI_API_KEY else None
 
+# Separate client for background file uploads — 20 min timeout for 1h+ audio
+_bg_client = OpenAI(
+    api_key=settings.OPENAI_API_KEY,
+    timeout=httpx.Timeout(1200.0, connect=10.0),
+) if settings.OPENAI_API_KEY else None
+
 
 async def transcribe_audio(file: UploadFile) -> tuple[str, str]:
     """
@@ -59,6 +65,27 @@ async def transcribe_audio(file: UploadFile) -> tuple[str, str]:
     except Exception as e:
         print(f"Error during transcription: {e}")
         raise HTTPException(status_code=500, detail="Transcription failed")
+
+
+async def transcribe_audio_bytes(file_bytes: bytes, filename: str) -> tuple[str, str]:
+    """
+    Transcribes raw audio bytes. Used for background processing of large files
+    where the HTTP request must return before Whisper finishes.
+    Uses a long-timeout client (20 min) suitable for 1h+ recordings.
+    """
+    if not _bg_client:
+        raise Exception("OpenAI client not initialized")
+    file_obj = BytesIO(file_bytes)
+    file_obj.name = filename
+    transcript_response = await asyncio.to_thread(
+        _bg_client.audio.transcriptions.create,
+        model="whisper-1",
+        file=file_obj,
+        response_format="verbose_json"
+    )
+    text = transcript_response.text or ""
+    detected_language = getattr(transcript_response, "language", None) or "en"
+    return text, detected_language
 
 
 def get_language_display_name(language_code: str) -> str:

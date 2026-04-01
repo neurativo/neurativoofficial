@@ -65,10 +65,10 @@ function fmtBytes(b) {
 }
 
 const STAGES = [
-    { key: 'uploading',    label: 'Uploading…',           pct: 20 },
-    { key: 'transcribing', label: 'Transcribing audio…',  pct: 60 },
-    { key: 'summarizing',  label: 'Generating summary…',  pct: 85 },
-    { key: 'done',         label: 'Done!',                pct: 100 },
+    { key: 'uploading',    label: 'Uploading…',                        pct: 15 },
+    { key: 'transcribing', label: 'Transcribing audio… (may take a few minutes for long files)', pct: 55 },
+    { key: 'summarizing',  label: 'Generating summary…',               pct: 85 },
+    { key: 'done',         label: 'Done!',                             pct: 100 },
 ];
 
 export default function ImportModal({ onClose }) {
@@ -118,29 +118,43 @@ export default function ImportModal({ onClose }) {
 
         try {
             setStage('uploading');
-            // Brief pause to show uploading state before axios fires
-            await new Promise(r => setTimeout(r, 300));
 
-            setStage('transcribing');
-            // POST to /api/v1/transcribe — this is where the real work happens
             const res = await api.post('/api/v1/transcribe', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' },
                 onUploadProgress: (e) => {
-                    // Upload done → show transcribing
-                    if (e.loaded === e.total) setStage('transcribing');
+                    if (e.loaded >= e.total) setStage('transcribing');
                 },
+                timeout: 120_000, // 2 min max for the upload itself
             });
 
-            setStage('summarizing');
-            // Trigger summarization
             const lectureId = res.data?.lecture_id;
-            if (lectureId) {
-                try { await api.post(`/api/v1/summarize/${lectureId}`); } catch { /* non-fatal */ }
+            setStage('transcribing');
+
+            // Backend processes in background — poll until transcript appears
+            const POLL_INTERVAL = 5000;   // 5s between checks
+            const MAX_WAIT_MS   = 20 * 60 * 1000; // 20 min max
+            const deadline = Date.now() + MAX_WAIT_MS;
+
+            while (Date.now() < deadline) {
+                await new Promise(r => setTimeout(r, POLL_INTERVAL));
+                try {
+                    const check = await api.get(`/api/v1/lectures/${lectureId}`);
+                    const transcript = check.data?.transcript;
+                    if (transcript && transcript.length > 10) {
+                        setStage('summarizing');
+                        await new Promise(r => setTimeout(r, 800));
+                        setStage('done');
+                        await new Promise(r => setTimeout(r, 600));
+                        navigate(`/lecture/${lectureId}`);
+                        return;
+                    }
+                } catch { /* keep polling */ }
             }
 
-            setStage('done');
-            await new Promise(r => setTimeout(r, 600));
-            navigate(`/lecture/${lectureId}`);
+            // Timed out
+            setError('Transcription is taking longer than expected. Your lecture will appear in the dashboard once it finishes.');
+            setStage(null);
+
         } catch (err) {
             const status = err?.response?.status;
             const detail = err?.response?.data?.detail;
