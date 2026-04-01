@@ -499,30 +499,49 @@ export default function Dashboard({ user }) {
                     </div>
                 </header>
 
-                {/* ── Free plan usage banner ── */}
-                {usage && usage.plan_tier === 'free' && (
+                {/* ── Usage banner (all plans) ── */}
+                {usage && (
                     <div className="db-usage-banner">
                         <div className="db-usage-inner">
-                            <div className="db-usage-row">
-                                <span className="db-usage-label">Live lectures</span>
-                                <div className="db-usage-bar">
-                                    <div
-                                        className={`db-usage-fill-blue${usage.lectures_this_month >= usage.lectures_limit ? ' full' : usage.lectures_this_month >= usage.lectures_limit * 0.8 ? ' warn' : ''}`}
-                                        style={{ width: `${Math.min(100, (usage.lectures_this_month / usage.lectures_limit) * 100)}%` }}
-                                    />
+                            {/* Live lectures — only show if there's a count cap */}
+                            {usage.lectures_limit != null && (
+                                <div className="db-usage-row">
+                                    <span className="db-usage-label">Live lectures</span>
+                                    <div className="db-usage-bar">
+                                        <div
+                                            className={`db-usage-fill-blue${usage.lectures_this_month >= usage.lectures_limit ? ' full' : usage.lectures_this_month >= usage.lectures_limit * 0.8 ? ' warn' : ''}`}
+                                            style={{ width: `${Math.min(100, (usage.lectures_this_month / usage.lectures_limit) * 100)}%` }}
+                                        />
+                                    </div>
+                                    <span className="db-usage-count">{usage.lectures_this_month} / {usage.lectures_limit}</span>
                                 </div>
-                                <span className="db-usage-count">{usage.lectures_this_month} / {usage.lectures_limit}</span>
-                            </div>
-                            <div className="db-usage-row">
-                                <span className="db-usage-label">Imports</span>
-                                <div className="db-usage-bar">
-                                    <div
-                                        className={`db-usage-fill-purple${usage.uploads_this_month >= usage.uploads_limit ? ' full' : usage.uploads_this_month >= usage.uploads_limit * 0.8 ? ' warn' : ''}`}
-                                        style={{ width: `${Math.min(100, (usage.uploads_this_month / usage.uploads_limit) * 100)}%` }}
-                                    />
+                            )}
+                            {/* Imports — only show if there's a count cap */}
+                            {usage.uploads_limit != null && (
+                                <div className="db-usage-row">
+                                    <span className="db-usage-label">Imports</span>
+                                    <div className="db-usage-bar">
+                                        <div
+                                            className={`db-usage-fill-purple${usage.uploads_this_month >= usage.uploads_limit ? ' full' : usage.uploads_this_month >= usage.uploads_limit * 0.8 ? ' warn' : ''}`}
+                                            style={{ width: `${Math.min(100, (usage.uploads_this_month / usage.uploads_limit) * 100)}%` }}
+                                        />
+                                    </div>
+                                    <span className="db-usage-count">{usage.uploads_this_month} / {usage.uploads_limit}</span>
                                 </div>
-                                <span className="db-usage-count">{usage.uploads_this_month} / {usage.uploads_limit}</span>
-                            </div>
+                            )}
+                            {/* Total hours — always show */}
+                            {usage.total_hours_limit != null && (
+                                <div className="db-usage-row">
+                                    <span className="db-usage-label">Hours used</span>
+                                    <div className="db-usage-bar">
+                                        <div
+                                            className={`db-usage-fill-blue${usage.total_hours_used >= usage.total_hours_limit ? ' full' : usage.total_hours_used >= usage.total_hours_limit * 0.8 ? ' warn' : ''}`}
+                                            style={{ width: `${Math.min(100, (usage.total_hours_used / usage.total_hours_limit) * 100)}%` }}
+                                        />
+                                    </div>
+                                    <span className="db-usage-count">{usage.total_hours_used}h / {usage.total_hours_limit}h</span>
+                                </div>
+                            )}
                             {usage.month_resets_at && (
                                 <span className="db-usage-resets">
                                     Resets {new Date(usage.month_resets_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}

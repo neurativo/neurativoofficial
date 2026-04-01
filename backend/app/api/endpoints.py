@@ -1109,12 +1109,14 @@ def get_usage(user=Depends(get_current_user)):
         monthly              = get_monthly_usage(str(user.id))
         lectures_count       = monthly["live_lectures"]
         uploads_count        = monthly["uploads"]
+        total_minutes_used   = monthly["total_minutes_used"]
         total_lectures_count = get_total_lecture_count(str(user.id))
 
-        live_limit   = limits["live_lectures_per_month"]
-        upload_limit = limits["uploads_per_month"]
-        max_live_dur = limits["live_max_duration_seconds"]
-        max_up_dur   = limits["upload_max_duration_seconds"]
+        live_limit       = limits["live_lectures_per_month"]
+        upload_limit     = limits["uploads_per_month"]
+        max_live_dur     = limits["live_max_duration_seconds"]
+        max_up_dur       = limits["upload_max_duration_seconds"]
+        total_min_limit  = limits.get("total_minutes_per_month")
 
         def _dur_label(secs):
             if secs is None: return "Unlimited"
@@ -1135,10 +1137,15 @@ def get_usage(user=Depends(get_current_user)):
             "live_max_duration_seconds": max_live_dur,
             "live_max_duration_label":   _dur_label(max_live_dur),
             "upload_max_duration_label": _dur_label(max_up_dur),
+            "total_minutes_used":        total_minutes_used,
+            "total_hours_used":          round(total_minutes_used / 60, 1),
+            "total_minutes_limit":       total_min_limit,
+            "total_hours_limit":         (total_min_limit // 60) if total_min_limit is not None else None,
+            "hours_remaining":           max(0, (total_min_limit - total_minutes_used) // 60) if total_min_limit is not None else None,
             "plan_tier":                 plan_tier,
             "month_resets_at":           resets_at,
             "total_lectures_all_time":   total_lectures_count,
-            # Legacy fields kept for backwards-compat
+            # Legacy fields
             "limit":                     live_limit,
             "remaining":                 max(0, live_limit - lectures_count) if live_limit is not None else None,
             "resets_at":                 resets_at,

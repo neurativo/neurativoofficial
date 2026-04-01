@@ -240,7 +240,8 @@ const CSS = `
     font-size: 34px; font-weight: 600; color: #1a1a1a;
     letter-spacing: -2px; line-height: 1; font-family: 'Inter', sans-serif;
   }
-  .lp-price-mo { font-size: 12px; color: #a3a3a3; margin-bottom: 20px; }
+  .lp-price-mo { font-size: 12px; color: #a3a3a3; margin-bottom: 4px; }
+  .lp-price-lkr { font-size: 12px; color: #c0bdb8; margin-bottom: 16px; }
   .lp-plan-div { height: 1px; background: #f0ede8; margin: 20px 0; }
   .lp-plan-items { list-style: none; margin-bottom: 24px; display: flex; flex-direction: column; gap: 9px; }
   .lp-plan-item { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; color: #6b6b6b; line-height: 1.45; }
@@ -957,7 +958,7 @@ function FAQ() {
         },
         {
             q: "What's the difference between Free, Student, and Pro?",
-            a: 'Free gives 5 live lectures and 3 imports/month. Student ($8/mo) gives unlimited live lectures up to 3 hours each, plus 20 imports/month. Pro ($18/mo) removes all limits — unlimited everything.',
+            a: 'Free gives 5 live lectures (30 min each) and 3 imports/month — 2.5 hrs total. Student ($19/mo · Rs. 5,795) gives unlimited live lectures up to 3 hours each, 20 imports, and 25 hrs/month total. Pro ($39/mo · Rs. 11,895) gives unlimited everything with a 60 hrs/month ceiling.',
         },
     ];
     return (
@@ -1003,43 +1004,45 @@ function Pricing() {
                 {/* Free */}
                 <div className="lp-plan">
                     <div className="lp-plan-name">Free</div>
-                    <div className="lp-plan-tagline">For trying it out</div>
+                    <div className="lp-plan-tagline">Try it — no card needed</div>
                     <div className="lp-price-row">
                         <span className="lp-price-sign">$</span>
                         <span className="lp-price-big">0</span>
                     </div>
                     <div className="lp-price-mo">forever</div>
+                    <div className="lp-price-lkr">Rs. 0</div>
                     <div className="lp-plan-div" />
                     <ul className="lp-plan-items">
-                        <PlanItem text="5 live lectures per month" />
-                        <PlanItem text="30 min max per live lecture" />
-                        <PlanItem text="3 audio imports per month" />
-                        <PlanItem text="Up to 60 min audio files" />
-                        <PlanItem text="PDF export included" />
-                        <PlanItem text="All 40+ languages" />
+                        <PlanItem text="5 live lectures / month" />
+                        <PlanItem text="30 min max per lecture" />
+                        <PlanItem text="3 audio imports / month" />
+                        <PlanItem text="Up to 60 min per import" />
+                        <PlanItem text="2.5 hrs total / month" />
+                        <PlanItem text="PDF export · 40+ languages" />
                     </ul>
                     <button className="lp-btn-plan-outline" onClick={openSignUp}>Get started free</button>
                 </div>
 
                 {/* Student — featured */}
                 <div className="lp-plan-feat">
-                    <div className="lp-plan-badge">Popular</div>
+                    <div className="lp-plan-badge">Most Popular</div>
                     <div className="lp-plan-name">Student</div>
                     <div className="lp-plan-tagline">For serious students</div>
                     <div className="lp-price-row">
                         <span className="lp-price-sign">$</span>
-                        <span className="lp-price-big">8</span>
+                        <span className="lp-price-big">19</span>
                     </div>
                     <div className="lp-price-mo">per month</div>
+                    <div className="lp-price-lkr">Rs. 5,795 / month</div>
                     <div className="lp-plan-div" />
                     <ul className="lp-plan-items">
                         <PlanItem text="Unlimited live lectures" />
-                        <PlanItem text="Up to 3 hours per live lecture" />
-                        <PlanItem text="20 audio imports per month" />
-                        <PlanItem text="Up to 4 hours audio files" />
+                        <PlanItem text="Up to 3 hours per lecture" />
+                        <PlanItem text="20 audio imports / month" />
+                        <PlanItem text="Up to 3 hours per import" />
+                        <PlanItem text="25 hrs total / month" />
                         <PlanItem text="Everything in Free" />
                         <PlanItem text="Share lecture links" />
-                        <PlanItem text="Priority processing" />
                     </ul>
                     <button className="lp-btn-plan-dark" onClick={openSignUp}>Start Student</button>
                 </div>
@@ -1047,21 +1050,21 @@ function Pricing() {
                 {/* Pro */}
                 <div className="lp-plan">
                     <div className="lp-plan-name">Pro</div>
-                    <div className="lp-plan-tagline">For power users</div>
+                    <div className="lp-plan-tagline">For researchers &amp; power users</div>
                     <div className="lp-price-row">
                         <span className="lp-price-sign">$</span>
-                        <span className="lp-price-big">18</span>
+                        <span className="lp-price-big">39</span>
                     </div>
                     <div className="lp-price-mo">per month</div>
+                    <div className="lp-price-lkr">Rs. 11,895 / month</div>
                     <div className="lp-plan-div" />
                     <ul className="lp-plan-items">
                         <PlanItem text="Unlimited live lectures" />
-                        <PlanItem text="No duration limit" />
+                        <PlanItem text="No per-lecture duration cap" />
                         <PlanItem text="Unlimited audio imports" />
-                        <PlanItem text="Any file size" />
+                        <PlanItem text="Up to 5 GB per file" />
+                        <PlanItem text="60 hrs total / month" />
                         <PlanItem text="Everything in Student" />
-                        <PlanItem text="Bulk PDF export" />
-                        <PlanItem text="API access" />
                         <PlanItem text="Early feature access" />
                     </ul>
                     <button className="lp-btn-plan-outline" onClick={openSignUp}>Start Pro</button>
