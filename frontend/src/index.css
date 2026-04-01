@@ -241,6 +241,11 @@
   .orb-3 { width: 240px; height: 240px; }
 }
 
+/* Section scroll landing — clears sticky nav (60px) + breathing room */
+section[id] {
+  scroll-margin-top: 80px;
+}
+
 /* ========================
    SCROLLBAR
 ======================== */

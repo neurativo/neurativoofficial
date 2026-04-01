@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { ClerkProvider, useUser } from '@clerk/react';
 import { AuthModalProvider } from './components/AuthModal.jsx';
 import App from './App.jsx';
@@ -32,11 +32,7 @@ if (localStorage.getItem('neurativo_theme') === 'dark') {
 function SectionRedirect({ sectionId }) {
     const navigate = useNavigate();
     React.useEffect(() => {
-        navigate('/', { replace: true });
-        // Wait for landing page to mount then scroll
-        setTimeout(() => {
-            document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth' });
-        }, 120);
+        navigate('/', { replace: true, state: { scrollTo: sectionId } });
     }, []);
     return null;
 }

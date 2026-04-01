@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useClerk } from '@clerk/react';
 import { useAuthModal } from '../components/AuthModal';
 import { useSEO } from '../lib/useSEO';
@@ -551,10 +551,10 @@ function Navbar({ user }) {
                 <span className="lp-nav-wordmark">Neurativo</span>
             </Link>
             <div className="lp-nav-center">
-                <a href="#features" className="lp-nav-lnk">Features</a>
-                <a href="#pricing" className="lp-nav-lnk">Pricing</a>
-                <a href="#how-it-works" className="lp-nav-lnk">How it works</a>
-                <a href="#faq" className="lp-nav-lnk">FAQ</a>
+                <Link to="/features" className="lp-nav-lnk">Features</Link>
+                <Link to="/pricing" className="lp-nav-lnk">Pricing</Link>
+                <Link to="/how-it-works" className="lp-nav-lnk">How it works</Link>
+                <Link to="/faq" className="lp-nav-lnk">FAQ</Link>
             </div>
             <div className="lp-nav-right">
                 {user ? (
@@ -578,10 +578,10 @@ function Navbar({ user }) {
             </div>
             {/* Mobile menu */}
             <div className={`lp-mobile-menu ${menuOpen ? 'open' : ''}`}>
-                <a href="#features"    className="lp-mobile-menu-lnk" onClick={() => setMenuOpen(false)}>Features</a>
-                <a href="#pricing"     className="lp-mobile-menu-lnk" onClick={() => setMenuOpen(false)}>Pricing</a>
-                <a href="#how-it-works" className="lp-mobile-menu-lnk" onClick={() => setMenuOpen(false)}>How it works</a>
-                <a href="#faq"         className="lp-mobile-menu-lnk" onClick={() => setMenuOpen(false)}>FAQ</a>
+                <Link to="/features"    className="lp-mobile-menu-lnk" onClick={() => setMenuOpen(false)}>Features</Link>
+                <Link to="/pricing"     className="lp-mobile-menu-lnk" onClick={() => setMenuOpen(false)}>Pricing</Link>
+                <Link to="/how-it-works" className="lp-mobile-menu-lnk" onClick={() => setMenuOpen(false)}>How it works</Link>
+                <Link to="/faq"         className="lp-mobile-menu-lnk" onClick={() => setMenuOpen(false)}>FAQ</Link>
                 {user
                     ? <Link to="/app" className="lp-mobile-menu-lnk" onClick={() => setMenuOpen(false)}>Dashboard</Link>
                     : <button className="lp-mobile-menu-lnk" onClick={() => { setMenuOpen(false); openSignIn(); }}>Sign in</button>
@@ -630,7 +630,7 @@ function Hero({ user }) {
                 )}
                 {user
                     ? <Link to="/app" className="lp-btn-ghost-md">Go to dashboard</Link>
-                    : <a href="#how-it-works" className="lp-btn-ghost-md">See how it works</a>
+                    : <Link to="/how-it-works" className="lp-btn-ghost-md">See how it works</Link>
                 }
             </div>
             <p className="lp-proof">Trusted by students at 40+ universities · 10,000+ lectures transcribed</p>
@@ -1098,8 +1098,8 @@ function Footer() {
                 <span className="lp-footer-name">Neurativo</span>
             </Link>
             <div className="lp-footer-lnks">
-                <a href="#features" className="lp-footer-lnk">Features</a>
-                <a href="#pricing" className="lp-footer-lnk">Pricing</a>
+                <Link to="/features" className="lp-footer-lnk">Features</Link>
+                <Link to="/pricing" className="lp-footer-lnk">Pricing</Link>
                 <Link to="/privacy" className="lp-footer-lnk">Privacy</Link>
                 <Link to="/terms" className="lp-footer-lnk">Terms</Link>
             </div>
@@ -1110,11 +1110,26 @@ function Footer() {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function LandingPage({ user }) {
+    const location = useLocation();
+
     useSEO({
         title: null, // use default full title from index.html
         description: 'Neurativo records your lecture, transcribes every word, and builds structured AI summaries in real time — so you can focus on learning, not writing. Free to start.',
         canonicalPath: '/',
     });
+
+    // Scroll to section when navigated from a section route (e.g. /pricing → /)
+    useEffect(() => {
+        const sectionId = location.state?.scrollTo;
+        if (!sectionId) return;
+        const el = document.getElementById(sectionId);
+        if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        // Clear the state so back-nav doesn't re-scroll
+        window.history.replaceState({}, '');
+    }, [location.state?.scrollTo]);
+
     return (
         <>
             <style>{CSS}</style>
