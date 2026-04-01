@@ -6,4 +6,4 @@ Disallow: /lecture/
 Disallow: /profile
 Disallow: /admin
 
-Sitemap: https://neurativo.com/sitemap.xml
+Sitemap: https://www.neurativo.com/sitemap.xml

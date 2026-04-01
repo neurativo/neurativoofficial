@@ -6,7 +6,7 @@
 
   <!-- Main landing page — highest priority -->
   <url>
-    <loc>https://neurativo.com/</loc>
+    <loc>https://www.neurativo.com/</loc>
     <lastmod>2026-04-01</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
@@ -14,14 +14,14 @@
 
   <!-- Legal pages -->
   <url>
-    <loc>https://neurativo.com/terms</loc>
+    <loc>https://www.neurativo.com/terms</loc>
     <lastmod>2026-04-01</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
 
   <url>
-    <loc>https://neurativo.com/privacy</loc>
+    <loc>https://www.neurativo.com/privacy</loc>
     <lastmod>2026-04-01</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
