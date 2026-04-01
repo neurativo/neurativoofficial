@@ -60,6 +60,7 @@ function Root() {
             <Route path="/how-it-works"   element={<SectionRedirect sectionId="how-it-works" />} />
             <Route path="/pricing"        element={<SectionRedirect sectionId="pricing" />} />
             <Route path="/faq"            element={<SectionRedirect sectionId="faq" />} />
+            <Route path="/about"          element={<SectionRedirect sectionId="about" />} />
             <Route path="/share/:token"   element={<ShareView />} />
             <Route path="/terms"          element={<TermsOfService />} />
             <Route path="/privacy"        element={<PrivacyPolicy />} />
