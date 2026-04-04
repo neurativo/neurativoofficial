@@ -205,6 +205,7 @@ function App({ user }) {
     const timerWorkerRef      = useRef(null);         // 12s chunk timer worker
     const sseReconnectRef     = useRef(0);            // SSE reconnect attempt count
     const summaryPollRef      = useRef(null);         // fallback 15s summary poll
+    const micStreamRef        = useRef(null);         // active mic stream — stopped on pause/end
 
     // ── Screen capture refs ───────────────────────────────
     const screenStreamRef      = useRef(null);
@@ -651,6 +652,11 @@ function App({ user }) {
             audioContextRef.current?.close();
             audioContextRef.current = null;
         }
+        // Explicitly stop mic tracks so browser releases the mic indicator immediately
+        if (micStreamRef.current) {
+            micStreamRef.current.getTracks().forEach(t => t.stop());
+            micStreamRef.current = null;
+        }
     };
 
     const getSpeechEnergy = (dataArray) => {
@@ -681,6 +687,7 @@ function App({ user }) {
         if (!targetId) return;
         try {
             const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            micStreamRef.current = micStream;
 
             // Fix 6: recover from unexpected microphone disconnects
             micStream.getTracks().forEach(track => {
