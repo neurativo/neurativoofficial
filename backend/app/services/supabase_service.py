@@ -616,8 +616,16 @@ def cleanup_old_chunks(days: int = 30) -> int:
     # Delete in batches of 100 to avoid query size limits
     for i in range(0, len(lecture_ids), 100):
         batch = lecture_ids[i:i + 100]
-        resp = supabase.table("lecture_chunks").delete().in_("lecture_id", batch).execute()
-        deleted += len(resp.data or [])
+        # Count first — delete() returns empty data in supabase-py v2+
+        count_resp = (
+            supabase.table("lecture_chunks")
+            .select("id", count="exact")
+            .in_("lecture_id", batch)
+            .execute()
+        )
+        batch_count = count_resp.count or 0
+        supabase.table("lecture_chunks").delete().in_("lecture_id", batch).execute()
+        deleted += batch_count
     return deleted
 
 
