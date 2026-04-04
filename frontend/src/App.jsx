@@ -789,13 +789,9 @@ function App({ user }) {
                 if (!isRecordingRef.current) { micStream.getTracks().forEach(t => t.stop()); return; }
                 peakSpeechEnergyRef.current = 0;
                 audioChunksRef.current = [];
-                const MIME_CANDIDATES = [
-                    'audio/webm;codecs=opus',
-                    'audio/webm',
-                    'audio/ogg;codecs=opus',
-                    'audio/ogg',
-                    '',
-                ];
+                // Only use webm — Whisper API does not accept ogg files.
+                // Empty string fallback lets the browser choose (Chrome defaults to webm anyway).
+                const MIME_CANDIDATES = ['audio/webm;codecs=opus', 'audio/webm', ''];
                 const supportedMime = MIME_CANDIDATES.find(m => m === '' || MediaRecorder.isTypeSupported(m));
                 const recorderOpts = supportedMime ? { mimeType: supportedMime } : {};
                 const recorder = new MediaRecorder(recordingStream, recorderOpts);
@@ -848,8 +844,7 @@ function App({ user }) {
     // Resilience 4: measure round-trip latency to set connQuality
     const uploadChunkWithRetry = async (blob, targetId, attempt = 0) => {
         const formData = new FormData();
-        const ext = blob.type?.includes('ogg') ? 'ogg' : 'webm';
-        formData.append('file', new File([blob], `chunk.${ext}`, { type: blob.type || 'audio/webm' }));
+        formData.append('file', new File([blob], 'chunk.webm', { type: blob.type || 'audio/webm' }));
         const start = Date.now();
         try {
             const res = await api.post(
@@ -1045,8 +1040,10 @@ function App({ user }) {
         }
         setScreenShareActive(false);
         lastFrameHashRef.current = '';
-        // If we were merging screen audio, restart recording mic-only
+        // If we were merging screen audio, restart recording mic-only.
+        // Set isRecordingRef false BEFORE stop() so onstop doesn't re-enter startLoop.
         if (hadAudio && isRecordingRef.current) {
+            isRecordingRef.current = false;
             if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop();
             setTimeout(() => startRecording(lectureIdRef.current), 300);
         }
@@ -1234,8 +1231,10 @@ function App({ user }) {
             screenStreamRef.current = stream;
             setScreenShareActive(true);
 
-            // If user shared tab audio, restart recording to merge mic + tab audio
+            // If user shared tab audio, restart recording to merge mic + tab audio.
+            // Set isRecordingRef false BEFORE stop() so onstop doesn't re-enter startLoop.
             if (stream.getAudioTracks().length > 0 && isRecordingRef.current) {
+                isRecordingRef.current = false;
                 if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop();
                 setTimeout(() => startRecording(lectureIdRef.current), 300);
             }
