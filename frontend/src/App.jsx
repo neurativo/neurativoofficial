@@ -204,6 +204,7 @@ function App({ user }) {
     const wakeLockRef         = useRef(null);         // screen wake lock
     const timerWorkerRef      = useRef(null);         // 12s chunk timer worker
     const sseReconnectRef     = useRef(0);            // SSE reconnect attempt count
+    const summaryPollRef      = useRef(null);         // fallback 15s summary poll
 
     // ── Screen capture refs ───────────────────────────────
     const screenStreamRef      = useRef(null);
@@ -292,6 +293,7 @@ function App({ user }) {
     useEffect(() => {
         return () => {
             stopScreenShare();
+            stopSummaryPoll();
             isRecordingRef.current = false;
             cancelAnimationFrame(animFrameRef.current);
             if (audioContextRef.current?.state !== 'closed') {
@@ -570,6 +572,25 @@ function App({ user }) {
         if (sseRef.current) { sseRef.current.close(); sseRef.current = null; }
     };
 
+    // Guaranteed 15s summary poll — runs alongside SSE so the Summary tab always
+    // updates even if the SSE stream fails silently (token issues, proxy drops, etc.)
+    const startSummaryPoll = (id) => {
+        if (summaryPollRef.current) clearInterval(summaryPollRef.current);
+        summaryPollRef.current = setInterval(async () => {
+            const st = sessionStatusRef.current;
+            if (st !== 'recording' && st !== 'paused') return;
+            try {
+                const res = await api.get(`/api/v1/lectures/${id}`);
+                const ms = res.data.master_summary || res.data.summary;
+                if (ms) setSummary(prev => (ms !== prev ? ms : prev));
+            } catch {}
+        }, 15000);
+    };
+    const stopSummaryPoll = () => {
+        clearInterval(summaryPollRef.current);
+        summaryPollRef.current = null;
+    };
+
     // ── Chunk overlap helper ──────────────────────────────
     const getLastTwoSentences = (text) => {
         if (!text) return '';
@@ -608,6 +629,7 @@ function App({ user }) {
             lastOverlapRef.current = '';
             setExplainPanel({ show: false, loading: false, data: null });
             connectSSE(res.data.lecture_id);
+            startSummaryPoll(res.data.lecture_id);
             startRecording(res.data.lecture_id);
         } catch (err) {
             if (err?.response?.status === 403 && err?.response?.data?.detail?.error === 'live_limit_reached') {
@@ -890,6 +912,7 @@ function App({ user }) {
     const endSession = async () => {
         pauseSession(); // stops worker + releases wake lock
         disconnectSSE();
+        stopSummaryPoll();
         sseReconnectRef.current = 0;
         sessionStorage.removeItem('neurativo_session');
         setSessionStatus('ended');
@@ -1135,6 +1158,7 @@ function App({ user }) {
             if (masterSummary) setSummary(masterSummary);
         } catch {}
         connectSSE(savedId);
+        startSummaryPoll(savedId);
         setSessionStatus('paused'); // user must manually resume — mic requires user gesture
     };
 
