@@ -1546,9 +1546,9 @@ function App({ user }) {
                         </div>
                     )}
 
-                    {/* Language + Topic + N.A.S.T. badges */}
+                    {/* Language + Topic + N.A.S.T. badges — desktop only */}
                     {(detectedLanguage || detectedTopic || nastScore != null) && (
-                        <div className="flex items-center gap-1.5 overflow-hidden">
+                        <div className="hidden md:flex items-center gap-1.5 overflow-hidden">
                             {detectedLanguage && (
                                 <span className="px-2 py-0.5 rounded-md bg-[#fafaf9] text-blue-700 text-[11px] font-semibold uppercase tracking-wide border border-blue-100 shrink-0">
                                     {LANGUAGE_NAMES[detectedLanguage] || detectedLanguage.toUpperCase()}
@@ -1740,18 +1740,18 @@ function App({ user }) {
                                         }
                                         parts.push(text.slice(last));
                                         return (
-                                            <div key={seg.id} className="group flex gap-4 px-3 py-3 rounded-xl hover:bg-[#fafaf9] transition-colors animate-fade-in">
-                                                <span className="text-[10px] text-[#a3a3a3] font-mono pt-[4px] shrink-0 select-none" style={{ minWidth: 36, textAlign: 'right' }}>{seg.timestamp || fmtTs(i * 12)}</span>
-                                                <p className="flex-1 text-[15px] leading-relaxed text-[#1a1a1a] group-hover:text-[#1a1a1a] transition-colors">{parts}</p>
+                                            <div key={seg.id} className="group flex gap-3 md:gap-4 px-2 md:px-3 py-3 rounded-xl hover:bg-[#fafaf9] transition-colors animate-fade-in">
+                                                <span className="text-[10px] text-[#a3a3a3] font-mono pt-[4px] shrink-0 select-none" style={{ minWidth: 32, textAlign: 'right' }}>{seg.timestamp || fmtTs(i * 12)}</span>
+                                                <p className="flex-1 text-[15px] leading-[1.7] text-[#1a1a1a] group-hover:text-[#1a1a1a] transition-colors">{parts}</p>
                                             </div>
                                         );
                                     }
                                     return (
                                         <div key={seg.id}
-                                            className="group flex gap-4 px-3 py-3 rounded-xl hover:bg-[#fafaf9] transition-colors animate-fade-in"
+                                            className="group flex gap-3 md:gap-4 px-2 md:px-3 py-3 rounded-xl hover:bg-[#fafaf9] transition-colors animate-fade-in"
                                             style={{ animationDelay: `${Math.min(i, 4) * 0.04}s` }}>
-                                            <span className="text-[10px] text-[#a3a3a3] font-mono pt-[4px] shrink-0 select-none" style={{ minWidth: 36, textAlign: 'right' }}>{seg.timestamp || fmtTs(i * 12)}</span>
-                                            <p className="flex-1 text-[15px] leading-relaxed text-[#1a1a1a] group-hover:text-[#1a1a1a] transition-colors">{seg.text}</p>
+                                            <span className="text-[10px] text-[#a3a3a3] font-mono pt-[4px] shrink-0 select-none" style={{ minWidth: 32, textAlign: 'right' }}>{seg.timestamp || fmtTs(i * 12)}</span>
+                                            <p className="flex-1 text-[15px] leading-[1.7] text-[#1a1a1a] group-hover:text-[#1a1a1a] transition-colors">{seg.text}</p>
                                         </div>
                                     );
                                 })}
@@ -2155,13 +2155,13 @@ function App({ user }) {
                             {/* Input */}
                             <div className="p-3 border-t border-[#f0ede8] shrink-0">
                                 <form onSubmit={handleAsk}
-                                    className="flex items-center gap-2 bg-[#fafaf9] border border-[#f0ede8] rounded-xl px-3 py-2 focus-within:border-[#1a1a1a]/40 transition-all">
+                                    className="flex items-center gap-2 bg-[#fafaf9] border border-[#f0ede8] rounded-xl px-3 py-2.5 focus-within:border-[#1a1a1a]/40 transition-all">
                                     <input
                                         value={qaQuestion}
                                         onChange={e => setQaQuestion(e.target.value)}
                                         placeholder={lectureId ? 'Ask about the lecture...' : 'Start a session first'}
                                         disabled={!lectureId}
-                                        className="flex-1 bg-transparent text-[13px] text-slate-800 placeholder:text-[#a3a3a3] outline-none"
+                                        className="flex-1 bg-transparent text-[14px] md:text-[13px] text-slate-800 placeholder:text-[#a3a3a3] outline-none"
                                     />
                                     <button type="submit"
                                         disabled={qaLoading || !lectureId || !qaQuestion.trim()}
@@ -2368,19 +2368,33 @@ function App({ user }) {
                 </div>
 
                 {/* Center: primary control */}
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                     {sessionStatus === 'recording' && (
-                        <button onClick={pauseSession}
-                            className="flex items-center gap-2 px-5 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-sm font-semibold transition-colors">
-                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
-                            </svg>
-                            Pause
-                        </button>
+                        <>
+                            <button onClick={pauseSession}
+                                className="flex items-center gap-2 px-4 md:px-5 py-2 md:py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-sm font-semibold transition-colors">
+                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
+                                </svg>
+                                Pause
+                            </button>
+                            {/* Board camera — mobile only (screen share unavailable on mobile) */}
+                            <button
+                                onClick={cameraMode ? stopCameraCapture : startCameraCapture}
+                                className={`md:hidden flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold transition-colors ${
+                                    cameraMode ? 'bg-green-700 text-white' : 'bg-slate-700 text-slate-300'
+                                }`}>
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                </svg>
+                                {cameraMode ? 'Stop' : 'Board'}
+                            </button>
+                        </>
                     )}
                     {sessionStatus === 'paused' && (
                         <button onClick={() => startRecording(lectureId)}
-                            className="flex items-center gap-2 px-5 py-2 bg-[#1a1a1a] hover:opacity-80 text-[#fafaf9] rounded-xl text-sm font-semibold transition-colors">
+                            className="flex items-center gap-2 px-4 md:px-5 py-2 bg-[#1a1a1a] hover:opacity-80 text-[#fafaf9] rounded-xl text-sm font-semibold transition-colors">
                             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                                 <path d="M8 5v14l11-7z" />
                             </svg>
@@ -2410,11 +2424,13 @@ function App({ user }) {
             </div>
 
             {/* ── Mobile Bottom Nav ── */}
-            <nav className="md:hidden flex items-center justify-around border-t border-[#333] bg-[#1a1a1a] h-12 shrink-0">
+            <nav className="md:hidden flex items-stretch justify-around border-t border-[#2a2a2a] bg-[#111] shrink-0"
+                style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
                 {[
-                    { id: 'transcript', label: 'Transcript', tab: null, icon: 'M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z' },
-                    { id: 'summary',    label: 'Summary',    tab: 'summary', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01' },
-                    { id: 'ask',        label: 'Ask',        tab: 'ask',     icon: 'M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z' },
+                    { id: 'transcript', label: 'Live',     tab: null,      icon: 'M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z' },
+                    { id: 'summary',    label: 'Summary',  tab: 'summary', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01' },
+                    { id: 'ask',        label: 'Ask',      tab: 'ask',     icon: 'M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z' },
+                    { id: 'stats',      label: 'Stats',    tab: 'stats',   icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' },
                 ].map(({ id, label, tab, icon }) => {
                     const isActive = id === 'transcript' ? activePanel === 'transcript' : (activePanel === 'right' && activeTab === tab);
                     return (
@@ -2427,11 +2443,16 @@ function App({ user }) {
                                     setActiveTab(tab);
                                 }
                             }}
-                            className={`flex flex-col items-center gap-0.5 px-6 py-1.5 transition-colors ${isActive ? 'text-[#1a1a1a]' : 'text-[#6b6b6b] hover:text-[#a3a3a3]'}`}>
-                            <svg className="w-4.5 h-4.5" style={{ width: '18px', height: '18px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d={icon} />
+                            className={`flex-1 flex flex-col items-center justify-center gap-1 py-2.5 transition-colors relative ${
+                                isActive ? 'text-white' : 'text-[#555]'
+                            }`}>
+                            {isActive && (
+                                <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-[2px] rounded-full bg-white" />
+                            )}
+                            <svg style={{ width: 18, height: 18 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={isActive ? 2.2 : 1.7} d={icon} />
                             </svg>
-                            <span className="text-[10px] font-semibold">{label}</span>
+                            <span className={`text-[10px] font-semibold tracking-wide ${isActive ? 'text-white' : 'text-[#555]'}`}>{label}</span>
                         </button>
                     );
                 })}
