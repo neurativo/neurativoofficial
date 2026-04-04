@@ -591,36 +591,32 @@ def get_lecture_owner(lecture_id: str) -> str | None:
     return None
 
 
-def cleanup_old_chunks(days: int = 30) -> int:
+def cleanup_old_chunks(days: int = 0) -> int:
     """
-    Deletes lecture_chunks older than `days` days for lectures that already
-    have a master_summary (processing complete). Returns number of rows deleted.
-    Keeps chunks for recent or still-processing lectures untouched.
+    Deletes lecture_chunks for lectures that have a completed master_summary.
+    Chunks serve no purpose after summarisation is done — safe to delete anytime.
+    If days > 0, only lectures created more than `days` days ago are targeted
+    (safety margin to avoid deleting chunks for very recently completed lectures).
+    Returns number of chunk rows deleted.
     """
     if not supabase:
         return 0
-    from datetime import datetime, timedelta, timezone
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
 
-    # Find completed lecture IDs older than cutoff.
-    # Use .filter() with "not.is" for reliable IS NOT NULL across supabase-py versions.
-    lectures_resp = (
-        supabase.table("lectures")
-        .select("id")
-        .lt("created_at", cutoff)
-        .filter("master_summary", "not.is", "null")
-        .execute()
-    )
+    q = supabase.table("lectures").select("id").filter("master_summary", "not.is", "null")
+    if days > 0:
+        from datetime import datetime, timedelta, timezone
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        q = q.lt("created_at", cutoff)
+    lectures_resp = q.execute()
+
     lecture_ids = [r["id"] for r in (lectures_resp.data or [])]
-    print(f"[cleanup] cutoff={cutoff} matched_lectures={len(lecture_ids)}")
+    print(f"[cleanup] days={days} matched_lectures={len(lecture_ids)}")
     if not lecture_ids:
         return 0
 
     deleted = 0
-    # Delete in batches of 100 to avoid query size limits
     for i in range(0, len(lecture_ids), 100):
         batch = lecture_ids[i:i + 100]
-        # Count first — delete() returns empty data in supabase-py v2+
         count_resp = (
             supabase.table("lecture_chunks")
             .select("id", count="exact")

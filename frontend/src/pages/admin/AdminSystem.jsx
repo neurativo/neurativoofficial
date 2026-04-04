@@ -54,7 +54,7 @@ function actionClass(action) {
 
 export default function AdminSystem() {
     const [system, setSystem] = useState(null);
-    const [cleanupDays, setCleanupDays] = useState(30);
+    const [cleanupDays, setCleanupDays] = useState(0);
     const [cleaning, setCleaning] = useState(false);
     const [cleanResult, setCleanResult] = useState('');
 
@@ -118,14 +118,16 @@ export default function AdminSystem() {
             <div className="adm-card" style={{ marginBottom: 28 }}>
                 <div className="adm-card-title">Storage Cleanup</div>
                 <p style={{ fontSize: 13, color: '#666', marginBottom: 14 }}>
-                    Delete lecture_chunks older than N days for lectures with completed summaries.
-                    Reduces Supabase storage usage.
+                    Deletes raw <code style={{ fontFamily: 'monospace', fontSize: 12 }}>lecture_chunks</code> for
+                    lectures that have a completed summary — chunks are never used again after summarisation finishes.
+                    Set min age to 0 to clean all completed lectures, or enter a number to skip lectures newer than N days.
                 </p>
                 <div className="adm-cleanup-row">
+                    <span style={{ fontSize: 13, color: '#666' }}>Min age</span>
                     <input
                         className="adm-input"
                         type="number"
-                        min="1"
+                        min="0"
                         max="365"
                         value={cleanupDays}
                         onChange={e => setCleanupDays(Number(e.target.value))}
