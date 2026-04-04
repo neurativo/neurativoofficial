@@ -72,9 +72,10 @@ def update_lecture_language(lecture_id: str, language: str):
     _fresh_db().table("lectures").update({"language": language}).eq("id", lecture_id).execute()
 
 
-def get_lecture_language(lecture_id: str) -> str:
+def get_lecture_language(lecture_id: str):
     """
-    Returns the stored ISO-639-1 language code for a lecture, defaulting to 'en'.
+    Returns the stored ISO-639-1 language code for a lecture, or None if not yet detected.
+    Returns None (not 'en') so the caller can distinguish "unset" from "English".
     """
     try:
         response = (
@@ -84,7 +85,8 @@ def get_lecture_language(lecture_id: str) -> str:
             .execute()
         )
         if hasattr(response, 'data') and len(response.data) > 0:
-            return response.data[0].get("language") or "en"
+            lang = response.data[0].get("language")
+            return lang if lang else None
     except Exception:
         pass
     return "en"

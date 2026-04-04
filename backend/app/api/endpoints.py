@@ -702,22 +702,48 @@ async def process_live_chunk(
 
     # Fix 4: serialize per-lecture so two overlapping chunks never race through
     # transcription + transcript-append for the same lecture simultaneously.
+    # Languages Whisper hallucinates on silence — never use these to set lecture language
+    _HALLUCINATION_LANGS = {'ja', 'zh'}
+    # Known Whisper silence hallucination strings — stripped from chunk text before processing
+    _HALLUCINATION_STRINGS = [
+        'ご視聴ありがとうございました', 'ありがとうございました',
+        'お願いします', 'ご視聴', '字幕', 'Subtitles',
+    ]
+
     async with _get_lecture_lock(lecture_id):
+        # Build Whisper context from last ~100 words of transcript to prevent
+        # duplicate transcription at chunk boundaries (Whisper re-generates its own
+        # internal context window otherwise, causing the last 1-2 sentences to repeat).
+        whisper_prompt = None
+        try:
+            transcript_so_far = get_lecture_transcript(lecture_id)
+            if transcript_so_far:
+                words = transcript_so_far.split()
+                whisper_prompt = " ".join(words[-100:])
+        except Exception:
+            pass
+
         # 2. Transcribe
         try:
-            chunk_text, detected_language = await transcribe_audio(file)
+            chunk_text, detected_language = await transcribe_audio(file, prompt=whisper_prompt)
         except Exception:
             raise HTTPException(status_code=500, detail="Transcription failed")
+
+        # Strip known Whisper hallucination strings (fired on silence/noise)
+        for _h in _HALLUCINATION_STRINGS:
+            chunk_text = chunk_text.replace(_h, '')
+        chunk_text = chunk_text.strip()
 
         if not chunk_text:
             return {"lecture_id": lecture_id, "chunk_transcript": "", "message": "Empty transcription"}
 
-        # 3. Persist language (stored value wins after first detection)
-        stored_language = get_lecture_language(lecture_id)
-        if stored_language == "en" and detected_language != "en":
+        # 3. Persist language — first real detection wins, never override.
+        # Ignore hallucination languages (ja/zh) which Whisper emits on silence.
+        stored_language = get_lecture_language(lecture_id)  # None if not yet set
+        if not stored_language and detected_language and detected_language not in _HALLUCINATION_LANGS:
             update_lecture_language(lecture_id, detected_language)
             stored_language = detected_language
-        language = stored_language
+        language = stored_language or 'en'
 
         # 4. Append transcript + update session analytics
         try:

@@ -29,11 +29,13 @@ _bg_client = OpenAI(
 ) if settings.OPENAI_API_KEY else None
 
 
-async def transcribe_audio(file: UploadFile) -> tuple[str, str]:
+async def transcribe_audio(file: UploadFile, prompt: str = None) -> tuple[str, str]:
     """
     Transcribes audio using Whisper and returns (transcript_text, language_code).
     Language code is ISO-639-1 (e.g. "en", "ar", "zh").
     Whisper detects language automatically — we just capture what it found.
+    prompt: optional last ~100 words of the previous chunk to prevent duplicate transcription
+            at chunk boundaries (Whisper re-transcribes its own context window otherwise).
     """
     if not settings.OPENAI_API_KEY:
         raise HTTPException(status_code=500, detail="OpenAI API key not configured")
@@ -49,11 +51,16 @@ async def transcribe_audio(file: UploadFile) -> tuple[str, str]:
         # Use response_format="verbose_json" to get language alongside transcript.
         # Whisper always detects language internally — verbose_json exposes it
         # instead of discarding it. No extra API cost, no extra latency.
-        transcript_response = await asyncio.to_thread(
-            client.audio.transcriptions.create,
+        create_kwargs = dict(
             model="whisper-1",
             file=file_obj,
-            response_format="verbose_json"
+            response_format="verbose_json",
+        )
+        if prompt:
+            create_kwargs["prompt"] = prompt
+        transcript_response = await asyncio.to_thread(
+            client.audio.transcriptions.create,
+            **create_kwargs
         )
 
         text = transcript_response.text or ""
