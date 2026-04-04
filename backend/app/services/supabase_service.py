@@ -89,7 +89,7 @@ def get_lecture_language(lecture_id: str):
             return lang if lang else None
     except Exception:
         pass
-    return "en"
+    return None  # caller uses `stored_language or 'en'` as the final fallback
 
 
 def get_lecture_topic(lecture_id: str):
@@ -224,28 +224,36 @@ def update_live_session_timestamp(live_session_id: str):
 
 def update_lecture_analytics(lecture_id: str, chunk_duration: int = 12):
     """
-    Updates analytics for a lecture (total_chunks, total_duration_seconds).
-    Note: 'word_count' is implicitly derivable from transcript or stored if we add a column.
-    For this request, we'll increment total_chunks and total_duration_seconds by approximate value.
+    Atomically increments total_chunks and total_duration_seconds via a
+    Supabase RPC so concurrent chunks never race and lose an increment.
+
+    Required SQL (run once in Supabase SQL editor):
+        CREATE OR REPLACE FUNCTION increment_lecture_analytics(
+            p_lecture_id UUID, p_duration INTEGER
+        ) RETURNS VOID LANGUAGE plpgsql AS $$
+        BEGIN
+            UPDATE lectures
+            SET total_chunks           = COALESCE(total_chunks, 0) + 1,
+                total_duration_seconds = COALESCE(total_duration_seconds, 0) + p_duration
+            WHERE id = p_lecture_id;
+        END; $$;
     """
     if not supabase:
         raise Exception("Supabase client is not initialized")
-    
-    # NOTE: This is a read-modify-write operation and is not atomic.
-    # In production, replace with a Supabase RPC function:
-    #   supabase.rpc("increment_analytics", {"lecture_id": lecture_id, "duration": chunk_duration}).execute()
-    # For this prototype, concurrent requests for the same lecture_id are unlikely (12s chunk cadence).
-    response = supabase.table("lectures").select("total_chunks, total_duration_seconds").eq("id", lecture_id).execute()
-    
-    if hasattr(response, 'data') and len(response.data) > 0:
-        current = response.data[0]
-        new_chunks = (current.get("total_chunks") or 0) + 1
-        new_duration = (current.get("total_duration_seconds") or 0) + chunk_duration
-        
-        supabase.table("lectures").update({
-            "total_chunks": new_chunks,
-            "total_duration_seconds": new_duration
-        }).eq("id", lecture_id).execute()
+    try:
+        supabase.rpc(
+            "increment_lecture_analytics",
+            {"p_lecture_id": lecture_id, "p_duration": chunk_duration},
+        ).execute()
+    except Exception:
+        # RPC not yet created — fall back to read-modify-write
+        response = supabase.table("lectures").select("total_chunks, total_duration_seconds").eq("id", lecture_id).execute()
+        if hasattr(response, 'data') and len(response.data) > 0:
+            current = response.data[0]
+            supabase.table("lectures").update({
+                "total_chunks":           (current.get("total_chunks") or 0) + 1,
+                "total_duration_seconds": (current.get("total_duration_seconds") or 0) + chunk_duration,
+            }).eq("id", lecture_id).execute()
 
 def end_live_session(lecture_id: str):
     """
@@ -370,10 +378,11 @@ def create_lecture_section(lecture_id: str, section_summary: str, range_start: i
         "chunk_range_end": range_end,
         "section_index": section_index
     }
-    # Bug 1 fix: upsert with ignore_duplicates prevents postgres error 23505
-    # on (lecture_id, section_index) unique constraint violation
+    # Upsert: if two background tasks race to the same section_index, the later
+    # one overwrites — both computed summaries for the same chunk range, so
+    # overwriting is safe and prevents silent data loss from ignore_duplicates.
     db.table("lecture_sections").upsert(
-        data, on_conflict="lecture_id,section_index", ignore_duplicates=True
+        data, on_conflict="lecture_id,section_index"
     ).execute()
 
     # Also update total_sections counter in master table
@@ -665,16 +674,30 @@ def get_lecture_by_share_token(token: str):
 
 
 def increment_share_views(lecture_id: str) -> None:
-    """Increments share_views counter. Non-fatal on failure."""
+    """
+    Atomically increments share_views. Non-fatal on failure.
+
+    Required SQL (run once in Supabase SQL editor):
+        CREATE OR REPLACE FUNCTION increment_share_views(p_lecture_id UUID)
+        RETURNS VOID LANGUAGE plpgsql AS $$
+        BEGIN
+            UPDATE lectures SET share_views = COALESCE(share_views, 0) + 1
+            WHERE id = p_lecture_id;
+        END; $$;
+    """
     if not supabase:
         return
     try:
-        resp = supabase.table("lectures").select("share_views").eq("id", lecture_id).execute()
-        if hasattr(resp, "data") and resp.data:
-            current = resp.data[0].get("share_views") or 0
-            supabase.table("lectures").update({"share_views": current + 1}).eq("id", lecture_id).execute()
-    except Exception as e:
-        print(f"[share] increment_share_views failed (non-fatal): {e}")
+        supabase.rpc("increment_share_views", {"p_lecture_id": lecture_id}).execute()
+    except Exception:
+        # RPC not yet created — fall back to read-modify-write
+        try:
+            resp = supabase.table("lectures").select("share_views").eq("id", lecture_id).execute()
+            if hasattr(resp, "data") and resp.data:
+                current = resp.data[0].get("share_views") or 0
+                supabase.table("lectures").update({"share_views": current + 1}).eq("id", lecture_id).execute()
+        except Exception as e:
+            print(f"[share] increment_share_views failed (non-fatal): {e}")
 
 
 def get_lecture_full(lecture_id: str):

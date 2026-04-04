@@ -306,11 +306,15 @@ async def _transcribe_background(file_bytes: bytes, filename: str, lecture_id: s
     except Exception as e:
         print(f"[bg_transcribe] transcription failed for lecture={lecture_id}: {e}")
         return
-    # Auto-summarize after transcription completes
+    # Auto-summarize after transcription completes.
+    # generate_master_summary expects a list of section summaries — wrap the
+    # full transcript as a single element so it doesn't TypeError on str.join.
     try:
         from app.services.summarization_service import generate_master_summary
         import asyncio as _asyncio
-        summary = await _asyncio.to_thread(generate_master_summary, transcript_text)
+        summary = await _asyncio.to_thread(
+            generate_master_summary, [transcript_text], language=language
+        )
         update_lecture_summary_only(lecture_id, summary)
         print(f"[bg_transcribe] summary done lecture={lecture_id}")
     except Exception as e:
@@ -685,13 +689,20 @@ async def process_live_chunk(
     if not session:
         raise HTTPException(status_code=400, detail="Active live session not found")
 
+    # Reject oversized uploads before reading into RAM (DoS protection).
+    # Content-Length is checked first; byte-count check after read is the fallback.
+    _MAX_CHUNK = 5 * 1024 * 1024  # 5 MB
+    cl = request.headers.get("content-length")
+    if cl and int(cl) > _MAX_CHUNK:
+        raise HTTPException(status_code=413, detail="Audio chunk too large")
+
     # Validate audio chunk — magic bytes check (rejects non-audio uploads)
     if not await _check_audio_magic(file):
         raise HTTPException(status_code=400, detail="Invalid audio format")
 
-    # Hard file size limit for chunks — 12s WebM is typically 50-200KB, cap at 5MB
+    # Read + secondary size guard (covers clients that omit Content-Length)
     chunk_bytes = await file.read()
-    if len(chunk_bytes) > 5 * 1024 * 1024:
+    if len(chunk_bytes) > _MAX_CHUNK:
         raise HTTPException(status_code=413, detail="Audio chunk too large")
     await file.seek(0)
 
@@ -753,9 +764,10 @@ async def process_live_chunk(
         except Exception:
             raise HTTPException(status_code=500, detail="Failed to update lecture")
 
-    # 5. Compute chunk_idx (needed by background task and topic detection)
-    lecture_data = get_lecture_for_summarization(lecture_id)
-    chunk_idx    = ((lecture_data.get("total_chunks") or 0) - 1) if lecture_data else 0
+        # 5. Compute chunk_idx inside the lock so a concurrent chunk that already
+        #    incremented total_chunks doesn't cause two chunks to share the same index.
+        lecture_data = get_lecture_for_summarization(lecture_id)
+        chunk_idx    = ((lecture_data.get("total_chunks") or 0) - 1) if lecture_data else 0
 
     # 6. Topic detection — synchronous, fires exactly once on chunk_idx == 1.
     #    Kept on the hot path so the response carries the topic for the badge.

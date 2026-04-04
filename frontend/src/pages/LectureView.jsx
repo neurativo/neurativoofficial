@@ -242,7 +242,7 @@ export default function LectureView() {
                 .then(res => setVisualFrames(res.data.frames || []))
                 .catch(() => setVisualFrames([]));
         }
-    }, [activeTab, id, stats, visualFrames]);
+    }, [activeTab, id]); // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
         if (qaEndRef.current) qaEndRef.current.scrollIntoView({ behavior: 'smooth' });
