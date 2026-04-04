@@ -11,6 +11,7 @@ from playwright.sync_api import sync_playwright
 from openai import OpenAI
 from app.core.config import settings
 from app.services.supabase_service import get_lecture_for_summarization, get_visual_frames
+from app.services.cost_tracker import log_cost
 
 # ── OpenAI client ─────────────────────────────────────────────────────────────
 _client = OpenAI(api_key=settings.OPENAI_API_KEY) if settings.OPENAI_API_KEY else None
@@ -129,6 +130,9 @@ def _call_executive_summary(transcript: str, title: str, topic: str | None) -> s
         temperature=0.4,
         max_tokens=650,
     )
+    log_cost("pdf_executive_summary", "gpt-4o-mini",
+             input_tokens=resp.usage.prompt_tokens,
+             output_tokens=resp.usage.completion_tokens)
     return resp.choices[0].message.content.strip()
 
 
@@ -174,6 +178,9 @@ def _call_enrich_section(
         max_tokens=550,
         response_format={"type": "json_object"},
     )
+    log_cost("pdf_enrich_section", "gpt-4o-mini",
+             input_tokens=resp.usage.prompt_tokens,
+             output_tokens=resp.usage.completion_tokens)
     try:
         data = json.loads(resp.choices[0].message.content)
     except Exception:
@@ -215,6 +222,9 @@ def _call_glossary(transcript: str, topic: str | None, n_terms: int = 8) -> list
         max_tokens=700,
         response_format={"type": "json_object"},
     )
+    log_cost("pdf_glossary", "gpt-4o-mini",
+             input_tokens=resp.usage.prompt_tokens,
+             output_tokens=resp.usage.completion_tokens)
     try:
         return json.loads(resp.choices[0].message.content).get("terms", [])
     except Exception:
@@ -242,6 +252,9 @@ def _call_takeaways(transcript: str, summary: str, topic: str | None) -> list[st
         max_tokens=450,
         response_format={"type": "json_object"},
     )
+    log_cost("pdf_takeaways", "gpt-4o-mini",
+             input_tokens=resp.usage.prompt_tokens,
+             output_tokens=resp.usage.completion_tokens)
     try:
         return json.loads(resp.choices[0].message.content).get("takeaways", [])
     except Exception:
@@ -279,6 +292,9 @@ def _call_quick_review(
         max_tokens=1400,
         response_format={"type": "json_object"},
     )
+    log_cost("pdf_quick_review", "gpt-4o-mini",
+             input_tokens=resp.usage.prompt_tokens,
+             output_tokens=resp.usage.completion_tokens)
     try:
         return json.loads(resp.choices[0].message.content).get("questions", [])
     except Exception:
@@ -320,6 +336,9 @@ def _call_study_roadmap(
         max_tokens=700,
         response_format={"type": "json_object"},
     )
+    log_cost("pdf_study_roadmap", "gpt-4o",
+             input_tokens=resp.usage.prompt_tokens,
+             output_tokens=resp.usage.completion_tokens)
     try:
         data = json.loads(resp.choices[0].message.content)
         return {
@@ -358,6 +377,9 @@ def _call_conceptual_map(section_summaries: list[str]) -> list[dict]:
         max_tokens=900,
         response_format={"type": "json_object"},
     )
+    log_cost("pdf_conceptual_map", "gpt-4o",
+             input_tokens=resp.usage.prompt_tokens,
+             output_tokens=resp.usage.completion_tokens)
     try:
         return json.loads(resp.choices[0].message.content).get("connections", [])
     except Exception:

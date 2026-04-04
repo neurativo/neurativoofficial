@@ -29,7 +29,9 @@ from app.services.supabase_service import (
     delete_lecture,
     cleanup_old_chunks,
     get_user_plan,
+    get_client as _sb_client,
 )
+from app.services.cost_tracker import PRICING, LKR_RATE
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -260,3 +262,107 @@ async def get_system(admin: User = Depends(get_admin_user)):
         "plan_limits": PLAN_LIMITS,
         "audit_log": list(_audit_log),
     }
+
+
+# ---------------------------------------------------------------------------
+# Cost tracking endpoints
+# ---------------------------------------------------------------------------
+
+def _query_cost_logs(
+    days: int = 30,
+    feature: str = "",
+    page: int = 1,
+    page_size: int = 50,
+) -> dict:
+    """Query api_cost_logs from Supabase. Returns empty data if table not found."""
+    try:
+        sb = _sb_client()
+        if not sb:
+            return {"logs": [], "total": 0, "total_usd": 0.0}
+
+        # Date filter
+        from datetime import datetime, timezone, timedelta
+        since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+
+        q = sb.table("api_cost_logs").select("*", count="exact").gte("created_at", since)
+        if feature:
+            q = q.eq("feature", feature)
+
+        offset = (page - 1) * page_size
+        res = q.order("created_at", desc=True).range(offset, offset + page_size - 1).execute()
+        total = res.count or 0
+
+        # Also fetch total cost for the period
+        total_res = sb.table("api_cost_logs").select("cost_usd").gte("created_at", since).execute()
+        total_usd = sum(r.get("cost_usd", 0) or 0 for r in (total_res.data or []))
+
+        return {
+            "logs":      res.data or [],
+            "total":     total,
+            "total_usd": round(total_usd, 6),
+            "total_lkr": round(total_usd * LKR_RATE, 2),
+        }
+    except Exception as e:
+        print(f"[admin/costs] query failed: {e}")
+        return {"logs": [], "total": 0, "total_usd": 0.0, "total_lkr": 0.0}
+
+
+def _cost_summary(days: int = 30) -> dict:
+    """Aggregate cost by feature and day for the dashboard."""
+    try:
+        sb = _sb_client()
+        if not sb:
+            return {"by_feature": {}, "daily": [], "total_usd": 0.0}
+
+        from datetime import datetime, timezone, timedelta
+        since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+
+        res = sb.table("api_cost_logs").select("feature,cost_usd,created_at,model").gte("created_at", since).execute()
+        rows = res.data or []
+
+        by_feature: dict = {}
+        daily: dict = {}
+        total_usd = 0.0
+
+        for r in rows:
+            feat = r.get("feature", "unknown")
+            cost = r.get("cost_usd") or 0.0
+            total_usd += cost
+            by_feature[feat] = round(by_feature.get(feat, 0.0) + cost, 8)
+            day = (r.get("created_at") or "")[:10]
+            if day:
+                daily[day] = round(daily.get(day, 0.0) + cost, 8)
+
+        daily_list = sorted([{"date": d, "cost_usd": v} for d, v in daily.items()], key=lambda x: x["date"])
+
+        return {
+            "by_feature": by_feature,
+            "daily":      daily_list,
+            "total_usd":  round(total_usd, 6),
+            "total_lkr":  round(total_usd * LKR_RATE, 2),
+            "pricing":    PRICING,
+        }
+    except Exception as e:
+        print(f"[admin/costs/summary] query failed: {e}")
+        return {"by_feature": {}, "daily": [], "total_usd": 0.0, "total_lkr": 0.0, "pricing": PRICING}
+
+
+@router.get("/costs")
+async def get_costs(
+    days:      int = Query(30, ge=1, le=365),
+    feature:   str = Query(""),
+    page:      int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    admin: User = Depends(get_admin_user),
+):
+    """Paginated raw cost logs with period totals."""
+    return _query_cost_logs(days=days, feature=feature, page=page, page_size=page_size)
+
+
+@router.get("/costs/summary")
+async def get_costs_summary(
+    days: int = Query(30, ge=1, le=365),
+    admin: User = Depends(get_admin_user),
+):
+    """Aggregated cost breakdown by feature and day."""
+    return _cost_summary(days=days)

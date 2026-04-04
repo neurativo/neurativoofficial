@@ -1,5 +1,6 @@
 import time
 import app.services.openai_service as openai_service
+from app.services.cost_tracker import log_cost
 
 
 def _language_instruction(language: str) -> str:
@@ -121,6 +122,9 @@ def generate_micro_summary(text: str, language: str = "en") -> str:
                 temperature=0.2,
                 max_tokens=150
             )
+            log_cost("micro_summary", "gpt-4o-mini",
+                     input_tokens=response.usage.prompt_tokens,
+                     output_tokens=response.usage.completion_tokens)
             return response.choices[0].message.content
         except Exception as e:
             last_err = e
@@ -160,6 +164,9 @@ def generate_section_summary(micro_summaries: list, language: str = "en", topic:
                 temperature=0.2,
                 max_tokens=400
             )
+            log_cost("section_summary", "gpt-4o-mini",
+                     input_tokens=response.usage.prompt_tokens,
+                     output_tokens=response.usage.completion_tokens)
             return response.choices[0].message.content
         except Exception as e:
             last_err = e
@@ -230,6 +237,9 @@ def generate_master_summary(section_summaries: list, language: str = "en", topic
                 temperature=0.2,
                 max_tokens=1200
             )
+            log_cost("master_summary", "gpt-4o-mini",
+                     input_tokens=response.usage.prompt_tokens,
+                     output_tokens=response.usage.completion_tokens)
             master_summary = response.choices[0].message.content
             break
         except Exception as e:
@@ -265,6 +275,9 @@ def generate_master_summary(section_summaries: list, language: str = "en", topic
                     temperature=0.2,
                     max_tokens=1200
                 )
+                log_cost("master_summary_compression", "gpt-4o-mini",
+                         input_tokens=compression_response.usage.prompt_tokens,
+                         output_tokens=compression_response.usage.completion_tokens)
                 master_summary = compression_response.choices[0].message.content
                 break
             except Exception as e:

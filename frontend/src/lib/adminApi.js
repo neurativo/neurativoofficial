@@ -51,4 +51,6 @@ export const adminApi = {
     deleteLecture:   (lectureId)               => _delete(`/lectures/${lectureId}`),
     triggerCleanup:  (days = 30)               => _post('/system/cleanup', { days }),
     getSystem:       ()                        => _get('/system'),
+    getCosts:        (p = {})                  => _get('/costs', p),
+    getCostsSummary: (p = {})                  => _get('/costs/summary', p),
 };

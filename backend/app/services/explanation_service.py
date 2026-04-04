@@ -2,6 +2,7 @@ import json
 from openai import OpenAI
 from app.core.config import settings
 from fastapi import HTTPException
+from app.services.cost_tracker import log_cost
 
 client = OpenAI(api_key=settings.OPENAI_API_KEY) if settings.OPENAI_API_KEY else None
 
@@ -112,6 +113,9 @@ def generate_explanation(selected_text: str, mode: str = "simple", topic: str = 
             response_format={"type": "json_object"}
         )
 
+        log_cost("smart_explain", "gpt-4o-mini",
+                 input_tokens=response.usage.prompt_tokens,
+                 output_tokens=response.usage.completion_tokens)
         content = response.choices[0].message.content
         return json.loads(content)
 

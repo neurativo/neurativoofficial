@@ -1,4 +1,5 @@
 import app.services.openai_service as openai_service
+from app.services.cost_tracker import log_cost
 
 # Canonical domain labels the classifier is steered toward.
 # Kept lowercase so comparisons elsewhere are case-insensitive string matches.
@@ -44,6 +45,9 @@ def detect_lecture_topic(transcript: str) -> str:
             temperature=0.1,
             max_tokens=10,
         )
+        log_cost("topic_detection", "gpt-4o-mini",
+                 input_tokens=response.usage.prompt_tokens,
+                 output_tokens=response.usage.completion_tokens)
         raw = response.choices[0].message.content.strip().lower()
         return raw[:30] if raw else "general"
 

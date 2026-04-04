@@ -270,7 +270,16 @@ function langName(code) {
 // ─── UserMenu ─────────────────────────────────────────────────────────────────
 function UserMenu({ user, onSignOut }) {
     const [open, setOpen] = useState(false);
+    const [isAdmin, setIsAdmin] = useState(false);
     const initials = (user?.email?.[0] || '?').toUpperCase();
+
+    useEffect(() => {
+        // Silently check admin access — only show link if verified
+        import('../lib/adminApi.js').then(({ adminApi }) => {
+            adminApi.verify().then(() => setIsAdmin(true)).catch(() => {});
+        });
+    }, []);
+
     return (
         <div className="db-avatar-wrap">
             <button className="db-avatar" onClick={() => setOpen(o => !o)}>{initials}</button>
@@ -283,6 +292,12 @@ function UserMenu({ user, onSignOut }) {
                             <div className="db-dropdown-email">{user?.email}</div>
                         </div>
                         <Link to="/profile" className="db-dropdown-item" onClick={() => setOpen(false)}>Profile</Link>
+                        {isAdmin && (
+                            <>
+                                <div className="db-dropdown-divider" />
+                                <Link to="/admin" className="db-dropdown-item" onClick={() => setOpen(false)} style={{ color: '#7c3aed' }}>Admin Panel</Link>
+                            </>
+                        )}
                         <div className="db-dropdown-divider" />
                         <button className="db-dropdown-signout" onClick={onSignOut}>Sign out</button>
                     </div>

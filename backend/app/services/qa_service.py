@@ -1,6 +1,7 @@
 import hashlib
 import re
 
+from app.services.cost_tracker import log_cost
 from app.services.supabase_service import (
     get_lecture_transcript,
     get_lecture_language,
@@ -141,6 +142,9 @@ def answer_lecture_question(lecture_id: str, question: str) -> str:
             max_tokens=600,
         )
 
+        log_cost("qa_answer", "gpt-4o-mini",
+                 input_tokens=response.usage.prompt_tokens,
+                 output_tokens=response.usage.completion_tokens)
         return response.choices[0].message.content
 
     except HTTPException:
@@ -179,6 +183,9 @@ def _expand_query(question: str) -> list[str]:
             temperature=0.5,
             max_tokens=150,
         )
+        log_cost("qa_expansion", "gpt-4o-mini",
+                 input_tokens=resp.usage.prompt_tokens,
+                 output_tokens=resp.usage.completion_tokens)
         lines = [ln.strip() for ln in resp.choices[0].message.content.strip().splitlines() if ln.strip()]
         return lines[:3]
     except Exception as e:

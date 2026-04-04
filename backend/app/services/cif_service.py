@@ -17,6 +17,7 @@ silently dropped due to a classification failure.
 import json
 
 import app.services.openai_service as openai_service
+from app.services.cost_tracker import log_cost
 
 _VALID_TYPES = {"LECTURE", "STUDENT_QUESTION", "LECTURER_RESPONSE", "OFF_TOPIC"}
 
@@ -76,6 +77,9 @@ def classify_chunk(chunk_text: str, topic: str | None) -> dict:
 
         note = str(data.get("note", ""))
 
+        log_cost("cif_classification", "gpt-4o-mini",
+                 input_tokens=resp.usage.prompt_tokens,
+                 output_tokens=resp.usage.completion_tokens)
         print(f"[CIF] type={cif_type} confidence={confidence:.2f} note={note!r}")
         return {"type": cif_type, "confidence": confidence, "note": note}
 

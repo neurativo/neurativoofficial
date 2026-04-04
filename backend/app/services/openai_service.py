@@ -4,6 +4,7 @@ from openai import OpenAI
 from fastapi import UploadFile, HTTPException
 from app.core.config import settings
 from io import BytesIO
+from app.services.cost_tracker import log_cost_async, log_cost
 
 # Language code → display name map for the frontend badge
 LANGUAGE_NAMES = {
@@ -67,6 +68,11 @@ async def transcribe_audio(file: UploadFile, prompt: str = None) -> tuple[str, s
         # verbose_json includes a top-level 'language' field (ISO-639-1 code)
         detected_language = getattr(transcript_response, "language", None) or "en"
 
+        # Estimate audio duration from verbose_json segments when available
+        segments = getattr(transcript_response, "segments", None) or []
+        audio_seconds = segments[-1]["end"] if segments else 0.0
+        await log_cost_async("whisper_transcription", "whisper-1", audio_seconds=audio_seconds)
+
         return text, detected_language
 
     except Exception as e:
@@ -92,6 +98,11 @@ async def transcribe_audio_bytes(file_bytes: bytes, filename: str) -> tuple[str,
     )
     text = transcript_response.text or ""
     detected_language = getattr(transcript_response, "language", None) or "en"
+
+    segments = getattr(transcript_response, "segments", None) or []
+    audio_seconds = segments[-1]["end"] if segments else 0.0
+    log_cost("whisper_import", "whisper-1", audio_seconds=audio_seconds)
+
     return text, detected_language
 
 

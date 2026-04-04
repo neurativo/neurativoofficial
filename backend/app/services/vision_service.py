@@ -3,6 +3,7 @@ import base64
 import json
 
 import app.services.openai_service as openai_service
+from app.services.cost_tracker import log_cost_async
 
 VISION_PROMPT = """You are analyzing a screenshot from a live lecture.
 Extract ALL meaningful academic content visible on screen.
@@ -124,6 +125,7 @@ async def analyze_frame(image_base64: str, topic: str = None) -> dict:
         )
 
         result = json.loads(response.choices[0].message.content)
+        await log_cost_async("vision_screen", "gpt-4o-vision", image_count=1)
         print(f"[VISION] {result.get('content_type')} — {result.get('summary', '')[:80]}")
         return result
 
@@ -174,6 +176,7 @@ async def analyze_board_frame(image_base64: str, topic: str = None) -> dict:
         )
 
         result = json.loads(response.choices[0].message.content)
+        await log_cost_async("vision_board", "gpt-4o-vision", image_count=1)
         confidence = result.get("confidence", "low")
         print(
             f"[VISION-BOARD] {result.get('content_type')} "
