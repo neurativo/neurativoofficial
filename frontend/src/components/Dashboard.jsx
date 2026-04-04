@@ -453,8 +453,12 @@ export default function Dashboard({ user }) {
         try {
             const res = await api.post(`/api/v1/lectures/${id}/share`);
             const shareUrl = window.location.origin + res.data.share_url;
-            await navigator.clipboard.writeText(shareUrl);
-            addToast({ type: 'success', message: 'Link copied!' });
+            try {
+                await navigator.clipboard.writeText(shareUrl);
+                addToast({ type: 'success', message: 'Link copied!' });
+            } catch {
+                addToast({ type: 'success', message: shareUrl });
+            }
         } catch {
             addToast({ type: 'error', message: 'Failed to generate share link' });
         }

@@ -267,9 +267,14 @@ export default function LectureView() {
         try {
             const res = await api.post(`/api/v1/lectures/${id}/share`);
             const shareUrl = window.location.origin + res.data.share_url;
-            await navigator.clipboard.writeText(shareUrl);
-            addToast({ type: 'success', message: 'Link copied!' });
             if (lecture) setLecture(l => ({ ...l, share_token: res.data.share_url.split('/share/')[1] }));
+            try {
+                await navigator.clipboard.writeText(shareUrl);
+                addToast({ type: 'success', message: 'Link copied!' });
+            } catch {
+                // Clipboard blocked — show the URL so the user can copy manually
+                addToast({ type: 'success', message: shareUrl });
+            }
         } catch {
             addToast({ type: 'error', message: 'Failed to generate share link' });
         }

@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useSEO } from '../lib/useSEO';
 
 // Public endpoint — no auth interceptor needed
-const BASE_URL = import.meta.env.VITE_API_URL || '';
+const BASE_URL = import.meta.env.VITE_API_URL || 'https://neurativoofficial-production.up.railway.app';
 
 const C = {
     bg: 'var(--color-bg)', text: 'var(--color-text)', sec: 'var(--color-sec)', muted: 'var(--color-muted)',
