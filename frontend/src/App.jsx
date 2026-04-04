@@ -511,9 +511,15 @@ function App({ user }) {
 
     const connectSSE = async (id) => {
         if (sseRef.current) sseRef.current.close();
-        // Pass auth token as query param since EventSource can't set headers
-        const token = await window.Clerk?.session?.getToken();
-        const qs = token ? `?token=${encodeURIComponent(token)}` : '';
+        // Pass auth token as query param since EventSource can't set headers.
+        // Retry token fetch up to 3 times — Clerk session may not be ready immediately.
+        let token = null;
+        for (let attempt = 0; attempt < 3 && !token; attempt++) {
+            if (attempt > 0) await new Promise(r => setTimeout(r, 500 * attempt));
+            token = await window.Clerk?.session?.getToken().catch(() => null);
+        }
+        if (!token) { console.warn('[SSE] No auth token — SSE skipped, polling will cover updates'); return; }
+        const qs = `?token=${encodeURIComponent(token)}`;
         const es = new EventSource(`/api/v1/live/${id}/stream${qs}`);
 
         es.onmessage = (e) => {
@@ -702,6 +708,10 @@ function App({ user }) {
         const targetId = currentId || lectureId;
         if (!targetId) return;
         try {
+            // Stop previous audio monitoring BEFORE acquiring new stream so
+            // stopAudioMonitoring doesn't kill the fresh micStream via micStreamRef
+            stopAudioMonitoring();
+
             const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
             micStreamRef.current = micStream;
 
@@ -717,8 +727,6 @@ function App({ user }) {
                     setTimeout(() => startRecording(targetId), 2000);
                 };
             });
-
-            stopAudioMonitoring();
             const AudioCtx = window.AudioContext || window.webkitAudioContext;
             audioContextRef.current = new AudioCtx();
             await audioContextRef.current.resume();
