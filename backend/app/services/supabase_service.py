@@ -966,10 +966,13 @@ def save_visual_frame(
     formatted_text: str,
     source: str = "screen",   # "screen" (Phase 1) or "board" (Phase 2)
 ) -> None:
-    """Persists a GPT-4o Vision analysis result for a single captured frame."""
+    """Persists a GPT-4o Vision analysis result for a single captured frame.
+    Tries with 'source' column first; falls back without it if the column doesn't
+    exist yet (run: ALTER TABLE lecture_visual_frames ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'screen')
+    """
     if not supabase:
         return
-    supabase.table("lecture_visual_frames").insert({
+    row = {
         "lecture_id":        lecture_id,
         "timestamp_seconds": timestamp_seconds,
         "content_type":      visual_data.get("content_type"),
@@ -982,11 +985,18 @@ def save_visual_frame(
         "summary":           visual_data.get("summary"),
         "formatted_text":    formatted_text,
         "source":            source,
-    }).execute()
+    }
+    try:
+        supabase.table("lecture_visual_frames").insert(row).execute()
+    except Exception:
+        # Retry without 'source' in case the column migration hasn't been run yet
+        row.pop("source", None)
+        supabase.table("lecture_visual_frames").insert(row).execute()
 
 
 def get_visual_frames(lecture_id: str) -> list:
-    """Returns all visual frames for a lecture in chronological order."""
+    """Returns all visual frames for a lecture in chronological order.
+    Wraps flat DB columns into a nested visual_data dict for frontend compatibility."""
     if not supabase:
         return []
     response = (
@@ -996,7 +1006,20 @@ def get_visual_frames(lecture_id: str) -> list:
         .order("timestamp_seconds", desc=False)
         .execute()
     )
-    return response.data if hasattr(response, "data") else []
+    frames = response.data if hasattr(response, "data") else []
+    for f in frames:
+        f["visual_data"] = {
+            "has_content":  True,
+            "content_type": f.get("content_type"),
+            "title":        f.get("title"),
+            "text_content": f.get("text_content"),
+            "equations":    f.get("equations") or [],
+            "diagrams":     f.get("diagrams") or [],
+            "code":         f.get("code"),
+            "key_terms":    f.get("key_terms") or [],
+            "summary":      f.get("summary"),
+        }
+    return frames
 
 
 def get_visual_frames_in_window(lecture_id: str, start_sec: int, end_sec: int) -> list:

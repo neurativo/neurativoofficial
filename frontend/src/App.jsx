@@ -1240,14 +1240,6 @@ function App({ user }) {
                 setTimeout(() => startRecording(lectureIdRef.current), 300);
             }
 
-            // Privacy notice
-            const hasAudio = stream.getAudioTracks().length > 0;
-            showError(
-                hasAudio
-                    ? 'Screen + tab audio captured. Frames are analyzed; images are never stored.'
-                    : 'Only your selected screen is captured. Frames are analyzed and never stored as images.',
-                4000
-            );
 
             const videoTrack = stream.getVideoTracks()[0];
             const imageCapture = new window.ImageCapture(videoTrack);
