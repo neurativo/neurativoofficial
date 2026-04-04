@@ -781,14 +781,24 @@ function App({ user }) {
                 if (!isRecordingRef.current) { micStream.getTracks().forEach(t => t.stop()); return; }
                 peakSpeechEnergyRef.current = 0;
                 audioChunksRef.current = [];
-                const recorder = new MediaRecorder(recordingStream, { mimeType: 'audio/webm' });
+                const MIME_CANDIDATES = [
+                    'audio/webm;codecs=opus',
+                    'audio/webm',
+                    'audio/ogg;codecs=opus',
+                    'audio/ogg',
+                    '',
+                ];
+                const supportedMime = MIME_CANDIDATES.find(m => m === '' || MediaRecorder.isTypeSupported(m));
+                const recorderOpts = supportedMime ? { mimeType: supportedMime } : {};
+                const recorder = new MediaRecorder(recordingStream, recorderOpts);
                 mediaRecorderRef.current = recorder;
                 recorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
                 recorder.onstop = () => {
                     const isSilent = peakSpeechEnergyRef.current < speechThreshold;
                     if (audioChunksRef.current.length > 0 && !isSilent) {
                         silentChunksRef.current = 0;
-                        uploadChunk(new Blob(audioChunksRef.current, { type: 'audio/webm' }), targetId);
+                        const blobType = recorder.mimeType || supportedMime || 'audio/webm';
+                        uploadChunk(new Blob(audioChunksRef.current, { type: blobType }), targetId);
                     } else if (isSilent) {
                         noiseFloorRef.current = 0.9 * noiseFloorRef.current + 0.1 * peakSpeechEnergyRef.current;
                         speechThreshold = Math.max(8, Math.min(60, noiseFloorRef.current * 2.5));
@@ -830,7 +840,8 @@ function App({ user }) {
     // Resilience 4: measure round-trip latency to set connQuality
     const uploadChunkWithRetry = async (blob, targetId, attempt = 0) => {
         const formData = new FormData();
-        formData.append('file', new File([blob], 'chunk.webm', { type: 'audio/webm' }));
+        const ext = blob.type?.includes('ogg') ? 'ogg' : 'webm';
+        formData.append('file', new File([blob], `chunk.${ext}`, { type: blob.type || 'audio/webm' }));
         const start = Date.now();
         try {
             const res = await api.post(
