@@ -20,6 +20,7 @@ import AdminLectures from './pages/admin/AdminLectures.jsx';
 import AdminLectureDetail from './pages/admin/AdminLectureDetail.jsx';
 import AdminSessions from './pages/admin/AdminSessions.jsx';
 import AdminSystem from './pages/admin/AdminSystem.jsx';
+import AdminCosts from './pages/admin/AdminCosts.jsx';
 import { ToastProvider } from './components/Toast.jsx';
 import './index.css';
 
@@ -76,6 +77,7 @@ function Root() {
                 <Route path="users/:userId" element={<AdminUserDetail />} />
                 <Route path="lectures" element={<AdminLectures />} />
                 <Route path="lectures/:lectureId" element={<AdminLectureDetail />} />
+                <Route path="costs" element={<AdminCosts />} />
                 <Route path="sessions" element={<AdminSessions />} />
                 <Route path="system" element={<AdminSystem />} />
             </Route>
