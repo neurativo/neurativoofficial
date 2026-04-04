@@ -210,6 +210,7 @@ function App({ user }) {
     const lastFrameHashRef     = useRef('');
     const frameIntervalRef     = useRef(null);
     const canvasRef            = useRef(null);  // lazily created
+    const mergeAudioCtxRef     = useRef(null);  // AudioContext for mic+screen merge
 
     // ── Audio monitoring refs ──────────────────────────────
     const audioContextRef      = useRef(null);
@@ -657,10 +658,10 @@ function App({ user }) {
         const targetId = currentId || lectureId;
         if (!targetId) return;
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
             // Fix 6: recover from unexpected microphone disconnects
-            stream.getTracks().forEach(track => {
+            micStream.getTracks().forEach(track => {
                 track.onended = () => {
                     // If we stopped intentionally (pause/end), isRecordingRef is already false — ignore
                     if (!isRecordingRef.current) return;
@@ -678,7 +679,22 @@ function App({ user }) {
             await audioContextRef.current.resume();
             analyserRef.current = audioContextRef.current.createAnalyser();
             analyserRef.current.fftSize = 256;
-            audioContextRef.current.createMediaStreamSource(stream).connect(analyserRef.current);
+            audioContextRef.current.createMediaStreamSource(micStream).connect(analyserRef.current);
+
+            // Merge screen audio into recording stream if screen share is active with audio
+            let recordingStream = micStream;
+            const screenAudioTracks = screenStreamRef.current?.getAudioTracks() || [];
+            if (screenAudioTracks.length > 0) {
+                if (mergeAudioCtxRef.current && mergeAudioCtxRef.current.state !== 'closed') {
+                    mergeAudioCtxRef.current.close();
+                }
+                const mergeCtx = new AudioCtx();
+                const dest = mergeCtx.createMediaStreamDestination();
+                mergeCtx.createMediaStreamSource(micStream).connect(dest);
+                mergeCtx.createMediaStreamSource(screenStreamRef.current).connect(dest);
+                mergeAudioCtxRef.current = mergeCtx;
+                recordingStream = dest.stream;
+            }
 
             const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
 
@@ -717,10 +733,10 @@ function App({ user }) {
             drawLoop();
 
             const startLoop = () => {
-                if (!isRecordingRef.current) { stream.getTracks().forEach(t => t.stop()); return; }
+                if (!isRecordingRef.current) { micStream.getTracks().forEach(t => t.stop()); return; }
                 peakSpeechEnergyRef.current = 0;
                 audioChunksRef.current = [];
-                const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+                const recorder = new MediaRecorder(recordingStream, { mimeType: 'audio/webm' });
                 mediaRecorderRef.current = recorder;
                 recorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
                 recorder.onstop = () => {
@@ -738,7 +754,7 @@ function App({ user }) {
                         }
                     }
                     if (isRecordingRef.current) startLoop();
-                    else stream.getTracks().forEach(t => t.stop());
+                    else micStream.getTracks().forEach(t => t.stop());
                 };
                 // Resilience 7: point worker tick at the current recorder instance
                 if (timerWorkerRef.current) {
@@ -949,15 +965,25 @@ function App({ user }) {
 
     // ── Screen Capture (Visual Lecture Intelligence) ───────────────────────────
 
-    const stopScreenShare = () => {
+    const stopScreenShare = (restartRecording = false) => {
         clearInterval(frameIntervalRef.current);
         frameIntervalRef.current = null;
+        const hadAudio = (screenStreamRef.current?.getAudioTracks() || []).length > 0;
         if (screenStreamRef.current) {
             screenStreamRef.current.getTracks().forEach(t => t.stop());
             screenStreamRef.current = null;
         }
+        if (mergeAudioCtxRef.current && mergeAudioCtxRef.current.state !== 'closed') {
+            mergeAudioCtxRef.current.close();
+            mergeAudioCtxRef.current = null;
+        }
         setScreenShareActive(false);
         lastFrameHashRef.current = '';
+        // If we were merging screen audio, restart recording mic-only
+        if (hadAudio && isRecordingRef.current) {
+            if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop();
+            setTimeout(() => startRecording(lectureIdRef.current), 300);
+        }
     };
 
     const bitmapToBase64 = async (bitmap) => {
@@ -1013,13 +1039,25 @@ function App({ user }) {
         try {
             const stream = await navigator.mediaDevices.getDisplayMedia({
                 video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 1 } },
-                audio: false,
+                audio: true,  // shows "Share tab audio" checkbox in Chrome — user can opt in
             });
             screenStreamRef.current = stream;
             setScreenShareActive(true);
 
+            // If user shared tab audio, restart recording to merge mic + tab audio
+            if (stream.getAudioTracks().length > 0 && isRecordingRef.current) {
+                if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop();
+                setTimeout(() => startRecording(lectureIdRef.current), 300);
+            }
+
             // Privacy notice
-            showError('Only your selected screen is captured. Frames are analyzed and never stored as images.', 4000);
+            const hasAudio = stream.getAudioTracks().length > 0;
+            showError(
+                hasAudio
+                    ? 'Screen + tab audio captured. Frames are analyzed; images are never stored.'
+                    : 'Only your selected screen is captured. Frames are analyzed and never stored as images.',
+                4000
+            );
 
             const videoTrack = stream.getVideoTracks()[0];
             const imageCapture = new window.ImageCapture(videoTrack);
