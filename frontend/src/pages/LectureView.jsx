@@ -444,6 +444,24 @@ export default function LectureView() {
                                                     <div className="lv-stat-val">{lecture.share_views}</div>
                                                 </div>
                                             )}
+                                            {visualFrames && visualFrames.length > 0 && (() => {
+                                                const screenCount = visualFrames.filter(f => (f.source || 'screen') === 'screen').length;
+                                                const boardCount  = visualFrames.filter(f => f.source === 'board').length;
+                                                return (
+                                                    <div className="lv-stat-card">
+                                                        <div className="lv-stat-label">Visual frames</div>
+                                                        <div className="lv-stat-val">{visualFrames.length}</div>
+                                                        <div className="lv-stat-sub">
+                                                            {screenCount > 0 && boardCount > 0
+                                                                ? `${screenCount} screen · ${boardCount} board`
+                                                                : screenCount > 0
+                                                                    ? `${screenCount} screen`
+                                                                    : `${boardCount} board`
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })()}
                                         </div>
                                     )
                                 }
@@ -457,13 +475,14 @@ export default function LectureView() {
                                     <div style={{ fontSize: 13, color: C.muted }}>Loading…</div>
                                 ) : visualFrames.length === 0 ? (
                                     <div style={{ fontSize: 13, color: C.muted, textAlign: 'center', paddingTop: 32 }}>
-                                        No screen capture data for this lecture.
+                                        No visual capture data for this lecture.
                                     </div>
                                 ) : (
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                                         {visualFrames.map((frame, i) => {
                                             const vd = frame.visual_data || {};
                                             const contentType = vd.content_type || 'unknown';
+                                            const source = frame.source || 'screen';
                                             const typeColors = {
                                                 slide: { bg: '#eff6ff', color: '#2563eb' },
                                                 code: { bg: '#f0fdf4', color: '#16a34a' },
@@ -472,6 +491,9 @@ export default function LectureView() {
                                                 default: { bg: '#f8fafc', color: '#475569' },
                                             };
                                             const tc = typeColors[contentType] || typeColors.default;
+                                            const sourceBadge = source === 'board'
+                                                ? { bg: '#f0fdf4', color: '#15803d', label: 'Board' }
+                                                : { bg: '#eff6ff', color: '#1d4ed8', label: 'Screen' };
                                             return (
                                                 <div key={i} style={{
                                                     border: `1px solid ${C.border}`,
@@ -502,6 +524,17 @@ export default function LectureView() {
                                                             color: tc.color,
                                                         }}>
                                                             {contentType}
+                                                        </span>
+                                                        <span style={{
+                                                            fontSize: 10,
+                                                            fontWeight: 600,
+                                                            letterSpacing: '0.4px',
+                                                            padding: '2px 7px',
+                                                            borderRadius: 5,
+                                                            background: sourceBadge.bg,
+                                                            color: sourceBadge.color,
+                                                        }}>
+                                                            {sourceBadge.label}
                                                         </span>
                                                     </div>
                                                     {vd.title && (

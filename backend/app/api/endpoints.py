@@ -226,6 +226,7 @@ class FrameRequest(BaseModel):
     image_base64: str           # JPEG base64 encoded frame
     timestamp_seconds: int      # seconds into session
     last_frame_hash: str = ""   # first 100 chars of previous frame base64
+    camera_mode: bool = False   # True = physical board/projector (Phase 2)
 
 
 router = APIRouter()
@@ -860,20 +861,31 @@ async def process_visual_frame(
     topic = get_lecture_topic(lecture_id)
 
     from app.services.vision_service import (
-        analyze_frame, format_visual_for_summary, should_send_frame
+        analyze_frame,
+        analyze_board_frame,
+        format_visual_for_summary,
+        should_send_frame,
     )
 
     # Change detection — skip if frame is visually unchanged
     if not should_send_frame(body.image_base64, body.last_frame_hash):
         return {"analyzed": False, "reason": "no_change", "lecture_id": lecture_id}
 
-    # Analyze frame with GPT-4o Vision
-    visual = await analyze_frame(body.image_base64, topic)
+    # Route to correct analyzer: board camera (Phase 2) or screen capture (Phase 1)
+    source = "board" if body.camera_mode else "screen"
+    if body.camera_mode:
+        visual = await analyze_board_frame(body.image_base64, topic)
+    else:
+        visual = await analyze_frame(body.image_base64, topic)
 
     if not visual or not visual.get("has_content"):
-        return {"analyzed": True, "has_content": False, "lecture_id": lecture_id}
+        return {
+            "analyzed":   True,
+            "has_content": False,
+            "issue":      visual.get("issue") if visual else None,
+            "lecture_id": lecture_id,
+        }
 
-    # Persist visual content linked to timestamp
     visual_text = format_visual_for_summary(visual)
     try:
         save_visual_frame(
@@ -881,6 +893,7 @@ async def process_visual_frame(
             timestamp_seconds=body.timestamp_seconds,
             visual_data=visual,
             formatted_text=visual_text,
+            source=source,
         )
     except Exception as e:
         print(f"[VISION] save_visual_frame failed (non-fatal): {e}")
@@ -889,7 +902,9 @@ async def process_visual_frame(
         "analyzed":     True,
         "has_content":  True,
         "content_type": visual.get("content_type"),
+        "confidence":   visual.get("confidence"),
         "summary":      visual.get("summary"),
+        "source":       source,
         "lecture_id":   lecture_id,
     }
 

@@ -959,23 +959,29 @@ def admin_lecture_counts_by_user(user_ids: list) -> dict:
 #  VISUAL FRAMES
 # =============================================================================
 
-def save_visual_frame(lecture_id: str, timestamp_seconds: int,
-                       visual_data: dict, formatted_text: str) -> None:
+def save_visual_frame(
+    lecture_id: str,
+    timestamp_seconds: int,
+    visual_data: dict,
+    formatted_text: str,
+    source: str = "screen",   # "screen" (Phase 1) or "board" (Phase 2)
+) -> None:
     """Persists a GPT-4o Vision analysis result for a single captured frame."""
     if not supabase:
         return
     supabase.table("lecture_visual_frames").insert({
-        "lecture_id":       lecture_id,
+        "lecture_id":        lecture_id,
         "timestamp_seconds": timestamp_seconds,
-        "content_type":     visual_data.get("content_type"),
-        "title":            visual_data.get("title"),
-        "text_content":     visual_data.get("text_content"),
-        "equations":        visual_data.get("equations", []),
-        "diagrams":         visual_data.get("diagrams", []),
-        "code":             visual_data.get("code"),
-        "key_terms":        visual_data.get("key_terms", []),
-        "summary":          visual_data.get("summary"),
-        "formatted_text":   formatted_text,
+        "content_type":      visual_data.get("content_type"),
+        "title":             visual_data.get("title"),
+        "text_content":      visual_data.get("text_content"),
+        "equations":         visual_data.get("equations", []),
+        "diagrams":          visual_data.get("diagrams", []),
+        "code":              visual_data.get("code"),
+        "key_terms":         visual_data.get("key_terms", []),
+        "summary":           visual_data.get("summary"),
+        "formatted_text":    formatted_text,
+        "source":            source,
     }).execute()
 
 

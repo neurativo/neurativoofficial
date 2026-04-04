@@ -177,6 +177,12 @@ function App({ user }) {
     const [visualToast, setVisualToast]               = useState(null);
     const [upgradeModal, setUpgradeModal]             = useState({ show: false, reason: '', detail: null });
 
+    // ── Visual Lecture Intelligence (camera / board — Phase 2) ──
+    const [cameraMode, setCameraMode]               = useState(false);
+    const [cameraQuality, setCameraQuality]         = useState(null); // 'good'|'too_dark'|'positioning'|null
+    const [showCameraPreview, setShowCameraPreview] = useState(true);
+    const [boardTipsModal, setBoardTipsModal]       = useState(false);
+
     // ── Resilience state ──────────────────────────────────
     const [isOnline, setIsOnline]               = useState(navigator.onLine);
     const [connQuality, setConnQuality]         = useState('good'); // 'good' | 'poor' | 'offline'
@@ -213,6 +219,13 @@ function App({ user }) {
     const frameIntervalRef     = useRef(null);
     const canvasRef            = useRef(null);  // lazily created
     const mergeAudioCtxRef     = useRef(null);  // AudioContext for mic+screen merge
+
+    // ── Board camera refs (Phase 2) ───────────────────────
+    const cameraStreamRef        = useRef(null);
+    const cameraVideoRef         = useRef(null);
+    const cameraFrameIntervalRef = useRef(null);
+    const cameraCanvasRef        = useRef(null); // lazily created
+    const boardLastFrameHashRef  = useRef('');
 
     // ── Audio monitoring refs ──────────────────────────────
     const audioContextRef      = useRef(null);
@@ -294,6 +307,7 @@ function App({ user }) {
     useEffect(() => {
         return () => {
             stopScreenShare();
+            stopCameraCapture();
             stopSummaryPoll();
             isRecordingRef.current = false;
             cancelAnimationFrame(animFrameRef.current);
@@ -622,6 +636,8 @@ function App({ user }) {
             setSearchQuery('');
             setVisualsDetected(0);
             setScreenShareActive(false);
+            setCameraMode(false);
+            setCameraQuality(null);
             setSearchActive(false);
             setActivePanel('transcript');
             setStudentQuestions([]);
@@ -911,8 +927,9 @@ function App({ user }) {
         }
         // Resilience 5: release wake lock on pause
         releaseWakeLock();
-        // Stop screen capture if active
+        // Stop visual captures if active
         stopScreenShare();
+        stopCameraCapture();
         setSessionStatus('paused');
     };
 
@@ -1016,6 +1033,125 @@ function App({ user }) {
         }
     };
 
+    // ── Board Camera Capture (Phase 2) ────────────────────────────────────────
+
+    const assessImageDarkness = (ctx, canvas) => {
+        const imageData = ctx.getImageData(
+            0, 0,
+            Math.min(canvas.width, 100),
+            Math.min(canvas.height, 100)
+        );
+        const data = imageData.data;
+        let total = 0;
+        const pixels = data.length / 4;
+        for (let i = 0; i < data.length; i += 4) {
+            total += (data[i] + data[i + 1] + data[i + 2]) / 3;
+        }
+        const avg = total / pixels;
+        if (avg < 30) return 'too_dark';
+        if (avg < 60) return 'positioning';
+        return 'good';
+    };
+
+    const assessCameraQuality = () => {
+        if (!cameraVideoRef.current || !cameraStreamRef.current) return;
+        const video = cameraVideoRef.current;
+        if (!cameraCanvasRef.current) cameraCanvasRef.current = document.createElement('canvas');
+        const canvas = cameraCanvasRef.current;
+        canvas.width  = Math.min(video.videoWidth  || 200, 200);
+        canvas.height = Math.min(video.videoHeight || 200, 200);
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        setCameraQuality(assessImageDarkness(ctx, canvas));
+    };
+
+    const captureBoardFrame = async () => {
+        if (!cameraVideoRef.current || !cameraStreamRef.current) return;
+        if (!cameraCanvasRef.current) cameraCanvasRef.current = document.createElement('canvas');
+        const video  = cameraVideoRef.current;
+        const canvas = cameraCanvasRef.current;
+        canvas.width  = video.videoWidth  || 1280;
+        canvas.height = video.videoHeight || 720;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0);
+        const quality = assessImageDarkness(ctx, canvas);
+        setCameraQuality(quality);
+        if (quality === 'too_dark') {
+            console.log('[VISION-BOARD] Frame too dark, skipping');
+            return;
+        }
+        const base64 = canvas.toDataURL('image/jpeg', 0.80).split(',')[1];
+        await sendFrame(base64, true);
+    };
+
+    const stopCameraCapture = () => {
+        clearInterval(cameraFrameIntervalRef.current);
+        cameraFrameIntervalRef.current = null;
+        if (cameraStreamRef.current) {
+            cameraStreamRef.current.getTracks().forEach(t => t.stop());
+            cameraStreamRef.current = null;
+        }
+        if (cameraVideoRef.current) cameraVideoRef.current.srcObject = null;
+        setCameraMode(false);
+        setCameraQuality(null);
+        boardLastFrameHashRef.current = '';
+    };
+
+    const startCameraCapture = async () => {
+        if (planTier === 'free') {
+            setUpgradeModal({ show: true, reason: 'visual_capture', detail: null });
+            return;
+        }
+        if (screenShareActive) {
+            showError('Stop screen share before using camera mode.', 3000);
+            return;
+        }
+        // Show tips modal on first use
+        if (!localStorage.getItem('neurativo_board_tips_shown')) {
+            setBoardTipsModal(true);
+            return;
+        }
+        await _doStartCamera();
+    };
+
+    const _doStartCamera = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                    facingMode: 'environment',
+                },
+                audio: false,
+            });
+            cameraStreamRef.current = stream;
+            setCameraMode(true);
+            setCameraQuality('positioning');
+            setShowCameraPreview(true);
+            if (cameraVideoRef.current) cameraVideoRef.current.srcObject = stream;
+            // Initial quality check
+            setTimeout(() => assessCameraQuality(), 2000);
+            // Capture frame every 15s (boards change less than slides)
+            cameraFrameIntervalRef.current = setInterval(async () => {
+                if (!cameraStreamRef.current) return;
+                await captureBoardFrame();
+            }, 15000);
+            stream.getVideoTracks()[0].onended = () => stopCameraCapture();
+            const isMobile = window.innerWidth < 768;
+            showError(
+                isMobile
+                    ? 'Point your phone\'s back camera at the board while Neurativo records your voice.'
+                    : 'Board camera active. Position your camera to fill the frame with the board.',
+                5000
+            );
+        } catch (err) {
+            const msg = err.name === 'NotAllowedError' ? 'Camera access denied.'
+                      : err.name === 'NotFoundError'   ? 'No camera found on this device.'
+                      : 'Could not start camera.';
+            showError(msg, 0);
+        }
+    };
+
     const bitmapToBase64 = async (bitmap) => {
         if (!canvasRef.current) canvasRef.current = document.createElement('canvas');
         const canvas = canvasRef.current;
@@ -1027,31 +1163,36 @@ function App({ user }) {
         return canvas.toDataURL('image/jpeg', 0.7).split(',')[1];
     };
 
-    const showVisualToast = (summary) => {
-        setVisualToast(summary);
-        setTimeout(() => setVisualToast(null), 3000);
+    const showVisualToast = (summary, source = 'screen') => {
+        const prefix = source === 'board' ? 'Board' : 'Screen';
+        setVisualToast(`${prefix}: ${summary}`);
+        setTimeout(() => setVisualToast(null), 3500);
     };
 
-    const sendFrame = async (base64) => {
+    const sendFrame = async (base64, cameraMode = false) => {
         if (!lectureIdRef.current || !isRecordingRef.current) return;
+        const hashRef = cameraMode ? boardLastFrameHashRef : lastFrameHashRef;
         try {
             const res = await api.post(`/api/v1/live/${lectureIdRef.current}/frame`, {
-                image_base64:    base64,
+                image_base64:      base64,
                 timestamp_seconds: recordingSeconds,
-                last_frame_hash:   lastFrameHashRef.current,
+                last_frame_hash:   hashRef.current,
+                camera_mode:       cameraMode,
             });
-            lastFrameHashRef.current = base64.substring(0, 100);
+            hashRef.current = base64.substring(0, 100);
             if (res.data.has_content) {
                 setVisualsDetected(prev => prev + 1);
-                if (res.data.summary) showVisualToast(res.data.summary);
+                if (res.data.summary) showVisualToast(res.data.summary, res.data.source || (cameraMode ? 'board' : 'screen'));
+            }
+            if (res.data.issue === 'too_dark' && cameraMode) {
+                setCameraQuality('too_dark');
             }
         } catch (err) {
-            // 403 feature_locked — stop screen share and show upgrade prompt
             if (err?.response?.status === 403 && err?.response?.data?.detail?.error === 'feature_locked') {
-                stopScreenShare();
+                if (cameraMode) stopCameraCapture();
+                else stopScreenShare();
                 setUpgradeModal({ show: true, reason: 'visual_capture', detail: null });
             }
-            // Other errors are non-fatal — screen share continues
         }
     };
 
@@ -1466,25 +1607,52 @@ function App({ user }) {
                         </button>
                     )}
                     {sessionStatus === 'recording' && (
-                        <button
-                            onClick={screenShareActive ? stopScreenShare : startScreenShare}
-                            className={`hidden md:flex items-center gap-1.5 btn-ghost border ${
-                                screenShareActive
-                                    ? 'border-blue-200 bg-blue-50 text-blue-600'
-                                    : 'border-slate-200'
-                            }`}
-                            title={screenShareActive ? 'Stop screen capture' : 'Capture screen content (Student+)'}
-                        >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
-                            </svg>
-                            {screenShareActive ? 'Capturing' : 'Share screen'}
-                            {screenShareActive && visualsDetected > 0 && (
-                                <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-semibold">
-                                    {visualsDetected}
-                                </span>
-                            )}
-                        </button>
+                        <div className="hidden md:flex items-center border border-slate-200 rounded-lg overflow-hidden divide-x divide-slate-200">
+                            {/* Screen capture (Phase 1) */}
+                            <button
+                                onClick={screenShareActive ? stopScreenShare : startScreenShare}
+                                disabled={cameraMode}
+                                title={cameraMode ? 'Stop board camera first' : (screenShareActive ? 'Stop screen capture' : 'Capture screen (Student+)')}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                                    screenShareActive
+                                        ? 'bg-blue-50 text-blue-600'
+                                        : 'bg-white text-slate-600 hover:bg-slate-50'
+                                }`}
+                            >
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                                </svg>
+                                Screen
+                                {screenShareActive && visualsDetected > 0 && (
+                                    <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-semibold leading-none">
+                                        {visualsDetected}
+                                    </span>
+                                )}
+                            </button>
+                            {/* Board camera (Phase 2) */}
+                            <button
+                                onClick={cameraMode ? stopCameraCapture : startCameraCapture}
+                                disabled={screenShareActive}
+                                title={screenShareActive ? 'Stop screen share first' : (cameraMode ? 'Stop board camera' : 'Capture board/projector (Student+)')}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                                    cameraMode
+                                        ? 'bg-green-50 text-green-700'
+                                        : 'bg-white text-slate-600 hover:bg-slate-50'
+                                }`}
+                            >
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                </svg>
+                                Board
+                                {cameraMode && (
+                                    <span className={`w-1.5 h-1.5 rounded-full ${
+                                        cameraQuality === 'good' ? 'bg-green-500' :
+                                        cameraQuality === 'too_dark' ? 'bg-red-500' : 'bg-amber-400'
+                                    }`} />
+                                )}
+                            </button>
+                        </div>
                     )}
                     {sessionStatus !== 'ended' && (
                         <button onClick={endSession}
@@ -1499,7 +1667,7 @@ function App({ user }) {
             <div className="flex flex-1 overflow-hidden">
 
                 {/* ── LEFT: Transcript ── */}
-                <div className={`flex-1 flex flex-col border-r border-[#f0ede8] min-w-0 ${activePanel !== 'transcript' ? 'hidden md:flex' : 'flex'}`}>
+                <div className={`relative flex-1 flex flex-col border-r border-[#f0ede8] min-w-0 ${activePanel !== 'transcript' ? 'hidden md:flex' : 'flex'}`}>
 
                     {/* Panel header */}
                     <div className="panel-header">
@@ -1626,6 +1794,73 @@ function App({ user }) {
                         )}
                         <div ref={transcriptEndRef} />
                     </div>
+
+                    {/* ── Camera Preview Panel (Phase 2) ── */}
+                    {cameraMode && showCameraPreview && (
+                        <div className="absolute bottom-3 right-3 z-30 shadow-lg rounded-xl overflow-hidden border border-slate-200 bg-black"
+                            style={{ width: 200, height: 'auto' }}>
+                            {/* Quality bar */}
+                            <div className={`flex items-center gap-1.5 px-2 py-1 text-[10px] font-semibold ${
+                                cameraQuality === 'good'       ? 'bg-green-600 text-white' :
+                                cameraQuality === 'too_dark'   ? 'bg-red-600 text-white' :
+                                cameraQuality === 'positioning'? 'bg-amber-500 text-white' :
+                                'bg-slate-700 text-slate-200'
+                            }`}>
+                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                    cameraQuality === 'good'        ? 'bg-green-200' :
+                                    cameraQuality === 'too_dark'    ? 'bg-red-200' :
+                                    cameraQuality === 'positioning' ? 'bg-amber-200' : 'bg-slate-400'
+                                }`} />
+                                {cameraQuality === 'good'        ? 'Good quality' :
+                                 cameraQuality === 'too_dark'    ? 'Too dark' :
+                                 cameraQuality === 'positioning' ? 'Adjust framing' : 'Starting…'}
+                                <button
+                                    onClick={stopCameraCapture}
+                                    className="ml-auto text-white/70 hover:text-white transition-colors"
+                                    title="Stop camera">
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/>
+                                    </svg>
+                                </button>
+                            </div>
+                            {/* Video feed */}
+                            <div className="relative" style={{ width: 200, height: 113 }}>
+                                <video
+                                    ref={cameraVideoRef}
+                                    autoPlay
+                                    playsInline
+                                    muted
+                                    className="w-full h-full object-cover"
+                                />
+                                {/* Framing guide overlay */}
+                                {cameraQuality === 'positioning' && (
+                                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                        <div className="border-2 border-dashed border-amber-400 rounded-md opacity-70"
+                                            style={{ width: '75%', height: '75%' }} />
+                                    </div>
+                                )}
+                            </div>
+                            {/* Hide toggle */}
+                            <button
+                                onClick={() => setShowCameraPreview(false)}
+                                className="w-full text-[10px] text-slate-400 hover:text-slate-200 py-1 bg-slate-900 hover:bg-slate-800 transition-colors">
+                                Hide preview
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Show preview button when hidden */}
+                    {cameraMode && !showCameraPreview && (
+                        <button
+                            onClick={() => setShowCameraPreview(true)}
+                            className="absolute bottom-3 right-3 z-30 flex items-center gap-1 px-2 py-1 rounded-lg bg-green-700 text-white text-[10px] font-semibold shadow-md hover:bg-green-600 transition-colors">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+                            </svg>
+                            Board
+                        </button>
+                    )}
                 </div>
 
                 {/* ── RIGHT: Tabbed Panel ── */}
@@ -2393,6 +2628,79 @@ function App({ user }) {
                             onClick={() => setUpgradeModal(p => ({ ...p, show: false }))}
                             className="w-full py-2.5 bg-[#1a1a1a] text-[#fafaf9] text-sm font-semibold rounded-xl hover:opacity-80 transition-opacity">
                             Got it
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Board Tips Modal (Phase 2) ── */}
+            {boardTipsModal && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-950/50 backdrop-blur-md animate-fade-in">
+                    <div className="bg-white w-full max-w-sm rounded-2xl p-8 shadow-2xl animate-slide-up border border-[#f0ede8]">
+                        <div className="flex items-center justify-center mb-5">
+                            <div className="w-14 h-14 rounded-2xl bg-green-50 flex items-center justify-center">
+                                <svg className="w-7 h-7 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                </svg>
+                            </div>
+                        </div>
+                        <h3 className="text-[17px] font-bold text-[#1a1a1a] mb-1 font-heading text-center">Board Camera Tips</h3>
+                        <p className="text-[#a3a3a3] text-sm text-center mb-5 leading-relaxed">
+                            Point your camera at the board or projector screen for best results.
+                        </p>
+                        <ul className="space-y-3 mb-6">
+                            <li className="flex items-start gap-3">
+                                <div className="w-7 h-7 rounded-lg bg-amber-50 flex items-center justify-center shrink-0 mt-0.5">
+                                    <svg className="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707"/>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <p className="text-[13px] font-semibold text-[#1a1a1a]">Good lighting</p>
+                                    <p className="text-[12px] text-[#a3a3a3]">Make sure the board is well-lit — dark frames are skipped automatically.</p>
+                                </div>
+                            </li>
+                            <li className="flex items-start gap-3">
+                                <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center shrink-0 mt-0.5">
+                                    <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <p className="text-[13px] font-semibold text-[#1a1a1a]">Fill the frame</p>
+                                    <p className="text-[12px] text-[#a3a3a3]">Aim to fill most of the frame with the board content.</p>
+                                </div>
+                            </li>
+                            <li className="flex items-start gap-3">
+                                <div className="w-7 h-7 rounded-lg bg-green-50 flex items-center justify-center shrink-0 mt-0.5">
+                                    <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <p className="text-[13px] font-semibold text-[#1a1a1a]">Hold steady</p>
+                                    <p className="text-[12px] text-[#a3a3a3]">A capture is sent every 15 seconds — no need to hold your phone up the whole time.</p>
+                                </div>
+                            </li>
+                        </ul>
+                        <button
+                            onClick={() => {
+                                localStorage.setItem('neurativo_board_tips_shown', '1');
+                                setBoardTipsModal(false);
+                                _doStartCamera();
+                            }}
+                            className="w-full py-2.5 bg-[#1a1a1a] text-[#fafaf9] text-sm font-semibold rounded-xl hover:opacity-80 transition-opacity mb-2">
+                            Got it — start camera
+                        </button>
+                        <button
+                            onClick={() => {
+                                localStorage.setItem('neurativo_board_tips_shown', '1');
+                                setBoardTipsModal(false);
+                                _doStartCamera();
+                            }}
+                            className="w-full py-2 text-[13px] text-[#a3a3a3] hover:text-[#6b6b6b] transition-colors">
+                            Skip tips
                         </button>
                     </div>
                 </div>
