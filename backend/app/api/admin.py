@@ -243,7 +243,7 @@ async def remove_lecture(lecture_id: str, admin: User = Depends(get_admin_user))
 
 @router.post("/system/cleanup")
 async def trigger_cleanup(
-    days: int = Query(30, ge=1, le=365),
+    days: int = Query(0, ge=0, le=365),
     admin: User = Depends(get_admin_user),
 ):
     """Manually trigger old-chunk cleanup."""
