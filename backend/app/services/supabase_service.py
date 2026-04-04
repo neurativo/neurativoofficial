@@ -601,17 +601,21 @@ def cleanup_old_chunks(days: int = 30) -> int:
         return 0
     from datetime import datetime, timedelta, timezone
     cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
-    # Find completed lecture IDs older than cutoff
+
+    # Find completed lecture IDs older than cutoff.
+    # Use .filter() with "not.is" for reliable IS NOT NULL across supabase-py versions.
     lectures_resp = (
         supabase.table("lectures")
         .select("id")
         .lt("created_at", cutoff)
-        .not_.is_("master_summary", "null")
+        .filter("master_summary", "not.is", "null")
         .execute()
     )
     lecture_ids = [r["id"] for r in (lectures_resp.data or [])]
+    print(f"[cleanup] cutoff={cutoff} matched_lectures={len(lecture_ids)}")
     if not lecture_ids:
         return 0
+
     deleted = 0
     # Delete in batches of 100 to avoid query size limits
     for i in range(0, len(lecture_ids), 100):
@@ -624,7 +628,9 @@ def cleanup_old_chunks(days: int = 30) -> int:
             .execute()
         )
         batch_count = count_resp.count or 0
-        supabase.table("lecture_chunks").delete().in_("lecture_id", batch).execute()
+        print(f"[cleanup] batch {i//100 + 1}: {len(batch)} lectures → {batch_count} chunks")
+        if batch_count > 0:
+            supabase.table("lecture_chunks").delete().in_("lecture_id", batch).execute()
         deleted += batch_count
     return deleted
 
