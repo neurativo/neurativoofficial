@@ -171,6 +171,12 @@ function App({ user }) {
     const [planTier, setPlanTier]                     = useState('free');
     const [limitModal, setLimitModal]                 = useState({ show: false, reason: '', plan: '', limit: 0, limitLabel: '', resetsAt: '' });
 
+    // ── Visual Lecture Intelligence (screen capture) ──────
+    const [screenShareActive, setScreenShareActive]   = useState(false);
+    const [visualsDetected, setVisualsDetected]       = useState(0);
+    const [visualToast, setVisualToast]               = useState(null);
+    const [upgradeModal, setUpgradeModal]             = useState({ show: false, reason: '', detail: null });
+
     // ── Resilience state ──────────────────────────────────
     const [isOnline, setIsOnline]               = useState(navigator.onLine);
     const [connQuality, setConnQuality]         = useState('good'); // 'good' | 'poor' | 'offline'
@@ -198,6 +204,12 @@ function App({ user }) {
     const wakeLockRef         = useRef(null);         // screen wake lock
     const timerWorkerRef      = useRef(null);         // 12s chunk timer worker
     const sseReconnectRef     = useRef(0);            // SSE reconnect attempt count
+
+    // ── Screen capture refs ───────────────────────────────
+    const screenStreamRef      = useRef(null);
+    const lastFrameHashRef     = useRef('');
+    const frameIntervalRef     = useRef(null);
+    const canvasRef            = useRef(null);  // lazily created
 
     // ── Audio monitoring refs ──────────────────────────────
     const audioContextRef      = useRef(null);
@@ -278,6 +290,7 @@ function App({ user }) {
     // Fix 10 / Resilience: complete cleanup on component unmount
     useEffect(() => {
         return () => {
+            stopScreenShare();
             isRecordingRef.current = false;
             cancelAnimationFrame(animFrameRef.current);
             if (audioContextRef.current?.state !== 'closed') {
@@ -570,6 +583,7 @@ function App({ user }) {
             const limits = res.data.limits || {};
             setMaxDurationSeconds(limits.max_duration_seconds || null);
             setIsUnlimitedDuration(limits.is_unlimited !== false);
+            if (res.data.plan_tier) setPlanTier(res.data.plan_tier);
 
             setLectureId(res.data.lecture_id);
             setTranscript([]);
@@ -583,6 +597,8 @@ function App({ user }) {
             setNastScore(null);
             setStatsData(null);
             setSearchQuery('');
+            setVisualsDetected(0);
+            setScreenShareActive(false);
             setSearchActive(false);
             setActivePanel('transcript');
             setStudentQuestions([]);
@@ -850,6 +866,8 @@ function App({ user }) {
         }
         // Resilience 5: release wake lock on pause
         releaseWakeLock();
+        // Stop screen capture if active
+        stopScreenShare();
         setSessionStatus('paused');
     };
 
@@ -926,6 +944,107 @@ function App({ user }) {
             setQaHistory(prev => [...prev, { question, answer: "Couldn't get an answer. Please try again." }]);
         } finally {
             setQaLoading(false);
+        }
+    };
+
+    // ── Screen Capture (Visual Lecture Intelligence) ───────────────────────────
+
+    const stopScreenShare = () => {
+        clearInterval(frameIntervalRef.current);
+        frameIntervalRef.current = null;
+        if (screenStreamRef.current) {
+            screenStreamRef.current.getTracks().forEach(t => t.stop());
+            screenStreamRef.current = null;
+        }
+        setScreenShareActive(false);
+        lastFrameHashRef.current = '';
+    };
+
+    const bitmapToBase64 = async (bitmap) => {
+        if (!canvasRef.current) canvasRef.current = document.createElement('canvas');
+        const canvas = canvasRef.current;
+        canvas.width = bitmap.width;
+        canvas.height = bitmap.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(bitmap, 0, 0);
+        // 70% JPEG quality — ~100-200 KB per frame at 1280×720
+        return canvas.toDataURL('image/jpeg', 0.7).split(',')[1];
+    };
+
+    const showVisualToast = (summary) => {
+        setVisualToast(summary);
+        setTimeout(() => setVisualToast(null), 3000);
+    };
+
+    const sendFrame = async (base64) => {
+        if (!lectureIdRef.current || !isRecordingRef.current) return;
+        try {
+            const res = await api.post(`/api/v1/live/${lectureIdRef.current}/frame`, {
+                image_base64:    base64,
+                timestamp_seconds: recordingSeconds,
+                last_frame_hash:   lastFrameHashRef.current,
+            });
+            lastFrameHashRef.current = base64.substring(0, 100);
+            if (res.data.has_content) {
+                setVisualsDetected(prev => prev + 1);
+                if (res.data.summary) showVisualToast(res.data.summary);
+            }
+        } catch (err) {
+            // 403 feature_locked — stop screen share and show upgrade prompt
+            if (err?.response?.status === 403 && err?.response?.data?.detail?.error === 'feature_locked') {
+                stopScreenShare();
+                setUpgradeModal({ show: true, reason: 'visual_capture', detail: null });
+            }
+            // Other errors are non-fatal — screen share continues
+        }
+    };
+
+    const startScreenShare = async () => {
+        // Browser compatibility check
+        if (!('ImageCapture' in window)) {
+            showError('Screen capture requires Chrome or Edge.', 4000);
+            return;
+        }
+        // Plan gate
+        if (planTier === 'free') {
+            setUpgradeModal({ show: true, reason: 'visual_capture', detail: null });
+            return;
+        }
+        try {
+            const stream = await navigator.mediaDevices.getDisplayMedia({
+                video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 1 } },
+                audio: false,
+            });
+            screenStreamRef.current = stream;
+            setScreenShareActive(true);
+
+            // Privacy notice
+            showError('Only your selected screen is captured. Frames are analyzed and never stored as images.', 4000);
+
+            const videoTrack = stream.getVideoTracks()[0];
+            const imageCapture = new window.ImageCapture(videoTrack);
+
+            // Capture a frame every 10 seconds
+            frameIntervalRef.current = setInterval(async () => {
+                if (!screenStreamRef.current) return;
+                try {
+                    const bitmap = await imageCapture.grabFrame();
+                    const base64 = await bitmapToBase64(bitmap);
+                    await sendFrame(base64);
+                } catch (err) {
+                    console.log('[VISION] Frame capture error:', err);
+                }
+            }, 10000);
+
+            // Handle user stopping screen share from browser UI
+            videoTrack.onended = () => stopScreenShare();
+
+        } catch (err) {
+            if (err.name === 'NotAllowedError') {
+                showError('Screen share was cancelled.', 3000);
+            } else {
+                showError('Could not start screen share.', 3000);
+            }
         }
     };
 
@@ -1142,6 +1261,16 @@ function App({ user }) {
                 </div>
             )}
 
+            {/* ── Visual Capture Toast ── */}
+            {visualToast && (
+                <div className="fixed top-16 right-4 z-50 bg-slate-900 text-white text-xs font-medium px-3 py-2 rounded-lg shadow-lg animate-fade-in flex items-center gap-2 max-w-xs">
+                    <svg className="w-3.5 h-3.5 text-blue-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                    </svg>
+                    <span className="truncate">Screen: {visualToast}</span>
+                </div>
+            )}
+
             {/* ── Header ── */}
             <header className="h-14 border-b border-[#f0ede8] flex items-center justify-between px-4 md:px-5 shrink-0 bg-white z-30">
                 {/* Left: brand + status */}
@@ -1265,6 +1394,27 @@ function App({ user }) {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                             </svg>
                             Export PDF
+                        </button>
+                    )}
+                    {sessionStatus === 'recording' && (
+                        <button
+                            onClick={screenShareActive ? stopScreenShare : startScreenShare}
+                            className={`hidden md:flex items-center gap-1.5 btn-ghost border ${
+                                screenShareActive
+                                    ? 'border-blue-200 bg-blue-50 text-blue-600'
+                                    : 'border-slate-200'
+                            }`}
+                            title={screenShareActive ? 'Stop screen capture' : 'Capture screen content (Student+)'}
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                            </svg>
+                            {screenShareActive ? 'Capturing' : 'Share screen'}
+                            {screenShareActive && visualsDetected > 0 && (
+                                <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-semibold">
+                                    {visualsDetected}
+                                </span>
+                            )}
                         </button>
                     )}
                     {sessionStatus !== 'ended' && (
@@ -1824,6 +1974,14 @@ function App({ user }) {
                                             </div>
                                         )}
 
+                                        {/* Visual frames row */}
+                                        {visualsDetected > 0 && (
+                                            <div className="flex items-center justify-between py-2 border-b border-slate-100">
+                                                <span className="text-xs text-slate-500">Visual frames captured</span>
+                                                <span className="text-xs font-mono font-semibold text-slate-700">{visualsDetected}</span>
+                                            </div>
+                                        )}
+
                                         {/* Refresh */}
                                         <button onClick={() => {
                                             setStatsData(null); setStatsLoading(true);
@@ -2143,6 +2301,30 @@ function App({ user }) {
                                 Dismiss
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Upgrade Modal (feature gating) ── */}
+            {upgradeModal.show && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-950/50 backdrop-blur-md animate-fade-in">
+                    <div className="bg-white w-full max-w-sm rounded-2xl p-8 shadow-2xl animate-slide-up border border-[#f0ede8]">
+                        <div className="flex items-center justify-center mb-5">
+                            <div className="w-14 h-14 rounded-2xl bg-blue-50 flex items-center justify-center">
+                                <svg className="w-7 h-7 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                                </svg>
+                            </div>
+                        </div>
+                        <h3 className="text-[17px] font-bold text-[#1a1a1a] mb-1 font-heading text-center">Student or Pro plan required</h3>
+                        <p className="text-[#a3a3a3] text-sm text-center mb-6 leading-relaxed">
+                            Screen capture and visual content extraction require a <strong className="text-[#1a1a1a]">Student</strong> or <strong className="text-[#1a1a1a]">Pro</strong> plan.
+                        </p>
+                        <button
+                            onClick={() => setUpgradeModal(p => ({ ...p, show: false }))}
+                            className="w-full py-2.5 bg-[#1a1a1a] text-[#fafaf9] text-sm font-semibold rounded-xl hover:opacity-80 transition-opacity">
+                            Got it
+                        </button>
                     </div>
                 </div>
             )}

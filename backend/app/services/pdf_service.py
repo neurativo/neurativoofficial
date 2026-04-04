@@ -10,7 +10,7 @@ from playwright.sync_api import sync_playwright
 
 from openai import OpenAI
 from app.core.config import settings
-from app.services.supabase_service import get_lecture_for_summarization
+from app.services.supabase_service import get_lecture_for_summarization, get_visual_frames
 
 # ── OpenAI client ─────────────────────────────────────────────────────────────
 _client = OpenAI(api_key=settings.OPENAI_API_KEY) if settings.OPENAI_API_KEY else None
@@ -549,9 +549,22 @@ async def generate_lecture_pdf(lecture_id: str) -> bytes:
     )
     reading_time_minutes = max(1, math.ceil(doc_word_count / 238))
 
+    # 6b. Fetch visual frames captured during this lecture
+    try:
+        visual_frames = await asyncio.to_thread(get_visual_frames, lecture_id)
+    except Exception:
+        visual_frames = []
+
     # 7. Render Jinja2 template
     template_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "templates")
     env          = Environment(loader=FileSystemLoader(template_dir))
+
+    def _fmt_time_mmss(seconds):
+        m = (seconds or 0) // 60
+        s = (seconds or 0) % 60
+        return f"{m:02d}:{s:02d}"
+
+    env.filters["format_time"] = _fmt_time_mmss
     template     = env.get_template("lecture_template.html")
 
     total_concepts = sum(len(s.get("concepts", [])) for s in enriched_sections)
@@ -585,6 +598,8 @@ async def generate_lecture_pdf(lecture_id: str) -> bytes:
         # Legacy variable (kept for backwards compatibility)
         "summary_html":         clean_markdown_to_html(summary),
         "compression_ratio":    0.0,
+        # Visual frames
+        "visual_frames":        visual_frames,
     }
 
     html_content = template.render(**context)

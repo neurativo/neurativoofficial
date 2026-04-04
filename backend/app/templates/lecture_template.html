@@ -34,10 +34,13 @@
             --accent:     #2563eb;
             --accent-lt:  #eff6ff;
             --accent-mid: #bfdbfe;
+            --accent-bg:  #eff6ff;
             --slate-100:  #f1f5f9;
             --slate-200:  #e2e8f0;
             --slate-300:  #cbd5e1;
             --border:     #e5e7eb;
+            --rule:       #e2e8f0;
+            --mono:       'Courier New', Courier, monospace;
         }
 
         body {
@@ -527,6 +530,54 @@
         .ce-list li:last-child {
             border-bottom: none;
         }
+
+        /* ─── VISUAL FRAMES ──────────────────────────────────────────── */
+        .visual-frame {
+            border-left: 2px solid var(--rule);
+            padding: 3mm 5mm;
+            margin-bottom: 4mm;
+            page-break-inside: avoid;
+        }
+        .vf-time {
+            font-family: var(--mono);
+            font-size: 7.5pt;
+            color: var(--ink-4);
+            margin-bottom: 1.5mm;
+        }
+        .vf-title {
+            font-size: 11pt;
+            font-weight: 600;
+            color: var(--ink);
+            margin-bottom: 2mm;
+        }
+        .vf-label {
+            font-size: 7pt;
+            font-weight: 600;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            color: var(--ink-3);
+            margin-bottom: 1.5mm;
+        }
+        .vf-eq {
+            font-family: var(--mono);
+            font-size: 10pt;
+            color: var(--accent);
+            margin-bottom: 1mm;
+            padding: 2mm 3mm;
+            background: var(--accent-bg);
+            border-radius: 3px;
+        }
+        .vf-text {
+            font-size: 9.5pt;
+            color: var(--ink-2);
+            line-height: 1.6;
+        }
+        .vf-diagram {
+            font-size: 9pt;
+            color: var(--ink-3);
+            font-style: italic;
+            margin-bottom: 1mm;
+        }
     </style>
 </head>
 
@@ -750,6 +801,48 @@
         </div>
         {% endfor %}
     </div>
+    {% endif %}
+
+
+    <!-- ══════════════════════════════════════════
+         VISUAL CONTENT CAPTURED
+    ══════════════════════════════════════════ -->
+    {% if visual_frames %}
+    <div class="eyebrow-row" style="padding-top: 10mm;">
+        <span class="eyebrow-label">Visual content captured</span>
+    </div>
+    <hr class="eyebrow-rule">
+    <h2>Visual Content</h2>
+
+    {% for frame in visual_frames %}
+    {% if frame.formatted_text %}
+    <div class="visual-frame">
+        <div class="vf-time">{{ frame.timestamp_seconds | format_time }}</div>
+        {% if frame.title %}
+        <div class="vf-title">{{ frame.title }}</div>
+        {% endif %}
+        {% if frame.equations %}
+        <div class="vf-equations">
+            <div class="vf-label">Equations</div>
+            {% for eq in frame.equations %}
+            <div class="vf-eq">{{ eq }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% if frame.text_content %}
+        <div class="vf-text">{{ frame.text_content }}</div>
+        {% endif %}
+        {% if frame.diagrams %}
+        <div class="vf-diagrams">
+            <div class="vf-label">Diagrams</div>
+            {% for d in frame.diagrams %}
+            <div class="vf-diagram">{{ d }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+    {% endfor %}
     {% endif %}
 
 

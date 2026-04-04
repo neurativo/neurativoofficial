@@ -213,14 +213,15 @@ export default function LectureView() {
     const navigate = useNavigate();
     const addToast = useToast();
 
-    const [lecture, setLecture]       = useState(null);
-    const [loading, setLoading]       = useState(true);
-    const [exportOpen, setExportOpen] = useState(false);
-    const [activeTab, setActiveTab]   = useState('summary');
-    const [qaHistory, setQaHistory]   = useState([]);
-    const [qaQuestion, setQaQuestion] = useState('');
-    const [qaLoading, setQaLoading]   = useState(false);
-    const [stats, setStats]           = useState(null);
+    const [lecture, setLecture]         = useState(null);
+    const [loading, setLoading]         = useState(true);
+    const [exportOpen, setExportOpen]   = useState(false);
+    const [activeTab, setActiveTab]     = useState('summary');
+    const [qaHistory, setQaHistory]     = useState([]);
+    const [qaQuestion, setQaQuestion]   = useState('');
+    const [qaLoading, setQaLoading]     = useState(false);
+    const [stats, setStats]             = useState(null);
+    const [visualFrames, setVisualFrames] = useState(null); // null = not fetched
     const qaEndRef = useRef(null);
 
     useEffect(() => {
@@ -236,7 +237,12 @@ export default function LectureView() {
                 .then(res => setStats(res.data))
                 .catch(() => {});
         }
-    }, [activeTab, id, stats]);
+        if (activeTab === 'visuals' && id && visualFrames === null) {
+            api.get(`/api/v1/lectures/${id}/visual-frames`)
+                .then(res => setVisualFrames(res.data.frames || []))
+                .catch(() => setVisualFrames([]));
+        }
+    }, [activeTab, id, stats, visualFrames]);
 
     useEffect(() => {
         if (qaEndRef.current) qaEndRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -341,7 +347,7 @@ export default function LectureView() {
                     {/* Right: tabbed panel */}
                     <div className="lv-right">
                         <div className="lv-tabs">
-                            {['summary', 'ask', 'stats'].map(tab => (
+                            {['summary', 'ask', 'stats', 'visuals'].map(tab => (
                                 <button
                                     key={tab}
                                     className={`lv-tab${activeTab === tab ? ' active' : ''}`}
@@ -441,6 +447,107 @@ export default function LectureView() {
                                         </div>
                                     )
                                 }
+                            </div>
+                        )}
+
+                        {/* Visuals */}
+                        {activeTab === 'visuals' && (
+                            <div className="lv-tab-body">
+                                {visualFrames === null ? (
+                                    <div style={{ fontSize: 13, color: C.muted }}>Loading…</div>
+                                ) : visualFrames.length === 0 ? (
+                                    <div style={{ fontSize: 13, color: C.muted, textAlign: 'center', paddingTop: 32 }}>
+                                        No screen capture data for this lecture.
+                                    </div>
+                                ) : (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                        {visualFrames.map((frame, i) => {
+                                            const vd = frame.visual_data || {};
+                                            const contentType = vd.content_type || 'unknown';
+                                            const typeColors = {
+                                                slide: { bg: '#eff6ff', color: '#2563eb' },
+                                                code: { bg: '#f0fdf4', color: '#16a34a' },
+                                                diagram: { bg: '#faf5ff', color: '#7c3aed' },
+                                                equation: { bg: '#fff7ed', color: '#c2410c' },
+                                                default: { bg: '#f8fafc', color: '#475569' },
+                                            };
+                                            const tc = typeColors[contentType] || typeColors.default;
+                                            return (
+                                                <div key={i} style={{
+                                                    border: `1px solid ${C.border}`,
+                                                    borderRadius: 10,
+                                                    padding: '12px 14px',
+                                                    background: C.card,
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    gap: 6,
+                                                }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                        <span style={{
+                                                            fontFamily: 'monospace',
+                                                            fontSize: 12,
+                                                            color: C.muted,
+                                                            minWidth: 40,
+                                                        }}>
+                                                            {fmtTs(frame.timestamp_seconds)}
+                                                        </span>
+                                                        <span style={{
+                                                            fontSize: 10,
+                                                            fontWeight: 600,
+                                                            letterSpacing: '0.4px',
+                                                            textTransform: 'uppercase',
+                                                            padding: '2px 7px',
+                                                            borderRadius: 5,
+                                                            background: tc.bg,
+                                                            color: tc.color,
+                                                        }}>
+                                                            {contentType}
+                                                        </span>
+                                                    </div>
+                                                    {vd.title && (
+                                                        <div style={{ fontSize: 14, fontWeight: 500, color: C.text }}>
+                                                            {vd.title}
+                                                        </div>
+                                                    )}
+                                                    {vd.text_content && (
+                                                        <div style={{ fontSize: 12, color: '#64748b', lineHeight: 1.6 }}>
+                                                            {vd.text_content}
+                                                        </div>
+                                                    )}
+                                                    {vd.equations && vd.equations.length > 0 && (
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                                            {vd.equations.map((eq, j) => (
+                                                                <div key={j} style={{
+                                                                    fontFamily: 'monospace',
+                                                                    fontSize: 12,
+                                                                    color: '#2563eb',
+                                                                    background: '#eff6ff',
+                                                                    padding: '4px 8px',
+                                                                    borderRadius: 5,
+                                                                }}>
+                                                                    {eq}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                    {vd.diagrams && vd.diagrams.length > 0 && (
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                                                            {vd.diagrams.map((d, j) => (
+                                                                <div key={j} style={{
+                                                                    fontSize: 12,
+                                                                    color: '#64748b',
+                                                                    fontStyle: 'italic',
+                                                                }}>
+                                                                    {d}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>

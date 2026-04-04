@@ -930,6 +930,59 @@ def admin_lecture_counts_by_user(user_ids: list) -> dict:
     return counts
 
 
+# =============================================================================
+#  VISUAL FRAMES
+# =============================================================================
+
+def save_visual_frame(lecture_id: str, timestamp_seconds: int,
+                       visual_data: dict, formatted_text: str) -> None:
+    """Persists a GPT-4o Vision analysis result for a single captured frame."""
+    if not supabase:
+        return
+    supabase.table("lecture_visual_frames").insert({
+        "lecture_id":       lecture_id,
+        "timestamp_seconds": timestamp_seconds,
+        "content_type":     visual_data.get("content_type"),
+        "title":            visual_data.get("title"),
+        "text_content":     visual_data.get("text_content"),
+        "equations":        visual_data.get("equations", []),
+        "diagrams":         visual_data.get("diagrams", []),
+        "code":             visual_data.get("code"),
+        "key_terms":        visual_data.get("key_terms", []),
+        "summary":          visual_data.get("summary"),
+        "formatted_text":   formatted_text,
+    }).execute()
+
+
+def get_visual_frames(lecture_id: str) -> list:
+    """Returns all visual frames for a lecture in chronological order."""
+    if not supabase:
+        return []
+    response = (
+        supabase.table("lecture_visual_frames")
+        .select("*")
+        .eq("lecture_id", lecture_id)
+        .order("timestamp_seconds", desc=False)
+        .execute()
+    )
+    return response.data if hasattr(response, "data") else []
+
+
+def get_visual_frames_in_window(lecture_id: str, start_sec: int, end_sec: int) -> list:
+    """Returns visual frames captured within [start_sec, end_sec) for a lecture."""
+    if not supabase:
+        return []
+    response = (
+        supabase.table("lecture_visual_frames")
+        .select("formatted_text, equations, diagrams")
+        .eq("lecture_id", lecture_id)
+        .gte("timestamp_seconds", start_sec)
+        .lt("timestamp_seconds", end_sec)
+        .execute()
+    )
+    return response.data if hasattr(response, "data") else []
+
+
 def set_user_plan(user_id: str, plan_tier: str) -> None:
     """Sets a user's plan tier in user_plans table (TEXT primary key, works with Clerk string IDs)."""
     if not supabase:

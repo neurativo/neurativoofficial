@@ -73,6 +73,9 @@ from app.services.supabase_service import (
     get_total_lecture_count,
     set_user_plan,
     increment_uploads_this_month,
+    save_visual_frame,
+    get_visual_frames,
+    get_visual_frames_in_window,
 )
 
 
@@ -218,6 +221,11 @@ class QuestionRequest(BaseModel):
 class ExplainRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=5000)
     mode: str = Field("simple", pattern=r'^(simple|detailed|step|analogy)$')
+
+class FrameRequest(BaseModel):
+    image_base64: str           # JPEG base64 encoded frame
+    timestamp_seconds: int      # seconds into session
+    last_frame_hash: str = ""   # first 100 chars of previous frame base64
 
 
 router = APIRouter()
@@ -437,9 +445,11 @@ def start_live_session(request: Request, user=Depends(get_current_user)):
             "lecture_id": lecture_id,
             "live_session_id": live_session_id,
             "status": "started",
+            "plan_tier": plan_tier,
             "limits": {
                 "max_duration_seconds": max_dur,
                 "is_unlimited": is_unlimited(max_dur),
+                "visual_capture": bool(limits.get("visual_capture")),
             },
         }
     except HTTPException:
@@ -516,6 +526,22 @@ def _run_summarization(
     # ── Phase 1: micro summary ────────────────────────────────────────────────
     try:
         micro = generate_micro_summary(chunk_text, language=language)
+
+        # Merge visual content captured in the same 12-second window (non-fatal)
+        try:
+            visual_frames = get_visual_frames_in_window(
+                lecture_id, chunk_idx * 12, (chunk_idx + 1) * 12
+            )
+            if visual_frames:
+                visual_text = "\n".join(
+                    f["formatted_text"] for f in visual_frames
+                    if f.get("formatted_text")
+                )
+                if visual_text:
+                    micro = micro + "\n[Visual content: " + visual_text + "]"
+        except Exception as ve:
+            print(f"[BG] Visual merge failed (non-fatal): {ve}")
+
         db.table("lecture_chunks").insert({
             "lecture_id":    lecture_id,
             "transcript":    chunk_text,
@@ -762,6 +788,74 @@ async def process_live_chunk(
     return base_response
 
 
+@router.post("/live/{lecture_id}/frame")
+@limiter.limit("30/minute")
+async def process_visual_frame(
+    request: Request,
+    lecture_id: str,
+    body: FrameRequest,
+    user=Depends(get_current_user),
+):
+    """
+    Processes a screen capture frame for visual content.
+    Analyzes with GPT-4o Vision only when screen content has meaningfully changed.
+    Student/Pro only — free plan returns 403 feature_locked.
+    """
+    _check_owner(lecture_id, user.id)
+
+    # Check plan
+    profile = get_user_profile(str(user.id))
+    limits = get_limits(profile.get("plan_tier", "free"))
+    if not limits.get("visual_capture"):
+        raise HTTPException(status_code=403, detail={
+            "error": "feature_locked",
+            "feature": "visual_capture",
+            "required_plan": "student",
+        })
+
+    # Verify session is active
+    session = get_active_live_session(lecture_id)
+    if not session:
+        raise HTTPException(status_code=400, detail="No active session")
+
+    # Get topic for context
+    topic = get_lecture_topic(lecture_id)
+
+    from app.services.vision_service import (
+        analyze_frame, format_visual_for_summary, should_send_frame
+    )
+
+    # Change detection — skip if frame is visually unchanged
+    if not should_send_frame(body.image_base64, body.last_frame_hash):
+        return {"analyzed": False, "reason": "no_change", "lecture_id": lecture_id}
+
+    # Analyze frame with GPT-4o Vision
+    visual = await analyze_frame(body.image_base64, topic)
+
+    if not visual or not visual.get("has_content"):
+        return {"analyzed": True, "has_content": False, "lecture_id": lecture_id}
+
+    # Persist visual content linked to timestamp
+    visual_text = format_visual_for_summary(visual)
+    try:
+        save_visual_frame(
+            lecture_id=lecture_id,
+            timestamp_seconds=body.timestamp_seconds,
+            visual_data=visual,
+            formatted_text=visual_text,
+        )
+    except Exception as e:
+        print(f"[VISION] save_visual_frame failed (non-fatal): {e}")
+
+    return {
+        "analyzed":     True,
+        "has_content":  True,
+        "content_type": visual.get("content_type"),
+        "summary":      visual.get("summary"),
+        "lecture_id":   lecture_id,
+    }
+
+
 @router.get("/live/{lecture_id}/stream")
 async def stream_summary(lecture_id: str, token: str = Query(None)):
     """
@@ -981,6 +1075,18 @@ def get_lecture_full_endpoint(lecture_id: str, user=Depends(get_current_user)):
     if not lecture:
         raise HTTPException(status_code=404, detail="Lecture not found")
     return lecture
+
+
+@router.get("/lectures/{lecture_id}/visual-frames")
+def get_lecture_visual_frames(lecture_id: str, user=Depends(get_current_user)):
+    """Returns all visual frames captured during a lecture, in chronological order."""
+    _check_owner(lecture_id, user.id)
+    try:
+        frames = get_visual_frames(lecture_id)
+        return {"lecture_id": lecture_id, "frames": frames, "count": len(frames)}
+    except Exception as e:
+        print(f"[visual-frames] fetch error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch visual frames")
 
 
 @router.post("/lectures/{lecture_id}/share")
