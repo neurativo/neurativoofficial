@@ -477,6 +477,131 @@ const CSS = `
     .lp-testi-grid { gap: 10px; }
     .lp-testi-card { padding: 18px; }
   }
+
+  /* ═══════════════════════════════════════
+     DARK MODE OVERRIDES
+  ═══════════════════════════════════════ */
+  .dark .lp { background: var(--color-bg); color: var(--color-text); }
+  .dark .lp-nav { background: rgba(18,18,18,0.92); border-bottom-color: var(--color-border); }
+  .dark .lp-nav-wordmark { color: var(--color-text); }
+  .dark .lp-nav-lnk { color: var(--color-sec); }
+  .dark .lp-nav-lnk:hover { color: var(--color-text); }
+  .dark .lp-btn-ghost-sm { color: var(--color-sec); }
+  .dark .lp-btn-ghost-sm:hover { background: var(--color-border); color: var(--color-text); }
+  .dark .lp-btn-dark-sm { background: var(--color-dark); color: var(--color-dark-fg); }
+  .dark .lp-avatar { background: var(--color-dark); color: var(--color-dark-fg); }
+  .dark .lp-nav-dropdown { background: var(--color-card); border-color: var(--color-border); box-shadow: 0 8px 32px rgba(0,0,0,0.4); }
+  .dark .lp-nav-dd-head { border-bottom-color: var(--color-border); }
+  .dark .lp-nav-dd-email { color: var(--color-text); }
+  .dark .lp-nav-dd-item { color: var(--color-sec); }
+  .dark .lp-nav-dd-item:hover { background: var(--color-border); color: var(--color-text); }
+  .dark .lp-nav-dd-divider { background: var(--color-border); }
+  .dark .lp-mobile-menu { background: rgba(18,18,18,0.97); border-bottom-color: var(--color-border); }
+  .dark .lp-mobile-menu-lnk { color: var(--color-text); border-bottom-color: var(--color-border); }
+  .dark .lp-hamburger { color: var(--color-sec); }
+
+  .dark .lp-eyebrow { background: var(--color-card); border-color: var(--color-border); color: var(--color-muted); }
+  .dark .lp-h1 { color: var(--color-text); }
+  .dark .lp-h1-em { color: var(--color-sec); }
+  .dark .lp-hero-sub { color: var(--color-sec); }
+  .dark .lp-btn-dark-md { background: var(--color-dark); color: var(--color-dark-fg); }
+  .dark .lp-btn-ghost-md { background: var(--color-card); border-color: var(--color-border); color: var(--color-sec); }
+  .dark .lp-btn-ghost-md:hover { border-color: var(--color-border-hov); color: var(--color-text); }
+  .dark .lp-proof { color: var(--color-muted); }
+
+  .dark .lp-browser { background: var(--color-card); border-color: var(--color-border); box-shadow: 0 8px 48px rgba(0,0,0,0.4); }
+  .dark .lp-browser-bar { background: var(--color-bg); border-bottom-color: var(--color-border); }
+  .dark .lp-url-bar { background: var(--color-border); }
+  .dark .lp-url-text { color: var(--color-muted); }
+  .dark .lp-t-panel { border-right-color: var(--color-border); }
+  .dark .lp-seg { color: var(--color-sec); }
+  .dark .lp-seg.live { border-left-color: var(--color-text); background: var(--color-border); color: var(--color-text); }
+  .dark .lp-sum-card { background: var(--color-bg); border-color: var(--color-border); }
+  .dark .lp-sum-title { color: var(--color-text); }
+  .dark .lp-sum-body { color: var(--color-sec); }
+  .dark .lp-pill { background: #0f1e38; color: #93c5fd; border-color: #1e3a6a; }
+
+  .dark .lp-stats-grid { background: var(--color-card); border-color: var(--color-border); }
+  .dark .lp-stat { border-right-color: var(--color-border); }
+  .dark .lp-stat-n { color: var(--color-text); }
+  .dark .lp-stat-l { color: var(--color-muted); }
+  @media (max-width: 768px) {
+    .dark .lp-stat:nth-child(3) { border-top-color: var(--color-border); }
+    .dark .lp-stat:nth-child(4) { border-top-color: var(--color-border); }
+    .dark .lp-feat-cell:not(:last-child) { border-bottom-color: var(--color-border); }
+  }
+
+  .dark .lp-sec-eye { color: var(--color-muted); }
+  .dark .lp-sec-h2 { color: var(--color-text); }
+  .dark .lp-sec-sub { color: var(--color-sec); }
+
+  .dark .lp-feat-grid { background: var(--color-border); border-color: var(--color-border); }
+  .dark .lp-feat-cell { background: var(--color-card); }
+  .dark .lp-feat-cell:hover { background: var(--color-bg); }
+  .dark .lp-feat-icon { background: var(--color-bg); border-color: var(--color-border); color: var(--color-text); }
+  .dark .lp-feat-title { color: var(--color-text); }
+  .dark .lp-feat-desc { color: var(--color-sec); }
+
+  .dark .lp-step { background: var(--color-card); border-color: var(--color-border); }
+  .dark .lp-step:hover { border-color: var(--color-border-hov); }
+  .dark .lp-step-n { color: var(--color-muted); }
+  .dark .lp-step-title { color: var(--color-text); }
+  .dark .lp-step-desc { color: var(--color-sec); }
+
+  .dark .lp-plan { background: var(--color-card); border-color: var(--color-border); }
+  .dark .lp-plan-feat { background: var(--color-card); border-color: var(--color-text); }
+  .dark .lp-plan-name { color: var(--color-text); }
+  .dark .lp-plan-tagline { color: var(--color-sec); }
+  .dark .lp-price-sign { color: var(--color-sec); }
+  .dark .lp-price-big { color: var(--color-text); }
+  .dark .lp-price-mo { color: var(--color-muted); }
+  .dark .lp-price-lkr { color: var(--color-muted); }
+  .dark .lp-plan-div { background: var(--color-border); }
+  .dark .lp-plan-item { color: var(--color-sec); }
+  .dark .lp-check { color: var(--color-text); }
+  .dark .lp-btn-plan-dark { background: var(--color-dark); color: var(--color-dark-fg); }
+  .dark .lp-btn-plan-outline { background: var(--color-card); color: var(--color-text); border-color: var(--color-border); }
+  .dark .lp-btn-plan-outline:hover { border-color: var(--color-border-hov); }
+
+  .dark .lp-cta { background: #1a1a2e; border: 1px solid var(--color-border); }
+  .dark .lp-cta-h2 { color: var(--color-text); }
+  .dark .lp-cta-sub { color: var(--color-sec); }
+  .dark .lp-btn-light { background: var(--color-border-hov); color: var(--color-text); }
+
+  .dark .lp-about-quote { border-left-color: var(--color-text); }
+  .dark .lp-about-quote-text { color: var(--color-text); }
+  .dark .lp-about-quote-sub { color: var(--color-muted); }
+  .dark .lp-about-cols { background: var(--color-border); border-color: var(--color-border); }
+  .dark .lp-about-col { background: var(--color-card); }
+  .dark .lp-about-col-label { color: var(--color-muted); }
+  .dark .lp-about-col-text { color: var(--color-sec); }
+  .dark .lp-about-founders { border-top-color: var(--color-border); color: var(--color-muted); }
+  .dark .lp-about-founders span { color: var(--color-sec); }
+
+  .dark .lp-footer { border-top-color: var(--color-border); }
+  .dark .lp-footer-name { color: var(--color-text); }
+  .dark .lp-footer-lnk { color: var(--color-muted); }
+  .dark .lp-footer-lnk:hover { color: var(--color-text); }
+  .dark .lp-footer-copy { color: var(--color-muted); }
+
+  .dark .lp-nast-inner { background: #0a0a0a; border: 1px solid rgba(255,255,255,0.06); }
+
+  .dark .lp-uni-bar-inner { border-color: var(--color-border); }
+  .dark .lp-uni-label { color: var(--color-muted); }
+  .dark .lp-uni-name { color: var(--color-muted); }
+
+  .dark .lp-testi-card { background: var(--color-card); border-color: var(--color-border); }
+  .dark .lp-testi-card:hover { border-color: var(--color-border-hov); }
+  .dark .lp-testi-quote { color: var(--color-sec); }
+  .dark .lp-testi-name { color: var(--color-text); }
+  .dark .lp-testi-school { color: var(--color-muted); }
+
+  .dark .lp-faq { background: var(--color-card); border-color: var(--color-border); }
+  .dark .lp-faq-item { border-bottom-color: var(--color-border); }
+  .dark .lp-faq-q { color: var(--color-text); }
+  .dark .lp-faq-q:hover { background: var(--color-bg); }
+  .dark .lp-faq-chevron { color: var(--color-muted); }
+  .dark .lp-faq-a { color: var(--color-sec); }
 `;
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
@@ -524,7 +649,7 @@ const IconCheck = () => (
     </svg>
 );
 const IconLogo = () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fafaf9" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--color-dark-fg, #fafaf9)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M13 10V3L4 14h7v7l9-11h-7z"/>
     </svg>
 );

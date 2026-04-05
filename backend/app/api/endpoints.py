@@ -218,6 +218,10 @@ def should_trigger_section(pending_chunks: list) -> tuple:
 class QuestionRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=2000)
 
+class ShareRequest(BaseModel):
+    mode: str = Field("full", pattern=r'^(full|summary_only)$')
+    expires_at: str | None = None   # ISO-8601 UTC timestamp, or null for no expiry
+
 class ExplainRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=5000)
     mode: str = Field("simple", pattern=r'^(simple|detailed|step|analogy)$')
@@ -1144,12 +1148,14 @@ def get_lecture_visual_frames(lecture_id: str, user=Depends(get_current_user)):
 
 @router.post("/lectures/{lecture_id}/share")
 @limiter.limit("20/minute")
-def share_lecture(request: Request, lecture_id: str, user=Depends(get_current_user)):
-    """Generates (or returns existing) share token. Returns the share URL path."""
+def share_lecture(request: Request, lecture_id: str, body: ShareRequest = None, user=Depends(get_current_user)):
+    """Generates (or returns existing) share token with optional mode and expiry."""
     _check_owner(lecture_id, user.id)
+    mode = body.mode if body else "full"
+    expires_at = body.expires_at if body else None
     try:
-        token = generate_share_token(lecture_id)
-        return {"share_url": f"/share/{token}"}
+        token = generate_share_token(lecture_id, mode=mode, expires_at=expires_at)
+        return {"share_url": f"/share/{token}", "mode": mode, "expires_at": expires_at}
     except Exception:
         raise HTTPException(status_code=500, detail="Failed to generate share link")
 
@@ -1172,6 +1178,8 @@ def get_shared_lecture(request: Request, token: str):
     lecture = get_lecture_by_share_token(token)
     if not lecture:
         raise HTTPException(status_code=404, detail="Shared lecture not found")
+    if lecture.get("expired"):
+        raise HTTPException(status_code=410, detail="Share link has expired")
     try:
         increment_share_views(lecture["id"])
     except Exception:

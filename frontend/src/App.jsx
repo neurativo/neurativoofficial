@@ -850,7 +850,7 @@ function App({ user }) {
             const res = await api.post(
                 `/api/v1/live/${targetId}/chunk`,
                 formData,
-                { timeout: 25000 },
+                { timeout: 45000 },
             );
             // Resilience 4: update connection quality from round-trip latency
             const latency = Date.now() - start;
@@ -897,8 +897,8 @@ function App({ user }) {
                 showError(`${mins} minute${mins !== 1 ? 's' : ''} remaining on your ${res.data.plan || planTier} plan`, 0);
             }
         } catch (err) {
-            if (attempt < 2 && navigator.onLine) {
-                await new Promise(r => setTimeout(r, (attempt + 1) * 2000));
+            if (attempt < 4 && navigator.onLine) {
+                await new Promise(r => setTimeout(r, Math.min((attempt + 1) * 3000, 12000)));
                 return uploadChunkWithRetry(blob, targetId, attempt + 1);
             }
             if (!navigator.onLine) {
@@ -907,7 +907,7 @@ function App({ user }) {
                 chunkBufferRef.current.push({ blob, targetId });
                 setChunkBufferCount(chunkBufferRef.current.length);
             } else {
-                showError('Upload failed after 3 attempts — small gap may exist', 3000);
+                showError('Upload failed after 5 attempts — small gap may exist', 3000);
             }
         }
     };

@@ -253,7 +253,132 @@ section[id] {
 ::-webkit-scrollbar       { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: #e2e8f0;
+  background: #d1d5db;
   border-radius: 10px;
 }
-::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
+::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+
+.dark ::-webkit-scrollbar-thumb { background: #3a3a3a; }
+.dark ::-webkit-scrollbar-thumb:hover { background: #4a4a4a; }
+
+/* ========================
+   DARK MODE — GLOBAL OVERRIDES
+   Covers Tailwind arbitrary classes used in App.jsx (record page)
+   and shared utilities across all components.
+======================== */
+
+/* ── Tailwind arbitrary value overrides ── */
+.dark .bg-white                       { background-color: var(--color-card) !important; }
+.dark .bg-\[#fafaf9\]                 { background-color: var(--color-bg) !important; }
+.dark .bg-\[#f0ede8\]                 { background-color: var(--color-border) !important; }
+.dark .bg-\[#e8e4de\]                 { background-color: var(--color-border-hov) !important; }
+.dark .bg-\[#1a1a1a\]                 { background-color: var(--color-dark) !important; }
+.dark .text-\[#1a1a1a\]               { color: var(--color-text) !important; }
+.dark .text-\[#6b6b6b\]               { color: var(--color-sec) !important; }
+.dark .text-\[#a3a3a3\]               { color: var(--color-muted) !important; }
+.dark .text-\[#fafaf9\]               { color: var(--color-dark-fg) !important; }
+.dark .border-\[#f0ede8\]             { border-color: var(--color-border) !important; }
+.dark .hover\:bg-\[#fafaf9\]:hover    { background-color: var(--color-card) !important; }
+.dark .hover\:bg-\[#e8e4de\]:hover    { background-color: var(--color-border-hov) !important; }
+.dark .hover\:text-\[#1a1a1a\]:hover  { color: var(--color-text) !important; }
+.dark .hover\:bg-\[#333\]:hover       { background-color: #444 !important; }
+.dark .disabled\:bg-\[#f0ede8\]:disabled { background-color: var(--color-border) !important; }
+.dark .disabled\:text-\[#a3a3a3\]:disabled { color: var(--color-muted) !important; }
+.dark .focus\:border-\[#c0bdb8\]:focus { border-color: var(--color-border-hov) !important; }
+.dark .placeholder\:text-\[#a3a3a3\]::placeholder { color: var(--color-muted) !important; }
+.dark .selection\:bg-\[#f0ede8\]::selection { background-color: var(--color-border) !important; }
+.dark .bg-\[#fafaf9\]\/80              { background-color: rgba(18,18,18,0.8) !important; }
+
+/* ── Tailwind slate utilities used in App.jsx ── */
+.dark .border-slate-100  { border-color: var(--color-border) !important; }
+.dark .bg-slate-50       { background-color: var(--color-bg) !important; }
+.dark .bg-slate-50\/80   { background-color: rgba(18,18,18,0.8) !important; }
+.dark .text-slate-400    { color: var(--color-muted) !important; }
+.dark .text-slate-600    { color: var(--color-sec) !important; }
+.dark .text-slate-900    { color: var(--color-text) !important; }
+.dark .hover\:bg-slate-100:hover { background-color: var(--color-border) !important; }
+.dark .hover\:text-slate-900:hover { color: var(--color-text) !important; }
+
+/* ── Component utilities from index.css ── */
+.dark .btn-ghost { color: var(--color-sec); }
+.dark .btn-ghost:hover { color: var(--color-text); background-color: var(--color-border); }
+.dark .panel-header { background-color: rgba(18,18,18,0.8); border-color: var(--color-border); }
+.dark .panel-label { color: var(--color-muted); }
+
+/* ── Concept pill dark variant ── */
+.dark .concept-pill {
+  background: #1a2d4a;
+  color: #93c5fd;
+  border-color: #2d4a6f;
+}
+
+/* ── Skeleton shimmer dark variant ── */
+.dark .skeleton-shimmer {
+  background: linear-gradient(90deg, #1e1e1e 25%, #2c2c2c 50%, #1e1e1e 75%);
+}
+
+/* ── Section highlight animation dark variant ── */
+.dark .section-new {
+  border-left: 3px solid #818cf8 !important;
+  animation: section-highlight-fade-dark 2s ease-out forwards;
+}
+@keyframes section-highlight-fade-dark {
+  0%   { border-left-color: #818cf8; background-color: #1e1f3b; }
+  70%  { border-left-color: #818cf8; background-color: transparent; }
+  100% { border-left-color: transparent; background-color: transparent; }
+}
+
+/* ── Gradient orbs: switch to screen blend in dark mode ── */
+.dark .orb { mix-blend-mode: screen; }
+
+/* ── Shared pill dark variants (Dashboard, LectureView, ShareView) ── */
+.dark .db-pill-topic,
+.dark .lv-pill-topic,
+.dark .sv-pill-topic {
+  background: #2d1a4a !important; color: #c4b5fd !important; border-color: #4c2d7a !important;
+}
+.dark .db-pill-lang,
+.dark .lv-pill-lang,
+.dark .sv-pill-lang {
+  background: #0f1e38 !important; color: #93c5fd !important; border-color: #1e3a6a !important;
+}
+.dark .db-pill-dur { background: var(--color-border) !important; }
+
+/* ── Summary highlight dark bg ── */
+.dark .lv-sum-highlight { background: #252525 !important; border-left-color: #4a4a4a !important; }
+.dark .sv-sum-highlight { background: #252525 !important; border-left-color: #4a4a4a !important; }
+
+/* ── Signout / danger hover ── */
+.dark .db-dropdown-signout:hover,
+.dark .lp-nav-dd-signout:hover { background: rgba(239,68,68,0.1) !important; }
+.dark .db-card-menu-item.danger:hover { background: rgba(239,68,68,0.1) !important; }
+
+/* ── Dashboard danger button hover ── */
+.dark .db-btn-danger { background: #b91c1c !important; }
+
+/* ── Dashboard mic denied ── */
+.dark .ob-mic-denied { background: rgba(239,68,68,0.1) !important; border-color: rgba(239,68,68,0.3) !important; }
+
+/* ── Legal page nav backdrop ── */
+.dark .legal-nav { background: rgba(18,18,18,0.92) !important; }
+
+/* ── Legal warning box ── */
+.dark .legal-warning { background: #2a1f00 !important; border-color: #6b5a1a !important; color: #fbbf24 !important; }
+
+/* ── Share modal backdrop ── */
+.dark .lv-share-overlay { background: rgba(0,0,0,0.7); }
+
+/* ── QAAnswer source badge ── */
+.dark .qa-src-badge { background: rgba(255,255,255,0.07) !important; }
+
+/* ── App.jsx blue/emerald/red Tailwind utilities ── */
+.dark .bg-blue-50  { background-color: #0f1e38 !important; }
+.dark .bg-blue-100 { background-color: #1a2d4a !important; }
+.dark .text-blue-400 { color: #60a5fa !important; }
+.dark .text-blue-500 { color: #3b82f6 !important; }
+.dark .text-blue-600 { color: #93c5fd !important; }
+.dark .text-blue-700 { color: #93c5fd !important; }
+.dark .border-blue-100 { border-color: #1e3a6a !important; }
+.dark .bg-emerald-50 { background-color: #0a2218 !important; }
+.dark .bg-red-50 { background-color: rgba(239,68,68,0.1) !important; }
+.dark .hover\:bg-blue-50:hover { background-color: #0f1e38 !important; }

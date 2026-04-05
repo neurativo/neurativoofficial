@@ -2,6 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useSEO } from '../lib/useSEO';
 
+function useIsDark() {
+    const [dark, setDark] = React.useState(() => document.documentElement.classList.contains('dark'));
+    React.useEffect(() => {
+        const obs = new MutationObserver(() =>
+            setDark(document.documentElement.classList.contains('dark'))
+        );
+        obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+        return () => obs.disconnect();
+    }, []);
+    return dark;
+}
+
 // Public endpoint — no auth interceptor needed
 const BASE_URL = import.meta.env.VITE_API_URL || 'https://neurativoofficial-production.up.railway.app';
 
@@ -58,6 +70,21 @@ const CSS = `
     .sv-title { font-size: 22px; letter-spacing: -0.5px; }
     .sv-footer-inner { flex-direction: column; gap: 8px; text-align: center; }
   }
+
+  /* ── Dark mode ── */
+  .dark .sv-header { background: var(--color-card); border-bottom-color: var(--color-border); }
+  .dark .sv-badge { border-color: var(--color-border); color: var(--color-muted); }
+  .dark .sv-pill-topic { background: #2d1a4a; color: #c4b5fd; border-color: #4c2d7a; }
+  .dark .sv-pill-lang  { background: #0f1e38; color: #93c5fd; border-color: #1e3a6a; }
+  .dark .sv-pill-dur   { background: var(--color-border); }
+  .dark .sv-transcript-toggle { border-color: var(--color-border); color: var(--color-sec); }
+  .dark .sv-transcript-toggle:hover { border-color: var(--color-border-hov); }
+  .dark .sv-sum-card { border-color: var(--color-border); }
+  .dark .sv-sum-lead { color: var(--color-sec); }
+  .dark .sv-sum-prose { color: var(--color-muted); }
+  .dark .sv-footer { border-top-color: var(--color-border); }
+  .dark .sv-footer-made { color: var(--color-muted); }
+  .dark .sv-btn-home { background: var(--color-dark); color: var(--color-dark-fg); }
 `;
 
 function parseSummary(text) {
@@ -95,13 +122,21 @@ function parseSummary(text) {
 
 const LANG = { en: 'English', ar: 'Arabic', zh: 'Chinese', fr: 'French', de: 'German', hi: 'Hindi', es: 'Spanish', it: 'Italian', ja: 'Japanese', ko: 'Korean', pt: 'Portuguese', ru: 'Russian' };
 
-const ACCENTS = [
+const ACCENTS_LIGHT = [
     { border: '#c4b5fd', title: '#7c3aed', bg: '#faf5ff' },
     { border: '#93c5fd', title: '#2563eb', bg: '#eff6ff' },
     { border: '#6ee7b7', title: '#059669', bg: '#f0fdf4' },
     { border: '#fdba74', title: '#c2410c', bg: '#fff7ed' },
     { border: '#f9a8d4', title: '#be185d', bg: '#fdf2f8' },
     { border: '#86efac', title: '#15803d', bg: '#f0fdf4' },
+];
+const ACCENTS_DARK = [
+    { border: '#7c3aed', title: '#c4b5fd', bg: '#1e1338' },
+    { border: '#2563eb', title: '#93c5fd', bg: '#0f1e38' },
+    { border: '#059669', title: '#6ee7b7', bg: '#0a2218' },
+    { border: '#c2410c', title: '#fdba74', bg: '#291508' },
+    { border: '#be185d', title: '#f9a8d4', bg: '#25081e' },
+    { border: '#15803d', title: '#86efac', bg: '#0c1f10' },
 ];
 
 function fmtDur(s) {
@@ -117,9 +152,11 @@ function fmtDate(iso) {
 
 export default function ShareView() {
     const { token } = useParams();
+    const isDark = useIsDark();
     const [lecture, setLecture]           = useState(null);
     const [loading, setLoading]           = useState(true);
     const [notFound, setNotFound]         = useState(false);
+    const [expired, setExpired]           = useState(false);
     const [showTranscript, setShowTranscript] = useState(false);
 
     // Dynamic SEO — updates once lecture loads
@@ -137,6 +174,7 @@ export default function ShareView() {
         fetch(`${BASE_URL}/api/v1/share/${token}`)
             .then(r => {
                 if (r.status === 404) { setNotFound(true); return null; }
+                if (r.status === 410) { setExpired(true); return null; }
                 return r.json();
             })
             .then(data => { if (data) setLecture(data); })
@@ -163,6 +201,29 @@ export default function ShareView() {
         );
     }
 
+    if (expired) {
+        return (
+            <>
+                <style>{CSS}</style>
+                <div className="sv">
+                    <header className="sv-header">
+                        <Link to="/" className="sv-logo">
+                            <div className="sv-logo-icon">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fafaf9" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                            </div>
+                            <span className="sv-wordmark">Neurativo</span>
+                        </Link>
+                    </header>
+                    <div className="sv-404">
+                        <p className="sv-404-title">This link has expired</p>
+                        <p className="sv-404-sub">The share link is past its expiry date. Ask the owner to generate a new one.</p>
+                        <Link to="/" className="sv-btn-home">Go home</Link>
+                    </div>
+                </div>
+            </>
+        );
+    }
+
     if (notFound || !lecture) {
         return (
             <>
@@ -178,7 +239,7 @@ export default function ShareView() {
                     </header>
                     <div className="sv-404">
                         <p className="sv-404-title">This lecture is no longer available</p>
-                        <p className="sv-404-sub">The share link may have been revoked or expired.</p>
+                        <p className="sv-404-sub">The share link may have been revoked.</p>
                         <Link to="/" className="sv-btn-home">Go home</Link>
                     </div>
                 </div>
@@ -228,7 +289,8 @@ export default function ShareView() {
                         <>
                             <div className="sv-eyebrow">Summary</div>
                             {sections.map((s, i) => {
-                                const a = ACCENTS[i % ACCENTS.length];
+                                const palette = isDark ? ACCENTS_DARK : ACCENTS_LIGHT;
+                                const a = palette[i % palette.length];
                                 return (
                                     <div key={i} className="sv-sum-card" style={{ borderLeft: `3px solid ${a.border}` }}>
                                         <div className="sv-sum-title" style={{ color: a.title }}>{s.title}</div>

@@ -170,6 +170,18 @@ const CSS = `
   .ob-mic-denied { background: #fff5f5; border-color: #fecaca; color: #ef4444; }
   .ob-mic-status { font-size: 13px; margin-top: 12px; margin-bottom: 20px; }
   .ob-checkmark { width: 56px; height: 56px; border-radius: 50%; background: #f0fdf4; border: 1.5px solid #86efac; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; color: #16a34a; }
+
+  /* ── Dark mode overrides ── */
+  .dark .db-pill-topic { background: #2d1a4a; color: #c4b5fd; border-color: #4c2d7a; }
+  .dark .db-pill-lang  { background: #0f1e38; color: #93c5fd; border-color: #1e3a6a; }
+  .dark .db-pill-dur   { background: var(--color-border); }
+  .dark .db-card-menu-item.danger:hover { background: rgba(239,68,68,0.1); }
+  .dark .db-dropdown-signout:hover      { background: rgba(239,68,68,0.1); }
+  .dark .db-search:focus { border-color: var(--color-border-hov); }
+  .dark .ob-mic-icon    { background: rgba(22,163,74,0.15); border-color: rgba(134,239,172,0.3); }
+  .dark .ob-mic-granted { background: rgba(22,163,74,0.15); border-color: rgba(134,239,172,0.3); }
+  .dark .ob-mic-denied  { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.3); }
+  .dark .ob-checkmark   { background: rgba(22,163,74,0.15); border-color: rgba(134,239,172,0.3); }
 `;
 
 // ─── Theme toggle ─────────────────────────────────────────────────────────────

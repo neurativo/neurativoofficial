@@ -233,6 +233,10 @@ const CSS = `
   @media (max-width: 360px) {
     .pp-stats { grid-template-columns: 1fr; }
   }
+
+  /* Dark mode */
+  .dark .pp-btn-delete { border-color: rgba(239,68,68,0.3); }
+  .dark .pp-btn-delete:hover { background: rgba(239,68,68,0.1); }
 `;
 
 const PLANS = [

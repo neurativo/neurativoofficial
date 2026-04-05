@@ -25,7 +25,7 @@ const CSS = `
   }
   .nf-logo-box {
     width: 28px; height: 28px; border-radius: 8px;
-    background: #1a1a1a;
+    background: var(--color-dark, #1a1a1a);
     display: flex; align-items: center; justify-content: center;
   }
   .nf-logo-text {
@@ -69,7 +69,7 @@ const CSS = `
   .nf-btn-dark {
     display: inline-flex; align-items: center; gap: 6px;
     padding: 11px 20px;
-    background: #1a1a1a; color: #fafaf9;
+    background: var(--color-dark, #1a1a1a); color: var(--color-dark-fg, #fafaf9);
     font-size: 13.5px; font-weight: 500;
     border-radius: 10px; text-decoration: none;
     font-family: 'Inter', sans-serif;
@@ -97,7 +97,7 @@ const CSS = `
   /* Footer note */
   .nf-note {
     margin-top: 40px;
-    font-size: 11px; color: #c8c4be;
+    font-size: 11px; color: var(--color-muted, #a3a3a3);
   }
 
   @media (max-width: 400px) {
@@ -109,7 +109,7 @@ const CSS = `
 
 const LogoIcon = () => (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-        stroke="#fafaf9" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        stroke="var(--color-dark-fg, #fafaf9)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M13 10V3L4 14h7v7l9-11h-7z"/>
     </svg>
 );

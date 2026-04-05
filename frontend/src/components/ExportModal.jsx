@@ -96,8 +96,8 @@ export default function ExportModal({ lectureId, onClose }) {
             <div
                 onClick={e => e.stopPropagation()}
                 style={{
-                    background: '#ffffff',
-                    border: '1px solid #f0ede8',
+                    background: 'var(--color-card)',
+                    border: '1px solid var(--color-border)',
                     borderRadius: 20,
                     padding: '36px 32px 28px',
                     width: '100%',
@@ -111,8 +111,8 @@ export default function ExportModal({ lectureId, onClose }) {
                     <div style={{
                         width: 56, height: 56, borderRadius: 16,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        background: isSuccess ? '#f0fdf4' : isError ? '#fff5f5' : '#fafaf9',
-                        border: `1px solid ${isSuccess ? '#bbf7d0' : isError ? '#fecaca' : '#f0ede8'}`,
+                        background: isSuccess ? '#f0fdf4' : isError ? 'rgba(239,68,68,0.1)' : 'var(--color-bg)',
+                        border: `1px solid ${isSuccess ? '#bbf7d0' : isError ? 'rgba(239,68,68,0.3)' : 'var(--color-border)'}`,
                         transition: 'background 0.3s, border-color 0.3s',
                     }}>
                         {isLoading && (
@@ -135,10 +135,10 @@ export default function ExportModal({ lectureId, onClose }) {
                 </div>
 
                 {/* Title */}
-                <h3 style={{ fontSize: 17, fontWeight: 600, color: '#1a1a1a', textAlign: 'center', letterSpacing: '-0.4px', margin: '0 0 4px' }}>
+                <h3 style={{ fontSize: 17, fontWeight: 600, color: 'var(--color-text)', textAlign: 'center', letterSpacing: '-0.4px', margin: '0 0 4px' }}>
                     {isSuccess ? 'Export Ready' : isError ? 'Export Failed' : 'Generating PDF'}
                 </h3>
-                <p style={{ fontSize: 13, color: '#a3a3a3', textAlign: 'center', margin: '0 0 24px', lineHeight: 1.5 }}>
+                <p style={{ fontSize: 13, color: 'var(--color-muted)', textAlign: 'center', margin: '0 0 24px', lineHeight: 1.5 }}>
                     {status}
                 </p>
 
@@ -146,12 +146,12 @@ export default function ExportModal({ lectureId, onClose }) {
                 {isLoading && (
                     <div style={{ marginBottom: 8 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                            <span style={{ fontSize: 11, color: '#a3a3a3', fontWeight: 500 }}>Progress</span>
-                            <span style={{ fontSize: 12, color: '#1a1a1a', fontWeight: 600, fontFamily: 'monospace' }}>{progress}%</span>
+                            <span style={{ fontSize: 11, color: 'var(--color-muted)', fontWeight: 500 }}>Progress</span>
+                            <span style={{ fontSize: 12, color: 'var(--color-text)', fontWeight: 600, fontFamily: 'monospace' }}>{progress}%</span>
                         </div>
-                        <div style={{ width: '100%', background: '#f0ede8', height: 5, borderRadius: 99, overflow: 'hidden' }}>
+                        <div style={{ width: '100%', background: 'var(--color-border)', height: 5, borderRadius: 99, overflow: 'hidden' }}>
                             <div style={{
-                                height: '100%', background: '#1a1a1a', borderRadius: 99,
+                                height: '100%', background: 'var(--color-dark)', borderRadius: 99,
                                 width: `${progress}%`, transition: 'width 0.7s ease-out',
                             }} />
                         </div>
@@ -164,7 +164,7 @@ export default function ExportModal({ lectureId, onClose }) {
                         <div style={{ width: '100%', background: '#dcfce7', height: 5, borderRadius: 99, overflow: 'hidden' }}>
                             <div style={{ height: '100%', background: '#22c55e', width: '100%', borderRadius: 99 }} />
                         </div>
-                        <p style={{ fontSize: 12, color: '#6b6b6b', textAlign: 'center', marginTop: 12 }}>
+                        <p style={{ fontSize: 12, color: 'var(--color-sec)', textAlign: 'center', marginTop: 12 }}>
                             Downloading…
                         </p>
                     </div>
@@ -175,8 +175,8 @@ export default function ExportModal({ lectureId, onClose }) {
                     <div>
                         {errorMsg && (
                             <div style={{
-                                background: '#fff5f5', border: '1px solid #fecaca', borderRadius: 10,
-                                padding: '10px 12px', fontSize: 12, color: '#dc2626',
+                                background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 10,
+                                padding: '10px 12px', fontSize: 12, color: '#f87171',
                                 fontFamily: 'monospace', wordBreak: 'break-all', marginBottom: 16,
                             }}>
                                 {errorMsg}
@@ -186,7 +186,7 @@ export default function ExportModal({ lectureId, onClose }) {
                             <button
                                 onClick={runExport}
                                 style={{
-                                    flex: 1, padding: '10px 0', background: '#1a1a1a', color: '#fafaf9',
+                                    flex: 1, padding: '10px 0', background: 'var(--color-dark)', color: 'var(--color-dark-fg)',
                                     border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 500,
                                     cursor: 'pointer', fontFamily: 'Inter, sans-serif',
                                 }}
@@ -196,8 +196,8 @@ export default function ExportModal({ lectureId, onClose }) {
                             <button
                                 onClick={onClose}
                                 style={{
-                                    flex: 1, padding: '10px 0', background: '#fafaf9', color: '#1a1a1a',
-                                    border: '1px solid #f0ede8', borderRadius: 10, fontSize: 13,
+                                    flex: 1, padding: '10px 0', background: 'var(--color-bg)', color: 'var(--color-text)',
+                                    border: '1px solid var(--color-border)', borderRadius: 10, fontSize: 13,
                                     cursor: 'pointer', fontFamily: 'Inter, sans-serif',
                                 }}
                             >

@@ -645,42 +645,85 @@ def delete_lecture(lecture_id: str) -> None:
 #  SHARE / FULL LECTURE
 # =============================================================================
 
-def generate_share_token(lecture_id: str) -> str:
+def generate_share_token(
+    lecture_id: str,
+    mode: str = "full",
+    expires_at: str | None = None,
+) -> str:
     """
-    Returns the existing share_token or generates a new uuid4 token, saves it,
-    and returns it. Idempotent — calling twice returns the same token.
+    Returns the existing share_token (or generates a new one) and updates
+    the share_mode / share_expires_at settings for this lecture.
+    Requires these columns in Supabase (run once):
+        ALTER TABLE lectures ADD COLUMN IF NOT EXISTS share_mode TEXT DEFAULT 'full';
+        ALTER TABLE lectures ADD COLUMN IF NOT EXISTS share_expires_at TIMESTAMPTZ;
     """
     db = _fresh_db()
     resp = db.table("lectures").select("share_token").eq("id", lecture_id).execute()
+    existing_token = None
     if hasattr(resp, "data") and resp.data:
-        existing = resp.data[0].get("share_token")
-        if existing:
-            return existing
-    token = str(_uuid.uuid4())
-    db.table("lectures").update({"share_token": token}).eq("id", lecture_id).execute()
+        existing_token = resp.data[0].get("share_token")
+
+    token = existing_token or str(_uuid.uuid4())
+    update_payload: dict = {"share_token": token}
+    try:
+        update_payload["share_mode"] = mode
+        update_payload["share_expires_at"] = expires_at
+    except Exception:
+        pass  # columns may not exist yet — token still works
+    db.table("lectures").update(update_payload).eq("id", lecture_id).execute()
     return token
 
 
 def clear_share_token(lecture_id: str) -> None:
-    """Sets share_token = NULL to unshare a lecture."""
-    _fresh_db().table("lectures").update({"share_token": None}).eq("id", lecture_id).execute()
+    """Sets share_token = NULL (and clears expiry/mode) to unshare a lecture."""
+    payload = {"share_token": None}
+    try:
+        payload["share_mode"] = None
+        payload["share_expires_at"] = None
+    except Exception:
+        pass
+    _fresh_db().table("lectures").update(payload).eq("id", lecture_id).execute()
 
 
 def get_lecture_by_share_token(token: str):
     """
-    Finds a lecture by share_token. Returns public-safe fields, or None if not found.
+    Finds a lecture by share_token.
+    - Returns None if not found.
+    - Returns {"expired": True} if share_expires_at is in the past.
+    - Strips transcript when share_mode = 'summary_only'.
     """
     if not supabase:
         return None
     response = (
         supabase.table("lectures")
-        .select("id, title, topic, language, master_summary, summary, transcript, created_at, total_duration_seconds, share_views")
+        .select("id, title, topic, language, master_summary, summary, transcript, "
+                "created_at, total_duration_seconds, share_views, share_mode, share_expires_at")
         .eq("share_token", token)
         .execute()
     )
-    if hasattr(response, "data") and response.data:
-        return response.data[0]
-    return None
+    if not (hasattr(response, "data") and response.data):
+        return None
+    lecture = response.data[0]
+
+    # Expiry check
+    expires_at = lecture.get("share_expires_at")
+    if expires_at:
+        from datetime import datetime, timezone
+        try:
+            exp = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+            if datetime.now(timezone.utc) > exp:
+                return {"expired": True}
+        except Exception:
+            pass
+
+    # Mode filter — strip transcript for summary-only links
+    if lecture.get("share_mode") == "summary_only":
+        lecture.pop("transcript", None)
+
+    # Remove internal share fields from public response
+    lecture.pop("share_mode", None)
+    lecture.pop("share_expires_at", None)
+    return lecture
 
 
 def increment_share_views(lecture_id: str) -> None:

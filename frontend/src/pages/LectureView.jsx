@@ -96,6 +96,32 @@ const CSS = `
   /* Loading */
   .lv-loading { display: flex; align-items: center; justify-content: center; height: 100%; font-size: 13px; color: ${C.muted}; }
 
+  /* Share modal */
+  .lv-share-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 16px; }
+  .lv-share-box { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 14px; width: 100%; max-width: 400px; padding: 24px; box-shadow: 0 8px 32px rgba(0,0,0,0.18); }
+  .lv-share-title { font-size: 15px; font-weight: 600; color: ${C.text}; margin: 0 0 20px; letter-spacing: -0.3px; }
+  .lv-share-label { font-size: 11px; font-weight: 600; color: ${C.muted}; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+  .lv-share-toggle { display: flex; border: 1px solid ${C.border}; border-radius: 9px; overflow: hidden; margin-bottom: 18px; }
+  .lv-share-opt { flex: 1; padding: 8px 10px; font-size: 12px; font-weight: 500; background: none; border: none; cursor: pointer; color: ${C.muted}; font-family: inherit; transition: background 0.12s, color 0.12s; text-align: center; }
+  .lv-share-opt.active { background: ${C.dark}; color: #fafaf9; }
+  .lv-share-expiry { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 18px; }
+  .lv-share-exp-btn { padding: 5px 11px; font-size: 12px; font-weight: 500; border: 1px solid ${C.border}; border-radius: 7px; background: none; cursor: pointer; color: ${C.sec}; font-family: inherit; transition: all 0.12s; }
+  .lv-share-exp-btn.active { border-color: ${C.dark}; background: ${C.dark}; color: #fafaf9; }
+  .lv-share-url-row { display: flex; gap: 7px; margin-bottom: 18px; }
+  .lv-share-url { flex: 1; padding: 8px 11px; background: ${C.bg}; border: 1px solid ${C.border}; border-radius: 8px; font-size: 11px; color: ${C.muted}; font-family: monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lv-share-copy { padding: 8px 14px; background: ${C.dark}; color: #fafaf9; border: none; border-radius: 8px; font-size: 12px; font-weight: 500; cursor: pointer; font-family: inherit; white-space: nowrap; }
+  .lv-share-copy:hover { opacity: 0.85; }
+  .lv-share-qr { display: flex; justify-content: center; margin-bottom: 18px; }
+  .lv-share-qr img { border-radius: 8px; border: 1px solid ${C.border}; }
+  .lv-share-actions { display: flex; gap: 8px; justify-content: space-between; align-items: center; }
+  .lv-share-revoke { font-size: 12px; color: #ef4444; background: none; border: 1px solid #ef444433; border-radius: 8px; padding: 8px 14px; cursor: pointer; font-family: inherit; transition: background 0.12s; }
+  .lv-share-revoke:hover { background: #ef44440f; }
+  .lv-share-gen { padding: 9px 20px; background: ${C.dark}; color: #fafaf9; border: none; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; }
+  .lv-share-gen:hover { opacity: 0.85; }
+  .lv-share-gen:disabled { opacity: 0.45; cursor: default; }
+  .lv-share-close { position: absolute; top: 16px; right: 16px; background: none; border: none; cursor: pointer; color: ${C.muted}; padding: 4px; }
+  .lv-share-mode-note { font-size: 11px; color: ${C.muted}; margin-bottom: 18px; line-height: 1.5; }
+
   /* Mobile */
   @media (max-width: 680px) {
     .lv-body { flex-direction: column; }
@@ -121,7 +147,7 @@ const CSS = `
 `;
 
 // ─── Accent palette (cycles per card) ────────────────────────────────────────
-const ACCENTS = [
+const ACCENTS_LIGHT = [
     { border: '#c4b5fd', title: '#7c3aed', bg: '#faf5ff' }, // violet
     { border: '#93c5fd', title: '#2563eb', bg: '#eff6ff' }, // blue
     { border: '#6ee7b7', title: '#059669', bg: '#f0fdf4' }, // emerald
@@ -129,6 +155,26 @@ const ACCENTS = [
     { border: '#f9a8d4', title: '#be185d', bg: '#fdf2f8' }, // pink
     { border: '#86efac', title: '#15803d', bg: '#f0fdf4' }, // green
 ];
+const ACCENTS_DARK = [
+    { border: '#7c3aed', title: '#c4b5fd', bg: '#1e1338' }, // violet
+    { border: '#2563eb', title: '#93c5fd', bg: '#0f1e38' }, // blue
+    { border: '#059669', title: '#6ee7b7', bg: '#0a2218' }, // emerald
+    { border: '#c2410c', title: '#fdba74', bg: '#291508' }, // orange
+    { border: '#be185d', title: '#f9a8d4', bg: '#25081e' }, // pink
+    { border: '#15803d', title: '#86efac', bg: '#0c1f10' }, // green
+];
+
+function useIsDark() {
+    const [dark, setDark] = React.useState(() => document.documentElement.classList.contains('dark'));
+    React.useEffect(() => {
+        const obs = new MutationObserver(() =>
+            setDark(document.documentElement.classList.contains('dark'))
+        );
+        obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+        return () => obs.disconnect();
+    }, []);
+    return dark;
+}
 
 // ─── parseSummary (mirrors App.jsx) ───────────────────────────────────────────
 function parseSummary(text) {
@@ -174,7 +220,7 @@ function parseSummary(text) {
 }
 
 function SummaryCard({ section, accent }) {
-    const a = accent || ACCENTS[0];
+    const a = accent || ACCENTS_LIGHT[0];
     return (
         <div className="lv-sum-card" style={{ borderLeft: `3px solid ${a.border}` }}>
             <div className="lv-sum-title" style={{ color: a.title }}>{section.title}</div>
@@ -207,15 +253,145 @@ function fmtDur(s) {
     return m > 0 ? `${m}m ${s % 60}s` : `${s}s`;
 }
 
+// ─── Share Modal ──────────────────────────────────────────────────────────────
+const EXPIRY_OPTIONS = [
+    { label: 'Never', value: null },
+    { label: '1 day', value: 1 },
+    { label: '7 days', value: 7 },
+    { label: '30 days', value: 30 },
+];
+
+function ShareModal({ lectureId, initialToken, onClose, addToast }) {
+    const [mode, setMode]           = useState('full');
+    const [expiryDays, setExpiryDays] = useState(null);
+    const [generating, setGenerating] = useState(false);
+    const [shareUrl, setShareUrl]   = useState(
+        initialToken ? window.location.origin + '/share/' + initialToken : ''
+    );
+    const [revoking, setRevoking]   = useState(false);
+
+    const expiryIso = expiryDays
+        ? new Date(Date.now() + expiryDays * 86400000).toISOString()
+        : null;
+
+    async function generate() {
+        setGenerating(true);
+        try {
+            const res = await (await import('../lib/api')).default.post(
+                `/api/v1/lectures/${lectureId}/share`,
+                { mode, expires_at: expiryIso }
+            );
+            const url = window.location.origin + res.data.share_url;
+            setShareUrl(url);
+        } catch {
+            addToast({ type: 'error', message: 'Failed to generate share link' });
+        } finally {
+            setGenerating(false);
+        }
+    }
+
+    async function copyLink() {
+        if (!shareUrl) return;
+        try {
+            await navigator.clipboard.writeText(shareUrl);
+            addToast({ type: 'success', message: 'Link copied!' });
+        } catch {
+            addToast({ type: 'success', message: shareUrl });
+        }
+    }
+
+    async function revoke() {
+        setRevoking(true);
+        try {
+            await (await import('../lib/api')).default.post(`/api/v1/lectures/${lectureId}/unshare`);
+            setShareUrl('');
+            addToast({ type: 'success', message: 'Share link revoked' });
+        } catch {
+            addToast({ type: 'error', message: 'Failed to revoke' });
+        } finally {
+            setRevoking(false);
+        }
+    }
+
+    return (
+        <div className="lv-share-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+            <div className="lv-share-box" style={{ position: 'relative' }}>
+                <button className="lv-share-close" onClick={onClose} aria-label="Close">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+
+                <div className="lv-share-title">Share lecture</div>
+
+                {/* Mode toggle */}
+                <div className="lv-share-label">Content</div>
+                <div className="lv-share-toggle" style={{ marginBottom: 6 }}>
+                    <button className={`lv-share-opt${mode === 'full' ? ' active' : ''}`} onClick={() => setMode('full')}>Full (transcript + summary)</button>
+                    <button className={`lv-share-opt${mode === 'summary_only' ? ' active' : ''}`} onClick={() => setMode('summary_only')}>Summary only</button>
+                </div>
+                <div className="lv-share-mode-note">
+                    {mode === 'summary_only' ? 'Viewers will see the summary and key concepts — transcript is hidden.' : 'Viewers can read the full transcript and summary.'}
+                </div>
+
+                {/* Expiry */}
+                <div className="lv-share-label">Expires</div>
+                <div className="lv-share-expiry">
+                    {EXPIRY_OPTIONS.map(opt => (
+                        <button
+                            key={opt.label}
+                            className={`lv-share-exp-btn${expiryDays === opt.value ? ' active' : ''}`}
+                            onClick={() => setExpiryDays(opt.value)}
+                        >{opt.label}</button>
+                    ))}
+                </div>
+
+                {/* Generate button */}
+                <button className="lv-share-gen" onClick={generate} disabled={generating} style={{ width: '100%', marginBottom: 18 }}>
+                    {generating ? 'Generating…' : shareUrl ? 'Update link' : 'Generate link'}
+                </button>
+
+                {/* URL + copy */}
+                {shareUrl && (
+                    <>
+                        <div className="lv-share-url-row">
+                            <div className="lv-share-url" title={shareUrl}>{shareUrl}</div>
+                            <button className="lv-share-copy" onClick={copyLink}>Copy</button>
+                        </div>
+                        {/* QR code */}
+                        <div className="lv-share-qr">
+                            <img
+                                src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(shareUrl)}&bgcolor=ffffff&color=1a1a1a&margin=6`}
+                                alt="QR code"
+                                width={140}
+                                height={140}
+                            />
+                        </div>
+                        {/* Revoke */}
+                        <div className="lv-share-actions">
+                            <button className="lv-share-revoke" onClick={revoke} disabled={revoking}>
+                                {revoking ? 'Revoking…' : 'Revoke link'}
+                            </button>
+                            <span style={{ fontSize: 11, color: 'var(--color-muted)' }}>
+                                {expiryDays ? `Expires in ${expiryDays}d` : 'No expiry'}
+                            </span>
+                        </div>
+                    </>
+                )}
+            </div>
+        </div>
+    );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function LectureView() {
     const { id } = useParams();
     const navigate = useNavigate();
     const addToast = useToast();
+    const isDark = useIsDark();
 
     const [lecture, setLecture]         = useState(null);
     const [loading, setLoading]         = useState(true);
     const [exportOpen, setExportOpen]   = useState(false);
+    const [shareOpen, setShareOpen]     = useState(false);
     const [activeTab, setActiveTab]     = useState('summary');
     const [qaHistory, setQaHistory]     = useState([]);
     const [qaQuestion, setQaQuestion]   = useState('');
@@ -263,22 +439,6 @@ export default function LectureView() {
         setQaLoading(false);
     };
 
-    const handleShare = async () => {
-        try {
-            const res = await api.post(`/api/v1/lectures/${id}/share`);
-            const shareUrl = window.location.origin + res.data.share_url;
-            if (lecture) setLecture(l => ({ ...l, share_token: res.data.share_url.split('/share/')[1] }));
-            try {
-                await navigator.clipboard.writeText(shareUrl);
-                addToast({ type: 'success', message: 'Link copied!' });
-            } catch {
-                // Clipboard blocked — show the URL so the user can copy manually
-                addToast({ type: 'success', message: shareUrl });
-            }
-        } catch {
-            addToast({ type: 'error', message: 'Failed to generate share link' });
-        }
-    };
 
 
     const segments = lecture?.transcript
@@ -317,9 +477,9 @@ export default function LectureView() {
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                             <span className="lv-btn-text">Export PDF</span>
                         </button>
-                        <button className="lv-btn-ghost" onClick={handleShare}>
+                        <button className="lv-btn-ghost" onClick={() => setShareOpen(true)}>
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-                            <span className="lv-btn-text">{lecture?.share_token ? 'Copy link' : 'Share'}</span>
+                            <span className="lv-btn-text">Share</span>
                         </button>
                     </div>
                 </nav>
@@ -368,7 +528,7 @@ export default function LectureView() {
                             <div className="lv-tab-body">
                                 {summarySections.length === 0
                                     ? <div style={{ fontSize: 13, color: C.muted, textAlign: 'center', paddingTop: 40 }}>Summary not yet generated</div>
-                                    : summarySections.map((s, i) => <SummaryCard key={i} section={s} accent={ACCENTS[i % ACCENTS.length]} />)
+                                    : summarySections.map((s, i) => { const palette = isDark ? ACCENTS_DARK : ACCENTS_LIGHT; return <SummaryCard key={i} section={s} accent={palette[i % palette.length]} />; })
                                 }
                             </div>
                         )}
@@ -488,7 +648,13 @@ export default function LectureView() {
                                             const vd = frame.visual_data || {};
                                             const contentType = vd.content_type || 'unknown';
                                             const source = frame.source || 'screen';
-                                            const typeColors = {
+                                            const typeColors = isDark ? {
+                                                slide: { bg: '#0f1e38', color: '#93c5fd' },
+                                                code: { bg: '#0a2218', color: '#6ee7b7' },
+                                                diagram: { bg: '#1e1338', color: '#c4b5fd' },
+                                                equation: { bg: '#291508', color: '#fdba74' },
+                                                default: { bg: '#1e1e1e', color: '#a0a0a0' },
+                                            } : {
                                                 slide: { bg: '#eff6ff', color: '#2563eb' },
                                                 code: { bg: '#f0fdf4', color: '#16a34a' },
                                                 diagram: { bg: '#faf5ff', color: '#7c3aed' },
@@ -497,8 +663,8 @@ export default function LectureView() {
                                             };
                                             const tc = typeColors[contentType] || typeColors.default;
                                             const sourceBadge = source === 'board'
-                                                ? { bg: '#f0fdf4', color: '#15803d', label: 'Board' }
-                                                : { bg: '#eff6ff', color: '#1d4ed8', label: 'Screen' };
+                                                ? isDark ? { bg: '#0a2218', color: '#6ee7b7', label: 'Board' } : { bg: '#f0fdf4', color: '#15803d', label: 'Board' }
+                                                : isDark ? { bg: '#0f1e38', color: '#93c5fd', label: 'Screen' } : { bg: '#eff6ff', color: '#1d4ed8', label: 'Screen' };
                                             return (
                                                 <div key={i} style={{
                                                     border: `1px solid ${C.border}`,
@@ -548,7 +714,7 @@ export default function LectureView() {
                                                         </div>
                                                     )}
                                                     {vd.text_content && (
-                                                        <div style={{ fontSize: 12, color: '#64748b', lineHeight: 1.6 }}>
+                                                        <div style={{ fontSize: 12, color: C.sec, lineHeight: 1.6 }}>
                                                             {vd.text_content}
                                                         </div>
                                                     )}
@@ -558,8 +724,8 @@ export default function LectureView() {
                                                                 <div key={j} style={{
                                                                     fontFamily: 'monospace',
                                                                     fontSize: 12,
-                                                                    color: '#2563eb',
-                                                                    background: '#eff6ff',
+                                                                    color: isDark ? '#93c5fd' : '#2563eb',
+                                                                    background: isDark ? '#0f1e38' : '#eff6ff',
                                                                     padding: '4px 8px',
                                                                     borderRadius: 5,
                                                                 }}>
@@ -594,6 +760,14 @@ export default function LectureView() {
 
         {exportOpen && (
             <ExportModal lectureId={id} onClose={() => setExportOpen(false)} />
+        )}
+        {shareOpen && (
+            <ShareModal
+                lectureId={id}
+                initialToken={lecture?.share_token}
+                onClose={() => setShareOpen(false)}
+                addToast={addToast}
+            />
         )}
         </>
     );

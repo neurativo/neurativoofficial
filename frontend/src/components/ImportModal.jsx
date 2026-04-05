@@ -6,8 +6,8 @@ const ACCEPTED = ['.mp3', '.m4a', '.wav', '.mp4', '.webm'];
 const MAX_BYTES = 500 * 1024 * 1024; // 500 MB
 
 const C = {
-    bg: '#fafaf9', card: '#ffffff', text: '#1a1a1a', sec: '#6b6b6b',
-    muted: '#a3a3a3', border: '#f0ede8', borderHov: '#e8e4de', dark: '#1a1a1a',
+    bg: 'var(--color-bg)', card: 'var(--color-card)', text: 'var(--color-text)', sec: 'var(--color-sec)',
+    muted: 'var(--color-muted)', border: 'var(--color-border)', borderHov: 'var(--color-border-hov)', dark: 'var(--color-dark)',
     accent: '#2563eb',
 };
 
@@ -57,6 +57,12 @@ const CSS = `
   .im-btn-submit { flex: 2; padding: 10px; background: ${C.dark}; color: #fafaf9; font-size: 13px; font-weight: 500; border: none; border-radius: 10px; cursor: pointer; font-family: inherit; transition: opacity 0.15s; }
   .im-btn-submit:hover { opacity: 0.82; }
   .im-btn-submit:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  /* ── Dark mode ── */
+  .dark .im-drop:hover, .dark .im-drop.drag { background: #0f1e38; border-color: #3b82f6; }
+  .dark .im-file-icon { background: #0f1e38; }
+  .dark .im-error { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.3); color: #f87171; }
+  .dark .im-btn-submit { color: var(--color-dark-fg); }
 `;
 
 function fmtBytes(b) {

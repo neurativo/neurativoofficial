@@ -70,7 +70,7 @@ async def transcribe_audio(file: UploadFile, prompt: str = None) -> tuple[str, s
 
         # Estimate audio duration from verbose_json segments when available
         segments = getattr(transcript_response, "segments", None) or []
-        audio_seconds = segments[-1]["end"] if segments else 0.0
+        audio_seconds = segments[-1].end if segments else 0.0
         await log_cost_async("whisper_transcription", "whisper-1", audio_seconds=audio_seconds)
 
         return text, detected_language

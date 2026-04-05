@@ -18,6 +18,7 @@ const CSS = `
     border-bottom: 1px solid var(--color-border, #f0ede8);
     display: flex; align-items: center; padding: 0 40px; gap: 16px;
   }
+  .dark .legal-nav { background: rgba(18,18,18,0.92); }
   .legal-nav a {
     font-size: 13px; font-weight: 500; color: var(--color-text, #1a1a1a);
     text-decoration: none; display: flex; align-items: center; gap: 6px;
