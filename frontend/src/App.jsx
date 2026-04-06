@@ -712,7 +712,13 @@ function App({ user }) {
             // stopAudioMonitoring doesn't kill the fresh micStream via micStreamRef
             stopAudioMonitoring();
 
-            const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const micStream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true,
+                },
+            });
             micStreamRef.current = micStream;
 
             // Fix 6: recover from unexpected microphone disconnects
@@ -732,10 +738,18 @@ function App({ user }) {
             await audioContextRef.current.resume();
             analyserRef.current = audioContextRef.current.createAnalyser();
             analyserRef.current.fftSize = 256;
-            audioContextRef.current.createMediaStreamSource(micStream).connect(analyserRef.current);
+
+            // Boost mic gain for distant lecture recording (phone in a classroom)
+            const micSource = audioContextRef.current.createMediaStreamSource(micStream);
+            const gainNode = audioContextRef.current.createGain();
+            gainNode.gain.value = 2.5;
+            const gainDest = audioContextRef.current.createMediaStreamDestination();
+            micSource.connect(gainNode);
+            gainNode.connect(analyserRef.current);
+            gainNode.connect(gainDest);
 
             // Merge screen audio into recording stream if screen share is active with audio
-            let recordingStream = micStream;
+            let recordingStream = gainDest.stream;
             const screenAudioTracks = screenStreamRef.current?.getAudioTracks() || [];
             if (screenAudioTracks.length > 0) {
                 if (mergeAudioCtxRef.current && mergeAudioCtxRef.current.state !== 'closed') {
@@ -743,7 +757,7 @@ function App({ user }) {
                 }
                 const mergeCtx = new AudioCtx();
                 const dest = mergeCtx.createMediaStreamDestination();
-                mergeCtx.createMediaStreamSource(micStream).connect(dest);
+                mergeCtx.createMediaStreamSource(gainDest.stream).connect(dest);
                 mergeCtx.createMediaStreamSource(screenStreamRef.current).connect(dest);
                 mergeAudioCtxRef.current = mergeCtx;
                 recordingStream = dest.stream;
@@ -752,7 +766,7 @@ function App({ user }) {
             const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
 
             const measuredFloor = await calibrateNoiseFloor(dataArray);
-            let speechThreshold = Math.max(8, Math.min(60, measuredFloor * 2.5));
+            let speechThreshold = Math.max(5, Math.min(40, measuredFloor * 1.8));
 
             // Resilience 5: request screen wake lock so device doesn't sleep
             await requestWakeLock();
@@ -805,7 +819,7 @@ function App({ user }) {
                         uploadChunk(new Blob(audioChunksRef.current, { type: blobType }), targetId);
                     } else if (isSilent) {
                         noiseFloorRef.current = 0.9 * noiseFloorRef.current + 0.1 * peakSpeechEnergyRef.current;
-                        speechThreshold = Math.max(8, Math.min(60, noiseFloorRef.current * 2.5));
+                        speechThreshold = Math.max(5, Math.min(40, noiseFloorRef.current * 1.8));
                         silentChunksRef.current += 1;
                         if (silentChunksRef.current >= SILENCE_WARN_AFTER) {
                             showError('No speech detected — is your microphone muted or too quiet?');
