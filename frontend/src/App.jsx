@@ -739,14 +739,22 @@ function App({ user }) {
             analyserRef.current = audioContextRef.current.createAnalyser();
             analyserRef.current.fftSize = 256;
 
-            // Boost mic gain for distant lecture recording (phone in a classroom)
+            // Boost mic gain for distant lecture recording (phone in a classroom).
+            // Compressor sits after gain to prevent clipping when mic is close.
             const micSource = audioContextRef.current.createMediaStreamSource(micStream);
             const gainNode = audioContextRef.current.createGain();
             gainNode.gain.value = 2.5;
+            const compressor = audioContextRef.current.createDynamicsCompressor();
+            compressor.threshold.value = -24;  // start compressing at -24 dBFS
+            compressor.knee.value       = 30;  // soft knee
+            compressor.ratio.value      = 12;  // heavy limiting above threshold
+            compressor.attack.value     = 0.003;
+            compressor.release.value    = 0.25;
             const gainDest = audioContextRef.current.createMediaStreamDestination();
             micSource.connect(gainNode);
-            gainNode.connect(analyserRef.current);
-            gainNode.connect(gainDest);
+            gainNode.connect(compressor);
+            compressor.connect(analyserRef.current);
+            compressor.connect(gainDest);
 
             // Merge screen audio into recording stream if screen share is active with audio
             let recordingStream = gainDest.stream;
