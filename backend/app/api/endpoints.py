@@ -13,7 +13,7 @@ from app.core.config import settings
 from app.core.auth import get_current_user
 from app.core.plans import get_limits, is_unlimited
 from app.core.rate_limit import limiter
-from app.services.openai_service import transcribe_audio, transcribe_audio_bytes
+from app.services.openai_service import transcribe_audio, transcribe_audio_bytes, filter_segments_by_confidence
 from app.services.explanation_service import generate_explanation
 from app.services.qa_service import answer_lecture_question
 from app.services.pdf_service import generate_lecture_pdf
@@ -720,34 +720,35 @@ async def process_live_chunk(
     # transcription + transcript-append for the same lecture simultaneously.
     # Languages Whisper hallucinates on silence — never use these to set lecture language
     _HALLUCINATION_LANGS = {'ja', 'zh'}
-    # Known Whisper silence hallucination strings — stripped from chunk text before processing
-    _HALLUCINATION_STRINGS = [
-        'ご視聴ありがとうございました', 'ありがとうございました',
-        'お願いします', 'ご視聴', '字幕', 'Subtitles',
-    ]
 
     async with _get_lecture_lock(lecture_id):
-        # Build Whisper context from last ~100 words of transcript to prevent
-        # duplicate transcription at chunk boundaries (Whisper re-generates its own
-        # internal context window otherwise, causing the last 1-2 sentences to repeat).
+        # Fetch pinned language before transcription so we can pass it to Whisper.
+        # After first detection, pinning prevents per-chunk re-detection drift that
+        # causes cross-language hallucinations on quiet or ambiguous audio.
+        stored_language = get_lecture_language(lecture_id)  # None on first chunk
+
+        # Build Whisper context from last ~200 words of transcript to prevent
+        # duplicate transcription at chunk boundaries.
         whisper_prompt = None
         try:
             transcript_so_far = get_lecture_transcript(lecture_id)
             if transcript_so_far:
                 words = transcript_so_far.split()
-                whisper_prompt = " ".join(words[-100:])
+                whisper_prompt = " ".join(words[-200:])
         except Exception:
             pass
 
-        # 2. Transcribe
+        # 2. Transcribe — language pin passed when available.
+        #    no_speech_prob segment filtering happens inside transcribe_audio().
         try:
-            chunk_text, detected_language = await transcribe_audio(file, prompt=whisper_prompt)
+            chunk_text, detected_language = await transcribe_audio(
+                file,
+                prompt=whisper_prompt,
+                language=stored_language or None,
+            )
         except Exception:
             raise HTTPException(status_code=500, detail="Transcription failed")
 
-        # Strip known Whisper hallucination strings (fired on silence/noise)
-        for _h in _HALLUCINATION_STRINGS:
-            chunk_text = chunk_text.replace(_h, '')
         chunk_text = chunk_text.strip()
 
         if not chunk_text:
@@ -755,7 +756,6 @@ async def process_live_chunk(
 
         # 3. Persist language — first real detection wins, never override.
         # Ignore hallucination languages (ja/zh) which Whisper emits on silence.
-        stored_language = get_lecture_language(lecture_id)  # None if not yet set
         if not stored_language and detected_language and detected_language not in _HALLUCINATION_LANGS:
             update_lecture_language(lecture_id, detected_language)
             stored_language = detected_language
