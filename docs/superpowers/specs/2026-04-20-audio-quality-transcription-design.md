@@ -86,7 +86,7 @@ else:
 
 **Threshold:** `0.6` — the established cutoff used in Whisper's own open-source reference implementation. Segments above this threshold are statistically more likely to be hallucinated than real speech.
 
-**Fallback:** The hardcoded `_HALLUCINATION_STRINGS` list is kept as a secondary safety net for any edge cases that slip through, but `no_speech_prob` filtering addresses the root cause rather than symptoms.
+**Fallback:** The hardcoded `_HALLUCINATION_STRINGS` list was removed from `endpoints.py` entirely. The `no_speech_prob` filtering addresses the root cause rather than individual symptom strings, and the list was Whisper-version-specific and fragile. No fallback string list is maintained.
 
 **Impact:** Eliminates hallucinated text on silence, background noise, and low-SNR audio that the hardcoded list cannot cover.
 

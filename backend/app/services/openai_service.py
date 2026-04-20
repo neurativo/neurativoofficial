@@ -128,7 +128,7 @@ async def transcribe_audio_bytes(file_bytes: bytes, filename: str) -> tuple[str,
     else:
         text = transcript_response.text or ""
 
-    audio_seconds = segments[-1]["end"] if segments else 0.0
+    audio_seconds = segments[-1].end if segments else 0.0
     log_cost("whisper_import", "whisper-1", audio_seconds=audio_seconds)
 
     return text, detected_language
