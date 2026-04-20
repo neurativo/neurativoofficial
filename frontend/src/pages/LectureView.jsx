@@ -506,6 +506,7 @@ export default function LectureView() {
     const wordCount = segments.reduce((n, s) => n + s.split(/\s+/).filter(Boolean).length, 0);
     const summaryText = lecture?.master_summary || lecture?.summary || '';
     const summarySections = parseSummary(summaryText);
+    const topicCount = summarySections.reduce((n, s) => n + s.concepts.length, 0);
     const titleDisplay = lecture?.title
         ? (lecture.title.length > 40 ? lecture.title.slice(0, 40) + '…' : lecture.title)
         : 'Lecture';
@@ -669,6 +670,16 @@ export default function LectureView() {
                                             <div className="lv-stat-card">
                                                 <div className="lv-stat-label">Language</div>
                                                 <div className="lv-stat-val" style={{ fontSize: 16 }}>{LANG_NAMES[stats.language] || (stats.language || '').toUpperCase()}</div>
+                                            </div>
+                                            <div className="lv-stat-card">
+                                                <div className="lv-stat-label">Sections</div>
+                                                <div className="lv-stat-val">{summarySections.length || '—'}</div>
+                                                <div className="lv-stat-sub">summarized</div>
+                                            </div>
+                                            <div className="lv-stat-card">
+                                                <div className="lv-stat-label">Topics</div>
+                                                <div className="lv-stat-val">{topicCount || '—'}</div>
+                                                <div className="lv-stat-sub">key concepts</div>
                                             </div>
                                             {lecture?.share_views > 0 && (
                                                 <div className="lv-stat-card">
