@@ -42,3 +42,11 @@ def test_missing_no_speech_prob_defaults_to_zero_and_is_kept():
     s = MagicMock(spec=[])
     s.text = "good speech"
     assert filter_segments_by_confidence([s]) == "good speech"
+
+
+def test_segment_with_none_text_is_skipped():
+    from app.services.openai_service import filter_segments_by_confidence
+    s = MagicMock()
+    s.text = None
+    s.no_speech_prob = 0.1
+    assert filter_segments_by_confidence([s]) == ""

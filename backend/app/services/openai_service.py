@@ -41,6 +41,7 @@ def filter_segments_by_confidence(segments: list, threshold: float = 0.6) -> str
         s.text
         for s in segments
         if getattr(s, "no_speech_prob", 0.0) <= threshold
+        and s.text is not None
     ]
     return " ".join(kept).strip()
 
