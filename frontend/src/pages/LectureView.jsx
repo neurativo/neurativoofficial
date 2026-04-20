@@ -148,6 +148,29 @@ const CSS = `
     .lv-stat-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
     .lv-left { height: 38vh; }
   }
+
+  /* Smart Explain */
+  .lv-explain-btn { position: fixed; z-index: 50; padding: 5px 10px; background: ${C.dark}; color: ${C.darkFg}; border: none; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.18); font-family: inherit; animation: lv-chunk-in 0.15s ease; transform: translate(-50%, -100%); white-space: nowrap; }
+  .lv-explain-btn:hover { opacity: 0.85; }
+  .lv-explain-overlay { position: fixed; inset: 0; z-index: 60; display: flex; justify-content: flex-end; }
+  .lv-explain-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.25); backdrop-filter: blur(2px); }
+  .lv-explain-panel { position: relative; width: 100%; max-width: 480px; background: ${C.card}; height: 100%; box-shadow: -4px 0 32px rgba(0,0,0,0.12); display: flex; flex-direction: column; border-left: 1px solid ${C.border}; animation: lv-slide-right 0.28s ease; }
+  @keyframes lv-slide-right { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: translateX(0); } }
+  .lv-explain-header { height: 52px; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid ${C.border}; flex-shrink: 0; }
+  .lv-explain-title { font-size: 14px; font-weight: 700; color: ${C.text}; font-family: 'Outfit', sans-serif; display: flex; align-items: center; gap: 8px; }
+  .lv-explain-dot { width: 8px; height: 8px; border-radius: 50%; background: ${C.dark}; }
+  .lv-explain-close { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; background: none; border: none; cursor: pointer; color: ${C.muted}; border-radius: 6px; transition: color 0.12s, background 0.12s; }
+  .lv-explain-close:hover { color: ${C.text}; background: ${C.border}; }
+  .lv-explain-body { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 18px; }
+  .lv-explain-section-label { font-size: 10px; font-weight: 700; color: ${C.muted}; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 6px; }
+  .lv-explain-text { font-size: 14px; color: ${C.text}; line-height: 1.75; }
+  .lv-explain-analogy { background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 14px; }
+  .lv-explain-analogy-text { font-size: 13px; color: ${C.sec}; line-height: 1.7; font-style: italic; }
+  .lv-explain-step { display: flex; gap: 12px; padding: 10px 12px; background: ${C.bg}; border: 1px solid ${C.border}; border-radius: 8px; }
+  .lv-explain-step-num { font-size: 10px; font-weight: 700; color: ${C.muted}; font-family: 'JetBrains Mono', monospace; padding-top: 2px; flex-shrink: 0; min-width: 20px; }
+  .lv-explain-step-text { font-size: 13px; color: ${C.sec}; line-height: 1.65; }
+  .lv-explain-spinner { width: 32px; height: 32px; border: 3px solid ${C.border}; border-top-color: ${C.dark}; border-radius: 50%; animation: lv-spin 0.7s linear infinite; }
+  @keyframes lv-spin { to { transform: rotate(360deg); } }
 `;
 
 // ─── Accent palette (cycles per card) ────────────────────────────────────────
@@ -403,6 +426,9 @@ export default function LectureView() {
     const [stats, setStats]             = useState(null);
     const [visualFrames, setVisualFrames] = useState(null); // null = not fetched
     const qaEndRef = useRef(null);
+    const [selInfo, setSelInfo]           = useState({ text: '', x: 0, y: 0, show: false });
+    const [explainPanel, setExplainPanel] = useState({ show: false, loading: false, data: null });
+    const transcriptRef = useRef(null);
 
     useEffect(() => {
         api.get(`/api/v1/lectures/${id}/full`)
@@ -443,7 +469,28 @@ export default function LectureView() {
         setQaLoading(false);
     };
 
+    const handleTextSelection = () => {
+        const sel = window.getSelection();
+        const text = sel ? sel.toString().trim() : '';
+        if (text.length >= 6) {
+            const rect = sel.getRangeAt(0).getBoundingClientRect();
+            setSelInfo({ text, x: rect.left + rect.width / 2, y: rect.top - 10, show: true });
+        } else {
+            setSelInfo(s => ({ ...s, show: false }));
+        }
+    };
 
+    const handleExplain = async () => {
+        if (!selInfo.text) return;
+        setSelInfo(s => ({ ...s, show: false }));
+        setExplainPanel({ show: true, loading: true, data: null });
+        try {
+            const res = await api.post(`/api/v1/explain/${id}`, { text: selInfo.text, mode: 'simple' });
+            setExplainPanel({ show: true, loading: false, data: res.data });
+        } catch {
+            setExplainPanel({ show: true, loading: false, data: { explanation: 'Could not generate explanation. Please try again.' } });
+        }
+    };
 
     const segments = lecture?.transcript
         ? lecture.transcript.split('\n').filter(s => s.trim())
@@ -491,7 +538,7 @@ export default function LectureView() {
                 {/* ── Two-panel body ── */}
                 <div className="lv-body">
                     {/* Left: transcript */}
-                    <div className="lv-left">
+                    <div className="lv-left" ref={transcriptRef} onMouseUp={handleTextSelection}>
                         <div className="lv-panel-header">
                             <span className="lv-panel-label">Transcript</span>
                             <span className="lv-panel-meta">{wordCount.toLocaleString()} words</span>
@@ -767,6 +814,68 @@ export default function LectureView() {
                     </div>
                 </div>
             </div>
+
+        {selInfo.show && (
+            <button
+                className="lv-explain-btn"
+                style={{ left: selInfo.x, top: selInfo.y }}
+                onMouseDown={e => e.preventDefault()}
+                onClick={handleExplain}
+            >
+                ✦ Explain
+            </button>
+        )}
+
+        {explainPanel.show && (
+            <div className="lv-explain-overlay">
+                <div className="lv-explain-backdrop" onClick={() => setExplainPanel(p => ({ ...p, show: false }))} />
+                <div className="lv-explain-panel">
+                    <div className="lv-explain-header">
+                        <div className="lv-explain-title">
+                            <div className="lv-explain-dot" />
+                            Concept Breakdown
+                        </div>
+                        <button className="lv-explain-close" onClick={() => setExplainPanel(p => ({ ...p, show: false }))}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                    </div>
+                    <div className="lv-explain-body">
+                        {explainPanel.loading ? (
+                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+                                <div className="lv-explain-spinner" />
+                                <p style={{ fontSize: 13, color: 'var(--color-muted)' }}>Analyzing concept…</p>
+                            </div>
+                        ) : explainPanel.data ? (
+                            <>
+                                <div>
+                                    <div className="lv-explain-section-label">Explanation</div>
+                                    <p className="lv-explain-text">{explainPanel.data.explanation}</p>
+                                </div>
+                                {explainPanel.data.analogy && (
+                                    <div className="lv-explain-analogy">
+                                        <div className="lv-explain-section-label" style={{ color: '#92400e' }}>Analogy</div>
+                                        <p className="lv-explain-analogy-text">{explainPanel.data.analogy}</p>
+                                    </div>
+                                )}
+                                {explainPanel.data.breakdown && (
+                                    <div>
+                                        <div className="lv-explain-section-label">Step-by-Step</div>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                            {explainPanel.data.breakdown.split('\n').filter(l => l.trim()).map((step, i) => (
+                                                <div key={i} className="lv-explain-step">
+                                                    <span className="lv-explain-step-num">{String(i + 1).padStart(2, '0')}</span>
+                                                    <p className="lv-explain-step-text">{step.replace(/^\d+\.\s*/, '')}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </>
+                        ) : null}
+                    </div>
+                </div>
+            </div>
+        )}
 
         {exportOpen && (
             <ExportModal lectureId={id} onClose={() => setExportOpen(false)} />
