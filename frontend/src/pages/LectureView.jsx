@@ -42,10 +42,15 @@ const CSS = `
   .lv-panel-header { padding: 16px 20px 12px; border-bottom: 1px solid ${C.border}; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
   .lv-panel-label { font-size: 11px; font-weight: 600; color: ${C.muted}; letter-spacing: 0.5px; text-transform: uppercase; flex: 1; }
   .lv-panel-meta { font-size: 11px; color: ${C.muted}; }
-  .lv-transcript-list { flex: 1; overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 10px; }
-  .lv-segment { display: flex; gap: 10px; }
-  .lv-seg-num { font-size: 10px; color: ${C.muted}; font-family: monospace; min-width: 40px; padding-top: 3px; text-align: right; flex-shrink: 0; }
-  .lv-seg-text { font-size: 13px; color: ${C.text}; line-height: 1.65; }
+  .lv-transcript-list { flex: 1; overflow-y: auto; padding: 0 0; display: flex; flex-direction: column; }
+  .lv-segment { display: flex; gap: 14px; padding: 10px 20px; border-bottom: 1px solid ${C.border}; transition: background 0.15s; }
+  .lv-segment:last-child { border-bottom: none; }
+  .lv-seg-num { font-size: 10px; color: ${C.muted}; font-family: 'JetBrains Mono', monospace; min-width: 42px; padding-top: 3px; flex-shrink: 0; line-height: 1.6; text-align: right; }
+  .lv-seg-text { font-size: 14px; color: ${C.sec}; line-height: 1.75; flex: 1; }
+  .lv-seg-live { border-left: 3px solid #6366f1; padding-left: 14px; }
+  .lv-seg-live .lv-seg-text { color: ${C.text}; font-weight: 500; }
+  @keyframes lv-chunk-in { from { opacity: 0; } to { opacity: 1; } }
+  .lv-chunk-enter { animation: lv-chunk-in 0.25s ease; }
   .lv-empty-panel { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 13px; color: ${C.muted}; }
 
   /* Right panel */
@@ -498,12 +503,18 @@ export default function LectureView() {
                             ? <div className="lv-empty-panel">No transcript available</div>
                             : (
                                 <div className="lv-transcript-list">
-                                    {segments.map((text, i) => (
-                                        <div key={i} className="lv-segment">
-                                            <span className="lv-seg-num">{fmtTs(i * 12)}</span>
-                                            <span className="lv-seg-text">{text}</span>
-                                        </div>
-                                    ))}
+                                    {segments.map((text, i) => {
+                                        const isLast = i === segments.length - 1;
+                                        return (
+                                            <div key={i} className={`lv-segment lv-chunk-enter${isLast ? ' lv-seg-live' : ''}`}>
+                                                <span className="lv-seg-num">
+                                                    {fmtTs(i * 12)}<br />
+                                                    <span style={{ opacity: 0.6 }}>–{fmtTs((i + 1) * 12)}</span>
+                                                </span>
+                                                <span className="lv-seg-text">{text}</span>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             )
                         }
