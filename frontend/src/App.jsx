@@ -739,9 +739,21 @@ function App({ user }) {
             analyserRef.current = audioContextRef.current.createAnalyser();
             analyserRef.current.fftSize = 256;
 
-            // Boost mic gain for distant lecture recording (phone in a classroom).
-            // Compressor sits after gain to prevent clipping when mic is close.
+            // Audio chain: bandpass filters strip non-speech frequencies before gain/compression.
+            // Highpass 80Hz removes AC hum, fan noise, desk vibration, traffic rumble.
+            // Lowpass 8kHz removes high-frequency hiss; speech intelligibility lives below 8kHz.
+            // Gain boost for distant lecture recording (phone in a classroom).
+            // Compressor after gain prevents clipping when mic is close.
             const micSource = audioContextRef.current.createMediaStreamSource(micStream);
+
+            const highpass = audioContextRef.current.createBiquadFilter();
+            highpass.type = 'highpass';
+            highpass.frequency.value = 80;
+
+            const lowpass = audioContextRef.current.createBiquadFilter();
+            lowpass.type = 'lowpass';
+            lowpass.frequency.value = 8000;
+
             const gainNode = audioContextRef.current.createGain();
             gainNode.gain.value = 2.5;
             const compressor = audioContextRef.current.createDynamicsCompressor();
@@ -751,7 +763,9 @@ function App({ user }) {
             compressor.attack.value     = 0.003;
             compressor.release.value    = 0.25;
             const gainDest = audioContextRef.current.createMediaStreamDestination();
-            micSource.connect(gainNode);
+            micSource.connect(highpass);
+            highpass.connect(lowpass);
+            lowpass.connect(gainNode);
             gainNode.connect(compressor);
             compressor.connect(analyserRef.current);
             compressor.connect(gainDest);
