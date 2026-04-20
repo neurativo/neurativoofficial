@@ -246,11 +246,18 @@ function parseSummary(text) {
     });
 }
 
-function SummaryCard({ section, accent }) {
+function SummaryCard({ section, accent, index, total }) {
     const a = accent || ACCENTS_LIGHT[0];
     return (
-        <div className="lv-sum-card" style={{ borderLeft: `3px solid ${a.border}` }}>
-            <div className="lv-sum-title" style={{ color: a.title }}>{section.title}</div>
+        <div className="lv-sum-card summary-card-enter" style={{ borderLeft: `3px solid ${a.border}` }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <div className="lv-sum-title" style={{ color: a.title, margin: 0 }}>{section.title}</div>
+                {total > 1 && (
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: 'var(--color-muted)', flexShrink: 0, paddingLeft: 8 }}>
+                        {index + 1}/{total}
+                    </span>
+                )}
+            </div>
             {section.highlights.map((h, i) => (
                 <div key={i} className="lv-sum-highlight" style={{ background: a.bg, borderLeftColor: a.border }}>{h}</div>
             ))}
@@ -585,7 +592,10 @@ export default function LectureView() {
                             <div className="lv-tab-body">
                                 {summarySections.length === 0
                                     ? <div style={{ fontSize: 13, color: C.muted, textAlign: 'center', paddingTop: 40 }}>Summary not yet generated</div>
-                                    : summarySections.map((s, i) => { const palette = isDark ? ACCENTS_DARK : ACCENTS_LIGHT; return <SummaryCard key={i} section={s} accent={palette[i % palette.length]} />; })
+                                    : summarySections.map((s, i) => {
+                                        const palette = isDark ? ACCENTS_DARK : ACCENTS_LIGHT;
+                                        return <SummaryCard key={i} section={s} accent={palette[i % palette.length]} index={i} total={summarySections.length} />;
+                                    })
                                 }
                             </div>
                         )}
