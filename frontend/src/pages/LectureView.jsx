@@ -47,7 +47,7 @@ const CSS = `
   .lv-segment:last-child { border-bottom: none; }
   .lv-seg-num { font-size: 10px; color: ${C.muted}; font-family: 'JetBrains Mono', monospace; min-width: 42px; padding-top: 3px; flex-shrink: 0; line-height: 1.6; text-align: right; }
   .lv-seg-text { font-size: 14px; color: ${C.sec}; line-height: 1.75; flex: 1; }
-  .lv-seg-live { border-left: 3px solid #6366f1; padding-left: 14px; }
+  .lv-seg-live { border-left: 3px solid #6366f1; padding-left: 17px; }
   .lv-seg-live .lv-seg-text { color: ${C.text}; font-weight: 500; }
   @keyframes lv-chunk-in { from { opacity: 0; } to { opacity: 1; } }
   .lv-chunk-enter { animation: lv-chunk-in 0.25s ease; }
@@ -139,7 +139,6 @@ const CSS = `
     .lv-btn-text { display: none; }
     .lv-btn-ghost { padding: 6px 9px; min-width: 32px; justify-content: center; }
     .lv-panel-header { padding: 12px 14px 10px; }
-    .lv-transcript-list { padding: 12px 14px; }
     .lv-tabs { padding: 0 12px; }
     .lv-tab { padding: 12px 10px 10px; font-size: 12px; }
     .lv-tab-body { padding: 14px; }
