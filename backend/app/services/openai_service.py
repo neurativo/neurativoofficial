@@ -46,13 +46,15 @@ def filter_segments_by_confidence(segments: list, threshold: float = 0.6) -> str
     return " ".join(kept).strip()
 
 
-async def transcribe_audio(file: UploadFile, prompt: str = None) -> tuple[str, str]:
+async def transcribe_audio(file: UploadFile, prompt: str = None, language: str = None) -> tuple[str, str]:
     """
     Transcribes audio using Whisper and returns (transcript_text, language_code).
     Language code is ISO-639-1 (e.g. "en", "ar", "zh").
-    Whisper detects language automatically — we just capture what it found.
-    prompt: optional last ~100 words of the previous chunk to prevent duplicate transcription
-            at chunk boundaries (Whisper re-transcribes its own context window otherwise).
+    prompt: optional last ~200 words of the previous chunk to prevent duplicate transcription
+            at chunk boundaries.
+    language: ISO-639-1 code to pin Whisper's language detection. Pass the lecture's stored
+              language on all chunks after the first detection. Eliminates cross-language
+              hallucinations on quiet/ambiguous 12s clips.
     """
     if not settings.OPENAI_API_KEY:
         raise HTTPException(status_code=500, detail="OpenAI API key not configured")
@@ -65,27 +67,32 @@ async def transcribe_audio(file: UploadFile, prompt: str = None) -> tuple[str, s
         file_obj = BytesIO(file_content)
         file_obj.name = file.filename
 
-        # Use response_format="verbose_json" to get language alongside transcript.
-        # Whisper always detects language internally — verbose_json exposes it
-        # instead of discarding it. No extra API cost, no extra latency.
         create_kwargs = dict(
             model="whisper-1",
             file=file_obj,
             response_format="verbose_json",
+            temperature=0,
         )
         if prompt:
             create_kwargs["prompt"] = prompt
+        if language:
+            create_kwargs["language"] = language
+
         transcript_response = await asyncio.to_thread(
             client.audio.transcriptions.create,
             **create_kwargs
         )
 
-        text = transcript_response.text or ""
-        # verbose_json includes a top-level 'language' field (ISO-639-1 code)
         detected_language = getattr(transcript_response, "language", None) or "en"
-
-        # Estimate audio duration from verbose_json segments when available
         segments = getattr(transcript_response, "segments", None) or []
+
+        # Filter hallucinated segments using Whisper's own no_speech_prob signal.
+        # Falls back to response.text when Whisper returns no segment data.
+        if segments:
+            text = filter_segments_by_confidence(segments)
+        else:
+            text = transcript_response.text or ""
+
         audio_seconds = segments[-1].end if segments else 0.0
         await log_cost_async("whisper_transcription", "whisper-1", audio_seconds=audio_seconds)
 
