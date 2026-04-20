@@ -612,11 +612,18 @@ export default function LectureView() {
                                     )}
                                     <div className="lv-qa-messages">
                                         {qaHistory.map((m, i) => (
-                                            <div key={i} className={`lv-qa-msg ${m.role === 'user' ? 'lv-qa-user' : 'lv-qa-assistant'}`}>
-                                                {m.role === 'assistant'
-                                                    ? <QAAnswer text={m.text} />
-                                                    : m.text
-                                                }
+                                            <div key={i}>
+                                                <div className={`lv-qa-msg ${m.role === 'user' ? 'lv-qa-user' : 'lv-qa-assistant'}`}>
+                                                    {m.role === 'assistant'
+                                                        ? <QAAnswer text={m.text} />
+                                                        : m.text
+                                                    }
+                                                </div>
+                                                {m.role === 'assistant' && (
+                                                    <p style={{ fontSize: 11, color: 'var(--color-muted)', fontStyle: 'italic', marginTop: 4, paddingLeft: 2 }}>
+                                                        From your lecture transcript
+                                                    </p>
+                                                )}
                                             </div>
                                         ))}
                                         {qaLoading && (
