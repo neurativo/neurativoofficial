@@ -446,6 +446,9 @@ export default function LectureView() {
     const [mobileSplit, setMobileSplit] = useState(55);
     const [isMobile, setIsMobile]       = useState(() => window.innerWidth < 768);
     const bodyRef = useRef(null);
+    const dragHandleRef = React.useRef(null);
+    const dragCleanupRef = React.useRef(null);
+    const onHandleDragRef = React.useRef(null);
 
     useEffect(() => {
         api.get(`/api/v1/lectures/${id}/full`)
@@ -475,6 +478,22 @@ export default function LectureView() {
         const handler = () => setIsMobile(window.innerWidth < 768);
         window.addEventListener('resize', handler);
         return () => window.removeEventListener('resize', handler);
+    }, []);
+
+    // Register touchstart with { passive: false } so e.preventDefault() works
+    useEffect(() => {
+        const el = dragHandleRef.current;
+        if (!el) return;
+        const handler = (e) => onHandleDragRef.current(e);
+        el.addEventListener('touchstart', handler, { passive: false });
+        return () => el.removeEventListener('touchstart', handler);
+    }, []); // only on mount
+
+    // Clean up any in-progress drag listeners if component unmounts mid-drag
+    useEffect(() => {
+        return () => {
+            if (dragCleanupRef.current) dragCleanupRef.current();
+        };
     }, []);
 
     const handleAsk = async () => {
@@ -524,17 +543,23 @@ export default function LectureView() {
             const pct = ((y - bodyRect.top) / bodyRect.height) * 100;
             setMobileSplit(Math.min(80, Math.max(20, Math.round(pct))));
         };
-        const onUp = () => {
+        const cleanup = () => {
             window.removeEventListener('mousemove', onMove);
             window.removeEventListener('touchmove', onMove);
             window.removeEventListener('mouseup', onUp);
             window.removeEventListener('touchend', onUp);
         };
+        const onUp = () => {
+            cleanup();
+            dragCleanupRef.current = null;
+        };
         window.addEventListener('mousemove', onMove);
         window.addEventListener('touchmove', onMove, { passive: false });
         window.addEventListener('mouseup', onUp);
         window.addEventListener('touchend', onUp);
+        dragCleanupRef.current = cleanup;
     };
+    onHandleDragRef.current = onHandleDrag;
 
     const segments = lecture?.transcript
         ? lecture.transcript.split('\n').filter(s => s.trim())
@@ -615,8 +640,8 @@ export default function LectureView() {
                     {/* Drag handle — mobile only */}
                     <div
                         className="lv-drag-handle"
+                        ref={dragHandleRef}
                         onMouseDown={onHandleDrag}
-                        onTouchStart={onHandleDrag}
                     >
                         <div className="lv-drag-pill" />
                     </div>
