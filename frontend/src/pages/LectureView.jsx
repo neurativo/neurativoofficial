@@ -130,8 +130,8 @@ const CSS = `
   /* Mobile */
   @media (max-width: 680px) {
     .lv-body { flex-direction: column; }
-    .lv-left { width: 100%; height: 42vh; border-right: none; border-bottom: 1px solid ${C.border}; }
-    .lv-right { flex: 1; min-height: 0; }
+    .lv-left { width: 100%; border-right: none; overflow: hidden; flex-shrink: 0; }
+    .lv-right { flex: 1; min-height: 0; overflow: hidden; }
   }
   @media (max-width: 480px) {
     .lv-nav { padding: 0 12px; gap: 6px; }
@@ -146,7 +146,6 @@ const CSS = `
     .lv-qa-input { padding: 9px 10px; font-size: 13px; }
     .lv-qa-send { padding: 9px 12px; font-size: 13px; }
     .lv-stat-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
-    .lv-left { height: 38vh; }
   }
 
   /* Smart Explain */
@@ -171,6 +170,14 @@ const CSS = `
   .lv-explain-step-text { font-size: 13px; color: ${C.sec}; line-height: 1.65; }
   .lv-explain-spinner { width: 32px; height: 32px; border: 3px solid ${C.border}; border-top-color: ${C.dark}; border-radius: 50%; animation: lv-spin 0.7s linear infinite; }
   @keyframes lv-spin { to { transform: rotate(360deg); } }
+
+  /* Drag handle (mobile only) */
+  .lv-drag-handle { display: none; height: 24px; align-items: center; justify-content: center; background: ${C.bg}; border-top: 1px solid ${C.border}; border-bottom: 1px solid ${C.border}; cursor: ns-resize; flex-shrink: 0; touch-action: none; user-select: none; }
+  .lv-drag-pill { width: 32px; height: 4px; background: ${C.borderHov}; border-radius: 2px; }
+  @media (max-width: 680px) {
+    .lv-drag-handle { display: flex; }
+    .lv-left { border-bottom: none !important; }
+  }
 `;
 
 // ─── Accent palette (cycles per card) ────────────────────────────────────────
@@ -436,6 +443,9 @@ export default function LectureView() {
     const [selInfo, setSelInfo]           = useState({ text: '', x: 0, y: 0, show: false });
     const [explainPanel, setExplainPanel] = useState({ show: false, loading: false, data: null });
     const transcriptRef = useRef(null);
+    const [mobileSplit, setMobileSplit] = useState(55);
+    const [isMobile, setIsMobile]       = useState(() => window.innerWidth < 768);
+    const bodyRef = useRef(null);
 
     useEffect(() => {
         api.get(`/api/v1/lectures/${id}/full`)
@@ -460,6 +470,12 @@ export default function LectureView() {
     useEffect(() => {
         if (qaEndRef.current) qaEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }, [qaHistory, qaLoading]);
+
+    useEffect(() => {
+        const handler = () => setIsMobile(window.innerWidth < 768);
+        window.addEventListener('resize', handler);
+        return () => window.removeEventListener('resize', handler);
+    }, []);
 
     const handleAsk = async () => {
         const q = qaQuestion.trim();
@@ -497,6 +513,27 @@ export default function LectureView() {
         } catch {
             setExplainPanel({ show: true, loading: false, data: { explanation: 'Could not generate explanation. Please try again.' } });
         }
+    };
+
+    const onHandleDrag = (e) => {
+        e.preventDefault();
+        const bodyRect = bodyRef.current?.getBoundingClientRect();
+        if (!bodyRect) return;
+        const onMove = (ev) => {
+            const y = ev.touches ? ev.touches[0].clientY : ev.clientY;
+            const pct = ((y - bodyRect.top) / bodyRect.height) * 100;
+            setMobileSplit(Math.min(80, Math.max(20, Math.round(pct))));
+        };
+        const onUp = () => {
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('touchmove', onMove);
+            window.removeEventListener('mouseup', onUp);
+            window.removeEventListener('touchend', onUp);
+        };
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('touchmove', onMove, { passive: false });
+        window.addEventListener('mouseup', onUp);
+        window.addEventListener('touchend', onUp);
     };
 
     const segments = lecture?.transcript
@@ -544,9 +581,10 @@ export default function LectureView() {
                 </nav>
 
                 {/* ── Two-panel body ── */}
-                <div className="lv-body">
+                <div className="lv-body" ref={bodyRef}>
                     {/* Left: transcript */}
-                    <div className="lv-left" ref={transcriptRef} onMouseUp={handleTextSelection}>
+                    <div className="lv-left" ref={transcriptRef} onMouseUp={handleTextSelection}
+                        style={isMobile ? { height: `${mobileSplit}vh` } : {}}>
                         <div className="lv-panel-header">
                             <span className="lv-panel-label">Transcript</span>
                             <span className="lv-panel-meta">{wordCount.toLocaleString()} words</span>
@@ -572,6 +610,15 @@ export default function LectureView() {
                                 </div>
                             )
                         }
+                    </div>
+
+                    {/* Drag handle — mobile only */}
+                    <div
+                        className="lv-drag-handle"
+                        onMouseDown={onHandleDrag}
+                        onTouchStart={onHandleDrag}
+                    >
+                        <div className="lv-drag-pill" />
                     </div>
 
                     {/* Right: tabbed panel */}
