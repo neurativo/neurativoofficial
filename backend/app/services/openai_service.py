@@ -30,6 +30,21 @@ _bg_client = OpenAI(
 ) if settings.OPENAI_API_KEY else None
 
 
+def filter_segments_by_confidence(segments: list, threshold: float = 0.6) -> str:
+    """
+    Returns joined text from segments whose no_speech_prob is at or below threshold.
+    Segments above threshold are Whisper's own signal that the audio is non-speech.
+    Threshold 0.6 matches Whisper's open-source reference implementation.
+    Returns empty string when all segments are discarded or input is empty.
+    """
+    kept = [
+        s.text
+        for s in segments
+        if getattr(s, "no_speech_prob", 0.0) <= threshold
+    ]
+    return " ".join(kept).strip()
+
+
 async def transcribe_audio(file: UploadFile, prompt: str = None) -> tuple[str, str]:
     """
     Transcribes audio using Whisper and returns (transcript_text, language_code).
