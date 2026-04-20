@@ -382,3 +382,10 @@ section[id] {
 .dark .bg-emerald-50 { background-color: #0a2218 !important; }
 .dark .bg-red-50 { background-color: rgba(239,68,68,0.1) !important; }
 .dark .hover\:bg-blue-50:hover { background-color: #0f1e38 !important; }
+
+/* ── LectureView redesign dark overrides ── */
+.dark .lv-seg-live { border-left-color: #818cf8; }
+.dark .lv-explain-analogy { background: #291e00 !important; border-color: #4a3800 !important; }
+.dark .lv-explain-analogy .lv-explain-section-label { color: #d97706 !important; }
+.dark .lv-explain-analogy-text { color: var(--color-sec); }
+.dark .lv-explain-step { background: var(--color-card); }
