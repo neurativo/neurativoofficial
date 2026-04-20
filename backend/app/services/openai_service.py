@@ -117,12 +117,17 @@ async def transcribe_audio_bytes(file_bytes: bytes, filename: str) -> tuple[str,
         _bg_client.audio.transcriptions.create,
         model="whisper-1",
         file=file_obj,
-        response_format="verbose_json"
+        response_format="verbose_json",
+        temperature=0,
     )
-    text = transcript_response.text or ""
     detected_language = getattr(transcript_response, "language", None) or "en"
-
     segments = getattr(transcript_response, "segments", None) or []
+
+    if segments:
+        text = filter_segments_by_confidence(segments)
+    else:
+        text = transcript_response.text or ""
+
     audio_seconds = segments[-1]["end"] if segments else 0.0
     log_cost("whisper_import", "whisper-1", audio_seconds=audio_seconds)
 
