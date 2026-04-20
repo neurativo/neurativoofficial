@@ -13,7 +13,7 @@ from app.core.config import settings
 from app.core.auth import get_current_user
 from app.core.plans import get_limits, is_unlimited
 from app.core.rate_limit import limiter
-from app.services.openai_service import transcribe_audio, transcribe_audio_bytes, filter_segments_by_confidence
+from app.services.openai_service import transcribe_audio, transcribe_audio_bytes
 from app.services.explanation_service import generate_explanation
 from app.services.qa_service import answer_lecture_question
 from app.services.pdf_service import generate_lecture_pdf
