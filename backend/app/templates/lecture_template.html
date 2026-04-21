@@ -578,10 +578,65 @@
             font-style: italic;
             margin-bottom: 1mm;
         }
+
+        /* ─── TABLE OF CONTENTS ─────────────────────────────────────────── */
+        .toc-page { page-break-after: always; padding-top: 4mm; }
+        .toc-title-h { font-family: 'Lora', Georgia, serif; font-size: 15pt; font-weight: 700; color: var(--ink); margin: 0 0 6mm 0; }
+        .toc-row { display: flex; align-items: baseline; gap: 4px; margin-bottom: 3.5mm; page-break-inside: avoid; }
+        .toc-num { font-size: 8pt; font-weight: 700; color: var(--accent); min-width: 22px; }
+        .toc-sec-title { font-family: 'Lora', Georgia, serif; font-size: 10pt; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 420px; }
+        .toc-dots { flex: 1; border-bottom: 1px dotted var(--slate-300); margin: 0 4px 3px; }
+        .toc-page-num { font-size: 8pt; color: var(--ink-4); font-family: 'Courier New', monospace; white-space: nowrap; }
+
+        /* ─── COVER TILES ───────────────────────────────────────────────── */
+        .cover-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4mm; margin-top: 2mm; }
+        .cover-tile { border: 1px solid var(--slate-200); border-radius: 10px; padding: 4mm 5mm; background: #fafbfc; }
+        .tile-value { font-family: 'Lora', Georgia, serif; font-size: 18pt; font-weight: 700; color: var(--ink); line-height: 1.1; margin-bottom: 2px; }
+        .tile-label { font-size: 7pt; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--ink-4); }
+
+        /* ─── SECTION NUMBER WATERMARK ──────────────────────────────────── */
+        .section-card { position: relative; }
+        .section-num-bg { position: absolute; right: -2mm; top: -6mm; font-size: 52pt; font-weight: 700; color: #f1f5f9; font-family: 'Lora', serif; line-height: 1; pointer-events: none; user-select: none; z-index: 0; }
+        .section-card-header { position: relative; z-index: 1; }
+
+        /* ─── ACTIVE RECALL Q&A ─────────────────────────────────────────── */
+        .review-question-block { border-left: 3px solid var(--accent); padding: 3mm 4mm; background: #ffffff; border-radius: 0 7px 7px 0; margin-bottom: 2mm; }
+        .fold-line { position: relative; border-top: 1.5px dashed #cbd5e1; margin: 3mm 0; }
+        .fold-label { position: absolute; top: -7px; left: 50%; transform: translateX(-50%); background: white; padding: 0 8px; font-size: 6.5pt; color: #94a3b8; letter-spacing: 0.4px; white-space: nowrap; }
+        .review-answer-block { background: #f8fafc; border: 1px solid var(--slate-100); border-radius: 7px; padding: 3mm 4mm; }
+
+        /* ─── COMMON MISTAKES ───────────────────────────────────────────── */
+        .mistake-card { background: #fffbeb; border-left: 3px solid #f59e0b; border-radius: 0 8px 8px 0; padding: 3.5mm 5mm; margin-bottom: 3mm; page-break-inside: avoid; }
+        .mistake-label { font-size: 7pt; font-weight: 700; color: #b45309; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 1.5mm; }
+        .mistake-text { font-size: 9.5pt; font-weight: 600; color: #92400e; margin: 0 0 2mm 0; line-height: 1.55; }
+        .correction-text { font-size: 9pt; color: #44403c; line-height: 1.65; }
+
+        /* ─── GLOSSARY MNEMONIC ─────────────────────────────────────────── */
+        .glossary-mnemonic { font-size: 8pt; color: #7c3aed; font-style: italic; margin-top: 2mm; line-height: 1.45; }
+
+        /* ─── SECTION NOTES LINES ───────────────────────────────────────── */
+        .section-notes { margin-top: 4mm; padding-top: 3mm; border-top: 1px solid #f1f5f9; }
+        .notes-label { font-size: 6.5pt; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: #d1d5db; margin-bottom: 2mm; }
+        .notes-lines { height: 12mm; background-image: repeating-linear-gradient(to bottom, transparent, transparent 5.5mm, #e5e7eb 5.5mm, #e5e7eb 6mm); }
+
+        /* ─── CHEAT SHEET ───────────────────────────────────────────────── */
+        .cheat-sheet-page { page-break-before: always; }
+        .cs-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6mm; margin-top: 4mm; }
+        .cs-col-heading { font-size: 7pt; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--ink-4); border-bottom: 1.5px solid var(--slate-200); padding-bottom: 2mm; margin-bottom: 3mm; }
+        .cs-term-row { display: flex; gap: 4px; margin-bottom: 2.5mm; font-size: 7.5pt; line-height: 1.4; }
+        .cs-term { font-weight: 700; color: var(--ink); white-space: nowrap; }
+        .cs-def { color: var(--ink-3); }
+        .cs-pill { display: inline-block; background: var(--accent-lt); color: var(--accent); border: 0.5px solid var(--accent-mid); border-radius: 20px; padding: 1px 7px; font-size: 7pt; font-weight: 500; margin: 1.5px 2px; }
+        .cs-takeaway { font-size: 8pt; color: var(--ink-2); line-height: 1.5; margin-bottom: 2.5mm; display: flex; gap: 5px; }
+        .cs-takeaway-num { font-weight: 700; color: var(--accent); min-width: 14px; }
+        .cs-footer { text-align: center; font-size: 7pt; color: var(--ink-4); margin-top: 5mm; border-top: 1px solid var(--slate-100); padding-top: 3mm; }
+
+        /* ─── PAGE BREAK STRATEGY ───────────────────────────────────────── */
+        .pb-before { page-break-before: always; }
     </style>
 </head>
 
-<body>
+<body style="--accent: {{ accent_color }};">
 <div class="container">
 
     <!-- ══════════════════════════════════════════
@@ -609,37 +664,31 @@
 
             <hr class="cover-rule">
 
-            <div class="cover-meta">
-                <div class="cover-meta-item">
-                    <div class="cover-meta-label">Date</div>
-                    <div class="cover-meta-value">{{ created_at }}</div>
+            <div class="cover-tiles">
+                <div class="cover-tile">
+                    <div class="tile-value">{{ created_at }}</div>
+                    <div class="tile-label">Date</div>
                 </div>
-                <div class="cover-meta-item">
-                    <div class="cover-meta-label">Duration</div>
-                    <div class="cover-meta-value">{{ duration_formatted }}</div>
+                <div class="cover-tile">
+                    <div class="tile-value">{{ duration_formatted }}</div>
+                    <div class="tile-label">Duration</div>
                 </div>
-                <div class="cover-meta-item">
-                    <div class="cover-meta-label">Words Spoken</div>
-                    <div class="cover-meta-value">{{ word_count }}</div>
+                <div class="cover-tile">
+                    <div class="tile-value">{{ word_count }}</div>
+                    <div class="tile-label">Words Spoken</div>
                 </div>
-                <div class="cover-meta-item">
-                    <div class="cover-meta-label">Est. Reading Time</div>
-                    <div class="cover-meta-value">{{ reading_time_minutes }} min</div>
+                <div class="cover-tile">
+                    <div class="tile-value">{{ reading_time_minutes }} min</div>
+                    <div class="tile-label">Est. Reading</div>
                 </div>
-                <div class="cover-meta-item">
-                    <div class="cover-meta-label">Sections</div>
-                    <div class="cover-meta-value">{{ total_sections }}</div>
+                <div class="cover-tile">
+                    <div class="tile-value">{{ total_sections }}</div>
+                    <div class="tile-label">Sections</div>
                 </div>
-                {% if total_concepts %}
-                <div class="cover-meta-item">
-                    <div class="cover-meta-label">Concepts</div>
-                    <div class="cover-meta-value">{{ total_concepts }}</div>
-                </div>
-                {% endif %}
                 {% if qa_pairs %}
-                <div class="cover-meta-item">
-                    <div class="cover-meta-label">Q&amp;A Pairs</div>
-                    <div class="cover-meta-value">{{ qa_pairs }}</div>
+                <div class="cover-tile">
+                    <div class="tile-value">{{ qa_pairs }}</div>
+                    <div class="tile-label">Q&amp;A Pairs</div>
                 </div>
                 {% endif %}
             </div>
@@ -652,10 +701,66 @@
 
 
     <!-- ══════════════════════════════════════════
+         TABLE OF CONTENTS
+    ══════════════════════════════════════════ -->
+    {% if enriched_sections | length > 1 %}
+    <div class="toc-page">
+        <div class="eyebrow-row" style="padding-top: 2mm;">
+            <span class="eyebrow-label">Contents</span>
+        </div>
+        <hr class="eyebrow-rule">
+        <div class="toc-title-h">Table of Contents</div>
+
+        {% if executive_summary %}
+        <div class="toc-row">
+            <span class="toc-num">—</span>
+            <span class="toc-sec-title">Executive Summary</span>
+            <span class="toc-dots"></span>
+            <span class="toc-page-num">p. ~2</span>
+        </div>
+        {% endif %}
+
+        {% for sec in enriched_sections %}
+        <div class="toc-row">
+            <span class="toc-num">{{ "%02d"|format(loop.index) }}</span>
+            <span class="toc-sec-title">{{ sec.title }}</span>
+            <span class="toc-dots"></span>
+            <span class="toc-page-num">p. ~{{ (3 + loop.index * 1.5) | int }}</span>
+        </div>
+        {% endfor %}
+
+        {% if conceptual_map %}
+        <div class="toc-row">
+            <span class="toc-num">—</span>
+            <span class="toc-sec-title">Conceptual Map</span>
+            <span class="toc-dots"></span>
+            <span class="toc-page-num">p. ~{{ (3 + enriched_sections|length * 1.5 + 1) | int }}</span>
+        </div>
+        {% endif %}
+
+        {% if quick_review %}
+        <div class="toc-row">
+            <span class="toc-num">—</span>
+            <span class="toc-sec-title">Self-Test ({{ quick_review|length }} Questions)</span>
+            <span class="toc-dots"></span>
+            <span class="toc-page-num">p. ~{{ (3 + enriched_sections|length * 1.5 + 3) | int }}</span>
+        </div>
+        {% endif %}
+
+        <div class="toc-row">
+            <span class="toc-num">—</span>
+            <span class="toc-sec-title">Cheat Sheet</span>
+            <span class="toc-dots"></span>
+            <span class="toc-page-num">last</span>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- ══════════════════════════════════════════
          EXECUTIVE SUMMARY
     ══════════════════════════════════════════ -->
     {% if executive_summary %}
-    <div class="eyebrow-row">
+    <div class="eyebrow-row pb-before">
         <span class="eyebrow-label">Executive Summary</span>
     </div>
     <hr class="eyebrow-rule">
@@ -678,7 +783,7 @@
          SECTION BREAKDOWN
     ══════════════════════════════════════════ -->
     {% if enriched_sections %}
-    <div class="eyebrow-row">
+    <div class="eyebrow-row pb-before">
         <span class="eyebrow-label">{{ section_label }}</span>
     </div>
     <hr class="eyebrow-rule">
@@ -745,7 +850,7 @@
          CONCEPTUAL MAP
     ══════════════════════════════════════════ -->
     {% if conceptual_map %}
-    <div class="eyebrow-row">
+    <div class="eyebrow-row pb-before">
         <span class="eyebrow-label">How It All Connects</span>
     </div>
     <hr class="eyebrow-rule">
@@ -766,7 +871,7 @@
          KEY TAKEAWAYS
     ══════════════════════════════════════════ -->
     {% if takeaways %}
-    <div class="eyebrow-row">
+    <div class="eyebrow-row pb-before">
         <span class="eyebrow-label">Key Takeaways</span>
     </div>
     <hr class="eyebrow-rule">
@@ -787,7 +892,7 @@
          GLOSSARY
     ══════════════════════════════════════════ -->
     {% if glossary %}
-    <div class="eyebrow-row" style="padding-top: 10mm;">
+    <div class="eyebrow-row pb-before">
         <span class="eyebrow-label">{{ glossary_label }}</span>
     </div>
     <hr class="eyebrow-rule">
@@ -808,7 +913,7 @@
          VISUAL CONTENT CAPTURED
     ══════════════════════════════════════════ -->
     {% if visual_frames %}
-    <div class="eyebrow-row" style="padding-top: 10mm;">
+    <div class="eyebrow-row pb-before">
         <span class="eyebrow-label">Visual content captured</span>
     </div>
     <hr class="eyebrow-rule">
@@ -850,7 +955,7 @@
          SELF-TEST
     ══════════════════════════════════════════ -->
     {% if quick_review %}
-    <div class="eyebrow-row" style="padding-top: 10mm;">
+    <div class="eyebrow-row pb-before">
         <span class="eyebrow-label">{{ review_label }}</span>
     </div>
     <hr class="eyebrow-rule">
@@ -882,7 +987,7 @@
          LEARNING PATH
     ══════════════════════════════════════════ -->
     {% if study_roadmap and (study_roadmap.prerequisites or study_roadmap.next_topics) %}
-    <div class="eyebrow-row" style="padding-top: 10mm;">
+    <div class="eyebrow-row pb-before">
         <span class="eyebrow-label">Your Learning Path</span>
     </div>
     <hr class="eyebrow-rule">
