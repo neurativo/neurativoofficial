@@ -430,6 +430,7 @@ export default function LectureView() {
     const isDark = useIsDark();
 
     const [lecture, setLecture]         = useState(null);
+    const [summaryStatus, setSummaryStatus] = useState('live');
     const [loading, setLoading]         = useState(true);
     const [exportOpen, setExportOpen]   = useState(false);
     const [shareOpen, setShareOpen]     = useState(false);
@@ -452,10 +453,29 @@ export default function LectureView() {
 
     useEffect(() => {
         api.get(`/api/v1/lectures/${id}/full`)
-            .then(res => setLecture(res.data))
+            .then(res => {
+                setLecture(res.data);
+                setSummaryStatus(res.data.summary_status || 'live');
+            })
             .catch(() => navigate('/app'))
             .finally(() => setLoading(false));
     }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Poll every 3s while summary is being recomputed; stop when final
+    useEffect(() => {
+        if (summaryStatus !== 'recomputing') return;
+        const interval = setInterval(() => {
+            api.get(`/api/v1/lectures/${id}/full`)
+                .then(res => {
+                    if ((res.data.summary_status || 'live') !== 'recomputing') {
+                        setLecture(res.data);
+                        setSummaryStatus(res.data.summary_status || 'final');
+                    }
+                })
+                .catch(() => {});
+        }, 3000);
+        return () => clearInterval(interval);
+    }, [summaryStatus, id]); // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
         if (activeTab === 'stats' && id && !stats) {
@@ -656,6 +676,9 @@ export default function LectureView() {
                                     onClick={() => setActiveTab(tab)}
                                 >
                                     {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                                    {tab === 'summary' && summaryStatus === 'recomputing' && (
+                                        <span style={{ fontSize: 11, color: 'var(--color-muted)', fontStyle: 'italic', fontWeight: 400, marginLeft: 5 }}>· Refining…</span>
+                                    )}
                                 </button>
                             ))}
                         </div>

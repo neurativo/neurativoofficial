@@ -452,6 +452,39 @@ def get_unsummarized_chunks(lecture_id: str, after_index: int):
     return []
 
 
+def get_all_chunk_transcripts(lecture_id: str) -> list:
+    """
+    Returns raw transcript text for all chunks ordered by chunk_index.
+    Used by the end-of-session recompute pipeline.
+
+    Requires: ALTER TABLE lectures ADD COLUMN IF NOT EXISTS summary_status text DEFAULT 'live';
+    """
+    try:
+        response = _fresh_db().table("lecture_chunks")\
+            .select("transcript")\
+            .eq("lecture_id", lecture_id)\
+            .order("chunk_index", desc=False)\
+            .execute()
+        if hasattr(response, 'data'):
+            return [row['transcript'] for row in response.data if row.get('transcript')]
+    except Exception as e:
+        print(f"get_all_chunk_transcripts error: {e}")
+    return []
+
+
+def set_summary_status(lecture_id: str, status: str) -> None:
+    """
+    Sets summary_status on a lecture. Values: 'live' | 'recomputing' | 'final'.
+    Non-fatal — if the column doesn't exist yet, the error is swallowed.
+    """
+    try:
+        _fresh_db().table("lectures").update(
+            {"summary_status": status}
+        ).eq("id", lecture_id).execute()
+    except Exception as e:
+        print(f"set_summary_status error (non-fatal): {e}")
+
+
 # =============================================================================
 #  EMBEDDING CACHE
 # =============================================================================
@@ -761,7 +794,7 @@ def get_lecture_full(lecture_id: str):
     response = db.table("lectures").select(
         "id, title, topic, language, transcript, master_summary, summary, "
         "total_chunks, total_sections, total_duration_seconds, created_at, "
-        "share_token, share_views"
+        "share_token, share_views, summary_status"
     ).eq("id", lecture_id).execute()
     if hasattr(response, "data") and response.data:
         return response.data[0]
