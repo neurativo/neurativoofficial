@@ -367,3 +367,96 @@ def segment_transcript(full_text: str, topic: str = None) -> list:
         {"title": "Part 2", "start": n // 3,     "end": (2 * n) // 3},
         {"title": "Part 3", "start": (2 * n) // 3, "end": n},
     ]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  End-of-session recompute — Pass 2: per-topic summarization
+# ─────────────────────────────────────────────────────────────────────────────
+
+def summarize_topic_segment(
+    segment_text: str,
+    title: str,
+    topic: str = None,
+    language: str = "en",
+) -> str:
+    """
+    Pass 2 of the end-of-session recompute.
+    Summarizes one topic segment directly from the raw transcript slice.
+
+    Anti-hallucination rules are baked in: optional sections (blockquote,
+    Key concepts, Examples) are ONLY written if the content warrants them.
+    Output is compatible with the frontend parseSummary() function.
+    Retries up to 3 times with exponential backoff.
+    """
+    if not openai_service.client or not segment_text.strip():
+        return ""
+
+    lang_note  = _language_instruction(language)
+    topic_line = (
+        f" This is a {topic} lecture."
+        f" Use precise {topic} terminology exactly as the speaker used it."
+        if topic and topic != "general" else ""
+    )
+
+    section_format = (
+        "Use exactly this markdown structure for your output "
+        "(omit any section that has no content from the transcript):\n\n"
+        f"## {title}\n\n"
+        "{{One sentence capturing the single most important idea STATED in this section.}}\n\n"
+        "{{2-4 sentences explaining what was covered, in the speaker's own terminology.}}\n\n"
+        "[Include ONLY if the speaker emphasized a key point, drew a contrast, or stated a conclusion:\n"
+        "> {{One sentence restating that point}}]\n\n"
+        "[Include ONLY if the speaker named or defined specific terms:\n"
+        "Key concepts: `term1`, `term2`, `term3`]\n\n"
+        "[Include ONLY if the speaker gave explicit examples:\n"
+        "Examples:\n"
+        "→ {{example the speaker gave}}]\n\n"
+        "---"
+    )
+
+    last_err = None
+    for attempt in range(3):
+        try:
+            response = openai_service.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            f"You are summarizing a section of a lecture transcript.{topic_line}"
+                            " Your ONLY source is the transcript text provided.\n\n"
+                            "STRICT RULES — violations make the summary worthless:\n"
+                            "1. Include ONLY information explicitly stated in this transcript. "
+                            "Do not add background knowledge, definitions, or context the speaker did not give.\n"
+                            "2. Key concepts: only terms the speaker named or defined. "
+                            "If a term appears but was not explained, omit it.\n"
+                            "3. Examples: only examples the speaker gave. "
+                            "If no example was given, omit the Examples section entirely — do not invent one.\n"
+                            "4. The blockquote must restate something the speaker actually emphasized. "
+                            "If nothing qualifies, omit the blockquote entirely.\n"
+                            "5. Write content directly — do not use 'the speaker says' or 'in this section'.\n"
+                            "6. No filler phrases: no 'it is important to note', "
+                            "'in conclusion', 'as we can see', 'as mentioned above'.\n"
+                            "7. Do NOT use **bold**. Use `backticks` for key terms only.\n\n"
+                            + section_format
+                            + lang_note
+                        )
+                    },
+                    {"role": "user", "content": segment_text}
+                ],
+                temperature=0.1,
+                max_tokens=500,
+            )
+            log_cost(
+                "topic_segment_summary", "gpt-4o-mini",
+                input_tokens=response.usage.prompt_tokens,
+                output_tokens=response.usage.completion_tokens,
+            )
+            return response.choices[0].message.content.strip()
+        except Exception as e:
+            last_err = e
+            if attempt < 2:
+                time.sleep(2 ** attempt)
+
+    print(f"summarize_topic_segment error after 3 attempts: {last_err}")
+    return ""
