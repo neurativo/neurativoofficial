@@ -789,16 +789,30 @@ def increment_share_views(lecture_id: str) -> None:
 def get_lecture_full(lecture_id: str):
     """
     Returns complete lecture data including share fields for the LectureView page.
+    Falls back to a query without summary_status if the column doesn't exist yet.
     """
     db = _fresh_db()
-    response = db.table("lectures").select(
-        "id, title, topic, language, transcript, master_summary, summary, "
-        "total_chunks, total_sections, total_duration_seconds, created_at, "
-        "share_token, share_views, summary_status"
-    ).eq("id", lecture_id).execute()
-    if hasattr(response, "data") and response.data:
-        return response.data[0]
-    return None
+    try:
+        response = db.table("lectures").select(
+            "id, title, topic, language, transcript, master_summary, summary, "
+            "total_chunks, total_sections, total_duration_seconds, created_at, "
+            "share_token, share_views, summary_status"
+        ).eq("id", lecture_id).execute()
+        if hasattr(response, "data") and response.data:
+            return response.data[0]
+        return None
+    except Exception:
+        # summary_status column may not exist in production yet — fall back
+        response = db.table("lectures").select(
+            "id, title, topic, language, transcript, master_summary, summary, "
+            "total_chunks, total_sections, total_duration_seconds, created_at, "
+            "share_token, share_views"
+        ).eq("id", lecture_id).execute()
+        if hasattr(response, "data") and response.data:
+            row = response.data[0]
+            row.setdefault("summary_status", "final")
+            return row
+        return None
 
 
 # =============================================================================
