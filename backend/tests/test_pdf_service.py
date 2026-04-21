@@ -125,3 +125,44 @@ def test_call_common_mistakes_returns_empty_on_api_error():
         result = _call_common_mistakes("transcript", "physics")
 
     assert result == []
+
+
+# ── _call_mnemonics ────────────────────────────────────────────────────────────
+
+def test_call_mnemonics_returns_merged_glossary():
+    """Mnemonics are merged back into the glossary list by term name."""
+    glossary = [
+        {"term": "Mitosis", "definition": "Cell division producing identical daughter cells."},
+        {"term": "Meiosis", "definition": "Cell division producing haploid gametes."},
+    ]
+    payload = json.dumps({"mnemonics": [
+        {"term": "Mitosis", "mnemonic": "MITosis = MITtens — two identical hands"},
+        {"term": "Meiosis", "mnemonic": None},
+    ]})
+    fake_resp = _make_chat_response(payload)
+
+    with patch("app.services.pdf_service._client") as mock_client, \
+         patch("app.services.pdf_service.log_cost"):
+        mock_client.chat.completions.create.return_value = fake_resp
+        from app.services.pdf_service import _call_mnemonics
+        result = _call_mnemonics(glossary)
+
+    assert result[0]["mnemonic"] == "MITosis = MITtens — two identical hands"
+    assert result[1].get("mnemonic") is None
+
+
+def test_call_mnemonics_handles_api_error_gracefully():
+    """On API error, original glossary list is returned unchanged."""
+    glossary = [{"term": "ATP", "definition": "Energy currency of the cell."}]
+    with patch("app.services.pdf_service._client") as mock_client, \
+         patch("app.services.pdf_service.log_cost"):
+        mock_client.chat.completions.create.side_effect = Exception("timeout")
+        from app.services.pdf_service import _call_mnemonics
+        result = _call_mnemonics(glossary)
+
+    assert result == glossary  # unchanged
+
+
+def test_call_mnemonics_empty_glossary_returns_empty():
+    from app.services.pdf_service import _call_mnemonics
+    assert _call_mnemonics([]) == []

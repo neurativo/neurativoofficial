@@ -455,6 +455,54 @@ def _call_common_mistakes(transcript: str, topic: str | None) -> list[dict]:
         return []
 
 
+def _call_mnemonics(glossary: list[dict]) -> list[dict]:
+    """
+    Generates memory hooks for glossary terms. Returns the same list with
+    an optional "mnemonic" key added to each item (None where no natural
+    mnemonic exists). Non-fatal: returns original list on any error.
+    """
+    if not _client or not glossary:
+        return glossary
+    terms_text = "\n".join(
+        f"- {item['term']}: {item['definition']}" for item in glossary
+    )
+    try:
+        resp = _client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "user",
+                    "content": (
+                        f"For each term below, generate ONE memory hook "
+                        "(acronym, rhyme, analogy, or vivid image) that makes it stick. "
+                        "Only generate a hook if one arises naturally from the term's meaning. "
+                        "Return null for terms where forcing one would be artificial.\n\n"
+                        f"Terms:\n{terms_text}\n\n"
+                        'Return JSON: {"mnemonics": [{"term": "...", "mnemonic": "..." | null}]}'
+                    ),
+                }
+            ],
+            temperature=0.4,
+            max_tokens=600,
+            response_format={"type": "json_object"},
+        )
+        log_cost("pdf_mnemonics", "gpt-4o-mini",
+                 input_tokens=resp.usage.prompt_tokens,
+                 output_tokens=resp.usage.completion_tokens)
+        mnemonic_map = {
+            m["term"]: m.get("mnemonic")
+            for m in json.loads(resp.choices[0].message.content).get("mnemonics", [])
+        }
+        for item in glossary:
+            m = mnemonic_map.get(item["term"])
+            if m is not None:
+                item["mnemonic"] = m
+        return glossary
+    except Exception as e:
+        print(f"_call_mnemonics error (non-fatal): {e}")
+        return glossary
+
+
 # ── PDF renderer (sync, run in thread) ───────────────────────────────────────
 
 def _render_pdf(html_content: str, title_short: str) -> bytes:
@@ -604,6 +652,13 @@ async def generate_lecture_pdf(lecture_id: str) -> bytes:
     glossary: list[dict] = results[ri] if not isinstance(results[ri], Exception) else []
     ri += 1
 
+    # Mnemonics — sequential second pass (needs glossary result)
+    if glossary:
+        try:
+            glossary = await asyncio.to_thread(_call_mnemonics, glossary)
+        except Exception as e:
+            print(f"mnemonics pass error (non-fatal): {e}")
+
     takeaways: list[str] = results[ri] if not isinstance(results[ri], Exception) else []
     ri += 1
 
@@ -662,6 +717,10 @@ async def generate_lecture_pdf(lecture_id: str) -> bytes:
         return f"{m:02d}:{s:02d}"
 
     env.filters["format_time"] = _fmt_time_mmss
+    def _truncate_words(s: str, n: int) -> str:
+        words = str(s).split()
+        return (" ".join(words[:n]) + "…") if len(words) > n else str(s)
+    env.filters["truncate_words"] = _truncate_words
     template     = env.get_template("lecture_template.html")
 
     total_concepts = sum(len(s.get("concepts", [])) for s in enriched_sections)
@@ -698,6 +757,7 @@ async def generate_lecture_pdf(lecture_id: str) -> bytes:
         # Visual frames
         "visual_frames":        visual_frames,
         "common_mistakes":      common_mistakes,
+        "accent_color":         _get_domain_color(topic),
     }
 
     html_content = template.render(**context)
