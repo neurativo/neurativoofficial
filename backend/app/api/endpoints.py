@@ -23,6 +23,7 @@ from app.services.summarization_service import (
     generate_section_summary,
     generate_master_summary,
 )
+from app.services.recompute_service import recompute_final_summary
 from app.services.embedding_service import get_embeddings, cosine_similarity
 from app.services.cif_service import classify_chunk
 from app.services.supabase_service import (
@@ -76,6 +77,7 @@ from app.services.supabase_service import (
     save_visual_frame,
     get_visual_frames,
     get_visual_frames_in_window,
+    set_summary_status,
 )
 
 
@@ -1037,6 +1039,10 @@ def end_session_endpoint(lecture_id: str, background_tasks: BackgroundTasks, use
 
         # Purge chunks older than 30 days (completed lectures only) in background
         background_tasks.add_task(cleanup_old_chunks, 30)
+
+        # Kick off definitive recompute from raw transcript
+        set_summary_status(lecture_id, "recomputing")
+        background_tasks.add_task(recompute_final_summary, lecture_id)
 
         return {"status": "ended", "lecture_id": lecture_id}
 
