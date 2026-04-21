@@ -790,6 +790,7 @@
 
     {% for sec in enriched_sections %}
     <div class="section-card">
+        <div class="section-num-bg">{{ "%02d"|format(loop.index) }}</div>
         <div class="section-card-header">
             <div class="section-card-title">{{ sec.title }}</div>
             <div class="section-progress">Section {{ loop.index }} of {{ enriched_sections | length }}</div>
@@ -841,6 +842,11 @@
             {% endfor %}
         </div>
         {% endif %}
+
+        <div class="section-notes">
+            <div class="notes-label">My Notes</div>
+            <div class="notes-lines"></div>
+        </div>
     </div>
     {% endfor %}
     {% endif %}
@@ -885,6 +891,26 @@
         </li>
         {% endfor %}
     </ul>
+    {% endif %}
+
+
+    <!-- ══════════════════════════════════════════
+         COMMON MISTAKES
+    ══════════════════════════════════════════ -->
+    {% if common_mistakes %}
+    <div class="eyebrow-row pb-before">
+        <span class="eyebrow-label">Watch Out</span>
+    </div>
+    <hr class="eyebrow-rule">
+    <h2>Common Mistakes</h2>
+
+    {% for item in common_mistakes %}
+    <div class="mistake-card">
+        <div class="mistake-label">⚠ Misconception</div>
+        <div class="mistake-text">{{ item.mistake }}</div>
+        <div class="correction-text">✓ {{ item.correction }}</div>
+    </div>
+    {% endfor %}
     {% endif %}
 
 
@@ -976,8 +1002,15 @@
             <span class="difficulty-badge diff-recall">{{ item.difficulty }}</span>
             {% endif %}
         </div>
-        <div class="review-question">{{ item.question }}</div>
-        <div class="review-answer">{{ item.answer }}</div>
+        <div class="review-question-block">
+            <div class="review-question">{{ item.question }}</div>
+        </div>
+        <div class="fold-line">
+            <span class="fold-label">✂ fold here to self-test</span>
+        </div>
+        <div class="review-answer-block">
+            <div class="review-answer">{{ item.answer }}</div>
+        </div>
     </div>
     {% endfor %}
     {% endif %}
