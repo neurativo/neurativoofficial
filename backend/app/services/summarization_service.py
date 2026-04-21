@@ -1,3 +1,4 @@
+import json
 import time
 import app.services.openai_service as openai_service
 from app.services.cost_tracker import log_cost
@@ -287,3 +288,82 @@ def generate_master_summary(section_summaries: list, language: str = "en", topic
                     print(f"Compression pass error after 3 attempts: {e}")
 
     return master_summary
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  End-of-session recompute — Pass 1: topic segmentation
+# ─────────────────────────────────────────────────────────────────────────────
+
+def segment_transcript(full_text: str, topic: str = None) -> list:
+    """
+    Pass 1 of the end-of-session recompute.
+    Sends the full raw transcript to GPT and asks it to identify where topics
+    naturally shift, returning a list of {"title", "start", "end"} dicts.
+
+    "start" and "end" are character indices into full_text.
+    Falls back to equal thirds if GPT fails or returns unparseable JSON.
+    Retries up to 3 times with exponential backoff.
+    """
+    if not openai_service.client or not full_text.strip():
+        return []
+
+    topic_line = (
+        f" This is a {topic} lecture." if topic and topic != "general" else ""
+    )
+
+    last_err = None
+    for attempt in range(3):
+        try:
+            response = openai_service.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            f"You are analyzing a lecture transcript.{topic_line}"
+                            " Identify every distinct topic or subtopic covered.\n\n"
+                            "Rules:\n"
+                            "- Titles must be specific and descriptive "
+                            "(e.g. 'Krebs Cycle — ATP Production', not 'Overview' or 'Section 1')\n"
+                            "- A topic shift occurs when the speaker moves to a genuinely new concept, "
+                            "not just a new sentence\n"
+                            "- Minimum 1 topic, maximum 12 topics\n"
+                            "- Every character in the transcript must belong to exactly one topic\n"
+                            "- Return ONLY valid JSON, no other text, no markdown fences\n\n"
+                            "Return a JSON array:\n"
+                            '[{"title": "...", "start": <char_index>, "end": <char_index>}, ...]'
+                        )
+                    },
+                    {"role": "user", "content": full_text}
+                ],
+                temperature=0.0,
+                max_tokens=800,
+            )
+            log_cost(
+                "segment_transcript", "gpt-4o-mini",
+                input_tokens=response.usage.prompt_tokens,
+                output_tokens=response.usage.completion_tokens,
+            )
+            raw = response.choices[0].message.content.strip()
+            # Strip markdown code fences if GPT wraps in them anyway
+            if raw.startswith("```"):
+                lines = raw.split("\n")
+                raw = "\n".join(lines[1:])
+                if raw.endswith("```"):
+                    raw = raw[:-3].strip()
+            segments = json.loads(raw)
+            if isinstance(segments, list) and len(segments) > 0:
+                return segments
+        except Exception as e:
+            last_err = e
+            if attempt < 2:
+                time.sleep(2 ** attempt)
+
+    print(f"segment_transcript error after 3 attempts: {last_err}. Using fallback.")
+    # Fallback: split into thirds
+    n = len(full_text)
+    return [
+        {"title": "Part 1", "start": 0,         "end": n // 3},
+        {"title": "Part 2", "start": n // 3,     "end": (2 * n) // 3},
+        {"title": "Part 3", "start": (2 * n) // 3, "end": n},
+    ]
