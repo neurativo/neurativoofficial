@@ -36,6 +36,32 @@ def _get_domain_labels(topic: str | None) -> tuple[str, str, str]:
     return _DOMAIN_LABELS.get(topic.lower(), _DEFAULT_LABELS)
 
 
+_DOMAIN_COLORS = {
+    "medicine":         "#DC2626",
+    "nursing":          "#DC2626",
+    "pharmacy":         "#DC2626",
+    "law":              "#1E3A5F",
+    "legal":            "#1E3A5F",
+    "computer science": "#4F46E5",
+    "software":         "#4F46E5",
+    "engineering":      "#4F46E5",
+    "physics":          "#0D9488",
+    "mathematics":      "#0D9488",
+    "chemistry":        "#0D9488",
+    "history":          "#92400E",
+    "social sciences":  "#92400E",
+    "business":         "#059669",
+    "economics":        "#059669",
+}
+_DEFAULT_COLOR = "#2563EB"
+
+
+def _get_domain_color(topic: str | None) -> str:
+    if not topic:
+        return _DEFAULT_COLOR
+    return _DOMAIN_COLORS.get(topic.lower(), _DEFAULT_COLOR)
+
+
 # ── Adaptive question count (Bloom's taxonomy scaling) ────────────────────────
 _DIFFICULTIES = ["Recall", "Understanding", "Application"]
 
@@ -165,11 +191,14 @@ def _call_enrich_section(
                     "'Summary', 'Review', 'Lecture Notes'. Name the actual concepts taught.\n"
                     "- \"prose\": 2-3 flowing sentences expanding the core idea. Present tense. No bullets.\n"
                     "- \"bullets\": Array of 3-5 specific key points as short strings\n"
-                    "- \"concepts\": Array of exactly 3 key concept names from this section "
-                    "(single nouns or short noun phrases, e.g. 'Action Potential', 'Ohm's Law')\n"
-                    "- \"examples\": Array of exactly 2 concrete real-world examples or applications "
-                    "from this section (one sentence each)\n"
-                    "IMPORTANT: All 5 fields are required. concepts and examples must not be empty.\n"
+                    "- \"concepts\": Array of key concept names explicitly named or defined in this section "
+                    "(single nouns or short noun phrases, e.g. 'Action Potential', 'Ohm\\'s Law'). "
+                    "Return an empty array if no concepts were explicitly named.\n"
+                    "- \"examples\": Array of concrete real-world examples or applications "
+                    "the lecturer explicitly gave. Return an empty array if none were given. "
+                    "Never invent examples that were not in the source text.\n"
+                    "STRICT RULE: only include information explicitly present in the section text. "
+                    "Empty arrays for concepts and examples are valid and preferred over invented content.\n"
                     "Return only valid JSON."
                 ),
             }
