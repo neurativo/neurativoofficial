@@ -415,6 +415,46 @@ def _call_conceptual_map(section_summaries: list[str]) -> list[dict]:
         return []
 
 
+def _call_common_mistakes(transcript: str, topic: str | None) -> list[dict]:
+    """
+    Identifies 2-3 genuine misconceptions the lecturer warned about, or classic
+    logical traps students make. Returns [] if none were mentioned.
+    STRICT: only returns mistakes grounded in the transcript.
+    """
+    if not _client:
+        return []
+    hint = f" Domain: {topic}." if topic else ""
+    try:
+        resp = _client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "user",
+                    "content": (
+                        f"TRANSCRIPT:\n{transcript[:5000]}\n\n"
+                        f"Read this lecture transcript carefully.{hint} "
+                        "Identify 2-3 genuine misconceptions the lecturer explicitly warned about, "
+                        "or classic logical traps students make with this specific material. "
+                        "STRICT RULE: return only mistakes that are clearly grounded in what was "
+                        "actually said in this transcript. If the lecturer did not warn about any "
+                        "misconceptions, return an empty mistakes array — do not invent warnings.\n"
+                        'Return JSON: {"mistakes": [{"mistake": "...", "correction": "..."}]}'
+                    ),
+                }
+            ],
+            temperature=0.2,
+            max_tokens=600,
+            response_format={"type": "json_object"},
+        )
+        log_cost("pdf_common_mistakes", "gpt-4o-mini",
+                 input_tokens=resp.usage.prompt_tokens,
+                 output_tokens=resp.usage.completion_tokens)
+        return json.loads(resp.choices[0].message.content).get("mistakes", [])
+    except Exception as e:
+        print(f"_call_common_mistakes error (non-fatal): {e}")
+        return []
+
+
 # ── PDF renderer (sync, run in thread) ───────────────────────────────────────
 
 def _render_pdf(html_content: str, title_short: str) -> bytes:
@@ -532,6 +572,9 @@ async def generate_lecture_pdf(lecture_id: str) -> bytes:
         [s.split('\n')[0].strip() for s in raw_sections],   # first line = section title
     ))
 
+    # Common mistakes — transcript-sourced only
+    tasks.append(asyncio.to_thread(_call_common_mistakes, transcript, topic))
+
     # 4. Run all calls in parallel
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -574,6 +617,9 @@ async def generate_lecture_pdf(lecture_id: str) -> bytes:
 
     r = results[ri]; ri += 1
     study_roadmap: dict = r if not isinstance(r, Exception) else {"next_topics": [], "prerequisites": []}
+
+    r = results[ri]; ri += 1
+    common_mistakes: list[dict] = r if not isinstance(r, Exception) else []
 
     # 5b. Title fallback: if title is still generic, extract from exec_summary first sentence
     _GENERIC_TITLES = {"live session", "lecture notes", "untitled", "untitled lecture"}
@@ -651,6 +697,7 @@ async def generate_lecture_pdf(lecture_id: str) -> bytes:
         "compression_ratio":    0.0,
         # Visual frames
         "visual_frames":        visual_frames,
+        "common_mistakes":      common_mistakes,
     }
 
     html_content = template.render(**context)
