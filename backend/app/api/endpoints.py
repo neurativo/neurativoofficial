@@ -300,6 +300,12 @@ async def _transcribe_background(file_bytes: bytes, filename: str, lecture_id: s
     Background task: transcribe audio bytes, update the lecture, then summarize.
     Not bound by HTTP timeout — runs until completion or failure.
     """
+    # Signal that transcription is starting.
+    try:
+        set_summary_status(lecture_id, "importing")
+    except Exception:
+        pass
+
     try:
         transcript_text, language = await transcribe_audio_bytes(file_bytes, filename)
         update_lecture_transcript(lecture_id, transcript_text, language)
@@ -313,6 +319,13 @@ async def _transcribe_background(file_bytes: bytes, filename: str, lecture_id: s
     except Exception as e:
         print(f"[bg_transcribe] transcription failed for lecture={lecture_id}: {e}")
         return
+
+    # Transcript saved — signal that summarisation is starting.
+    try:
+        set_summary_status(lecture_id, "summarizing")
+    except Exception:
+        pass
+
     # Auto-summarize after transcription completes.
     # Chunk the transcript into ~1500-word segments, summarise each via
     # summarize_topic_segment (mirrors the live path's section summarisation),
@@ -360,6 +373,13 @@ async def _transcribe_background(file_bytes: bytes, filename: str, lecture_id: s
         print(f"[bg_transcribe] summary done lecture={lecture_id} sections={len(section_summaries)}")
     except Exception as e:
         print(f"[bg_transcribe] summarization failed for lecture={lecture_id}: {e}")
+        return
+
+    # Everything done — signal frontend to navigate.
+    try:
+        set_summary_status(lecture_id, "final")
+    except Exception:
+        pass
 
 
 @router.post("/transcribe")
@@ -422,6 +442,12 @@ async def transcribe(
         lecture_id = save_lecture(title=title, transcript="", language="en", user_id=str(user.id))
     except Exception:
         raise HTTPException(status_code=500, detail="Failed to create lecture")
+
+    # Mark as importing immediately so frontend polling sees the status.
+    try:
+        set_summary_status(lecture_id, "importing")
+    except Exception:
+        pass
 
     # Increment upload counter now (non-reversible — uploading counts even if transcription fails)
     try:

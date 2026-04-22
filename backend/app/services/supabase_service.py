@@ -272,7 +272,8 @@ def get_lecture_for_summarization(lecture_id: str):
     db = _fresh_db()
     response = db.table("lectures").select(
         "transcript, summary, master_summary, total_sections, last_summarized_length, "
-        "total_chunks, total_duration_seconds, title, created_at, language, topic"
+        "total_chunks, total_duration_seconds, title, created_at, language, topic, "
+        "summary_status"
     ).eq("id", lecture_id).execute()
 
     if hasattr(response, 'data') and len(response.data) > 0:
