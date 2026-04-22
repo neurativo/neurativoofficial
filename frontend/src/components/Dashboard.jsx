@@ -407,6 +407,9 @@ export default function Dashboard({ user }) {
     const [showOnboarding, setShowOnboarding] = useState(false);
 
     const searchRef = useRef(null);
+    const searchTimerRef = useRef(null);
+    const [searchResults, setSearchResults] = useState(null);
+    const [searchLoading, setSearchLoading] = useState(false);
 
     const handleSignOut = async () => {
         await signOut();
@@ -430,6 +433,8 @@ export default function Dashboard({ user }) {
             .catch(() => setLectures([]))
             .finally(() => setLoading(false));
     }, []);
+
+    useEffect(() => () => clearTimeout(searchTimerRef.current), []);
 
     // Keyboard shortcuts: Escape clears, / focuses search, n = new lecture
     useEffect(() => {
@@ -483,10 +488,13 @@ export default function Dashboard({ user }) {
     const languages = [...new Set(lectures.map(l => l.language).filter(Boolean))];
     const hasFilters = topicFilter || langFilter;
 
-    const filtered = lectures
+    const baseList = searchResults !== null ? searchResults : lectures;
+    const filtered = baseList
         .filter(l => {
             const q = search.trim().toLowerCase();
-            const matchSearch = !q ||
+            // When searchResults is active (backend search), backend already filtered
+            // by content — only apply the dropdown filters client-side.
+            const matchSearch = searchResults !== null || !q ||
                 (l.title    || '').toLowerCase().includes(q) ||
                 (l.topic    || '').toLowerCase().includes(q) ||
                 (l.language || '').toLowerCase().includes(q);
@@ -587,7 +595,7 @@ export default function Dashboard({ user }) {
                     <p className="db-page-sub">{loading ? '' : `${lectures.length} ${lectureWord}`}</p>
 
                     {/* Search */}
-                    <div className="db-search-wrap">
+                    <div className={`db-search-wrap${searchLoading ? ' db-search-loading' : ''}`}>
                         <span className="db-search-icon">
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                                 <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
@@ -598,9 +606,38 @@ export default function Dashboard({ user }) {
                             className="db-search"
                             type="text"
                             value={search}
-                            onChange={e => setSearch(e.target.value)}
-                            onKeyDown={e => { if (e.key === 'Escape') { setSearch(''); e.target.blur(); } }}
-                            placeholder="Search by title, topic or language…"
+                            onChange={e => {
+                                const val = e.target.value;
+                                setSearch(val);
+                                clearTimeout(searchTimerRef.current);
+                                if (val.trim().length >= 3) {
+                                    setSearchLoading(true);
+                                    searchTimerRef.current = setTimeout(async () => {
+                                        try {
+                                            const res = await api.get(`/api/v1/lectures?limit=50&q=${encodeURIComponent(val.trim())}`);
+                                            const list = Array.isArray(res.data) ? res.data : [];
+                                            setSearchResults(list);
+                                        } catch {
+                                            setSearchResults([]);
+                                        } finally {
+                                            setSearchLoading(false);
+                                        }
+                                    }, 400);
+                                } else {
+                                    setSearchResults(null);
+                                    setSearchLoading(false);
+                                }
+                            }}
+                            onKeyDown={e => {
+                                if (e.key === 'Escape') {
+                                    setSearch('');
+                                    setSearchResults(null);
+                                    setSearchLoading(false);
+                                    clearTimeout(searchTimerRef.current);
+                                    e.target.blur();
+                                }
+                            }}
+                            placeholder="Search lectures by title, topic or content…"
                         />
                     </div>
 
