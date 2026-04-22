@@ -314,16 +314,50 @@ async def _transcribe_background(file_bytes: bytes, filename: str, lecture_id: s
         print(f"[bg_transcribe] transcription failed for lecture={lecture_id}: {e}")
         return
     # Auto-summarize after transcription completes.
-    # generate_master_summary expects a list of section summaries — wrap the
-    # full transcript as a single element so it doesn't TypeError on str.join.
+    # Chunk the transcript into ~1500-word segments, summarise each via
+    # summarize_topic_segment (mirrors the live path's section summarisation),
+    # then combine with generate_master_summary for live-path quality.
     try:
-        from app.services.summarization_service import generate_master_summary
+        from app.services.summarization_service import (
+            generate_master_summary,
+            summarize_topic_segment,
+        )
         import asyncio as _asyncio
+
+        # Fetch topic for better section context (non-fatal if unavailable).
+        try:
+            _lec = get_lecture_full(lecture_id)
+            topic = _lec.get("topic") if _lec else None
+        except Exception:
+            topic = None
+
+        words = transcript_text.split()
+        chunk_size = 1500
+        chunks = [
+            " ".join(words[i : i + chunk_size])
+            for i in range(0, max(len(words), 1), chunk_size)
+        ]
+
+        section_summaries = []
+        for idx, chunk in enumerate(chunks, start=1):
+            title = f"Part {idx}"
+            try:
+                sec = await _asyncio.to_thread(
+                    summarize_topic_segment, chunk, title, topic, language
+                )
+                section_summaries.append(sec)
+            except Exception as _e:
+                print(f"[bg_transcribe] section {idx} summarisation failed (skipped): {_e}")
+
+        if not section_summaries:
+            # Fallback: if all section summaries failed, pass raw text truncated.
+            section_summaries = [transcript_text[:6000]]
+
         summary = await _asyncio.to_thread(
-            generate_master_summary, [transcript_text], language=language
+            generate_master_summary, section_summaries, language=language
         )
         update_lecture_summary_only(lecture_id, summary)
-        print(f"[bg_transcribe] summary done lecture={lecture_id}")
+        print(f"[bg_transcribe] summary done lecture={lecture_id} sections={len(section_summaries)}")
     except Exception as e:
         print(f"[bg_transcribe] summarization failed for lecture={lecture_id}: {e}")
 
