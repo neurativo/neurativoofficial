@@ -4,7 +4,6 @@ import re
 from app.services.cost_tracker import log_cost
 from app.services.supabase_service import (
     get_lecture_transcript,
-    get_lecture_language,
     get_cached_embeddings,
     save_embeddings_cache,
 )
@@ -23,8 +22,6 @@ def answer_lecture_question(lecture_id: str, question: str) -> str:
     transcript = get_lecture_transcript(lecture_id)
     if not transcript:
         raise HTTPException(status_code=404, detail="Transcript empty or not found")
-
-    language  = get_lecture_language(lecture_id) or "en"
 
     # 2. Split transcript on sentence boundaries (1500-word chunks)
     chunks = _sentence_aware_chunks(transcript, max_words=1500)
