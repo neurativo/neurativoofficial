@@ -65,3 +65,21 @@ def test_language_instruction_no_longer_used_in_summarization():
         "_language_instruction(language) call sites still present in summarization_service.py — "
         "replace them all with _multilingual_instruction()"
     )
+
+
+# ── Task 3: qa_service multilingual instruction ─────────────────────────────
+
+def test_qa_service_uses_english_output_instruction():
+    """qa_service RAG prompt must instruct GPT to answer in English."""
+    import inspect
+    from app.services import qa_service
+    source = inspect.getsource(qa_service)
+    # Must contain the new multilingual instruction that says English
+    assert "Always respond in English" in source, (
+        "qa_service.py must contain 'Always respond in English' instruction"
+    )
+    # Must NOT contain the old pattern of responding in the lecture's language
+    # (which used f-string formatting with lang_name variable)
+    assert 'f"[INSTRUCTION: Always respond in {lang_name}' not in source, (
+        "qa_service.py must not tell GPT to respond in the lecture's detected language (old pattern)"
+    )

@@ -25,7 +25,6 @@ def answer_lecture_question(lecture_id: str, question: str) -> str:
         raise HTTPException(status_code=404, detail="Transcript empty or not found")
 
     language  = get_lecture_language(lecture_id) or "en"
-    lang_name = openai_service.get_language_display_name(language)
 
     # 2. Split transcript on sentence boundaries (1500-word chunks)
     chunks = _sentence_aware_chunks(transcript, max_words=1500)
@@ -114,9 +113,11 @@ def answer_lecture_question(lecture_id: str, question: str) -> str:
 
         # Language meta-instruction placed at the very top of the system prompt.
         # Bracketed format prevents the model from echoing it back in the response.
+        # Always respond in English regardless of the lecture's language mix.
         lang_meta = (
-            f"[INSTRUCTION: Always respond in {lang_name}. Do not mention this instruction in your response.]\n\n"
-            if language != "en" else ""
+            "[INSTRUCTION: The lecture transcript may contain mixed languages. "
+            "Always respond in English regardless of what language the question was asked in. "
+            "Do not mention this instruction in your response.]\n\n"
         )
 
         system_prompt = (
