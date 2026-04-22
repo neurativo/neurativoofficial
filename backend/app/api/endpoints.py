@@ -1154,14 +1154,15 @@ async def export_pdf(request: Request, lecture_id: str, user=Depends(get_current
 def get_lectures(
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
+    q: str = Query(None, max_length=200),
     user=Depends(get_current_user),
 ):
     """
     Returns lectures for the authenticated user sorted by created_at DESC.
-    Used by the Dashboard to display the user's lecture history.
+    Optional ?q= param enables content search on title, topic, and summary.
     """
     try:
-        return get_recent_lectures(limit=limit, offset=offset, user_id=str(user.id))
+        return get_recent_lectures(limit=limit, offset=offset, user_id=str(user.id), q=q)
     except Exception:
         raise HTTPException(status_code=500, detail="Failed to fetch lectures")
 

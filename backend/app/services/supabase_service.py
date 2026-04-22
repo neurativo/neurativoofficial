@@ -569,28 +569,56 @@ def save_student_question(lecture_id: str, question_text: str) -> None:
         print(f"[CIF] Failed to save student question: {e}")
 
 
-def get_recent_lectures(limit: int = 5, offset: int = 0, user_id: str = None) -> list:
+def get_recent_lectures(limit: int = 5, offset: int = 0, user_id: str = None, q: str = None) -> list:
     """
-    Returns the most recent lectures sorted by created_at DESC.
-    When user_id is provided, filters to only that user's lectures (dashboard view).
-    Without user_id, returns all lectures (legacy / unauthenticated mode).
+    Returns lectures sorted by created_at DESC.
+    When user_id is provided, filters to that user's lectures only.
+    When q is provided, applies case-insensitive content search on
+    title, topic, master_summary, and summary columns.
     """
     if not supabase:
         return []
     query = (
         supabase.table("lectures")
-        .select("id, title, topic, language, total_chunks, total_sections, total_duration_seconds, created_at, master_summary, summary")
+        .select(
+            "id, title, topic, language, total_chunks, total_sections, "
+            "total_duration_seconds, created_at, master_summary, summary"
+        )
         .order("created_at", desc=True)
         .range(offset, offset + limit - 1)
     )
     if user_id:
         query = query.eq("user_id", user_id)
+    if q:
+        term = q.strip()
+        query = query.or_(
+            f"title.ilike.%{term}%,"
+            f"topic.ilike.%{term}%,"
+            f"master_summary.ilike.%{term}%,"
+            f"summary.ilike.%{term}%"
+        )
     response = query.execute()
     if not hasattr(response, "data"):
         return []
     rows = []
     for row in response.data:
         preview_src = row.get("master_summary") or row.get("summary") or ""
+        if q and preview_src:
+            term = q.strip().lower()
+            idx = preview_src.lower().find(term)
+            if idx >= 0:
+                start = max(0, idx - 60)
+                end = min(len(preview_src), idx + len(term) + 60)
+                snippet = (
+                    ("…" if start > 0 else "")
+                    + preview_src[start:end]
+                    + ("…" if end < len(preview_src) else "")
+                )
+            else:
+                snippet = preview_src[:200]
+            summary_preview = snippet
+        else:
+            summary_preview = preview_src[:120] if preview_src else ""
         rows.append({
             "id":                     row["id"],
             "title":                  row.get("title") or "Untitled",
@@ -600,7 +628,7 @@ def get_recent_lectures(limit: int = 5, offset: int = 0, user_id: str = None) ->
             "total_sections":         row.get("total_sections") or 0,
             "total_duration_seconds": row.get("total_duration_seconds") or 0,
             "created_at":             row.get("created_at"),
-            "summary_preview":        preview_src[:120] if preview_src else "",
+            "summary_preview":        summary_preview,
         })
     return rows
 
