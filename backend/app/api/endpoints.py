@@ -724,11 +724,6 @@ async def process_live_chunk(
     _HALLUCINATION_LANGS = {'ja', 'zh'}
 
     async with _get_lecture_lock(lecture_id):
-        # Fetch pinned language before transcription so we can pass it to Whisper.
-        # After first detection, pinning prevents per-chunk re-detection drift that
-        # causes cross-language hallucinations on quiet or ambiguous audio.
-        stored_language = get_lecture_language(lecture_id)  # None on first chunk
-
         # Build Whisper context from last ~200 words of transcript to prevent
         # duplicate transcription at chunk boundaries.
         whisper_prompt = None
@@ -740,13 +735,13 @@ async def process_live_chunk(
         except Exception:
             pass
 
-        # 2. Transcribe — language pin passed when available.
-        #    no_speech_prob segment filtering happens inside transcribe_audio().
+        # 2. Transcribe — no language pin so Whisper handles code-switching.
+        #    Each chunk is detected independently. no_speech_prob filtering
+        #    handles silence hallucinations (no need for language pinning).
         try:
             chunk_text, detected_language = await transcribe_audio(
                 file,
                 prompt=whisper_prompt,
-                language=stored_language or None,
             )
         except Exception:
             raise HTTPException(status_code=500, detail="Transcription failed")
@@ -756,9 +751,10 @@ async def process_live_chunk(
         if not chunk_text:
             return {"lecture_id": lecture_id, "chunk_transcript": "", "message": "Empty transcription"}
 
-        # 3. Persist language — first real detection wins, never override.
+        # 3. Persist language — each chunk's detection is stored independently.
         # Ignore hallucination languages (ja/zh) which Whisper emits on silence.
-        if not stored_language and detected_language and detected_language not in _HALLUCINATION_LANGS:
+        stored_language = get_lecture_language(lecture_id)
+        if detected_language and detected_language not in _HALLUCINATION_LANGS:
             update_lecture_language(lecture_id, detected_language)
             stored_language = detected_language
         language = stored_language or 'en'
