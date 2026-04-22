@@ -83,3 +83,33 @@ def test_qa_service_uses_english_output_instruction():
     assert 'f"[INSTRUCTION: Always respond in {lang_name}' not in source, (
         "qa_service.py must not tell GPT to respond in the lecture's detected language (old pattern)"
     )
+
+
+# ── Task 4: pdf_service multilingual note ───────────────────────────────────
+
+def test_pdf_enrich_section_has_multilingual_note():
+    """_call_enrich_section must have a multilingual note in its prompt."""
+    import inspect
+    from app.services import pdf_service
+    source = inspect.getsource(pdf_service._call_enrich_section)
+    assert "mixed languages" in source or "multilingual" in source.lower() or "Extract meaning" in source, (
+        "_call_enrich_section must include a multilingual note in its user prompt"
+    )
+
+def test_pdf_glossary_has_multilingual_note():
+    """_call_glossary must have a multilingual note in its prompt."""
+    import inspect
+    from app.services import pdf_service
+    source = inspect.getsource(pdf_service._call_glossary)
+    assert "mixed languages" in source or "multilingual" in source.lower() or "Extract meaning" in source, (
+        "_call_glossary must include a multilingual note in its user prompt"
+    )
+
+def test_pdf_takeaways_has_multilingual_note():
+    """_call_takeaways must have a multilingual note in its prompt."""
+    import inspect
+    from app.services import pdf_service
+    source = inspect.getsource(pdf_service._call_takeaways)
+    assert "mixed languages" in source or "multilingual" in source.lower() or "Extract meaning" in source, (
+        "_call_takeaways must include a multilingual note in its user prompt"
+    )

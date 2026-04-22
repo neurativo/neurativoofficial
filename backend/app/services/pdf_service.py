@@ -182,6 +182,7 @@ def _call_enrich_section(
             {
                 "role": "user",
                 "content": (
+                    "Note: The transcript may contain mixed languages. Extract meaning from all languages present. Respond in English.\n\n"
                     f"You are enriching section {idx + 1} of {total} from a lecture.{hint}\n"
                     f"Section summary:\n{section_text}\n\n"
                     "Return a JSON object with exactly these fields:\n"
@@ -240,6 +241,7 @@ def _call_glossary(transcript: str, topic: str | None, n_terms: int = 8) -> list
             {
                 "role": "user",
                 "content": (
+                    "Note: The transcript may contain mixed languages. Extract meaning from all languages present. Respond in English.\n\n"
                     f"TRANSCRIPT:\n{transcript[:5000]}\n\n"
                     f"Extract {n_terms} key academic or technical terms from this lecture.{hint} "
                     "For each term provide a clear 1-sentence definition a student can memorise. "
@@ -270,6 +272,7 @@ def _call_takeaways(transcript: str, summary: str, topic: str | None) -> list[st
             {
                 "role": "user",
                 "content": (
+                    "Note: The transcript may contain mixed languages. Extract meaning from all languages present. Respond in English.\n\n"
                     f"SUMMARY:\n{summary[:3000]}\n\n"
                     f"List exactly 5 key takeaways from this lecture.{hint} "
                     "Each takeaway is one complete, actionable sentence starting with a verb or concept. "
@@ -308,6 +311,7 @@ def _call_quick_review(
             {
                 "role": "user",
                 "content": (
+                    "Note: The transcript may contain mixed languages. Extract meaning from all languages present. Respond in English.\n\n"
                     f"TRANSCRIPT:\n{transcript[:4000]}\nSUMMARY:\n{summary[:2000]}\n\n"
                     f"Generate {n_questions} exam-style questions.{hint}\n"
                     f"Difficulty assignments (Bloom's taxonomy):\n{diff_list}\n\n"
@@ -350,6 +354,7 @@ def _call_study_roadmap(
             {
                 "role": "user",
                 "content": (
+                    "Note: The transcript may contain mixed languages. Extract meaning from all languages present. Respond in English.\n\n"
                     f"Lecture title: \"{title}\"\n"
                     f"{topic_hint}Sections covered: {titles_str}\n\n"
                     "Return a JSON object with exactly two fields:\n"
@@ -431,6 +436,7 @@ def _call_common_mistakes(transcript: str, topic: str | None) -> list[dict]:
                 {
                     "role": "user",
                     "content": (
+                        "Note: The transcript may contain mixed languages. Extract meaning from all languages present. Respond in English.\n\n"
                         f"TRANSCRIPT:\n{transcript[:5000]}\n\n"
                         f"Read this lecture transcript carefully.{hint} "
                         "Identify 2-3 genuine misconceptions the lecturer explicitly warned about, "
