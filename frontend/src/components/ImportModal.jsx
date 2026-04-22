@@ -145,10 +145,29 @@ export default function ImportModal({ onClose }) {
                 await new Promise(r => setTimeout(r, POLL_INTERVAL));
                 try {
                     const check = await api.get(`/api/v1/lectures/${lectureId}`);
+                    const status = check.data?.summary_status;
                     const transcript = check.data?.transcript;
-                    if (transcript && transcript.length > 10) {
+
+                    // Update displayed stage based on backend status.
+                    if (status === 'summarizing') {
                         setStage('summarizing');
-                        await new Promise(r => setTimeout(r, 800));
+                    } else if (!status && transcript && transcript.length > 10) {
+                        // Fallback: old backend without summary_status — show summarizing stage.
+                        setStage('summarizing');
+                    }
+
+                    // Navigate when backend confirms everything is done.
+                    if (status === 'final') {
+                        setStage('done');
+                        await new Promise(r => setTimeout(r, 600));
+                        navigate(`/lecture/${lectureId}`);
+                        return;
+                    }
+
+                    // Fallback: old backend — navigate 5s after transcript appears
+                    // (gives summarisation extra time vs the old 800ms fake wait).
+                    if (!status && transcript && transcript.length > 10) {
+                        await new Promise(r => setTimeout(r, 5000));
                         setStage('done');
                         await new Promise(r => setTimeout(r, 600));
                         navigate(`/lecture/${lectureId}`);
