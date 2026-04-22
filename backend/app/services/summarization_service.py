@@ -11,6 +11,14 @@ def _language_instruction(language: str) -> str:
     return f" Always respond in {name} ({language}), matching the lecture language."
 
 
+def _multilingual_instruction() -> str:
+    return (
+        " The transcript may contain mixed languages (e.g. English with Sinhala, "
+        "Tamil, Arabic, or other local languages). Extract meaning accurately from "
+        "all languages present. Always write your response in English."
+    )
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 #  Topic-aware schemas
 # ─────────────────────────────────────────────────────────────────────────────
@@ -104,7 +112,7 @@ def generate_micro_summary(text: str, language: str = "en") -> str:
     """
     if not openai_service.client:
         return ""
-    lang_note = _language_instruction(language)
+    lang_note = _multilingual_instruction()
     last_err = None
     for attempt in range(3):
         try:
@@ -144,7 +152,7 @@ def generate_section_summary(micro_summaries: list, language: str = "en", topic:
     if not openai_service.client:
         return ""
     combined_micro = "\n".join(micro_summaries)
-    lang_note      = _language_instruction(language)
+    lang_note      = _multilingual_instruction()
     topic_note     = _section_guidance(topic)
     last_err = None
     for attempt in range(3):
@@ -186,7 +194,7 @@ def generate_master_summary(section_summaries: list, language: str = "en", topic
     if not openai_service.client:
         return ""
     combined_sections = "\n\n".join(section_summaries)
-    lang_note         = _language_instruction(language)
+    lang_note         = _multilingual_instruction()
     structure         = _master_structure(topic)
     topic_label       = f" This is a {topic} lecture." if topic and topic != "general" else ""
 
@@ -391,7 +399,7 @@ def summarize_topic_segment(
     if not openai_service.client or not segment_text.strip():
         return ""
 
-    lang_note  = _language_instruction(language)
+    lang_note  = _multilingual_instruction()
     topic_line = (
         f" This is a {topic} lecture."
         f" Use precise {topic} terminology exactly as the speaker used it."

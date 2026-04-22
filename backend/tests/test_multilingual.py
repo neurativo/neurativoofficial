@@ -30,3 +30,38 @@ def test_live_chunk_transcription_does_not_pin_language():
         "Language pinning still present — remove 'language=stored_language or None' "
         "from the transcribe_audio call in the live chunk endpoint."
     )
+
+
+# ── Task 2: summarization_service multilingual instruction ──────────────────
+
+def test_multilingual_instruction_exists():
+    """_multilingual_instruction() is a callable that takes no arguments."""
+    from app.services.summarization_service import _multilingual_instruction
+    result = _multilingual_instruction()
+    assert isinstance(result, str)
+    assert len(result) > 0
+
+def test_multilingual_instruction_says_english():
+    """_multilingual_instruction() output must mention English output."""
+    from app.services.summarization_service import _multilingual_instruction
+    result = _multilingual_instruction()
+    assert "English" in result or "english" in result
+
+def test_multilingual_instruction_mentions_mixed_languages():
+    """_multilingual_instruction() must mention mixed/multiple languages."""
+    from app.services.summarization_service import _multilingual_instruction
+    result = _multilingual_instruction()
+    # Must mention the concept of mixed/multiple languages
+    assert any(word in result for word in ["mixed", "multiple", "languages", "Sinhala", "Tamil"])
+
+def test_language_instruction_no_longer_used_in_summarization():
+    """_language_instruction must not appear as a call in summarization_service."""
+    import inspect
+    from app.services import summarization_service
+    source = inspect.getsource(summarization_service)
+    # The old function call pattern should be gone (after line 7 where it's defined)
+    # We check that lang_note is not assigned from _language_instruction(language)
+    assert "lang_note = _language_instruction(language)" not in source, (
+        "_language_instruction(language) call sites still present in summarization_service.py — "
+        "replace them all with _multilingual_instruction()"
+    )
