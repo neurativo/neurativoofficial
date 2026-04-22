@@ -656,7 +656,7 @@ const IconLogo = () => (
 
 // ─── Section sub-components ───────────────────────────────────────────────────
 
-const CYCLE_WORDS = ['wish', 'need', 'deserve', 'wanted'];
+const CYCLE_WORDS = ['wish', 'wished', 'hoped', 'always wished'];
 
 function NavAvatar({ user }) {
     const [open, setOpen] = useState(false);
