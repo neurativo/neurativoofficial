@@ -24,6 +24,8 @@ from app.services.supabase_service import (
     admin_get_lecture_detail,
     admin_list_lectures,
     admin_list_sessions,
+    admin_write_audit,
+    admin_get_audit_log,
     set_user_plan,
     delete_user_account,
     delete_lecture,
@@ -42,13 +44,21 @@ _audit_log: collections.deque = collections.deque(maxlen=100)
 
 
 def _audit(admin_id: str, action: str, target_id: str = "", detail: str = "") -> None:
-    _audit_log.appendleft({
+    """Write audit entry to Supabase (persistent) and in-memory buffer (fast display)."""
+    entry = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "admin_id": admin_id,
         "action": action,
         "target_id": target_id,
         "detail": detail,
-    })
+    }
+    _audit_log.appendleft(entry)
+    admin_write_audit(
+        admin_id=admin_id,
+        action=action,
+        target_id=target_id,
+        detail=detail,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -255,12 +265,24 @@ async def trigger_cleanup(
     return {"ok": True, "deleted_chunks": deleted}
 
 
+@router.get("/audit-log")
+async def get_audit_log_endpoint(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    action: str = Query(""),
+    admin: User = Depends(get_admin_user),
+):
+    """Paginated admin audit log from Supabase."""
+    return admin_get_audit_log(page=page, page_size=page_size, action_filter=action)
+
+
 @router.get("/system")
 async def get_system(admin: User = Depends(get_admin_user)):
-    """System info: plan limits config, audit log."""
+    """System info: plan limits config + recent audit entries."""
+    recent = admin_get_audit_log(page=1, page_size=20)
     return {
         "plan_limits": PLAN_LIMITS,
-        "audit_log": list(_audit_log),
+        "audit_log": recent["logs"],
     }
 
 

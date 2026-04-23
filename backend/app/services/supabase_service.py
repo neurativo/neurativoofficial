@@ -1184,6 +1184,56 @@ def set_user_plan(user_id: str, plan_tier: str) -> None:
 #  ADMIN QUERIES
 # =============================================================================
 
+def admin_write_audit(
+    admin_id: str,
+    action: str,
+    target_id: str = "",
+    detail: str = "",
+) -> None:
+    """Persists an admin action to the audit_logs Supabase table. Non-fatal."""
+    if not supabase:
+        return
+    try:
+        from datetime import datetime, timezone
+        supabase.table("audit_logs").insert({
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "admin_id": admin_id,
+            "action": action,
+            "target_id": target_id,
+            "detail": detail,
+        }).execute()
+    except Exception as e:
+        print(f"[audit] write failed (non-fatal): {e}")
+
+
+def admin_get_audit_log(
+    page: int = 1,
+    page_size: int = 50,
+    action_filter: str = "",
+) -> dict:
+    """
+    Returns paginated audit log rows from Supabase.
+    Falls back to empty list if table not found.
+    """
+    if not supabase:
+        return {"logs": [], "total": 0}
+    try:
+        offset = (page - 1) * page_size
+        q = supabase.table("audit_logs").select("*", count="exact").order("timestamp", desc=True)
+        if action_filter:
+            q = q.eq("action", action_filter)
+        res = q.range(offset, offset + page_size - 1).execute()
+        return {
+            "logs": res.data or [],
+            "total": res.count or 0,
+            "page": page,
+            "page_size": page_size,
+        }
+    except Exception as e:
+        print(f"[audit] read failed: {e}")
+        return {"logs": [], "total": 0, "page": page, "page_size": page_size}
+
+
 def admin_get_stats() -> dict:
     """Platform-wide stats for the admin dashboard."""
     if not supabase:
