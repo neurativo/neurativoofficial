@@ -6,7 +6,8 @@ Security model:
   - The JWT subject must be present in the ADMIN_USER_IDS env-var list.
   - No shared secrets, no API keys — Clerk JWT is the sole auth mechanism.
 
-All destructive actions are recorded in an in-memory audit log (deque, maxlen=100).
+All destructive actions are recorded in the Supabase audit_logs table (persistent) and
+an in-memory deque (fast display buffer for the current process lifetime).
 """
 import collections
 from datetime import datetime, timezone
