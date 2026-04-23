@@ -5,6 +5,7 @@ import api from '../lib/api';
 import { useToast } from './Toast';
 import ExportModal from './ExportModal';
 import ImportModal from './ImportModal';
+import Footer from './Footer';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const C = {
@@ -739,6 +740,7 @@ export default function Dashboard({ user }) {
                     </div>
                 )}
             </div>
+            <Footer />
         </>
     );
 }

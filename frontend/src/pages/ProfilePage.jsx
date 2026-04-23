@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 import { useClerk } from '@clerk/react';
+import Footer from '../components/Footer';
 
 const PLAN_COLORS = { free: '#6b7280', student: '#7c3aed', pro: '#0ea5e9' };
 const PLAN_LABELS = { free: 'Free', student: 'Student', pro: 'Pro' };
@@ -689,6 +690,7 @@ export default function ProfilePage({ user }) {
                     </div>
                 )}
             </div>
+            <Footer />
         </>
     );
 }

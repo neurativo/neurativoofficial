@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useSEO } from '../lib/useSEO';
+import Footer from '../components/Footer';
 
 const CSS = `
   .legal *, .legal *::before, .legal *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -362,6 +363,7 @@ export default function TermsOfService() {
                     </div>
                 </div>
             </div>
+            <Footer />
         </>
     );
 }

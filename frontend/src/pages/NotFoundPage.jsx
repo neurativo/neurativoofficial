@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useSEO } from '../lib/useSEO';
+import Footer from '../components/Footer';
 
 const CSS = `
   .nf {
@@ -154,6 +155,7 @@ export default function NotFoundPage() {
                     <p className="nf-note">neurativo.com</p>
                 </div>
             </div>
+            <Footer />
         </>
     );
 }
