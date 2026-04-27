@@ -1180,9 +1180,87 @@ def set_user_plan(user_id: str, plan_tier: str) -> None:
         raise Exception(str(resp.error))
 
 
+def set_user_suspended(user_id: str, suspended: bool) -> None:
+    """Sets the is_suspended flag on a user in user_plans. Non-fatal on missing table."""
+    if not supabase:
+        raise Exception("Supabase not initialized")
+    from datetime import datetime, timezone
+    supabase.table("user_plans").upsert(
+        {
+            "user_id": user_id,
+            "is_suspended": suspended,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        },
+        on_conflict="user_id",
+    ).execute()
+
+
+def get_user_suspended(user_id: str) -> bool:
+    """Returns True if the user is suspended. Defaults to False if not found."""
+    if not supabase or not user_id:
+        return False
+    try:
+        resp = supabase.table("user_plans").select("is_suspended").eq("user_id", user_id).limit(1).execute()
+        if resp.data:
+            return bool(resp.data[0].get("is_suspended", False))
+    except Exception as e:
+        print(f"[suspension] get_user_suspended error (non-fatal): {e}")
+    return False
+
+
+def admin_get_suspended_map(user_ids: list) -> dict:
+    """Returns {user_id: is_suspended} for a list of user IDs. Defaults to False."""
+    if not supabase or not user_ids:
+        return {}
+    result = {}
+    try:
+        for i in range(0, len(user_ids), 100):
+            batch = user_ids[i:i + 100]
+            resp = supabase.table("user_plans").select("user_id, is_suspended").in_("user_id", batch).execute()
+            for row in (resp.data or []):
+                result[row["user_id"]] = bool(row.get("is_suspended", False))
+    except Exception as e:
+        print(f"[suspension] admin_get_suspended_map error (non-fatal): {e}")
+    return result
+
+
 # =============================================================================
 #  ADMIN QUERIES
 # =============================================================================
+
+def get_plan_limits_override() -> dict | None:
+    """
+    Reads plan limits override from admin_config table.
+    Returns the stored dict if present, or None if not set (use Python constants as fallback).
+    """
+    if not supabase:
+        return None
+    try:
+        resp = supabase.table("admin_config").select("value").eq("key", "plan_limits").limit(1).execute()
+        if resp.data:
+            return resp.data[0].get("value")
+    except Exception as e:
+        print(f"[admin_config] get_plan_limits_override error (non-fatal): {e}")
+    return None
+
+
+def set_plan_limits_override(limits: dict) -> None:
+    """
+    Stores the full plan_limits dict in admin_config table.
+    Overwrites any existing override.
+    """
+    if not supabase:
+        raise Exception("Supabase not initialized")
+    from datetime import datetime, timezone
+    supabase.table("admin_config").upsert(
+        {
+            "key": "plan_limits",
+            "value": limits,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        },
+        on_conflict="key",
+    ).execute()
+
 
 def admin_write_audit(
     admin_id: str,
@@ -1539,3 +1617,51 @@ def get_monthly_lecture_count(user_id: str) -> dict:
     """
     usage = get_monthly_usage(user_id)
     return {"count": usage["live_lectures"]}
+
+
+def get_announcements() -> list:
+    """
+    Returns all non-expired announcements sorted by created_at DESC.
+    Includes announcements with expires_at = null (permanent) and those not yet expired.
+    """
+    if not supabase:
+        return []
+    try:
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc).isoformat()
+        res = supabase.table("announcements").select("*").or_(
+            f"expires_at.is.null,expires_at.gte.{now}"
+        ).order("created_at", desc=True).execute()
+        return res.data or []
+    except Exception as e:
+        print(f"[announcements] get error (non-fatal): {e}")
+        return []
+
+
+def create_announcement(
+    text: str,
+    ann_type: str = "info",
+    expires_at: str | None = None,
+    created_by: str = "",
+) -> dict:
+    """Creates a new announcement row. Returns the inserted row."""
+    if not supabase:
+        raise Exception("Supabase not initialized")
+    payload = {
+        "text": text,
+        "ann_type": ann_type,
+        "created_by": created_by,
+    }
+    if expires_at:
+        payload["expires_at"] = expires_at
+    res = supabase.table("announcements").insert(payload).execute()
+    if res.data:
+        return res.data[0]
+    raise Exception("Insert returned no data")
+
+
+def delete_announcement(announcement_id: int) -> None:
+    """Permanently deletes an announcement by ID."""
+    if not supabase:
+        raise Exception("Supabase not initialized")
+    supabase.table("announcements").delete().eq("id", announcement_id).execute()

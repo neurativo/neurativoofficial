@@ -10,7 +10,7 @@ import numpy as np
 from openai import OpenAI
 
 from app.core.config import settings
-from app.core.auth import get_current_user
+from app.core.auth import get_current_user, get_active_user
 from app.core.plans import get_limits, is_unlimited
 from app.core.rate_limit import limiter
 from app.services.openai_service import transcribe_audio, transcribe_audio_bytes
@@ -78,6 +78,7 @@ from app.services.supabase_service import (
     get_visual_frames,
     get_visual_frames_in_window,
     set_summary_status,
+    get_announcements,
 )
 
 
@@ -255,7 +256,7 @@ def _get_lecture_lock(lecture_id: str) -> asyncio.Lock:
 
 @router.post("/explain/{lecture_id}")
 @limiter.limit("20/minute")
-def explain_text(request: Request, lecture_id: str, body: ExplainRequest, user=Depends(get_current_user)):
+def explain_text(request: Request, lecture_id: str, body: ExplainRequest, user=Depends(get_active_user)):
     _check_owner(lecture_id, user.id)
     topic = get_lecture_topic(lecture_id)
     try:
@@ -388,7 +389,7 @@ async def transcribe(
     request: Request,
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    user=Depends(get_current_user),
+    user=Depends(get_active_user),
 ):
     # Extension check
     if not file.filename.lower().endswith(_ALLOWED_AUDIO_EXTENSIONS):
@@ -462,7 +463,7 @@ async def transcribe(
 
 
 @router.get("/summarize/{lecture_id}")
-def summarize(lecture_id: str, user=Depends(get_current_user)):
+def summarize(lecture_id: str, user=Depends(get_active_user)):
     _check_owner(lecture_id, user.id)
     lecture = get_lecture_for_summarization(lecture_id)
     if not lecture:
@@ -475,7 +476,7 @@ def summarize(lecture_id: str, user=Depends(get_current_user)):
 
 @router.post("/live/start")
 @limiter.limit("10/minute")
-def start_live_session(request: Request, user=Depends(get_current_user)):
+def start_live_session(request: Request, user=Depends(get_active_user)):
     try:
         profile = get_user_profile(str(user.id))
         plan_tier = profile.get("plan_tier") or "free"
@@ -740,7 +741,7 @@ async def process_live_chunk(
     lecture_id: str,
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    user=Depends(get_current_user),
+    user=Depends(get_active_user),
 ):
     """
     Hot path — returns after transcription + transcript append.
@@ -895,7 +896,7 @@ async def process_visual_frame(
     request: Request,
     lecture_id: str,
     body: FrameRequest,
-    user=Depends(get_current_user),
+    user=Depends(get_active_user),
 ):
     """
     Processes a screen capture frame for visual content.
@@ -1050,7 +1051,7 @@ async def stream_summary(lecture_id: str, token: str = Query(None)):
 
 
 @router.post("/live/{lecture_id}/end")
-def end_session_endpoint(lecture_id: str, background_tasks: BackgroundTasks, user=Depends(get_current_user)):
+def end_session_endpoint(lecture_id: str, background_tasks: BackgroundTasks, user=Depends(get_active_user)):
     """
     Ends the live session and forces a final summary pass so the session
     always ends with a complete, up-to-date master summary.
@@ -1107,7 +1108,7 @@ def end_session_endpoint(lecture_id: str, background_tasks: BackgroundTasks, use
 
 
 @router.get("/lectures/{lecture_id}/analytics")
-def get_analytics(lecture_id: str, user=Depends(get_current_user)):
+def get_analytics(lecture_id: str, user=Depends(get_active_user)):
     _check_owner(lecture_id, user.id)
     try:
         data = get_lecture_for_summarization(lecture_id)
@@ -1134,7 +1135,7 @@ def get_analytics(lecture_id: str, user=Depends(get_current_user)):
 
 @router.get("/lectures/{lecture_id}/export/pdf")
 @limiter.limit("3/minute")
-async def export_pdf(request: Request, lecture_id: str, user=Depends(get_current_user)):
+async def export_pdf(request: Request, lecture_id: str, user=Depends(get_active_user)):
     _check_owner(lecture_id, user.id)
     try:
         pdf_bytes = await generate_lecture_pdf(lecture_id)
@@ -1155,7 +1156,7 @@ def get_lectures(
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     q: str = Query(None, max_length=200),
-    user=Depends(get_current_user),
+    user=Depends(get_active_user),
 ):
     """
     Returns lectures for the authenticated user sorted by created_at DESC.
@@ -1168,7 +1169,7 @@ def get_lectures(
 
 
 @router.get("/lectures/{lecture_id}")
-def get_lecture_details(lecture_id: str, user=Depends(get_current_user)):
+def get_lecture_details(lecture_id: str, user=Depends(get_active_user)):
     _check_owner(lecture_id, user.id)
     lecture = get_lecture_for_summarization(lecture_id)
     if not lecture:
@@ -1178,7 +1179,7 @@ def get_lecture_details(lecture_id: str, user=Depends(get_current_user)):
 
 @router.post("/ask/{lecture_id}")
 @limiter.limit("20/minute")
-def ask_question_auth(request: Request, lecture_id: str, body: QuestionRequest, user=Depends(get_current_user)):
+def ask_question_auth(request: Request, lecture_id: str, body: QuestionRequest, user=Depends(get_active_user)):
     _check_owner(lecture_id, user.id)
     try:
         answer = answer_lecture_question(lecture_id, body.question)
@@ -1188,7 +1189,7 @@ def ask_question_auth(request: Request, lecture_id: str, body: QuestionRequest, 
 
 
 @router.get("/lectures/{lecture_id}/full")
-def get_lecture_full_endpoint(lecture_id: str, user=Depends(get_current_user)):
+def get_lecture_full_endpoint(lecture_id: str, user=Depends(get_active_user)):
     """Returns the complete lecture data including transcript, summary, and share state."""
     _check_owner(lecture_id, user.id)
     lecture = get_lecture_full(lecture_id)
@@ -1198,7 +1199,7 @@ def get_lecture_full_endpoint(lecture_id: str, user=Depends(get_current_user)):
 
 
 @router.get("/lectures/{lecture_id}/visual-frames")
-def get_lecture_visual_frames(lecture_id: str, user=Depends(get_current_user)):
+def get_lecture_visual_frames(lecture_id: str, user=Depends(get_active_user)):
     """Returns all visual frames captured during a lecture, in chronological order."""
     _check_owner(lecture_id, user.id)
     try:
@@ -1211,7 +1212,7 @@ def get_lecture_visual_frames(lecture_id: str, user=Depends(get_current_user)):
 
 @router.post("/lectures/{lecture_id}/share")
 @limiter.limit("20/minute")
-def share_lecture(request: Request, lecture_id: str, body: ShareRequest = None, user=Depends(get_current_user)):
+def share_lecture(request: Request, lecture_id: str, body: ShareRequest = None, user=Depends(get_active_user)):
     """Generates (or returns existing) share token with optional mode and expiry."""
     _check_owner(lecture_id, user.id)
     mode = body.mode if body else "full"
@@ -1224,7 +1225,7 @@ def share_lecture(request: Request, lecture_id: str, body: ShareRequest = None, 
 
 
 @router.post("/lectures/{lecture_id}/unshare")
-def unshare_lecture(lecture_id: str, user=Depends(get_current_user)):
+def unshare_lecture(lecture_id: str, user=Depends(get_active_user)):
     """Removes the share token, making the lecture private."""
     _check_owner(lecture_id, user.id)
     try:
@@ -1252,7 +1253,7 @@ def get_shared_lecture(request: Request, token: str):
 
 @router.delete("/lectures/{lecture_id}")
 @limiter.limit("10/minute")
-def delete_lecture_endpoint(request: Request, lecture_id: str, user=Depends(get_current_user)):
+def delete_lecture_endpoint(request: Request, lecture_id: str, user=Depends(get_active_user)):
     """Permanently deletes a lecture and all associated data."""
     _check_owner(lecture_id, user.id)
     try:
@@ -1267,7 +1268,7 @@ class TitleUpdateRequest(BaseModel):
 
 
 @router.patch("/lectures/{lecture_id}/title")
-def update_lecture_title_endpoint(lecture_id: str, request: TitleUpdateRequest, user=Depends(get_current_user)):
+def update_lecture_title_endpoint(lecture_id: str, request: TitleUpdateRequest, user=Depends(get_active_user)):
     """Updates a lecture's title."""
     _check_owner(lecture_id, user.id)
     title = request.title.strip()
@@ -1291,7 +1292,7 @@ class ProfileUpdateRequest(BaseModel):
 
 
 @router.get("/profile")
-def get_profile(user=Depends(get_current_user)):
+def get_profile(user=Depends(get_active_user)):
     """Returns the authenticated user's profile."""
     try:
         profile = get_user_profile(str(user.id))
@@ -1303,7 +1304,7 @@ def get_profile(user=Depends(get_current_user)):
 
 @router.patch("/profile")
 @limiter.limit("20/minute")
-def patch_profile(request: Request, body: ProfileUpdateRequest, user=Depends(get_current_user)):
+def patch_profile(request: Request, body: ProfileUpdateRequest, user=Depends(get_active_user)):
     """Updates the authenticated user's profile fields."""
     data = body.model_dump(exclude_none=True)
     if not data:
@@ -1317,7 +1318,7 @@ def patch_profile(request: Request, body: ProfileUpdateRequest, user=Depends(get
 
 @router.delete("/profile")
 @limiter.limit("3/hour")
-def delete_profile(request: Request, user=Depends(get_current_user)):
+def delete_profile(request: Request, user=Depends(get_active_user)):
     """Deletes the authenticated user's account and all associated data."""
     try:
         delete_user_account(str(user.id))
@@ -1327,7 +1328,7 @@ def delete_profile(request: Request, user=Depends(get_current_user)):
 
 
 @router.get("/usage")
-def get_usage(user=Depends(get_current_user)):
+def get_usage(user=Depends(get_active_user)):
     """Returns comprehensive usage stats for the current month."""
     # Ensure a profile row exists so every signed-up user appears in admin
     ensure_user_profile(str(user.id), getattr(user, "email", "") or "")
@@ -1383,4 +1384,13 @@ def get_usage(user=Depends(get_current_user)):
         }
     except Exception:
         raise HTTPException(status_code=500, detail="Failed to fetch usage")
+
+
+@router.get("/announcements")
+def get_active_announcements(user=Depends(get_active_user)):
+    """Returns active (non-expired) announcements for the authenticated user."""
+    try:
+        return {"announcements": get_announcements()}
+    except Exception:
+        return {"announcements": []}
 

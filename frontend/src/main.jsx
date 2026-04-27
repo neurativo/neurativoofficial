@@ -21,6 +21,8 @@ import AdminLectureDetail from './pages/admin/AdminLectureDetail.jsx';
 import AdminSessions from './pages/admin/AdminSessions.jsx';
 import AdminSystem from './pages/admin/AdminSystem.jsx';
 import AdminCosts from './pages/admin/AdminCosts.jsx';
+import AdminAnalytics from './pages/admin/AdminAnalytics.jsx';
+import AdminAnnouncements from './pages/admin/AdminAnnouncements.jsx';
 import { ToastProvider } from './components/Toast.jsx';
 import './index.css';
 
@@ -79,6 +81,8 @@ function Root() {
                 <Route path="lectures/:lectureId" element={<AdminLectureDetail />} />
                 <Route path="costs" element={<AdminCosts />} />
                 <Route path="sessions" element={<AdminSessions />} />
+                <Route path="analytics" element={<AdminAnalytics />} />
+                <Route path="announcements" element={<AdminAnnouncements />} />
                 <Route path="system" element={<AdminSystem />} />
             </Route>
 

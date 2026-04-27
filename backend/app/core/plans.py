@@ -86,6 +86,20 @@ FEATURE_FLAGS = [
 
 
 def get_limits(plan_tier: str) -> dict:
+    """
+    Returns limits for a plan tier. Checks Supabase admin_config override first,
+    falls back to Python constants if no override is set or Supabase is unavailable.
+    """
+    try:
+        from app.services.supabase_service import get_plan_limits_override
+        override = get_plan_limits_override()
+        if override and plan_tier in override:
+            # Merge override with base constants so any missing keys use defaults
+            base = dict(PLAN_LIMITS.get(plan_tier, PLAN_LIMITS["free"]))
+            base.update(override[plan_tier])
+            return base
+    except Exception:
+        pass
     return PLAN_LIMITS.get(plan_tier, PLAN_LIMITS["free"])
 
 

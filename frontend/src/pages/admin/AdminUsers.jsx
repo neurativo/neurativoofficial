@@ -45,6 +45,7 @@ const CSS = `
 .adm-total { color: #888; font-size: 12px; }
 .adm-row-link { cursor: pointer; }
 .adm-empty { text-align: center; padding: 32px; color: #444; }
+.adm-suspended-badge { display: inline-block; padding: 1px 7px; border-radius: 99px; font-size: 10px; font-weight: 600; background: #78350f22; color: #fbbf24; border: 1px solid #78350f55; margin-left: 6px; }
 `;
 
 function PlanPill({ tier }) {
@@ -158,7 +159,10 @@ export default function AdminUsers() {
                                               </div>
                                         }
                                         <div>
-                                            <div style={{ fontSize: 13, color: '#c8c8c8' }}>{u.display_name || <span style={{ color: '#444' }}>No name</span>}</div>
+                                            <div style={{ fontSize: 13, color: '#c8c8c8' }}>
+                                                {u.display_name || <span style={{ color: '#444' }}>No name</span>}
+                                                {u.is_suspended && <span className="adm-suspended-badge">SUSPENDED</span>}
+                                            </div>
                                             <div style={{ fontSize: 11, color: '#555' }}>{u.email || u.id.slice(0, 18) + '…'}</div>
                                         </div>
                                     </div>

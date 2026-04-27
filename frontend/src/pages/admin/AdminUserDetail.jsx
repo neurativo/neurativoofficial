@@ -29,6 +29,9 @@ const CSS = `
 .adm-danger-title { font-size: 11px; font-weight: 600; color: #f87171; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px; }
 .adm-btn-danger { background: #7f1d1d22; border: 1px solid #7f1d1d55; color: #f87171; padding: 8px 16px; border-radius: 7px; font-size: 13px; cursor: pointer; }
 .adm-btn-danger:hover { background: #7f1d1d44; }
+.adm-suspended-badge { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: 11px; font-weight: 600; background: #78350f22; color: #fbbf24; border: 1px solid #78350f55; margin-left: 8px; }
+.adm-btn-warn { background: #78350f22; border: 1px solid #78350f55; color: #fbbf24; padding: 8px 16px; border-radius: 7px; font-size: 13px; cursor: pointer; }
+.adm-btn-warn:hover { background: #78350f44; }
 .adm-table-wrap { background: #141414; border: 1px solid #1e1e1e; border-radius: 10px; overflow: hidden; }
 .adm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .adm-table th { text-align: left; padding: 10px 16px; font-size: 11px; font-weight: 600; color: #555; border-bottom: 1px solid #1e1e1e; background: #0f0f0f; text-transform: uppercase; letter-spacing: 0.06em; }
@@ -70,6 +73,7 @@ export default function AdminUserDetail() {
     const [toast, setToast] = useState('');
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [deletingUser, setDeletingUser] = useState(false);
+    const [suspending, setSuspending] = useState(false);
 
     useEffect(() => {
         adminApi.getUser(userId)
@@ -104,6 +108,25 @@ export default function AdminUserDetail() {
         } catch {
             showToast('Failed to delete user');
             setDeletingUser(false);
+        }
+    }
+
+    async function handleSuspend() {
+        if (!detail) return;
+        const isSuspended = detail.profile?.is_suspended;
+        setSuspending(true);
+        try {
+            if (isSuspended) {
+                await adminApi.unsuspendUser(userId);
+            } else {
+                await adminApi.suspendUser(userId);
+            }
+            const fresh = await adminApi.getUser(userId);
+            setDetail(fresh);
+        } catch {
+            showToast('Suspension action failed');
+        } finally {
+            setSuspending(false);
         }
     }
 
@@ -146,7 +169,10 @@ export default function AdminUserDetail() {
                             </div>
                             <div className="adm-field">
                                 <div className="adm-field-label">Current Plan</div>
-                                <div style={{ marginTop: 4 }}><PlanPill tier={profile.plan_tier} /></div>
+                                <div style={{ marginTop: 4 }}>
+                                    <PlanPill tier={profile.plan_tier} />
+                                    {profile.is_suspended && <span className="adm-suspended-badge">SUSPENDED</span>}
+                                </div>
                             </div>
                             {profile.email && (
                                 <div className="adm-field">
@@ -187,6 +213,18 @@ export default function AdminUserDetail() {
 
                             <div className="adm-danger-zone">
                                 <div className="adm-danger-title">Danger Zone</div>
+                                <button
+                                    className="adm-btn-warn"
+                                    onClick={handleSuspend}
+                                    disabled={suspending}
+                                    style={{ marginBottom: 10, display: 'block' }}
+                                >
+                                    {suspending
+                                        ? '…'
+                                        : profile.is_suspended
+                                            ? 'Unsuspend User'
+                                            : 'Suspend User'}
+                                </button>
                                 <button className="adm-btn-danger" onClick={() => setShowDeleteModal(true)}>
                                     Delete User & All Data
                                 </button>

@@ -17,6 +17,14 @@ const CSS = `
 .adm-limits-list li { display: flex; justify-content: space-between; font-size: 12px; color: #888; padding: 5px 0; border-bottom: 1px solid #0d0d0d; }
 .adm-limits-list li:last-child { border-bottom: none; }
 .adm-limits-list .val { color: #c8c8c8; }
+.adm-limit-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #0d0d0d; }
+.adm-limit-row:last-child { border-bottom: none; }
+.adm-limit-label { font-size: 12px; color: #888; }
+.adm-limit-input { width: 90px; padding: 4px 8px; background: #0f0f0f; border: 1px solid #2a2a2a; border-radius: 5px; color: #e8e8e8; font-size: 12px; text-align: right; outline: none; }
+.adm-limit-input:focus { border-color: #7c3aed; }
+.adm-limit-checkbox { width: 16px; height: 16px; cursor: pointer; accent-color: #7c3aed; }
+.adm-card-footer { display: flex; justify-content: flex-end; margin-top: 14px; gap: 8px; align-items: center; }
+.adm-save-result { font-size: 11px; color: #34d399; }
 .adm-cleanup-row { display: flex; gap: 10px; align-items: center; }
 .adm-input { padding: 8px 12px; background: #0f0f0f; border: 1px solid #2a2a2a; border-radius: 7px; color: #e8e8e8; font-size: 13px; outline: none; width: 80px; }
 .adm-btn-primary { background: #7c3aed; color: #fff; padding: 8px 16px; border-radius: 7px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; }
@@ -64,6 +72,9 @@ const ACTION_OPTIONS = ['', 'delete_user', 'delete_lecture', 'update_plan', 'cle
 
 export default function AdminSystem() {
     const [system, setSystem] = useState(null);
+    const [editedLimits, setEditedLimits] = useState({});
+    const [saving, setSaving] = useState({});
+    const [saveResult, setSaveResult] = useState({});
     const [cleanupDays, setCleanupDays] = useState(0);
     const [cleaning, setCleaning] = useState(false);
     const [cleanResult, setCleanResult] = useState('');
@@ -106,6 +117,46 @@ export default function AdminSystem() {
     const plans = system?.plan_limits || {};
     const totalPages = Math.ceil(auditTotal / PAGE_SIZE);
 
+    const NUMERIC_LIMIT_KEYS = [
+        { key: 'live_lectures_per_month',     label: 'Live lectures / month' },
+        { key: 'live_max_duration_seconds',   label: 'Max live duration (sec)' },
+        { key: 'uploads_per_month',           label: 'Uploads / month' },
+        { key: 'upload_max_duration_seconds', label: 'Max upload duration (sec)' },
+        { key: 'upload_max_bytes',            label: 'Max upload bytes' },
+        { key: 'total_minutes_per_month',     label: 'Total minutes / month' },
+    ];
+    const FEATURE_FLAG_KEYS = [
+        'pdf_export', 'qa_enabled', 'sharing', 'multilingual',
+        'visual_capture', 'flashcards', 'action_items',
+        'speaker_diarization', 'lecture_comparison', 'bulk_export',
+        'api_access', 'global_search', 'spaced_repetition', 'priority_processing',
+    ];
+
+    function getLimitEdit(tier, key, fallback) {
+        return editedLimits[tier]?.[key] !== undefined ? editedLimits[tier][key] : fallback;
+    }
+    function setLimitEdit(tier, key, val) {
+        setEditedLimits(prev => ({ ...prev, [tier]: { ...(prev[tier] || {}), [key]: val } }));
+    }
+    async function saveLimits(tier) {
+        const changes = editedLimits[tier];
+        if (!changes || !Object.keys(changes).length) return;
+        setSaving(prev => ({ ...prev, [tier]: true }));
+        setSaveResult(prev => ({ ...prev, [tier]: '' }));
+        try {
+            await adminApi.updatePlanLimits(tier, changes);
+            setSaveResult(prev => ({ ...prev, [tier]: '✓ Saved' }));
+            const fresh = await adminApi.getSystem();
+            setSystem(fresh);
+            setEditedLimits(prev => ({ ...prev, [tier]: {} }));
+        } catch {
+            setSaveResult(prev => ({ ...prev, [tier]: '✗ Failed' }));
+        } finally {
+            setSaving(prev => ({ ...prev, [tier]: false }));
+            setTimeout(() => setSaveResult(prev => ({ ...prev, [tier]: '' })), 3000);
+        }
+    }
+
     return (
         <div>
             <style>{CSS}</style>
@@ -118,13 +169,55 @@ export default function AdminSystem() {
                             <span className={`adm-plan-pill adm-plan-${tier}`}>{tier}</span>
                             {' '}Plan Limits
                         </div>
-                        <ul className="adm-limits-list">
-                            <li><span>Live lectures / month</span><span className="val">{fmtLimit(limits.live_lectures_per_month)}</span></li>
-                            <li><span>Max live duration</span><span className="val">{fmtLimit(limits.live_max_duration_seconds)}</span></li>
-                            <li><span>Audio uploads / month</span><span className="val">{fmtLimit(limits.uploads_per_month)}</span></li>
-                            <li><span>Max upload duration</span><span className="val">{fmtLimit(limits.upload_max_duration_seconds)}</span></li>
-                            <li><span>Max upload size</span><span className="val">{fmtLimit(limits.upload_max_bytes)}</span></li>
-                        </ul>
+
+                        {NUMERIC_LIMIT_KEYS.map(({ key, label }) => {
+                            const raw = getLimitEdit(tier, key, limits[key]);
+                            return (
+                                <div className="adm-limit-row" key={key}>
+                                    <span className="adm-limit-label">{label}</span>
+                                    <input
+                                        className="adm-limit-input"
+                                        type="number"
+                                        min="0"
+                                        placeholder="∞"
+                                        value={raw === null || raw === undefined ? '' : raw}
+                                        onChange={e => {
+                                            const v = e.target.value === '' ? null : Number(e.target.value);
+                                            setLimitEdit(tier, key, v);
+                                        }}
+                                    />
+                                </div>
+                            );
+                        })}
+
+                        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #111' }}>
+                            <div style={{ fontSize: 11, color: '#444', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Feature flags</div>
+                            {FEATURE_FLAG_KEYS.map(key => {
+                                const val = getLimitEdit(tier, key, limits[key]);
+                                return (
+                                    <div className="adm-limit-row" key={key}>
+                                        <span className="adm-limit-label">{key.replace(/_/g, ' ')}</span>
+                                        <input
+                                            className="adm-limit-checkbox"
+                                            type="checkbox"
+                                            checked={!!val}
+                                            onChange={e => setLimitEdit(tier, key, e.target.checked)}
+                                        />
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        <div className="adm-card-footer">
+                            {saveResult[tier] && <span className="adm-save-result">{saveResult[tier]}</span>}
+                            <button
+                                className="adm-btn-primary"
+                                onClick={() => saveLimits(tier)}
+                                disabled={saving[tier] || !editedLimits[tier] || !Object.keys(editedLimits[tier] || {}).length}
+                            >
+                                {saving[tier] ? 'Saving…' : 'Save'}
+                            </button>
+                        </div>
                     </div>
                 ))}
             </div>

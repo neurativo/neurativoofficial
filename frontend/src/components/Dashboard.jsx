@@ -48,6 +48,14 @@ const CSS = `
   .db-page-title { font-size: 22px; font-weight: 600; color: ${C.text}; letter-spacing: -0.5px; margin: 0 0 2px; }
   .db-page-sub { font-size: 13px; color: ${C.muted}; margin: 0 0 24px; }
 
+  /* Announcements */
+  .db-announcement { display: flex; align-items: flex-start; gap: 10px; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 13px; line-height: 1.5; }
+  .db-announcement-info { background: #0369a115; border: 1px solid #0369a133; color: #7dd3fc; }
+  .db-announcement-warning { background: #78350f15; border: 1px solid #78350f33; color: #fcd34d; }
+  .db-announcement-maintenance { background: #7f1d1d15; border: 1px solid #7f1d1d33; color: #fca5a5; }
+  .db-announcement-dismiss { margin-left: auto; cursor: pointer; background: none; border: none; color: inherit; opacity: 0.6; font-size: 16px; padding: 0 4px; line-height: 1; flex-shrink: 0; }
+  .db-announcement-dismiss:hover { opacity: 1; }
+
   /* Search */
   .db-search-wrap { position: relative; margin-bottom: 10px; }
   .db-search-icon { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: ${C.muted}; pointer-events: none; }
@@ -411,6 +419,10 @@ export default function Dashboard({ user }) {
     const searchTimerRef = useRef(null);
     const [searchResults, setSearchResults] = useState(null);
     const [searchLoading, setSearchLoading] = useState(false);
+    const [announcements, setAnnouncements] = useState([]);
+    const [dismissedIds, setDismissedIds] = useState(() => {
+        try { return JSON.parse(sessionStorage.getItem('dismissed_ann') || '[]'); } catch { return []; }
+    });
 
     const handleSignOut = async () => {
         await signOut();
@@ -420,6 +432,18 @@ export default function Dashboard({ user }) {
     useEffect(() => {
         api.get('/api/v1/usage').then(res => setUsage(res.data)).catch(() => {});
     }, []);
+
+    useEffect(() => {
+        api.get('/api/v1/announcements')
+            .then(r => setAnnouncements(Array.isArray(r.data?.announcements) ? r.data.announcements : []))
+            .catch(() => {});
+    }, []);
+
+    function dismissAnnouncement(id) {
+        const next = [...dismissedIds, id];
+        setDismissedIds(next);
+        try { sessionStorage.setItem('dismissed_ann', JSON.stringify(next)); } catch {}
+    }
 
     useEffect(() => {
         api.get('/api/v1/lectures?limit=50')
@@ -592,6 +616,15 @@ export default function Dashboard({ user }) {
                 )}
 
                 <main className="db-main">
+                    {announcements
+                        .filter(a => !dismissedIds.includes(a.id))
+                        .map(a => (
+                            <div key={a.id} className={`db-announcement db-announcement-${a.ann_type || 'info'}`}>
+                                <span>{a.text}</span>
+                                <button className="db-announcement-dismiss" onClick={() => dismissAnnouncement(a.id)} aria-label="Dismiss">×</button>
+                            </div>
+                        ))
+                    }
                     <h1 className="db-page-title">Your lectures</h1>
                     <p className="db-page-sub">{loading ? '' : `${lectures.length} ${lectureWord}`}</p>
 

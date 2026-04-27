@@ -45,6 +45,8 @@ export const adminApi = {
     getUser:         (userId)                  => _get(`/users/${userId}`),
     updateUserPlan:  (userId, plan_tier)       => _patch(`/users/${userId}/plan`, { plan_tier }),
     deleteUser:      (userId)                  => _delete(`/users/${userId}`),
+    suspendUser:     (userId)                  => _patch(`/users/${userId}/suspend`),
+    unsuspendUser:   (userId)                  => _patch(`/users/${userId}/unsuspend`),
     listSessions:    (p = {})                  => _get('/sessions', p),
     listLectures:    (p = {})                  => _get('/lectures', p),
     getLecture:      (lectureId)               => _get(`/lectures/${lectureId}`),
@@ -52,6 +54,15 @@ export const adminApi = {
     triggerCleanup:  (days = 30)               => _post('/system/cleanup', { days }),
     getSystem:       ()                        => _get('/system'),
     getAuditLog:     (p = {})                  => _get('/audit-log', p),
+    updatePlanLimits: (tier, limits)           => _patch('/system/limits', { tier, limits }),
+    getAnalytics:    (p = {})                  => _get('/analytics', p),
     getCosts:        (p = {})                  => _get('/costs', p),
     getCostsSummary: (p = {})                  => _get('/costs/summary', p),
+    listAnnouncements:   ()                    => _get('/announcements'),
+    createAnnouncement: async (body) => {
+        const token = await _token();
+        const res = await axios.post(BASE + '/announcements', body, { headers: _headers(token) });
+        return res.data;
+    },
+    deleteAnnouncement:  (id)                  => _delete(`/announcements/${id}`),
 };

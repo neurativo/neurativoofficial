@@ -83,6 +83,22 @@ async def get_current_user(authorization: str = Header(None)) -> User:
         raise HTTPException(status_code=401, detail="Authentication failed")
 
 
+async def get_active_user(authorization: str = Header(None)) -> User:
+    """
+    FastAPI dependency — validates Clerk JWT and checks that the user is not suspended.
+    Raises 401 if not authenticated, 403 if suspended.
+    """
+    user = await get_current_user(authorization)
+    # Import here to avoid circular imports at module load time
+    from app.services.supabase_service import get_user_suspended
+    if get_user_suspended(user.id):
+        raise HTTPException(
+            status_code=403,
+            detail="Account suspended. Contact support at support@neurativo.com.",
+        )
+    return user
+
+
 async def get_admin_user(authorization: str = Header(None)) -> User:
     """
     FastAPI dependency — verifies the Clerk Bearer token AND checks that
