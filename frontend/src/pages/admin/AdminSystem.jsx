@@ -1,56 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { adminApi } from '../../lib/adminApi.js';
 
-const CSS = `
-.adm-page-title { font-size: 22px; font-weight: 700; color: #fff; margin-bottom: 24px; }
-.adm-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 28px; }
-.adm-card { background: #141414; border: 1px solid #1e1e1e; border-radius: 10px; padding: 20px; }
-.adm-card-title { font-size: 11px; font-weight: 600; color: #555; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 16px; }
-.adm-plan-row { display: flex; justify-content: space-between; align-items: baseline; padding: 10px 0; border-bottom: 1px solid #111; }
-.adm-plan-row:last-child { border-bottom: none; }
-.adm-plan-name { font-size: 13px; font-weight: 600; color: #e8e8e8; }
-.adm-plan-pill { display: inline-block; padding: 2px 9px; border-radius: 99px; font-size: 11px; font-weight: 600; }
-.adm-plan-free { background: #ffffff0f; color: #888; }
-.adm-plan-student { background: #7c3aed22; color: #a78bfa; border: 1px solid #7c3aed44; }
-.adm-plan-pro { background: #0369a122; color: #38bdf8; border: 1px solid #0369a144; }
-.adm-limits-list { margin: 0; padding: 0; list-style: none; }
-.adm-limits-list li { display: flex; justify-content: space-between; font-size: 12px; color: #888; padding: 5px 0; border-bottom: 1px solid #0d0d0d; }
-.adm-limits-list li:last-child { border-bottom: none; }
-.adm-limits-list .val { color: #c8c8c8; }
-.adm-limit-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #0d0d0d; }
-.adm-limit-row:last-child { border-bottom: none; }
-.adm-limit-label { font-size: 12px; color: #888; }
-.adm-limit-input { width: 90px; padding: 4px 8px; background: #0f0f0f; border: 1px solid #2a2a2a; border-radius: 5px; color: #e8e8e8; font-size: 12px; text-align: right; outline: none; }
-.adm-limit-input:focus { border-color: #7c3aed; }
-.adm-limit-checkbox { width: 16px; height: 16px; cursor: pointer; accent-color: #7c3aed; }
-.adm-card-footer { display: flex; justify-content: flex-end; margin-top: 14px; gap: 8px; align-items: center; }
-.adm-save-result { font-size: 11px; color: #34d399; }
-.adm-cleanup-row { display: flex; gap: 10px; align-items: center; }
-.adm-input { padding: 8px 12px; background: #0f0f0f; border: 1px solid #2a2a2a; border-radius: 7px; color: #e8e8e8; font-size: 13px; outline: none; width: 80px; }
-.adm-btn-primary { background: #7c3aed; color: #fff; padding: 8px 16px; border-radius: 7px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; }
-.adm-btn-primary:hover { background: #6d28d9; }
-.adm-btn-primary:disabled { opacity: 0.5; cursor: default; }
-.adm-btn-ghost { background: transparent; border: 1px solid #2a2a2a; color: #888; padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; }
-.adm-btn-ghost:hover:not(:disabled) { border-color: #555; color: #e8e8e8; }
-.adm-btn-ghost:disabled { opacity: 0.3; cursor: default; }
-.adm-result { font-size: 12px; color: #888; }
-.adm-section-title { font-size: 11px; font-weight: 600; color: #555; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px; margin-top: 28px; }
-.adm-audit-wrap { background: #141414; border: 1px solid #1e1e1e; border-radius: 10px; overflow: hidden; }
-.adm-audit-toolbar { display: flex; gap: 10px; align-items: center; padding: 12px 16px; border-bottom: 1px solid #1e1e1e; background: #0f0f0f; }
-.adm-audit-select { padding: 6px 10px; background: #141414; border: 1px solid #2a2a2a; border-radius: 6px; color: #e8e8e8; font-size: 12px; cursor: pointer; }
-.adm-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.adm-table th { text-align: left; padding: 10px 16px; font-size: 11px; font-weight: 600; color: #555; border-bottom: 1px solid #1e1e1e; background: #0f0f0f; text-transform: uppercase; letter-spacing: 0.06em; }
-.adm-table td { padding: 10px 16px; border-bottom: 1px solid #111; color: #888; vertical-align: middle; }
-.adm-table tr:last-child td { border-bottom: none; }
-.adm-empty { text-align: center; padding: 24px; color: #444; }
-.adm-action-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; background: #1e1e1e; color: #888; }
-.adm-action-delete { background: #7f1d1d22; color: #f87171; }
-.adm-action-update { background: #7c3aed22; color: #a78bfa; }
-.adm-action-cleanup { background: #065f4622; color: #34d399; }
-.adm-action-suspend { background: #78350f22; color: #fbbf24; }
-.adm-pagination { display: flex; align-items: center; gap: 10px; padding: 12px 16px; font-size: 12px; color: #555; border-top: 1px solid #1e1e1e; }
-@media (max-width: 800px) { .adm-two-col { grid-template-columns: 1fr; } }
-`;
 
 function fmtLimit(v) {
     if (v === null || v === undefined) return '∞';
@@ -159,10 +109,9 @@ export default function AdminSystem() {
 
     return (
         <div>
-            <style>{CSS}</style>
             <div className="adm-page-title">System</div>
 
-            <div className="adm-two-col">
+            <div className="adm-two-col" style={{ marginBottom: 28 }}>
                 {Object.entries(plans).map(([tier, limits]) => (
                     <div className="adm-card" key={tier}>
                         <div className="adm-card-title">
@@ -190,8 +139,8 @@ export default function AdminSystem() {
                             );
                         })}
 
-                        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #111' }}>
-                            <div style={{ fontSize: 11, color: '#444', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Feature flags</div>
+                        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #f0ede8' }}>
+                            <div style={{ fontSize: 11, color: '#a3a3a3', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>Feature flags</div>
                             {FEATURE_FLAG_KEYS.map(key => {
                                 const val = getLimitEdit(tier, key, limits[key]);
                                 return (
@@ -224,16 +173,16 @@ export default function AdminSystem() {
 
             <div className="adm-card" style={{ marginBottom: 28 }}>
                 <div className="adm-card-title">Storage Cleanup</div>
-                <p style={{ fontSize: 13, color: '#666', marginBottom: 14 }}>
+                <p style={{ fontSize: 13, color: '#6b6b6b', marginBottom: 14, lineHeight: 1.6 }}>
                     Deletes raw <code style={{ fontFamily: 'monospace', fontSize: 12 }}>lecture_chunks</code> for
                     lectures that have a completed summary — chunks are never used again after summarisation finishes.
                     Set min age to 0 to clean all completed lectures, or enter a number to skip lectures newer than N days.
                 </p>
                 <div className="adm-cleanup-row">
-                    <span style={{ fontSize: 13, color: '#666' }}>Min age</span>
+                    <span style={{ fontSize: 13, color: '#6b6b6b' }}>Min age</span>
                     <input className="adm-input" type="number" min="0" max="365"
                         value={cleanupDays} onChange={e => setCleanupDays(Number(e.target.value))} />
-                    <span style={{ fontSize: 13, color: '#666' }}>days</span>
+                    <span style={{ fontSize: 13, color: '#6b6b6b' }}>days</span>
                     <button className="adm-btn-primary" onClick={runCleanup} disabled={cleaning}>
                         {cleaning ? 'Cleaning…' : 'Run Cleanup'}
                     </button>
@@ -242,11 +191,11 @@ export default function AdminSystem() {
             </div>
 
             <div className="adm-section-title">
-                Audit Log {auditTotal > 0 && <span style={{ color: '#444', fontWeight: 400 }}>— {auditTotal} entries</span>}
+                Audit Log {auditTotal > 0 && <span style={{ color: '#a3a3a3', fontWeight: 400 }}>— {auditTotal} entries</span>}
             </div>
             <div className="adm-audit-wrap">
                 <div className="adm-audit-toolbar">
-                    <span style={{ fontSize: 12, color: '#555' }}>Filter by action:</span>
+                    <span style={{ fontSize: 12, color: '#a3a3a3' }}>Filter by action:</span>
                     <select className="adm-audit-select" value={auditAction}
                         onChange={e => { setAuditAction(e.target.value); setAuditPage(1); }}>
                         {ACTION_OPTIONS.map(a => (
@@ -272,14 +221,14 @@ export default function AdminSystem() {
                                 </td>
                                 <td style={{ fontFamily: 'monospace', fontSize: 10 }}>{entry.admin_id?.slice(0, 14)}…</td>
                                 <td><span className={actionClass(entry.action)}>{entry.action}</span></td>
-                                <td style={{ fontFamily: 'monospace', fontSize: 10, color: '#555' }}>{entry.target_id?.slice(0, 14) || '—'}</td>
-                                <td style={{ color: '#555' }}>{entry.detail || '—'}</td>
+                                <td style={{ fontFamily: 'monospace', fontSize: 10, color: '#a3a3a3' }}>{entry.target_id?.slice(0, 14) || '—'}</td>
+                                <td style={{ color: '#a3a3a3' }}>{entry.detail || '—'}</td>
                             </tr>
                         ))}
                     </tbody>
                 </table>
                 {totalPages > 1 && (
-                    <div className="adm-pagination">
+                    <div className="adm-pagination" style={{ borderTop: '1px solid #f0ede8' }}>
                         <button className="adm-btn-ghost" disabled={auditPage <= 1}
                             onClick={() => setAuditPage(p => p - 1)}>← Prev</button>
                         <span>{auditPage} / {totalPages}</span>

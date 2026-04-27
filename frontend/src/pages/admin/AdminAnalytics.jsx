@@ -1,32 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { adminApi } from '../../lib/adminApi.js';
 
-const CSS = `
-.adm-page-title { font-size: 22px; font-weight: 700; color: #fff; margin-bottom: 24px; }
-.adm-toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 24px; }
-.adm-select { padding: 8px 12px; background: #141414; border: 1px solid #2a2a2a; border-radius: 7px; color: #e8e8e8; font-size: 13px; cursor: pointer; }
-.adm-stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
-.adm-stat-card { background: #141414; border: 1px solid #1e1e1e; border-radius: 10px; padding: 20px; text-align: center; }
-.adm-stat-label { font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
-.adm-stat-value { font-size: 32px; font-weight: 700; color: #fff; }
-.adm-stat-sub { font-size: 11px; color: #444; margin-top: 4px; }
-.adm-section-title { font-size: 11px; font-weight: 600; color: #555; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px; margin-top: 28px; }
-.adm-card { background: #141414; border: 1px solid #1e1e1e; border-radius: 10px; padding: 20px; margin-bottom: 24px; }
-.adm-bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
-.adm-bar-label { width: 180px; font-size: 12px; color: #888; flex-shrink: 0; }
-.adm-bar-track { flex: 1; height: 6px; background: #1e1e1e; border-radius: 3px; overflow: hidden; }
-.adm-bar-fill { height: 100%; background: #7c3aed; border-radius: 3px; transition: width 0.4s; }
-.adm-bar-pct { font-size: 11px; color: #555; width: 36px; text-align: right; }
-.adm-sparkline { display: flex; align-items: flex-end; gap: 2px; height: 48px; }
-.adm-spark-bar { flex: 1; background: #7c3aed44; border-radius: 2px 2px 0 0; min-height: 2px; }
-.adm-table-wrap { background: #141414; border: 1px solid #1e1e1e; border-radius: 10px; overflow: hidden; }
-.adm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.adm-table th { text-align: left; padding: 10px 16px; font-size: 11px; font-weight: 600; color: #555; border-bottom: 1px solid #1e1e1e; background: #0f0f0f; text-transform: uppercase; letter-spacing: 0.06em; }
-.adm-table td { padding: 11px 16px; border-bottom: 1px solid #111; color: #c8c8c8; vertical-align: middle; }
-.adm-table tr:last-child td { border-bottom: none; }
-.adm-empty { text-align: center; padding: 32px; color: #444; }
-@media (max-width: 700px) { .adm-stats-row { grid-template-columns: 1fr; } .adm-bar-label { width: 120px; } }
-`;
 
 export default function AdminAnalytics() {
     const [days, setDays] = useState(30);
@@ -50,7 +24,6 @@ export default function AdminAnalytics() {
 
     return (
         <div>
-            <style>{CSS}</style>
             <div className="adm-page-title">Engagement Analytics</div>
 
             <div className="adm-toolbar">
@@ -63,7 +36,7 @@ export default function AdminAnalytics() {
                 </select>
             </div>
 
-            {loading && <div style={{ color: '#444', fontSize: 13 }}>Loading…</div>}
+            {loading && <div style={{ color: '#a3a3a3', fontSize: 13 }}>Loading…</div>}
 
             {!loading && (
                 <>
@@ -88,7 +61,7 @@ export default function AdminAnalytics() {
                     {dailyActive.length > 0 && (
                         <>
                             <div className="adm-section-title">Daily Active Users ({days}d)</div>
-                            <div className="adm-card" style={{ paddingBottom: 10 }}>
+                            <div className="adm-card" style={{ paddingBottom: 10, marginBottom: 0 }}>
                                 <div className="adm-sparkline">
                                     {dailyActive.map((d, i) => (
                                         <div
@@ -99,7 +72,7 @@ export default function AdminAnalytics() {
                                         />
                                     ))}
                                 </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#333', marginTop: 4 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#c4c4c4', marginTop: 4 }}>
                                     <span>{dailyActive[0]?.date}</span>
                                     <span>{dailyActive[dailyActive.length - 1]?.date}</span>
                                 </div>
@@ -112,12 +85,12 @@ export default function AdminAnalytics() {
                             <div className="adm-section-title">Feature Adoption (% of active users)</div>
                             <div className="adm-card">
                                 {Object.entries(featureAdoption).map(([feat, pct]) => (
-                                    <div className="adm-bar-row" key={feat}>
-                                        <span className="adm-bar-label">{feat.replace(/_/g, ' ')}</span>
-                                        <div className="adm-bar-track">
-                                            <div className="adm-bar-fill" style={{ width: `${Math.round((pct / maxAdoption) * 100)}%` }} />
+                                    <div className="adm-adopt-row" key={feat}>
+                                        <span className="adm-adopt-label">{feat.replace(/_/g, ' ')}</span>
+                                        <div className="adm-adopt-track">
+                                            <div className="adm-adopt-fill" style={{ width: `${Math.round((pct / maxAdoption) * 100)}%` }} />
                                         </div>
-                                        <span className="adm-bar-pct">{pct}%</span>
+                                        <span className="adm-adopt-pct">{pct}%</span>
                                     </div>
                                 ))}
                             </div>
@@ -141,8 +114,8 @@ export default function AdminAnalytics() {
                                 )}
                                 {topUsers.map((u, i) => (
                                     <tr key={u.user_id}>
-                                        <td style={{ color: '#555' }}>{i + 1}</td>
-                                        <td style={{ fontFamily: 'monospace', fontSize: 11 }}>{u.user_id}</td>
+                                        <td style={{ color: '#c4c4c4' }}>{i + 1}</td>
+                                        <td style={{ fontFamily: 'monospace', fontSize: 11, color: '#6b6b6b' }}>{u.user_id}</td>
                                         <td>{u.api_calls.toLocaleString()}</td>
                                         <td>{u.lectures}</td>
                                     </tr>

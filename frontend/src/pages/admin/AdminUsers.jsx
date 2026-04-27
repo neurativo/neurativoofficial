@@ -2,51 +2,6 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { adminApi } from '../../lib/adminApi.js';
 
-const CSS = `
-.adm-page-title { font-size: 22px; font-weight: 700; color: #fff; margin-bottom: 24px; }
-.adm-toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 18px; flex-wrap: wrap; }
-.adm-input {
-    padding: 8px 12px; background: #141414; border: 1px solid #2a2a2a;
-    border-radius: 7px; color: #e8e8e8; font-size: 13px; outline: none;
-    transition: border-color 0.15s;
-}
-.adm-input:focus { border-color: #7c3aed; }
-.adm-input-search { width: 220px; }
-.adm-select {
-    padding: 8px 12px; background: #141414; border: 1px solid #2a2a2a;
-    border-radius: 7px; color: #e8e8e8; font-size: 13px; outline: none; cursor: pointer;
-}
-.adm-btn {
-    padding: 8px 16px; border-radius: 7px; font-size: 13px; font-weight: 500;
-    cursor: pointer; transition: background 0.15s, color 0.15s;
-    border: none;
-}
-.adm-btn-primary { background: #7c3aed; color: #fff; }
-.adm-btn-primary:hover { background: #6d28d9; }
-.adm-btn-ghost { background: transparent; border: 1px solid #2a2a2a; color: #888; }
-.adm-btn-ghost:hover { border-color: #555; color: #e8e8e8; }
-.adm-btn-danger { background: #7f1d1d22; border: 1px solid #7f1d1d55; color: #f87171; }
-.adm-btn-danger:hover { background: #7f1d1d44; }
-.adm-table-wrap { background: #141414; border: 1px solid #1e1e1e; border-radius: 10px; overflow: hidden; }
-.adm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.adm-table th { text-align: left; padding: 10px 16px; font-size: 11px; font-weight: 600; color: #555; border-bottom: 1px solid #1e1e1e; background: #0f0f0f; text-transform: uppercase; letter-spacing: 0.06em; }
-.adm-table td { padding: 12px 16px; border-bottom: 1px solid #111; color: #c8c8c8; vertical-align: middle; }
-.adm-table tr:last-child td { border-bottom: none; }
-.adm-table tr:hover td { background: #ffffff04; }
-.adm-plan-pill { display: inline-block; padding: 2px 9px; border-radius: 99px; font-size: 11px; font-weight: 600; }
-.adm-plan-free { background: #ffffff0f; color: #888; }
-.adm-plan-student { background: #7c3aed22; color: #a78bfa; border: 1px solid #7c3aed44; }
-.adm-plan-pro { background: #0369a122; color: #38bdf8; border: 1px solid #0369a144; }
-.adm-plan-select { padding: 4px 8px; background: #0f0f0f; border: 1px solid #2a2a2a; border-radius: 5px; color: #e8e8e8; font-size: 12px; cursor: pointer; }
-.adm-pagination { display: flex; align-items: center; gap: 10px; margin-top: 16px; font-size: 13px; color: #555; }
-.adm-pag-btn { padding: 6px 12px; background: #141414; border: 1px solid #2a2a2a; border-radius: 6px; color: #888; cursor: pointer; font-size: 12px; }
-.adm-pag-btn:hover:not(:disabled) { border-color: #555; color: #e8e8e8; }
-.adm-pag-btn:disabled { opacity: 0.3; cursor: default; }
-.adm-total { color: #888; font-size: 12px; }
-.adm-row-link { cursor: pointer; }
-.adm-empty { text-align: center; padding: 32px; color: #444; }
-.adm-suspended-badge { display: inline-block; padding: 1px 7px; border-radius: 99px; font-size: 10px; font-weight: 600; background: #78350f22; color: #fbbf24; border: 1px solid #78350f55; margin-left: 6px; }
-`;
 
 function PlanPill({ tier }) {
     return <span className={`adm-plan-pill adm-plan-${tier || 'free'}`}>{tier || 'free'}</span>;
@@ -109,10 +64,9 @@ export default function AdminUsers() {
 
     return (
         <div>
-            <style>{CSS}</style>
             <div className="adm-page-title">Users</div>
 
-            {error && <div style={{ color: '#ef4444', fontSize: 13, marginBottom: 12, padding: '10px 14px', background: '#7f1d1d22', borderRadius: 7, border: '1px solid #7f1d1d44' }}>Error: {error}</div>}
+            {error && <div className="adm-error">Error: {error}</div>}
             <div className="adm-toolbar">
                 <input
                     className="adm-input adm-input-search"
@@ -154,16 +108,16 @@ export default function AdminUsers() {
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                         {u.image_url
                                             ? <img src={u.image_url} alt="" style={{ width: 28, height: 28, borderRadius: '50%', flexShrink: 0 }} />
-                                            : <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#2a2a2a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#555', flexShrink: 0 }}>
+                                            : <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#9ca3af', flexShrink: 0 }}>
                                                 {(u.display_name || u.email || '?')[0].toUpperCase()}
                                               </div>
                                         }
                                         <div>
-                                            <div style={{ fontSize: 13, color: '#c8c8c8' }}>
-                                                {u.display_name || <span style={{ color: '#444' }}>No name</span>}
+                                            <div style={{ fontSize: 13, color: '#374151' }}>
+                                                {u.display_name || <span style={{ color: '#d1d5db' }}>No name</span>}
                                                 {u.is_suspended && <span className="adm-suspended-badge">SUSPENDED</span>}
                                             </div>
-                                            <div style={{ fontSize: 11, color: '#555' }}>{u.email || u.id.slice(0, 18) + '…'}</div>
+                                            <div style={{ fontSize: 11, color: '#a3a3a3' }}>{u.email || u.id.slice(0, 18) + '…'}</div>
                                         </div>
                                     </div>
                                 </td>
@@ -191,7 +145,7 @@ export default function AdminUsers() {
                                         <option value="student">Student</option>
                                         <option value="pro">Pro</option>
                                     </select>
-                                    {saving[u.id] && <span style={{ marginLeft: 6, fontSize: 11, color: '#555' }}>saving…</span>}
+                                    {saving[u.id] && <span style={{ marginLeft: 6, fontSize: 11, color: '#a3a3a3' }}>saving…</span>}
                                 </td>
                             </tr>
                         ))}
@@ -205,11 +159,7 @@ export default function AdminUsers() {
                 <button className="adm-pag-btn" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Next →</button>
             </div>
 
-            {toast && (
-                <div style={{ position: 'fixed', bottom: 24, right: 24, background: '#1e1e1e', border: '1px solid #2a2a2a', borderRadius: 8, padding: '12px 18px', fontSize: 13, color: '#e8e8e8', zIndex: 9999, boxShadow: '0 4px 20px #00000088' }}>
-                    {toast}
-                </div>
-            )}
+            {toast && <div className="adm-toast">{toast}</div>}
         </div>
     );
 }

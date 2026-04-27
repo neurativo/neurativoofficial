@@ -2,41 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { adminApi } from '../../lib/adminApi.js';
 
-const CSS = `
-.adm-page-title { font-size: 22px; font-weight: 700; color: #fff; margin-bottom: 24px; }
-.adm-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; margin-bottom: 28px; }
-.adm-card {
-    background: #141414;
-    border: 1px solid #1e1e1e;
-    border-radius: 10px;
-    padding: 20px;
-}
-.adm-card-label { font-size: 11px; font-weight: 600; color: #555; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
-.adm-card-value { font-size: 32px; font-weight: 700; color: #fff; }
-.adm-card-sub { font-size: 12px; color: #555; margin-top: 4px; }
-.adm-section-title { font-size: 13px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px; margin-top: 28px; }
-.adm-plan-bars { display: flex; flex-direction: column; gap: 8px; max-width: 400px; }
-.adm-plan-bar-row { display: flex; align-items: center; gap: 10px; }
-.adm-plan-bar-label { width: 60px; font-size: 12px; color: #888; text-align: right; }
-.adm-plan-bar-track { flex: 1; height: 8px; background: #1e1e1e; border-radius: 99px; overflow: hidden; }
-.adm-plan-bar-fill { height: 100%; border-radius: 99px; transition: width 0.4s ease; }
-.adm-plan-bar-count { width: 30px; font-size: 12px; color: #888; }
-.adm-table-wrap { background: #141414; border: 1px solid #1e1e1e; border-radius: 10px; overflow: hidden; margin-top: 8px; }
-.adm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.adm-table th { text-align: left; padding: 10px 16px; font-size: 11px; font-weight: 600; color: #555; border-bottom: 1px solid #1e1e1e; background: #0f0f0f; text-transform: uppercase; letter-spacing: 0.06em; }
-.adm-table td { padding: 11px 16px; border-bottom: 1px solid #111; color: #c8c8c8; vertical-align: middle; }
-.adm-table tr:last-child td { border-bottom: none; }
-.adm-table tr:hover td { background: #ffffff04; }
-.adm-plan-pill { display: inline-block; padding: 2px 9px; border-radius: 99px; font-size: 11px; font-weight: 600; }
-.adm-plan-free { background: #ffffff0f; color: #888; }
-.adm-plan-student { background: #7c3aed22; color: #a78bfa; border: 1px solid #7c3aed44; }
-.adm-plan-pro { background: #0369a122; color: #38bdf8; border: 1px solid #0369a144; }
-.adm-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
-.adm-link-row { cursor: pointer; }
-.adm-error { color: #ef4444; font-size: 13px; padding: 12px 0; }
-@media (max-width: 900px) { .adm-two-col { grid-template-columns: 1fr; } }
-`;
-
 function PlanPill({ tier }) {
     const cls = `adm-plan-pill adm-plan-${tier || 'free'}`;
     return <span className={cls}>{tier || 'free'}</span>;
@@ -72,14 +37,13 @@ export default function AdminDashboard() {
     const totalUsers = stats?.total_users || 0;
     const maxPlan = Math.max(...Object.values(planDist), 1);
 
-    const planColors = { free: '#444', student: '#7c3aed', pro: '#0369a1' };
+    const planColors = { free: '#9ca3af', student: '#6366f1', pro: '#2563eb' };
 
     return (
         <div>
-            <style>{CSS}</style>
             <div className="adm-page-title">Dashboard</div>
 
-            {error && <div style={{ color: '#ef4444', fontSize: 13, marginBottom: 16, padding: '10px 14px', background: '#7f1d1d22', borderRadius: 7, border: '1px solid #7f1d1d44' }}>Error: {error}</div>}
+            {error && <div className="adm-error">Error: {error}</div>}
 
             <div className="adm-cards">
                 <div className="adm-card">
@@ -142,7 +106,7 @@ export default function AdminDashboard() {
                 <div>
                     <div className="adm-section-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <span>Recent Users</span>
-                        <span style={{ fontSize: 11, color: '#555', cursor: 'pointer', textTransform: 'none', fontWeight: 400 }} onClick={() => navigate('/admin/users')}>View all →</span>
+                        <span style={{ fontSize: 11, color: '#a3a3a3', cursor: 'pointer', textTransform: 'none', fontWeight: 400 }} onClick={() => navigate('/admin/users')}>View all →</span>
                     </div>
                     <div className="adm-table-wrap">
                         <table className="adm-table">
@@ -154,7 +118,7 @@ export default function AdminDashboard() {
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                                                 {u.image_url
                                                     ? <img src={u.image_url} alt="" style={{ width: 22, height: 22, borderRadius: '50%' }} />
-                                                    : <div style={{ width: 22, height: 22, borderRadius: '50%', background: '#2a2a2a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#555' }}>
+                                                    : <div style={{ width: 22, height: 22, borderRadius: '50%', background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#9ca3af' }}>
                                                         {(u.display_name || u.email || '?')[0].toUpperCase()}
                                                       </div>
                                                 }
@@ -165,10 +129,10 @@ export default function AdminDashboard() {
                                             </div>
                                         </td>
                                         <td><PlanPill tier={u.plan_tier} /></td>
-                                        <td style={{ color: '#888' }}>{u.lecture_count ?? 0}</td>
+                                        <td style={{ color: '#9ca3af' }}>{u.lecture_count ?? 0}</td>
                                     </tr>
                                 ))}
-                                {!recentUsers.length && <tr><td colSpan={3} style={{ color: '#444', textAlign: 'center', padding: 20 }}>Loading…</td></tr>}
+                                {!recentUsers.length && <tr><td colSpan={3} style={{ color: '#d1d5db', textAlign: 'center', padding: 20 }}>Loading…</td></tr>}
                             </tbody>
                         </table>
                     </div>
@@ -177,7 +141,7 @@ export default function AdminDashboard() {
                 <div>
                     <div className="adm-section-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <span>Recent Lectures</span>
-                        <span style={{ fontSize: 11, color: '#555', cursor: 'pointer', textTransform: 'none', fontWeight: 400 }} onClick={() => navigate('/admin/lectures')}>View all →</span>
+                        <span style={{ fontSize: 11, color: '#a3a3a3', cursor: 'pointer', textTransform: 'none', fontWeight: 400 }} onClick={() => navigate('/admin/lectures')}>View all →</span>
                     </div>
                     <div className="adm-table-wrap">
                         <table className="adm-table">
@@ -192,7 +156,7 @@ export default function AdminDashboard() {
                                         <td>{fmtDate(l.created_at)}</td>
                                     </tr>
                                 ))}
-                                {!stats && <tr><td colSpan={3} style={{ color: '#444', textAlign: 'center', padding: 20 }}>Loading…</td></tr>}
+                                {!stats && <tr><td colSpan={3} style={{ color: '#d1d5db', textAlign: 'center', padding: 20 }}>Loading…</td></tr>}
                             </tbody>
                         </table>
                     </div>

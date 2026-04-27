@@ -1,69 +1,27 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { adminApi } from '../../lib/adminApi.js';
 
-const CSS = `
-.adm-page-title { font-size: 22px; font-weight: 700; color: #fff; margin-bottom: 24px; }
-.adm-toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 20px; flex-wrap: wrap; }
-.adm-select { padding: 8px 12px; background: #141414; border: 1px solid #2a2a2a; border-radius: 7px; color: #e8e8e8; font-size: 13px; outline: none; cursor: pointer; }
-.adm-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; margin-bottom: 28px; }
-.adm-card { background: #141414; border: 1px solid #1e1e1e; border-radius: 10px; padding: 18px 20px; }
-.adm-card-label { font-size: 11px; font-weight: 600; color: #555; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
-.adm-card-value { font-size: 28px; font-weight: 700; color: #fff; }
-.adm-card-sub { font-size: 12px; color: #555; margin-top: 4px; }
-.adm-section-title { font-size: 11px; font-weight: 600; color: #555; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px; margin-top: 28px; }
-.adm-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
-.adm-panel { background: #141414; border: 1px solid #1e1e1e; border-radius: 10px; padding: 20px; }
-.adm-panel-title { font-size: 11px; font-weight: 600; color: #555; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 16px; }
-
-/* Feature breakdown bars */
-.adm-feat-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-.adm-feat-label { width: 160px; font-size: 12px; color: #888; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.adm-feat-track { flex: 1; height: 7px; background: #1e1e1e; border-radius: 99px; overflow: hidden; }
-.adm-feat-fill { height: 100%; border-radius: 99px; background: #7c3aed; transition: width 0.4s ease; }
-.adm-feat-cost { width: 80px; text-align: right; font-size: 12px; color: #888; font-family: monospace; flex-shrink: 0; }
-
-/* Daily chart */
-.adm-chart { display: flex; align-items: flex-end; gap: 4px; height: 80px; margin-top: 8px; }
-.adm-bar-col { display: flex; flex-direction: column; align-items: center; flex: 1; gap: 4px; }
-.adm-bar-fill { width: 100%; border-radius: 4px 4px 0 0; background: #7c3aed; min-height: 2px; transition: height 0.3s ease; }
-.adm-bar-label { font-size: 9px; color: #444; transform: rotate(-35deg); white-space: nowrap; margin-top: 4px; }
-
-/* Logs table */
-.adm-table-wrap { background: #141414; border: 1px solid #1e1e1e; border-radius: 10px; overflow: hidden; margin-top: 8px; }
-.adm-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.adm-table th { text-align: left; padding: 10px 14px; font-size: 10px; font-weight: 600; color: #555; border-bottom: 1px solid #1e1e1e; background: #0f0f0f; text-transform: uppercase; letter-spacing: 0.06em; }
-.adm-table td { padding: 9px 14px; border-bottom: 1px solid #0d0d0d; color: #888; vertical-align: middle; }
-.adm-table tr:last-child td { border-bottom: none; }
-.adm-feat-badge { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 10px; font-weight: 600; background: #1e1e1e; color: #888; font-family: monospace; }
-.adm-pagination { display: flex; align-items: center; gap: 10px; margin-top: 14px; font-size: 12px; color: #555; }
-.adm-pag-btn { padding: 5px 11px; background: #141414; border: 1px solid #2a2a2a; border-radius: 6px; color: #888; cursor: pointer; font-size: 11px; }
-.adm-pag-btn:hover:not(:disabled) { border-color: #555; color: #e8e8e8; }
-.adm-pag-btn:disabled { opacity: 0.3; cursor: default; }
-.adm-empty { text-align: center; padding: 28px; color: #444; font-size: 13px; }
-.adm-error { color: #ef4444; font-size: 12px; padding: 10px 14px; background: #7f1d1d22; border-radius: 7px; border: 1px solid #7f1d1d44; margin-bottom: 14px; }
-@media (max-width: 900px) { .adm-two-col { grid-template-columns: 1fr; } }
-`;
 
 const FEATURE_COLORS = {
     whisper_transcription: '#3b82f6',
     whisper_import:        '#60a5fa',
-    micro_summary:         '#7c3aed',
-    section_summary:       '#8b5cf6',
-    master_summary:        '#a78bfa',
-    qa_answer:             '#0369a1',
+    micro_summary:         '#6366f1',
+    section_summary:       '#818cf8',
+    master_summary:        '#a5b4fc',
+    qa_answer:             '#2563eb',
     qa_expansion:          '#0284c7',
     smart_explain:         '#0891b2',
     vision_screen:         '#d97706',
     vision_board:          '#f59e0b',
     topic_detection:       '#10b981',
-    cif_classification:    '#34d399',
+    cif_classification:    '#059669',
     pdf_executive_summary: '#f43f5e',
-    pdf_enrich_section:    '#fb7185',
-    pdf_glossary:          '#fda4af',
-    pdf_takeaways:         '#fb923c',
-    pdf_quick_review:      '#f97316',
-    pdf_study_roadmap:     '#ef4444',
-    pdf_conceptual_map:    '#dc2626',
+    pdf_enrich_section:    '#e11d48',
+    pdf_glossary:          '#be185d',
+    pdf_takeaways:         '#ea580c',
+    pdf_quick_review:      '#dc2626',
+    pdf_study_roadmap:     '#c026d3',
+    pdf_conceptual_map:    '#7c3aed',
 };
 
 function fmtUSD(v) {
@@ -127,7 +85,6 @@ export default function AdminCosts() {
 
     return (
         <div>
-            <style>{CSS}</style>
             <div className="adm-page-title">Costs</div>
 
             {error && <div className="adm-error">{error}</div>}
@@ -222,7 +179,7 @@ export default function AdminCosts() {
                         <option key={f} value={f}>{f.replace(/_/g, ' ')}</option>
                     ))}
                 </select>
-                <span style={{ fontSize: 12, color: '#555' }}>{logsTotal.toLocaleString()} entries</span>
+                <span style={{ fontSize: 12, color: '#a3a3a3' }}>{logsTotal.toLocaleString()} entries</span>
             </div>
             <div className="adm-table-wrap">
                 <table className="adm-table">
@@ -246,19 +203,19 @@ export default function AdminCosts() {
                         )}
                         {logsData.map(row => (
                             <tr key={row.id}>
-                                <td style={{ whiteSpace: 'nowrap', color: '#555' }}>{fmtDate(row.created_at)}</td>
+                                <td style={{ whiteSpace: 'nowrap', color: '#a3a3a3' }}>{fmtDate(row.created_at)}</td>
                                 <td>
                                     <span className="adm-feat-badge"
-                                        style={{ background: (FEATURE_COLORS[row.feature] || '#7c3aed') + '22',
-                                                 color: FEATURE_COLORS[row.feature] || '#a78bfa' }}>
+                                        style={{ background: (FEATURE_COLORS[row.feature] || '#6366f1') + '18',
+                                                 color: FEATURE_COLORS[row.feature] || '#6366f1' }}>
                                         {row.feature}
                                     </span>
                                 </td>
-                                <td style={{ fontFamily: 'monospace', fontSize: 11 }}>{row.model}</td>
-                                <td style={{ color: '#666' }}>{row.input_tokens || '—'}</td>
-                                <td style={{ color: '#666' }}>{row.output_tokens || '—'}</td>
-                                <td style={{ color: '#666' }}>{row.audio_seconds ? Number(row.audio_seconds).toFixed(1) + 's' : '—'}</td>
-                                <td style={{ fontFamily: 'monospace', color: '#c8c8c8' }}>{fmtUSD(row.cost_usd)}</td>
+                                <td style={{ fontFamily: 'monospace', fontSize: 11, color: '#6b7280' }}>{row.model}</td>
+                                <td style={{ color: '#9ca3af' }}>{row.input_tokens || '—'}</td>
+                                <td style={{ color: '#9ca3af' }}>{row.output_tokens || '—'}</td>
+                                <td style={{ color: '#9ca3af' }}>{row.audio_seconds ? Number(row.audio_seconds).toFixed(1) + 's' : '—'}</td>
+                                <td style={{ fontFamily: 'monospace', color: '#374151' }}>{fmtUSD(row.cost_usd)}</td>
                             </tr>
                         ))}
                     </tbody>
