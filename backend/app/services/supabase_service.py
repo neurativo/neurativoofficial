@@ -851,7 +851,7 @@ def get_lecture_full(lecture_id: str):
 def get_user_profile(user_id: str) -> dict:
     """
     Returns profile data for a user. Merges profiles table (settings/stats)
-    with user_plans table (plan_tier, which uses TEXT key compatible with Clerk IDs).
+    with user_subscriptions table (plan_tier, which uses TEXT key compatible with Clerk IDs).
     """
     if not supabase:
         return {}
@@ -883,9 +883,9 @@ def get_user_profile(user_id: str) -> dict:
             })
     except Exception as e:
         print(f"[profile] get_user_profile error (non-fatal): {e}")
-    # Override plan_tier from user_plans (TEXT primary key, Clerk-ID compatible)
+    # Override plan_tier from user_subscriptions (TEXT primary key, Clerk-ID compatible)
     try:
-        plan_resp = supabase.table("user_plans").select("plan_tier").eq("user_id", user_id).execute()
+        plan_resp = supabase.table("user_subscriptions").select("plan_tier").eq("user_id", user_id).execute()
         if plan_resp.data:
             profile["plan_tier"] = plan_resp.data[0].get("plan_tier") or profile["plan_tier"]
     except Exception as e:
@@ -1049,7 +1049,7 @@ def get_total_lecture_count(user_id: str) -> int:
 def get_user_plan(user_ids: list) -> dict:
     """
     Returns a dict of {user_id: plan_tier} for a list of user IDs.
-    Reads from user_plans table (TEXT primary key, works with Clerk string IDs).
+    Reads from user_subscriptions table (TEXT primary key, works with Clerk string IDs).
     Users with no row default to 'free'.
     """
     if not supabase or not user_ids:
@@ -1058,7 +1058,7 @@ def get_user_plan(user_ids: list) -> dict:
     try:
         for i in range(0, len(user_ids), 100):
             batch = user_ids[i:i + 100]
-            resp = supabase.table("user_plans").select("user_id, plan_tier").in_("user_id", batch).execute()
+            resp = supabase.table("user_subscriptions").select("user_id, plan_tier").in_("user_id", batch).execute()
             for row in (resp.data or []):
                 result[row["user_id"]] = row.get("plan_tier") or "free"
     except Exception as e:
@@ -1167,11 +1167,11 @@ def get_visual_frames_in_window(lecture_id: str, start_sec: int, end_sec: int) -
 
 
 def set_user_plan(user_id: str, plan_tier: str) -> None:
-    """Sets a user's plan tier in user_plans table (TEXT primary key, works with Clerk string IDs)."""
+    """Sets a user's plan tier in user_subscriptions table (TEXT primary key, works with Clerk string IDs)."""
     if not supabase:
         raise Exception("Supabase not initialized")
     from datetime import datetime, timezone
-    resp = supabase.table("user_plans").upsert(
+    resp = supabase.table("user_subscriptions").upsert(
         {"user_id": user_id, "plan_tier": plan_tier, "updated_at": datetime.now(timezone.utc).isoformat()},
         on_conflict="user_id"
     ).execute()
@@ -1181,11 +1181,11 @@ def set_user_plan(user_id: str, plan_tier: str) -> None:
 
 
 def set_user_suspended(user_id: str, suspended: bool) -> None:
-    """Sets the is_suspended flag on a user in user_plans. Non-fatal on missing table."""
+    """Sets the is_suspended flag on a user in user_subscriptions. Non-fatal on missing table."""
     if not supabase:
         raise Exception("Supabase not initialized")
     from datetime import datetime, timezone
-    supabase.table("user_plans").upsert(
+    supabase.table("user_subscriptions").upsert(
         {
             "user_id": user_id,
             "is_suspended": suspended,
@@ -1200,7 +1200,7 @@ def get_user_suspended(user_id: str) -> bool:
     if not supabase or not user_id:
         return False
     try:
-        resp = supabase.table("user_plans").select("is_suspended").eq("user_id", user_id).limit(1).execute()
+        resp = supabase.table("user_subscriptions").select("is_suspended").eq("user_id", user_id).limit(1).execute()
         if resp.data:
             return bool(resp.data[0].get("is_suspended", False))
     except Exception as e:
@@ -1216,7 +1216,7 @@ def admin_get_suspended_map(user_ids: list) -> dict:
     try:
         for i in range(0, len(user_ids), 100):
             batch = user_ids[i:i + 100]
-            resp = supabase.table("user_plans").select("user_id, is_suspended").in_("user_id", batch).execute()
+            resp = supabase.table("user_subscriptions").select("user_id, is_suspended").in_("user_id", batch).execute()
             for row in (resp.data or []):
                 result[row["user_id"]] = bool(row.get("is_suspended", False))
     except Exception as e:
@@ -1332,7 +1332,7 @@ def admin_get_stats() -> dict:
 
         plan_dist = {"free": 0, "student": 0, "pro": 0}
         try:
-            plan_resp = supabase.table("user_plans").select("plan_tier").execute()
+            plan_resp = supabase.table("user_subscriptions").select("plan_tier").execute()
             for row in (plan_resp.data or []):
                 tier = row.get("plan_tier") or "free"
                 plan_dist[tier] = plan_dist.get(tier, 0) + 1
@@ -1497,9 +1497,9 @@ def admin_get_user_detail(user_id: str) -> dict:
         profile["id"] = profile.get("id") or user_id
         profile.setdefault("plan_tier", "free")
         profile.setdefault("display_name", "")
-        # Override plan from user_plans (TEXT key, Clerk-ID compatible)
+        # Override plan from user_subscriptions (TEXT key, Clerk-ID compatible)
         try:
-            plan_row = supabase.table("user_plans").select("plan_tier").eq("user_id", user_id).execute()
+            plan_row = supabase.table("user_subscriptions").select("plan_tier").eq("user_id", user_id).execute()
             if plan_row.data:
                 profile["plan_tier"] = plan_row.data[0].get("plan_tier") or profile["plan_tier"]
         except Exception:
