@@ -151,10 +151,10 @@ def _master_structure(topic: str | None) -> str:
 #  Summary phases
 # ─────────────────────────────────────────────────────────────────────────────
 
-def generate_micro_summary(text: str, language: str = "en") -> str:
+def generate_micro_summary(text: str, language: str = "en", topic: str | None = None) -> str:
     """
     PHASE 1: 2-4 bullet-point micro-summary for one 12-second chunk.
-    Topic-agnostic — keeps it fast and cheap.
+    Optionally topic-aware — a domain hint is injected when topic is provided.
     Retries up to 3 times with exponential backoff (1s, 2s) on failure.
     """
     if not openai_service.client:
@@ -169,7 +169,8 @@ def generate_micro_summary(text: str, language: str = "en") -> str:
                     {
                         "role": "system",
                         "content": (
-                            "You are Neurativo. Summarize the following lecture chunk "
+                            f"You are Neurativo. Summarize the following "
+                            f"{topic + ' ' if topic and topic.strip() and topic.strip() != 'general' else ''}lecture chunk "
                             "into 2-4 extremely concise bullet points." + lang_note
                         )
                     },
