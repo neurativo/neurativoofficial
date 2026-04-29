@@ -98,6 +98,24 @@ const CSS = `
   .lv-pill { font-size: 11px; padding: 2px 8px; border-radius: 5px; white-space: nowrap; }
   .lv-pill-topic { background: #f3f0ff; color: #7c3aed; border: 1px solid #e9d5ff; }
   .lv-pill-lang { background: #eff6ff; color: #3b82f6; border: 1px solid #bfdbfe; }
+  .lv-topic-wrap { position: relative; display: inline-block; }
+  .lv-topic-dropdown {
+    position: absolute; top: calc(100% + 6px); left: 0; z-index: 50;
+    background: var(--color-card); border: 1px solid var(--color-border);
+    border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.10);
+    padding: 8px; min-width: 200px; max-height: 260px; overflow-y: auto;
+  }
+  .lv-topic-option {
+    padding: 7px 10px; border-radius: 7px; font-size: 12px; cursor: pointer;
+    color: var(--color-text); transition: background 0.1s;
+    text-transform: capitalize;
+  }
+  .lv-topic-option:hover { background: var(--color-bg); }
+  .lv-topic-option.selected { background: #f3f0ff; color: #7c3aed; font-weight: 500; }
+  .lv-topic-custom { width: 100%; margin-top: 6px; padding: 6px 8px; font-size: 12px;
+    border: 1px solid var(--color-border); border-radius: 7px; outline: none;
+    font-family: 'Inter', sans-serif; background: var(--color-bg); color: var(--color-text);
+  }
 
   /* Loading */
   .lv-loading { display: flex; align-items: center; justify-content: center; height: 100%; font-size: 13px; color: ${C.muted}; }
@@ -423,6 +441,13 @@ function ShareModal({ lectureId, initialToken, onClose, addToast }) {
     );
 }
 
+const KNOWN_TOPICS = [
+    'medicine','law','physics','computer science','history','mathematics',
+    'economics','literature','chemistry','biology','psychology','philosophy',
+    'engineering','business','linguistics','political science','sociology',
+    'art','music','architecture',
+];
+
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function LectureView() {
     const { id } = useParams();
@@ -449,6 +474,9 @@ export default function LectureView() {
     const transcriptRef = useRef(null);
     const [mobileSplit, setMobileSplit] = useState(55);
     const [isMobile, setIsMobile]       = useState(() => window.innerWidth < 768);
+    const [topicEditing, setTopicEditing] = useState(false);
+    const [topicDraft, setTopicDraft]     = useState('');
+    const [topicSaving, setTopicSaving]   = useState(false);
     const bodyRef = useRef(null);
     const dragHandleRef = React.useRef(null);
     const dragCleanupRef = React.useRef(null);
@@ -518,6 +546,30 @@ export default function LectureView() {
             if (dragCleanupRef.current) dragCleanupRef.current();
         };
     }, []);
+
+    useEffect(() => {
+        if (!topicEditing) return;
+        function handleClick(e) {
+            if (!e.target.closest('.lv-topic-wrap')) setTopicEditing(false);
+        }
+        document.addEventListener('mousedown', handleClick);
+        return () => document.removeEventListener('mousedown', handleClick);
+    }, [topicEditing]);
+
+    async function saveTopic(newTopic) {
+        if (!newTopic || newTopic === lecture?.topic) { setTopicEditing(false); return; }
+        setTopicSaving(true);
+        try {
+            const { updateLectureTopic } = await import('../lib/api.js');
+            await updateLectureTopic(lecture.id, newTopic);
+            setLecture(l => ({ ...l, topic: newTopic }));
+        } catch {
+            // silent fail — badge reverts to original
+        } finally {
+            setTopicSaving(false);
+            setTopicEditing(false);
+        }
+    }
 
     const handleAsk = async () => {
         const q = qaQuestion.trim();
@@ -636,7 +688,38 @@ export default function LectureView() {
                         <div className="lv-panel-header">
                             <span className="lv-panel-label">Transcript</span>
                             <span className="lv-panel-meta">{wordCount.toLocaleString()} words</span>
-                            {lecture?.topic && <span className="lv-pill lv-pill-topic">{lecture.topic}</span>}
+                            {lecture?.topic && (
+                                <div className="lv-topic-wrap">
+                                    <span
+                                        className="lv-pill lv-pill-topic"
+                                        style={{ cursor: 'pointer', userSelect: 'none' }}
+                                        title="Click to change domain"
+                                        onClick={() => { setTopicDraft(''); setTopicEditing(e => !e); }}
+                                    >
+                                        {topicSaving ? '…' : lecture.topic}
+                                    </span>
+                                    {topicEditing && (
+                                        <div className="lv-topic-dropdown">
+                                            {KNOWN_TOPICS.map(t => (
+                                                <div
+                                                    key={t}
+                                                    className={`lv-topic-option${lecture.topic === t ? ' selected' : ''}`}
+                                                    onClick={() => saveTopic(t)}
+                                                >
+                                                    {t}
+                                                </div>
+                                            ))}
+                                            <input
+                                                className="lv-topic-custom"
+                                                placeholder="Custom field…"
+                                                value={topicDraft}
+                                                onChange={e => setTopicDraft(e.target.value)}
+                                                onKeyDown={e => { if (e.key === 'Enter') saveTopic(topicDraft); }}
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                             {lecture?.language && <span className="lv-pill lv-pill-lang">{LANG_NAMES[lecture.language] || lecture.language.toUpperCase()}</span>}
                         </div>
                         {segments.length === 0
