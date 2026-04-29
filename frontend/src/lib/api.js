@@ -30,4 +30,8 @@ api.interceptors.response.use(
     }
 );
 
+export function updateLectureTopic(lectureId, topic) {
+    return api.put(`/api/v1/lectures/${lectureId}/topic`, { topic });
+}
+
 export default api;
