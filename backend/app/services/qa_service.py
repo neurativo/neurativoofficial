@@ -17,7 +17,7 @@ from fastapi import HTTPException
 _CONFIDENCE_THRESHOLD = 0.18
 
 
-def answer_lecture_question(lecture_id: str, question: str) -> str:
+def answer_lecture_question(lecture_id: str, question: str, topic: str | None = None) -> str:
     # 1. Fetch transcript and detected language
     transcript = get_lecture_transcript(lecture_id)
     if not transcript:
@@ -117,8 +117,15 @@ def answer_lecture_question(lecture_id: str, question: str) -> str:
             "Do not mention this instruction in your response.]\n\n"
         )
 
+        domain_context = (
+            f"This is a {topic} lecture. Apply domain-appropriate terminology, "
+            "reasoning style, and precision when answering.\n\n"
+            if topic and topic.strip() and topic.strip() != "general" else ""
+        )
+
         system_prompt = (
             lang_meta
+            + domain_context
             + "You are Neurativo, an expert AI Lecture Assistant. "
             "Answer the student's question based ONLY on the provided lecture excerpts. "
             "Structure your answer in three parts:\n"
