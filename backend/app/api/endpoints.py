@@ -3,7 +3,7 @@ import json
 import os
 import re
 
-from fastapi import APIRouter, BackgroundTasks, UploadFile, File, HTTPException, Depends, Request, Query
+from fastapi import APIRouter, BackgroundTasks, UploadFile, File, Form, HTTPException, Depends, Request, Query
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 import numpy as np
@@ -221,6 +221,9 @@ def should_trigger_section(pending_chunks: list) -> tuple:
 class QuestionRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=2000)
 
+class StartSessionBody(BaseModel):
+    topic: str | None = Field(None, max_length=50)
+
 class ShareRequest(BaseModel):
     mode: str = Field("full", pattern=r'^(full|summary_only)$')
     expires_at: str | None = None   # ISO-8601 UTC timestamp, or null for no expiry
@@ -389,6 +392,7 @@ async def transcribe(
     request: Request,
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
+    topic: str | None = Form(None),
     user=Depends(get_active_user),
 ):
     # Extension check
@@ -444,6 +448,12 @@ async def transcribe(
     except Exception:
         raise HTTPException(status_code=500, detail="Failed to create lecture")
 
+    if topic:
+        try:
+            update_lecture_topic(lecture_id, topic.strip().lower()[:50])
+        except Exception:
+            pass
+
     # Mark as importing immediately so frontend polling sees the status.
     try:
         set_summary_status(lecture_id, "importing")
@@ -476,7 +486,7 @@ def summarize(lecture_id: str, user=Depends(get_active_user)):
 
 @router.post("/live/start")
 @limiter.limit("10/minute")
-def start_live_session(request: Request, user=Depends(get_active_user)):
+def start_live_session(request: Request, body: StartSessionBody = StartSessionBody(), user=Depends(get_active_user)):
     try:
         profile = get_user_profile(str(user.id))
         plan_tier = profile.get("plan_tier") or "free"
@@ -508,6 +518,8 @@ def start_live_session(request: Request, user=Depends(get_active_user)):
 
         lecture_id      = create_lecture(title="Live Session", transcript="", user_id=str(user.id))
         live_session_id = create_live_session(lecture_id)
+        if body.topic:
+            update_lecture_topic(lecture_id, body.topic.strip().lower()[:50])
         try:
             increment_monthly_live(str(user.id))
         except Exception:
@@ -597,7 +609,7 @@ def _run_summarization(
 
     # ── Phase 1: micro summary ────────────────────────────────────────────────
     try:
-        micro = generate_micro_summary(chunk_text, language=language)
+        micro = generate_micro_summary(chunk_text, language=language, topic=topic)
 
         # Merge visual content captured in the same 12-second window (non-fatal)
         try:
@@ -1182,7 +1194,8 @@ def get_lecture_details(lecture_id: str, user=Depends(get_active_user)):
 def ask_question_auth(request: Request, lecture_id: str, body: QuestionRequest, user=Depends(get_active_user)):
     _check_owner(lecture_id, user.id)
     try:
-        answer = answer_lecture_question(lecture_id, body.question)
+        topic = get_lecture_topic(lecture_id)
+        answer = answer_lecture_question(lecture_id, body.question, topic=topic)
     except Exception:
         raise HTTPException(status_code=500, detail="Failed to answer question")
     return {"lecture_id": lecture_id, "question": body.question, "answer": answer}
@@ -1279,6 +1292,18 @@ def update_lecture_title_endpoint(lecture_id: str, request: TitleUpdateRequest, 
         return {"lecture_id": lecture_id, "title": title}
     except Exception:
         raise HTTPException(status_code=500, detail="Failed to update title")
+
+
+class TopicUpdateRequest(BaseModel):
+    topic: str = Field(..., min_length=1, max_length=50)
+
+
+@router.put("/lectures/{lecture_id}/topic")
+def update_topic(lecture_id: str, body: TopicUpdateRequest, user=Depends(get_active_user)):
+    _check_owner(lecture_id, user.id)
+    normalised = body.topic.strip().lower()[:50]
+    update_lecture_topic(lecture_id, normalised)
+    return {"topic": normalised}
 
 
 # =============================================================================
