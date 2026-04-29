@@ -389,3 +389,16 @@ section[id] {
 .dark .lv-explain-analogy .lv-explain-section-label { color: #d97706 !important; }
 .dark .lv-explain-analogy-text { color: var(--color-sec); }
 .dark .lv-explain-step { background: var(--color-card); }
+
+/* ── Domain Picker Modal ── */
+.dp-overlay { position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.4); backdrop-filter: blur(6px); padding: 16px; }
+.dp-modal { background: var(--color-card, #fff); border: 1px solid var(--color-border, #f0ede8); border-radius: 20px; width: 100%; max-width: 440px; padding: 24px; font-family: 'Inter', sans-serif; box-shadow: 0 20px 60px rgba(0,0,0,0.15); }
+.dp-title { font-size: 17px; font-weight: 600; color: var(--color-text, #1a1a1a); letter-spacing: -0.4px; margin: 0 0 4px; }
+.dp-sub { font-size: 13px; color: var(--color-muted, #a3a3a3); margin: 0 0 18px; }
+.dp-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; margin-bottom: 14px; }
+.dp-pill { padding: 7px 4px; border-radius: 9px; border: 1.5px solid var(--color-border, #f0ede8); background: none; cursor: pointer; font-size: 11px; font-weight: 500; color: var(--color-text, #1a1a1a); text-align: center; transition: all 0.12s; text-transform: capitalize; font-family: 'Inter', sans-serif; }
+.dp-pill:hover { border-color: #6366f1; color: #6366f1; }
+.dp-pill.active { background: #f3f0ff; border-color: #6366f1; color: #6366f1; }
+.dp-actions { display: flex; gap: 10px; margin-top: 6px; }
+.dp-btn-primary { flex: 1; padding: 11px; background: #1a1a1a; color: #fafaf9; border: none; border-radius: 11px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif; }
+.dp-btn-ghost { flex: 1; padding: 11px; background: none; color: var(--color-sec, #6b6b6b); border: 1.5px solid var(--color-border, #f0ede8); border-radius: 11px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: 'Inter', sans-serif; }

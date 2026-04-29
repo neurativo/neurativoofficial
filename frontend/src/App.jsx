@@ -13,6 +13,13 @@ const LANGUAGE_NAMES = {
     tr: 'Turkish', uk: 'Ukrainian',  ur: 'Urdu',     vi: 'Vietnamese',
 };
 
+const KNOWN_TOPICS_LIST = [
+    'medicine','law','physics','computer science','history','mathematics',
+    'economics','literature','chemistry','biology','psychology','philosophy',
+    'engineering','business','linguistics','political science','sociology',
+    'art','music','architecture',
+];
+
 // ── Timestamp formatter ────────────────────────────────────────────────────
 function fmtTs(seconds) {
     const s = Math.floor(seconds);
@@ -149,6 +156,8 @@ function App({ user }) {
     const [explainPanel, setExplainPanel]     = useState({ show: false, loading: false, data: null });
     const [exportModal, setExportModal]       = useState({ show: false, progress: 0, status: '' });
     const [endModal, setEndModal]             = useState(false);
+    const [showDomainPicker, setShowDomainPicker] = useState(false);
+    const [selectedDomain, setSelectedDomain]     = useState('');
 
     // ── Phase 5: new state ────────────────────────────────
     const [nastScore, setNastScore]           = useState(null);  // from SSE when backend sends it
@@ -619,9 +628,10 @@ function App({ user }) {
         return sentences.slice(-2).join(' ').trim();
     };
 
-    const startLiveSession = async () => {
+    const startLiveSession = async (topic = '') => {
         try {
-            const res = await api.post('/api/v1/live/start');
+            const body = topic ? { topic } : {};
+            const res = await api.post('/api/v1/live/start', body);
             // Store plan limits from response
             const limits = res.data.limits || {};
             setMaxDurationSeconds(limits.max_duration_seconds || null);
@@ -1458,7 +1468,7 @@ function App({ user }) {
                     </div>
 
                     {/* CTA */}
-                    <button onClick={startLiveSession}
+                    <button onClick={() => { setSelectedDomain(''); setShowDomainPicker(true); }}
                         className="w-full py-3.5 bg-[#1a1a1a] hover:opacity-80 text-[#fafaf9] font-bold rounded-2xl transition-all active:scale-[0.98] flex items-center justify-center gap-2.5 text-[15px]">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
@@ -2845,6 +2855,35 @@ function App({ user }) {
                                 </div>
                             </div>
                         )}
+                    </div>
+                </div>
+            )}
+
+            {/* ── Domain Picker Modal ── */}
+            {showDomainPicker && (
+                <div className="dp-overlay" onClick={e => { if (e.target.classList.contains('dp-overlay')) setShowDomainPicker(false); }}>
+                    <div className="dp-modal">
+                        <p className="dp-title">What are you recording?</p>
+                        <p className="dp-sub">Optional — AI auto-detects if you skip.</p>
+                        <div className="dp-grid">
+                            {KNOWN_TOPICS_LIST.map(t => (
+                                <button
+                                    key={t}
+                                    className={`dp-pill${selectedDomain === t ? ' active' : ''}`}
+                                    onClick={() => setSelectedDomain(d => d === t ? '' : t)}
+                                >
+                                    {t}
+                                </button>
+                            ))}
+                        </div>
+                        <div className="dp-actions">
+                            <button className="dp-btn-ghost" onClick={() => { setShowDomainPicker(false); startLiveSession(''); }}>
+                                Skip
+                            </button>
+                            <button className="dp-btn-primary" onClick={() => { setShowDomainPicker(false); startLiveSession(selectedDomain); }}>
+                                {selectedDomain ? `Start — ${selectedDomain}` : 'Start Recording'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
