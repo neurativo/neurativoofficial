@@ -557,7 +557,9 @@ export default function LectureView() {
     }, [topicEditing]);
 
     async function saveTopic(newTopic) {
-        if (!newTopic || newTopic === lecture?.topic) { setTopicEditing(false); return; }
+        const trimmed = (newTopic || '').trim();
+        if (!trimmed || trimmed === lecture?.topic) { setTopicEditing(false); return; }
+        newTopic = trimmed;
         setTopicSaving(true);
         try {
             const { updateLectureTopic } = await import('../lib/api.js');

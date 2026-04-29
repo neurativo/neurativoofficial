@@ -2861,7 +2861,7 @@ function App({ user }) {
 
             {/* ── Domain Picker Modal ── */}
             {showDomainPicker && (
-                <div className="dp-overlay" onClick={e => { if (e.target.classList.contains('dp-overlay')) setShowDomainPicker(false); }}>
+                <div className="dp-overlay" onClick={e => { if (e.target === e.currentTarget) setShowDomainPicker(false); }}>
                     <div className="dp-modal">
                         <p className="dp-title">What are you recording?</p>
                         <p className="dp-sub">Optional — AI auto-detects if you skip.</p>
