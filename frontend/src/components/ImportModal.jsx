@@ -5,6 +5,13 @@ import api from '../lib/api';
 const ACCEPTED = ['.mp3', '.m4a', '.wav', '.mp4', '.webm'];
 const MAX_BYTES = 500 * 1024 * 1024; // 500 MB
 
+const KNOWN_TOPICS_LIST = [
+    'medicine','law','physics','computer science','history','mathematics',
+    'economics','literature','chemistry','biology','psychology','philosophy',
+    'engineering','business','linguistics','political science','sociology',
+    'art','music','architecture',
+];
+
 const C = {
     bg: 'var(--color-bg)', card: 'var(--color-card)', text: 'var(--color-text)', sec: 'var(--color-sec)',
     muted: 'var(--color-muted)', border: 'var(--color-border)', borderHov: 'var(--color-border-hov)', dark: 'var(--color-dark)',
@@ -58,6 +65,14 @@ const CSS = `
   .im-btn-submit:hover { opacity: 0.82; }
   .im-btn-submit:disabled { opacity: 0.45; cursor: not-allowed; }
 
+  /* Domain picker */
+  .im-domain-section { margin-top: 14px; }
+  .im-domain-label { font-size: 12px; font-weight: 500; color: var(--color-sec); margin-bottom: 8px; }
+  .im-domain-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .im-domain-pill { padding: 6px 4px; border-radius: 8px; border: 1.5px solid var(--color-border); background: none; cursor: pointer; font-size: 11px; font-weight: 500; color: var(--color-text); text-align: center; transition: all 0.12s; text-transform: capitalize; font-family: 'Inter', sans-serif; }
+  .im-domain-pill:hover { border-color: #6366f1; color: #6366f1; }
+  .im-domain-pill.active { background: #f3f0ff; border-color: #6366f1; color: #6366f1; }
+
   /* ── Dark mode ── */
   .dark .im-drop:hover, .dark .im-drop.drag { background: #0f1e38; border-color: #3b82f6; }
   .dark .im-file-icon { background: #0f1e38; }
@@ -79,11 +94,12 @@ const STAGES = [
 
 export default function ImportModal({ onClose }) {
     const navigate = useNavigate();
-    const [file, setFile]       = useState(null);
-    const [drag, setDrag]       = useState(false);
-    const [stage, setStage]     = useState(null); // null | 'uploading' | 'transcribing' | 'summarizing' | 'done'
-    const [error, setError]     = useState('');
-    const [usage, setUsage]     = useState(null);
+    const [file, setFile]           = useState(null);
+    const [drag, setDrag]           = useState(false);
+    const [stage, setStage]         = useState(null); // null | 'uploading' | 'transcribing' | 'summarizing' | 'done'
+    const [error, setError]         = useState('');
+    const [usage, setUsage]         = useState(null);
+    const [selectedDomain, setSelectedDomain] = useState('');
     const inputRef = useRef(null);
 
     useEffect(() => {
@@ -121,6 +137,7 @@ export default function ImportModal({ onClose }) {
 
         const formData = new FormData();
         formData.append('file', file);
+        if (selectedDomain) formData.append('topic', selectedDomain);
 
         try {
             setStage('uploading');
@@ -272,6 +289,24 @@ export default function ImportModal({ onClose }) {
                                     <p className="im-file-size">{fmtBytes(file.size)}</p>
                                 </div>
                                 <button className="im-file-remove" onClick={() => { setFile(null); setError(''); }}>×</button>
+                            </div>
+                        )}
+
+                        {/* Domain picker */}
+                        {file && !busy && (
+                            <div className="im-domain-section">
+                                <p className="im-domain-label">Field (optional — AI detects if blank)</p>
+                                <div className="im-domain-grid">
+                                    {KNOWN_TOPICS_LIST.map(t => (
+                                        <button
+                                            key={t}
+                                            className={`im-domain-pill${selectedDomain === t ? ' active' : ''}`}
+                                            onClick={() => setSelectedDomain(d => d === t ? '' : t)}
+                                        >
+                                            {t}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
                         )}
 
