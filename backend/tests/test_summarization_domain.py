@@ -1,0 +1,40 @@
+import pytest
+from app.services.summarization_service import _section_guidance, _master_structure
+
+
+def test_section_guidance_known_domain():
+    result = _section_guidance("law")
+    assert "statutes" in result or "legal" in result.lower()
+
+
+def test_section_guidance_new_known_domain():
+    result = _section_guidance("business")
+    assert "business" in result.lower() or "strategic" in result.lower()
+
+
+def test_section_guidance_unknown_domain_dynamic_fallback():
+    result = _section_guidance("marine biology")
+    assert "marine biology" in result
+    assert "domain-appropriate" in result or "terminology" in result
+
+
+def test_section_guidance_none_returns_empty():
+    assert _section_guidance(None) == ""
+    assert _section_guidance("") == ""
+
+
+def test_master_structure_with_topic():
+    result = _master_structure("mathematics")
+    assert "mathematics" in result
+    assert "theorem" in result or "proof" in result or "field" in result
+
+
+def test_master_structure_general_no_domain_hint():
+    result = _master_structure("general")
+    # Should not inject domain framing for "general"
+    assert "general" not in result or "lecture" not in result.lower()
+
+
+def test_master_structure_none_no_domain_hint():
+    result = _master_structure(None)
+    assert result  # non-empty — still contains title instruction
