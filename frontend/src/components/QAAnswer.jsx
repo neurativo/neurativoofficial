@@ -1,4 +1,5 @@
 import React from 'react';
+import { renderDomainContent } from '../lib/renderDomainContent.jsx';
 
 // Parses the structured ANSWER / DETAIL / SOURCE format from the backend.
 // Falls back to plain text if the format isn't detected.
@@ -15,12 +16,12 @@ function parse(text) {
     };
 }
 
-export default function QAAnswer({ text, dark = false }) {
+export default function QAAnswer({ text, dark = false, topic = null }) {
     const p = parse(text);
 
     // Plain fallback (error messages, "I couldn't find..." etc.)
     if (p.raw !== undefined) {
-        return <span style={{ fontSize: 13, lineHeight: 1.65 }}>{p.raw}</span>;
+        return <span style={{ fontSize: 13, lineHeight: 1.65 }}>{renderDomainContent(p.raw, topic) || p.raw}</span>;
     }
 
     const textColor   = dark ? '#fafaf9'  : '#1a1a1a';
@@ -39,7 +40,7 @@ export default function QAAnswer({ text, dark = false }) {
                 color: textColor,
                 lineHeight: 1.65,
             }}>
-                {p.answer}
+                {renderDomainContent(p.answer, topic) || p.answer}
             </p>
 
             {/* ── Detail / elaboration ── */}
@@ -52,7 +53,7 @@ export default function QAAnswer({ text, dark = false }) {
                         color: subColor,
                         lineHeight: 1.7,
                     }}>
-                        {p.detail}
+                        {renderDomainContent(p.detail, topic) || p.detail}
                     </p>
                 </>
             )}

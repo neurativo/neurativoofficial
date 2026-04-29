@@ -2169,7 +2169,7 @@ function App({ user }) {
                                             </div>
                                             <div className="flex justify-start">
                                                 <div className="max-w-[85%] bg-[#fafaf9] border border-[#f0ede8] rounded-2xl rounded-tl-sm px-3.5 py-2.5">
-                                                    <QAAnswer text={item.answer} />
+                                                    <QAAnswer text={item.answer} topic={detectedTopic} />
                                                 </div>
                                             </div>
                                         </div>

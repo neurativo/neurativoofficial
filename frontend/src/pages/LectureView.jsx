@@ -4,6 +4,7 @@ import api from '../lib/api';
 import { useToast } from '../components/Toast';
 import ExportModal from '../components/ExportModal';
 import QAAnswer from '../components/QAAnswer';
+import { useSEO } from '../lib/useSEO';
 
 function fmtTs(seconds) {
     const s = Math.floor(seconds);
@@ -430,6 +431,8 @@ export default function LectureView() {
     const isDark = useIsDark();
 
     const [lecture, setLecture]         = useState(null);
+
+    useSEO({ title: lecture?.title || 'Lecture', noindex: true });
     const [summaryStatus, setSummaryStatus] = useState('live');
     const [loading, setLoading]         = useState(true);
     const [exportOpen, setExportOpen]   = useState(false);
@@ -710,7 +713,7 @@ export default function LectureView() {
                                             <div key={i}>
                                                 <div className={`lv-qa-msg ${m.role === 'user' ? 'lv-qa-user' : 'lv-qa-assistant'}`}>
                                                     {m.role === 'assistant'
-                                                        ? <QAAnswer text={m.text} />
+                                                        ? <QAAnswer text={m.text} topic={lecture?.topic} />
                                                         : m.text
                                                     }
                                                 </div>
