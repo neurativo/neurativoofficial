@@ -5,6 +5,7 @@ import { useToast } from '../components/Toast';
 import ExportModal from '../components/ExportModal';
 import QAAnswer from '../components/QAAnswer';
 import { useSEO } from '../lib/useSEO';
+import { renderDomainContent } from '../lib/renderDomainContent.jsx';
 
 function fmtTs(seconds) {
     const s = Math.floor(seconds);
@@ -272,7 +273,7 @@ function parseSummary(text) {
     });
 }
 
-function SummaryCard({ section, accent, index, total }) {
+function SummaryCard({ section, accent, index, total, topic }) {
     const a = accent || ACCENTS_LIGHT[0];
     return (
         <div className="lv-sum-card summary-card-enter" style={{ borderLeft: `3px solid ${a.border}` }}>
@@ -285,20 +286,20 @@ function SummaryCard({ section, accent, index, total }) {
                 )}
             </div>
             {section.highlights.map((h, i) => (
-                <div key={i} className="lv-sum-highlight" style={{ background: a.bg, borderLeftColor: a.border }}>{h}</div>
+                <div key={i} className="lv-sum-highlight" style={{ background: a.bg, borderLeftColor: a.border }}>{renderDomainContent(h, topic) || h}</div>
             ))}
-            {section.lead_sentence && <div className="lv-sum-lead">{section.lead_sentence}</div>}
-            {section.prose && <div className="lv-sum-prose">{section.prose}</div>}
+            {section.lead_sentence && <div className="lv-sum-lead">{renderDomainContent(section.lead_sentence, topic) || section.lead_sentence}</div>}
+            {section.prose && <div className="lv-sum-prose">{renderDomainContent(section.prose, topic) || section.prose}</div>}
             {section.concepts.length > 0 && (
                 <div className="lv-sum-concepts">
                     {section.concepts.map((c, i) => (
-                        <span key={i} className="lv-sum-concept" style={{ borderColor: a.border, color: a.title }}>{c}</span>
+                        <span key={i} className="lv-sum-concept" style={{ borderColor: a.border, color: a.title }}>{renderDomainContent(c, topic) || c}</span>
                     ))}
                 </div>
             )}
             {section.examples.length > 0 && (
                 <div className="lv-sum-examples">
-                    {section.examples.map((e, i) => <div key={i} className="lv-sum-example">{e}</div>)}
+                    {section.examples.map((e, i) => <div key={i} className="lv-sum-example">{renderDomainContent(e, topic) || e}</div>)}
                 </div>
             )}
         </div>
@@ -778,7 +779,7 @@ export default function LectureView() {
                                     ? <div style={{ fontSize: 13, color: C.muted, textAlign: 'center', paddingTop: 40 }}>Summary not yet generated</div>
                                     : summarySections.map((s, i) => {
                                         const palette = isDark ? ACCENTS_DARK : ACCENTS_LIGHT;
-                                        return <SummaryCard key={i} section={s} accent={palette[i % palette.length]} index={i} total={summarySections.length} />;
+                                        return <SummaryCard key={i} section={s} accent={palette[i % palette.length]} index={i} total={summarySections.length} topic={lecture?.topic} />;
                                     })
                                 }
                             </div>
