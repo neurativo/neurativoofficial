@@ -31,8 +31,8 @@ def test_master_structure_with_topic():
 
 def test_master_structure_general_no_domain_hint():
     result = _master_structure("general")
-    # Should not inject domain framing for "general"
-    assert "general" not in result or "lecture" not in result.lower()
+    # "general" topic must not inject the domain framing sentence
+    assert "This is a general lecture" not in result
 
 
 def test_master_structure_none_no_domain_hint():

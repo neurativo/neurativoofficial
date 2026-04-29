@@ -122,7 +122,7 @@ _TITLE_INSTRUCTION = (
 
 
 def _section_guidance(topic: str | None) -> str:
-    if not topic:
+    if not topic or not topic.strip():
         return ""
     known = _SECTION_TOPIC_GUIDANCE.get(topic.lower())
     if known:
@@ -137,9 +137,10 @@ def _section_guidance(topic: str | None) -> str:
 
 def _master_structure(topic: str | None) -> str:
     base = _TITLE_INSTRUCTION
-    if topic and topic != "general":
+    stripped = topic.strip() if topic else ""
+    if stripped and stripped != "general":
         base += (
-            f" This is a {topic} lecture — structure the master summary to reflect "
+            f" This is a {stripped} lecture — structure the master summary to reflect "
             "how this field organises knowledge (e.g. theorem/proof for mathematics, "
             "case/principle for law, concept/application for science)."
         )
