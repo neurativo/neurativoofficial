@@ -679,8 +679,8 @@ async def generate_lecture_pdf(lecture_id: str) -> bytes:
         [s.split('\n')[0].strip() for s in raw_sections],   # first line = section title
     ))
 
-    # Common mistakes — transcript-sourced only
-    tasks.append(asyncio.to_thread(_call_common_mistakes, transcript, topic))
+    # Key stats — extracted from transcript for exec summary callout
+    tasks.append(asyncio.to_thread(_call_key_stats, transcript, topic))
 
     # 4. Run all calls in parallel
     results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -704,6 +704,9 @@ async def generate_lecture_pdf(lecture_id: str) -> bytes:
                 "concepts":      [],
                 "examples":      [],
                 "raw_section":   raw_sections[i],
+                "analogy":       None,
+                "mistake":       None,
+                "remember":      None,
             })
         else:
             enriched_sections.append(r)
@@ -733,7 +736,7 @@ async def generate_lecture_pdf(lecture_id: str) -> bytes:
     study_roadmap: dict = r if not isinstance(r, Exception) else {"next_topics": [], "prerequisites": []}
 
     r = results[ri]; ri += 1
-    common_mistakes: list[dict] = r if not isinstance(r, Exception) else []
+    key_stats: list[dict] = r if not isinstance(r, Exception) else []
 
     # 5b. Title fallback: if title is still generic, extract from exec_summary first sentence
     _GENERIC_TITLES = {"live session", "lecture notes", "untitled", "untitled lecture"}
@@ -815,7 +818,7 @@ async def generate_lecture_pdf(lecture_id: str) -> bytes:
         "compression_ratio":    0.0,
         # Visual frames
         "visual_frames":        visual_frames,
-        "common_mistakes":      common_mistakes,
+        "key_stats":            key_stats,
         "accent_color":         _get_domain_color(topic),
     }
 
