@@ -797,8 +797,21 @@
         </div>
         <hr class="section-bar">
 
+        {% if sec.analogy %}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;margin-bottom:4mm;border:1px solid var(--slate-200);border-radius:8px;overflow:hidden;">
+            <div style="padding:3.5mm 4mm;background:#fafbfc;border-right:1px solid var(--slate-200);">
+                <div style="font-size:6.5pt;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--ink-4);margin-bottom:2mm;">What it is</div>
+                <div style="font-size:9pt;color:var(--ink-2);line-height:1.6;">{{ sec.lead_sentence }}</div>
+            </div>
+            <div style="padding:3.5mm 4mm;background:#f0fff4;">
+                <div style="font-size:6.5pt;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#059669;margin-bottom:2mm;">Real-world analogy</div>
+                <div style="font-size:9pt;color:#134e4a;line-height:1.6;">{{ sec.analogy }}</div>
+            </div>
+        </div>
+        {% else %}
         {% if sec.lead_sentence %}
         <p class="ls-lead">{{ sec.lead_sentence }}</p>
+        {% endif %}
         {% endif %}
 
         {% if sec.prose %}
