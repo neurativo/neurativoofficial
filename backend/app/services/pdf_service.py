@@ -174,6 +174,7 @@ def _call_enrich_section(
         return {
             "title": f"Section {idx + 1}", "lead_sentence": lead, "prose": rest,
             "bullets": [], "concepts": [], "examples": [], "raw_section": section_text,
+            "analogy": None, "mistake": None, "remember": None,
         }
     hint = f" Domain: {topic}." if topic else ""
     resp = _client.chat.completions.create(
@@ -198,6 +199,14 @@ def _call_enrich_section(
                     "- \"examples\": Array of concrete real-world examples or applications "
                     "the lecturer explicitly gave. Return an empty array if none were given. "
                     "Never invent examples that were not in the source text.\n"
+                    "- \"analogy\": A 2-3 sentence real-world analogy that makes this concept click. "
+                    "Use 'Think of...' or 'Imagine...' framing. Only generate if a natural analogy "
+                    "exists for this specific content. Return null if no natural analogy exists.\n"
+                    "- \"mistake\": One specific misconception students commonly make with this "
+                    "section's content. Grounded in the source material. Return null if none is "
+                    "clearly identifiable.\n"
+                    "- \"remember\": One key principle to remember from this section — a positive, "
+                    "memorable one-sentence formulation. Always include.\n"
                     "STRICT RULE: only include information explicitly present in the section text. "
                     "Empty arrays for concepts and examples are valid and preferred over invented content.\n"
                     "Return only valid JSON."
@@ -205,7 +214,7 @@ def _call_enrich_section(
             }
         ],
         temperature=0.3,
-        max_tokens=550,
+        max_tokens=900,
         response_format={"type": "json_object"},
     )
     log_cost("pdf_enrich_section", "gpt-4o-mini",
@@ -228,6 +237,9 @@ def _call_enrich_section(
         "concepts":      concepts,
         "examples":      examples,
         "raw_section":   section_text,
+        "analogy":       data.get("analogy") or None,
+        "mistake":       data.get("mistake") or None,
+        "remember":      data.get("remember") or None,
     }
 
 

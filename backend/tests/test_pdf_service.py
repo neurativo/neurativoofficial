@@ -166,3 +166,92 @@ def test_call_mnemonics_handles_api_error_gracefully():
 def test_call_mnemonics_empty_glossary_returns_empty():
     from app.services.pdf_service import _call_mnemonics
     assert _call_mnemonics([]) == []
+
+
+# ── _call_enrich_section — new fields: analogy, mistake, remember ──────────────
+
+def test_enrich_section_returns_analogy_field():
+    """New analogy field must appear in result when GPT returns it."""
+    payload = json.dumps({
+        "title": "Ohm's Law",
+        "prose": "Ohm's Law relates voltage, current, and resistance.",
+        "bullets": ["V = IR"],
+        "concepts": ["Ohm's Law"],
+        "examples": [],
+        "analogy": "Think of voltage as water pressure, current as flow rate, and resistance as pipe width.",
+        "mistake": None,
+        "remember": "V = IR always holds for ohmic conductors.",
+    })
+    fake_resp = _make_chat_response(payload)
+
+    with patch("app.services.pdf_service._client") as mock_client, \
+         patch("app.services.pdf_service.log_cost"):
+        mock_client.chat.completions.create.return_value = fake_resp
+        from app.services.pdf_service import _call_enrich_section
+        result = _call_enrich_section("Ohm's Law section text", 0, 1, "physics", "en")
+
+    assert "analogy" in result
+    assert "Think of voltage as water pressure" in result["analogy"]
+
+
+def test_enrich_section_analogy_none_when_gpt_returns_null():
+    """Null analogy from GPT must be stored as None, not the string 'null'."""
+    payload = json.dumps({
+        "title": "Abstract Algebra",
+        "prose": "Rings generalise fields.",
+        "bullets": ["Rings have two operations"],
+        "concepts": ["Ring"],
+        "examples": [],
+        "analogy": None,
+        "mistake": None,
+        "remember": "A ring must be closed under addition and multiplication.",
+    })
+    fake_resp = _make_chat_response(payload)
+
+    with patch("app.services.pdf_service._client") as mock_client, \
+         patch("app.services.pdf_service.log_cost"):
+        mock_client.chat.completions.create.return_value = fake_resp
+        from app.services.pdf_service import _call_enrich_section
+        result = _call_enrich_section("algebra text", 0, 1, "mathematics", "en")
+
+    assert result["analogy"] is None
+
+
+def test_enrich_section_returns_mistake_and_remember_fields():
+    """mistake and remember fields must be present in result."""
+    payload = json.dumps({
+        "title": "SEO Basics",
+        "prose": "SEO improves organic search ranking.",
+        "bullets": ["Keywords matter"],
+        "concepts": ["SEO"],
+        "examples": [],
+        "analogy": "Think of Google as a librarian who ranks books by relevance.",
+        "mistake": "Keyword stuffing — cramming keywords destroys readability and is penalised.",
+        "remember": "Content quality and backlinks are the two pillars of effective SEO.",
+    })
+    fake_resp = _make_chat_response(payload)
+
+    with patch("app.services.pdf_service._client") as mock_client, \
+         patch("app.services.pdf_service.log_cost"):
+        mock_client.chat.completions.create.return_value = fake_resp
+        from app.services.pdf_service import _call_enrich_section
+        result = _call_enrich_section("SEO text", 0, 2, "business", "en")
+
+    assert "mistake" in result
+    assert "remember" in result
+    assert "Keyword stuffing" in result["mistake"]
+    assert "two pillars" in result["remember"]
+
+
+def test_enrich_section_no_client_includes_new_fields():
+    """When _client is None (no API key), fallback dict must include analogy/mistake/remember."""
+    with patch("app.services.pdf_service._client", None):
+        from app.services.pdf_service import _call_enrich_section
+        result = _call_enrich_section("some section", 0, 1, None, "en")
+
+    assert "analogy" in result
+    assert result["analogy"] is None
+    assert "mistake" in result
+    assert result["mistake"] is None
+    assert "remember" in result
+    assert result["remember"] is None
