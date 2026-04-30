@@ -84,49 +84,6 @@ def test_enrich_section_prompt_forbids_invented_content():
     assert "Never invent" in prompt or "only if" in prompt.lower()
 
 
-# ── _call_common_mistakes ──────────────────────────────────────────────────────
-
-def test_call_common_mistakes_returns_list_of_dicts():
-    payload = json.dumps({"mistakes": [
-        {"mistake": "Confusing mitosis with meiosis", "correction": "Mitosis produces identical diploid cells; meiosis produces haploid gametes."},
-    ]})
-    fake_resp = _make_chat_response(payload)
-
-    with patch("app.services.pdf_service._client") as mock_client, \
-         patch("app.services.pdf_service.log_cost"):
-        mock_client.chat.completions.create.return_value = fake_resp
-        from app.services.pdf_service import _call_common_mistakes
-        result = _call_common_mistakes("transcript about cell division", "biology")
-
-    assert isinstance(result, list)
-    assert len(result) == 1
-    assert result[0]["mistake"] == "Confusing mitosis with meiosis"
-    assert "correction" in result[0]
-
-
-def test_call_common_mistakes_returns_empty_when_none_mentioned():
-    payload = json.dumps({"mistakes": []})
-    fake_resp = _make_chat_response(payload)
-
-    with patch("app.services.pdf_service._client") as mock_client, \
-         patch("app.services.pdf_service.log_cost"):
-        mock_client.chat.completions.create.return_value = fake_resp
-        from app.services.pdf_service import _call_common_mistakes
-        result = _call_common_mistakes("transcript", None)
-
-    assert result == []
-
-
-def test_call_common_mistakes_returns_empty_on_api_error():
-    with patch("app.services.pdf_service._client") as mock_client, \
-         patch("app.services.pdf_service.log_cost"):
-        mock_client.chat.completions.create.side_effect = Exception("API down")
-        from app.services.pdf_service import _call_common_mistakes
-        result = _call_common_mistakes("transcript", "physics")
-
-    assert result == []
-
-
 # ── _call_mnemonics ────────────────────────────────────────────────────────────
 
 def test_call_mnemonics_returns_merged_glossary():

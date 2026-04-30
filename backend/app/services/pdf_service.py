@@ -432,45 +432,6 @@ def _call_conceptual_map(section_summaries: list[str]) -> list[dict]:
         return []
 
 
-def _call_common_mistakes(transcript: str, topic: str | None) -> list[dict]:
-    """
-    Identifies 2-3 genuine misconceptions the lecturer warned about, or classic
-    logical traps students make. Returns [] if none were mentioned.
-    STRICT: only returns mistakes grounded in the transcript.
-    """
-    if not _client:
-        return []
-    hint = f" Domain: {topic}." if topic else ""
-    try:
-        resp = _client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {
-                    "role": "user",
-                    "content": (
-                        "Note: The transcript may contain mixed languages. Extract meaning from all languages present. Respond in English.\n\n"
-                        f"TRANSCRIPT:\n{transcript[:5000]}\n\n"
-                        f"Read this lecture transcript carefully.{hint} "
-                        "Identify 2-3 genuine misconceptions the lecturer explicitly warned about, "
-                        "or classic logical traps students make with this specific material. "
-                        "STRICT RULE: return only mistakes that are clearly grounded in what was "
-                        "actually said in this transcript. If the lecturer did not warn about any "
-                        "misconceptions, return an empty mistakes array — do not invent warnings.\n"
-                        'Return JSON: {"mistakes": [{"mistake": "...", "correction": "..."}]}'
-                    ),
-                }
-            ],
-            temperature=0.2,
-            max_tokens=600,
-            response_format={"type": "json_object"},
-        )
-        log_cost("pdf_common_mistakes", "gpt-4o-mini",
-                 input_tokens=resp.usage.prompt_tokens,
-                 output_tokens=resp.usage.completion_tokens)
-        return json.loads(resp.choices[0].message.content).get("mistakes", [])
-    except Exception as e:
-        print(f"_call_common_mistakes error (non-fatal): {e}")
-        return []
 
 
 def _call_mnemonics(glossary: list[dict]) -> list[dict]:
@@ -818,7 +779,7 @@ async def generate_lecture_pdf(lecture_id: str) -> bytes:
         "compression_ratio":    0.0,
         # Visual frames
         "visual_frames":        visual_frames,
-        "key_stats":            key_stats,
+        "key_stats":            key_stats[:4],
         "accent_color":         _get_domain_color(topic),
     }
 
