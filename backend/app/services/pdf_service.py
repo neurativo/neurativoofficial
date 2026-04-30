@@ -521,6 +521,47 @@ def _call_mnemonics(glossary: list[dict]) -> list[dict]:
         return glossary
 
 
+def _call_key_stats(transcript: str, topic: str | None) -> list[dict]:
+    """
+    Extracts up to 4 memorable statistics, key numbers, or metrics from the lecture.
+    Returns [{"value": "28-30%", "label": "of clicks go to the #1 result"}].
+    Returns [] if no quantitative facts are present. Non-fatal on error.
+    """
+    if not _client:
+        return []
+    hint = f" Domain: {topic}." if topic else ""
+    try:
+        resp = _client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "user",
+                    "content": (
+                        "Note: The transcript may contain mixed languages. Extract meaning from all languages present. Respond in English.\n\n"
+                        f"TRANSCRIPT:\n{transcript[:5000]}\n\n"
+                        f"Extract up to 4 memorable statistics, key numbers, or metrics from this lecture.{hint} "
+                        "Each entry needs a VALUE (the number, percentage, or ratio — short, bold-worthy, max 8 characters) "
+                        "and a LABEL (what it measures, max 8 words). "
+                        "STRICT RULE: only include numbers explicitly stated in the transcript. "
+                        "Return fewer than 4 if fewer distinct quantitative facts exist. "
+                        "Return an empty stats array if the lecture contains no clear statistics.\n"
+                        'Return JSON: {"stats": [{"value": "...", "label": "..."}]}'
+                    ),
+                }
+            ],
+            temperature=0.2,
+            max_tokens=300,
+            response_format={"type": "json_object"},
+        )
+        log_cost("pdf_key_stats", "gpt-4o-mini",
+                 input_tokens=resp.usage.prompt_tokens,
+                 output_tokens=resp.usage.completion_tokens)
+        return json.loads(resp.choices[0].message.content).get("stats", [])
+    except Exception as e:
+        print(f"_call_key_stats error (non-fatal): {e}")
+        return []
+
+
 # ── PDF renderer (sync, run in thread) ───────────────────────────────────────
 
 def _render_pdf(html_content: str, title_short: str) -> bytes:

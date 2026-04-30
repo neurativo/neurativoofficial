@@ -255,3 +255,57 @@ def test_enrich_section_no_client_includes_new_fields():
     assert result["mistake"] is None
     assert "remember" in result
     assert result["remember"] is None
+
+
+# ── _call_key_stats ────────────────────────────────────────────────────────────
+
+def test_call_key_stats_returns_list_of_dicts_with_value_and_label():
+    payload = json.dumps({"stats": [
+        {"value": "28-30%", "label": "of clicks go to the #1 search result"},
+        {"value": "$42", "label": "returned per $1 spent on email marketing"},
+        {"value": "5-7x", "label": "more to acquire than retain a customer"},
+        {"value": "2-4%", "label": "average e-commerce conversion rate"},
+    ]})
+    fake_resp = _make_chat_response(payload)
+
+    with patch("app.services.pdf_service._client") as mock_client, \
+         patch("app.services.pdf_service.log_cost"):
+        mock_client.chat.completions.create.return_value = fake_resp
+        from app.services.pdf_service import _call_key_stats
+        result = _call_key_stats("transcript about digital marketing", "business")
+
+    assert isinstance(result, list)
+    assert len(result) == 4
+    assert result[0]["value"] == "28-30%"
+    assert "label" in result[0]
+
+
+def test_call_key_stats_returns_empty_when_no_numbers_present():
+    payload = json.dumps({"stats": []})
+    fake_resp = _make_chat_response(payload)
+
+    with patch("app.services.pdf_service._client") as mock_client, \
+         patch("app.services.pdf_service.log_cost"):
+        mock_client.chat.completions.create.return_value = fake_resp
+        from app.services.pdf_service import _call_key_stats
+        result = _call_key_stats("a purely conceptual lecture with no numbers", None)
+
+    assert result == []
+
+
+def test_call_key_stats_returns_empty_on_api_error():
+    with patch("app.services.pdf_service._client") as mock_client, \
+         patch("app.services.pdf_service.log_cost"):
+        mock_client.chat.completions.create.side_effect = Exception("network error")
+        from app.services.pdf_service import _call_key_stats
+        result = _call_key_stats("transcript", "physics")
+
+    assert result == []
+
+
+def test_call_key_stats_no_client_returns_empty():
+    with patch("app.services.pdf_service._client", None):
+        from app.services.pdf_service import _call_key_stats
+        result = _call_key_stats("transcript", "medicine")
+
+    assert result == []
