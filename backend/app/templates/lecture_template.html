@@ -605,12 +605,6 @@
         .fold-label { position: absolute; top: -7px; left: 50%; transform: translateX(-50%); background: white; padding: 0 8px; font-size: 6.5pt; color: #94a3b8; letter-spacing: 0.4px; white-space: nowrap; }
         .review-answer-block { background: #f8fafc; border: 1px solid var(--slate-100); border-radius: 7px; padding: 3mm 4mm; }
 
-        /* ─── COMMON MISTAKES ───────────────────────────────────────────── */
-        .mistake-card { background: #fffbeb; border-left: 3px solid #f59e0b; border-radius: 0 8px 8px 0; padding: 3.5mm 5mm; margin-bottom: 3mm; page-break-inside: avoid; }
-        .mistake-label { font-size: 7pt; font-weight: 700; color: #b45309; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 1.5mm; }
-        .mistake-text { font-size: 9.5pt; font-weight: 600; color: #92400e; margin: 0 0 2mm 0; line-height: 1.55; }
-        .correction-text { font-size: 9pt; color: #44403c; line-height: 1.65; }
-
         /* ─── GLOSSARY MNEMONIC ─────────────────────────────────────────── */
         .glossary-mnemonic { font-size: 8pt; color: #7c3aed; font-style: italic; margin-top: 2mm; line-height: 1.45; }
 
@@ -778,7 +772,7 @@
     </div>
 
     {% if key_stats %}
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:3mm;margin-top:4mm;margin-bottom:2mm;">
+    <div style="display:grid;grid-template-columns:repeat({{ key_stats|length }},1fr);gap:3mm;margin-top:4mm;margin-bottom:2mm;">
         {% for stat in key_stats %}
         <div style="text-align:center;padding:4mm 3mm;background:var(--accent-lt);border-radius:8px;border:1px solid var(--accent-mid);">
             <div style="font-family:'Lora',Georgia,serif;font-size:18pt;font-weight:700;color:var(--accent);line-height:1.1;margin-bottom:2mm;">{{ stat.value }}</div>
