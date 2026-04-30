@@ -776,6 +776,17 @@
             {% endif %}
         {% endfor %}
     </div>
+
+    {% if key_stats %}
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:3mm;margin-top:4mm;margin-bottom:2mm;">
+        {% for stat in key_stats %}
+        <div style="text-align:center;padding:4mm 3mm;background:var(--accent-lt);border-radius:8px;border:1px solid var(--accent-mid);">
+            <div style="font-family:'Lora',Georgia,serif;font-size:18pt;font-weight:700;color:var(--accent);line-height:1.1;margin-bottom:2mm;">{{ stat.value }}</div>
+            <div style="font-size:7.5pt;color:var(--ink-3);line-height:1.4;">{{ stat.label }}</div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
     {% endif %}
 
 
@@ -856,6 +867,27 @@
         </div>
         {% endif %}
 
+        {% if sec.mistake or sec.remember %}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;margin-top:4mm;border-radius:8px;overflow:hidden;border:1px solid #fde68a;">
+            {% if sec.mistake %}
+            <div style="padding:3mm 4mm;background:#fffbeb;border-right:1px solid #fde68a;">
+                <div style="font-size:6.5pt;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#b45309;margin-bottom:1.5mm;">Common Mistake</div>
+                <div style="font-size:8.5pt;color:#78350f;line-height:1.6;">{{ sec.mistake }}</div>
+            </div>
+            {% else %}
+            <div style="background:#fffbeb;border-right:1px solid #fde68a;"></div>
+            {% endif %}
+            {% if sec.remember %}
+            <div style="padding:3mm 4mm;background:#f0fff4;">
+                <div style="font-size:6.5pt;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#059669;margin-bottom:1.5mm;">Remember This</div>
+                <div style="font-size:8.5pt;color:#134e4a;line-height:1.6;">{{ sec.remember }}</div>
+            </div>
+            {% else %}
+            <div style="background:#f0fff4;"></div>
+            {% endif %}
+        </div>
+        {% endif %}
+
         <div class="section-notes">
             <div class="notes-label">My Notes</div>
             <div class="notes-lines"></div>
@@ -904,26 +936,6 @@
         </li>
         {% endfor %}
     </ul>
-    {% endif %}
-
-
-    <!-- ══════════════════════════════════════════
-         COMMON MISTAKES
-    ══════════════════════════════════════════ -->
-    {% if common_mistakes %}
-    <div class="eyebrow-row pb-before">
-        <span class="eyebrow-label">Watch Out</span>
-    </div>
-    <hr class="eyebrow-rule">
-    <h2>Common Mistakes</h2>
-
-    {% for item in common_mistakes %}
-    <div class="mistake-card">
-        <div class="mistake-label">⚠ Misconception</div>
-        <div class="mistake-text">{{ item.mistake }}</div>
-        <div class="correction-text">✓ {{ item.correction }}</div>
-    </div>
-    {% endfor %}
     {% endif %}
 
 
