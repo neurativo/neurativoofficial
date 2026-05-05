@@ -6,6 +6,7 @@ import ExportModal from '../components/ExportModal';
 import QAAnswer from '../components/QAAnswer';
 import { useSEO } from '../lib/useSEO';
 import { renderDomainContent } from '../lib/renderDomainContent.jsx';
+import JobProgress from '../components/JobProgress.jsx';
 
 function fmtTs(seconds) {
     const s = Math.floor(seconds);
@@ -457,6 +458,7 @@ export default function LectureView() {
     const isDark = useIsDark();
 
     const [lecture, setLecture]         = useState(null);
+    const [isProcessing, setIsProcessing] = useState(false);
 
     useSEO({ title: lecture?.title || 'Lecture', noindex: true });
     const [summaryStatus, setSummaryStatus] = useState('live');
@@ -488,6 +490,8 @@ export default function LectureView() {
             .then(res => {
                 setLecture(res.data);
                 setSummaryStatus(res.data.summary_status || 'live');
+                const status = res.data?.summary_status;
+                setIsProcessing(status && !['final', 'done'].includes(status));
             })
             .catch(() => navigate('/app'))
             .finally(() => setLoading(false));
@@ -682,6 +686,20 @@ export default function LectureView() {
                         </button>
                     </div>
                 </nav>
+
+                {/* ── Job progress bar ── */}
+                {isProcessing && (
+                    <div style={{ padding: '16px 20px 0' }}>
+                        <JobProgress
+                            lectureId={lecture?.id}
+                            onDone={() => {
+                                setIsProcessing(false);
+                                // Refresh lecture data
+                                api.get(`/api/v1/lectures/${lecture.id}`).then(r => setLecture(r.data)).catch(() => {});
+                            }}
+                        />
+                    </div>
+                )}
 
                 {/* ── Two-panel body ── */}
                 <div className="lv-body" ref={bodyRef}>

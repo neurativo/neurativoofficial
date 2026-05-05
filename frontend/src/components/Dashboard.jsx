@@ -362,6 +362,18 @@ function LectureCard({ lecture, onDelete, onShare, onExport }) {
 
     return (
         <div className="db-card" onClick={() => navigate(`/lecture/${lecture.id}`)}>
+            {/* Processing badge */}
+            {['importing','compressing','transcribing','cleaning','generating','storing'].includes(lecture.summary_status) && (
+                <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                    fontSize: 11, padding: '2px 8px', borderRadius: 5,
+                    background: '#ede9fe', color: '#7c3aed',
+                    marginBottom: 8,
+                }}>
+                    &#x27F3; Processing&hellip;
+                </span>
+            )}
+
             {/* Top row: title + date */}
             <div className="db-card-top">
                 <div className="db-card-title">{lecture.title || 'Untitled Lecture'}</div>
