@@ -25,6 +25,7 @@ import AdminAnalytics from './pages/admin/AdminAnalytics.jsx';
 import AdminAnnouncements from './pages/admin/AdminAnnouncements.jsx';
 import AdminTeams from './pages/admin/AdminTeams.jsx';
 import AdminTeamDetail from './pages/admin/AdminTeamDetail.jsx';
+import CreditsPage from './pages/CreditsPage.jsx';
 import { ToastProvider } from './components/Toast.jsx';
 import TeamsApp from './TeamsApp.jsx';
 import './index.css';
@@ -79,6 +80,7 @@ function Root() {
             <Route path="/record"  element={<ProtectedRoute><App user={user} /></ProtectedRoute>} />
             <Route path="/lecture/:id" element={<ProtectedRoute><LectureView user={user} /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><ProfilePage user={user} /></ProtectedRoute>} />
+            <Route path="/credits" element={<ProtectedRoute><CreditsPage /></ProtectedRoute>} />
 
             <Route path="/admin" element={<AdminLayout />}>
                 <Route index element={<AdminDashboard />} />

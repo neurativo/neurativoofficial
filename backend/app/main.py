@@ -7,6 +7,7 @@ from slowapi.errors import RateLimitExceeded
 from app.api.endpoints import router as api_router
 from app.api.admin import router as admin_router
 from app.api.teams import router as teams_router
+from app.api.credits import router as credits_router
 from app.core.config import settings
 from app.core.rate_limit import limiter
 
@@ -57,6 +58,7 @@ async def add_security_headers(request: Request, call_next):
 app.include_router(api_router, prefix="/api/v1")
 app.include_router(admin_router, prefix="/api/v1")
 app.include_router(teams_router, prefix="/api/v1")
+app.include_router(credits_router, prefix="/api/v1")
 
 
 @app.get("/")

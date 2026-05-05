@@ -26,6 +26,7 @@ from app.services.summarization_service import (
 from app.services.recompute_service import recompute_final_summary
 from app.services.embedding_service import get_embeddings, cosine_similarity
 from app.services.cif_service import classify_chunk
+from app.services.credits_service import check_credits, deduct_credit, mark_credit_deducted, refund_credit
 from app.services.supabase_service import (
     ensure_user_profile,
     save_lecture,
@@ -303,6 +304,7 @@ async def _transcribe_background(file_bytes: bytes, filename: str, lecture_id: s
     """
     Background task: transcribe audio bytes, update the lecture, then summarize.
     Not bound by HTTP timeout — runs until completion or failure.
+    Deducts 1 credit on success; refunds on failure if credit was already marked.
     """
     # Signal that transcription is starting.
     try:
@@ -377,7 +379,18 @@ async def _transcribe_background(file_bytes: bytes, filename: str, lecture_id: s
         print(f"[bg_transcribe] summary done lecture={lecture_id} sections={len(section_summaries)}")
     except Exception as e:
         print(f"[bg_transcribe] summarization failed for lecture={lecture_id}: {e}")
+        try:
+            refund_credit(user_id, lecture_id)
+        except Exception:
+            pass
         return
+
+    # Deduct 1 credit — processing succeeded.
+    try:
+        deduct_credit(user_id, lecture_id)
+        mark_credit_deducted(lecture_id)
+    except Exception as e:
+        print(f"[bg_transcribe] credit deduction failed (non-fatal): {e}")
 
     # Everything done — signal frontend to navigate.
     try:
@@ -398,6 +411,9 @@ async def transcribe(
     # Extension check
     if not file.filename.lower().endswith(_ALLOWED_AUDIO_EXTENSIONS):
         raise HTTPException(status_code=400, detail="Invalid file format")
+
+    # Credit check — must have at least 1 credit before processing
+    check_credits(str(user.id))
 
     # Fetch plan limits
     profile = get_user_profile(str(user.id))
@@ -487,6 +503,8 @@ def summarize(lecture_id: str, user=Depends(get_active_user)):
 @router.post("/live/start")
 @limiter.limit("10/minute")
 def start_live_session(request: Request, body: StartSessionBody = StartSessionBody(), user=Depends(get_active_user)):
+    # Credit check — must have at least 1 credit before starting a session
+    check_credits(str(user.id))
     try:
         profile = get_user_profile(str(user.id))
         plan_tier = profile.get("plan_tier") or "free"
@@ -1112,6 +1130,13 @@ def end_session_endpoint(lecture_id: str, background_tasks: BackgroundTasks, use
         # Kick off definitive recompute from raw transcript
         set_summary_status(lecture_id, "recomputing")
         background_tasks.add_task(recompute_final_summary, lecture_id)
+
+        # Deduct 1 credit for the completed live session
+        try:
+            deduct_credit(str(user.id), lecture_id)
+            mark_credit_deducted(lecture_id)
+        except Exception as e:
+            print(f"[live/end] credit deduction failed (non-fatal): {e}")
 
         return {"status": "ended", "lecture_id": lecture_id}
 

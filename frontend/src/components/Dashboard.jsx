@@ -2,10 +2,12 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useClerk } from '@clerk/react';
 import api from '../lib/api';
+import { useCreditsApi } from '../lib/creditsApi.js';
 import { useToast } from './Toast';
 import ExportModal from './ExportModal';
 import ImportModal from './ImportModal';
 import Footer from './Footer';
+import { useSEO } from '../lib/useSEO';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const C = {
@@ -180,6 +182,12 @@ const CSS = `
   .ob-mic-status { font-size: 13px; margin-top: 12px; margin-bottom: 20px; }
   .ob-checkmark { width: 56px; height: 56px; border-radius: 50%; background: #f0fdf4; border: 1.5px solid #86efac; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; color: #16a34a; }
 
+  /* Credits chip */
+  .db-credits-chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 8px; border: 1px solid ${C.border}; background: ${C.card}; font-size: 12px; font-weight: 500; color: ${C.sec}; text-decoration: none; transition: border-color .15s, color .15s; white-space: nowrap; }
+  .db-credits-chip:hover { border-color: ${C.dark}; color: ${C.text}; }
+  .db-credits-chip.low { border-color: #fde68a; background: #fef3c7; color: #b45309; }
+  .dark .db-credits-chip.low { background: rgba(217,119,6,0.15); border-color: rgba(251,191,36,0.3); color: #fbbf24; }
+
   /* ── Dark mode overrides ── */
   .dark .db-pill-topic { background: #2d1a4a; color: #c4b5fd; border-color: #4c2d7a; }
   .dark .db-pill-lang  { background: #0f1e38; color: #93c5fd; border-color: #1e3a6a; }
@@ -313,6 +321,7 @@ function UserMenu({ user, onSignOut }) {
                             <div className="db-dropdown-email">{user?.email}</div>
                         </div>
                         <Link to="/profile" className="db-dropdown-item" onClick={() => setOpen(false)}>Profile</Link>
+                        <Link to="/credits" className="db-dropdown-item" onClick={() => setOpen(false)}>Credits</Link>
                         {isAdmin && (
                             <>
                                 <div className="db-dropdown-divider" />
@@ -398,13 +407,16 @@ function LectureCard({ lecture, onDelete, onShare, onExport }) {
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 export default function Dashboard({ user }) {
+    useSEO({ title: 'Dashboard', noindex: true });
     const navigate = useNavigate();
     const addToast  = useToast();
     const { signOut } = useClerk();
+    const creditsApi = useCreditsApi();
 
     const [lectures, setLectures] = useState([]);
     const [loading, setLoading]   = useState(true);
     const [usage, setUsage]       = useState(null);
+    const [credits, setCredits]   = useState(null);
     const [search, setSearch]     = useState('');
     const [topicFilter, setTopicFilter] = useState('');
     const [langFilter,  setLangFilter]  = useState('');
@@ -431,6 +443,10 @@ export default function Dashboard({ user }) {
 
     useEffect(() => {
         api.get('/api/v1/usage').then(res => setUsage(res.data)).catch(() => {});
+    }, []);
+
+    useEffect(() => {
+        creditsApi.getBalance().then(res => setCredits(res.data)).catch(() => {});
     }, []);
 
     useEffect(() => {
@@ -547,6 +563,13 @@ export default function Dashboard({ user }) {
                     </Link>
                     <div className="db-header-right">
                         <ThemeToggle />
+                        {credits !== null && (
+                            <Link to="/credits" className={`db-credits-chip${credits.low_credits ? ' low' : ''}`}>
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                                {credits.credits} cr
+                                {credits.low_credits ? ' ⚠' : ''}
+                            </Link>
+                        )}
                         <button className="db-btn-import" onClick={() => setImportOpen(true)}>
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
@@ -625,6 +648,22 @@ export default function Dashboard({ user }) {
                             </div>
                         ))
                     }
+                    {credits?.low_credits && (
+                        <div className="db-announcement db-announcement-warning" style={{ marginBottom: 12 }}>
+                            <span>
+                                You have <strong>{credits.credits} credit{credits.credits !== 1 ? 's' : ''}</strong> remaining — each lecture uses 1 credit.{' '}
+                                <Link to="/credits" style={{ color: 'inherit', fontWeight: 600 }}>Buy more →</Link>
+                            </span>
+                        </div>
+                    )}
+                    {credits?.credits === 0 && (
+                        <div className="db-announcement db-announcement-maintenance" style={{ marginBottom: 12 }}>
+                            <span>
+                                You're out of credits. New lectures won't be processed until you add more.{' '}
+                                <Link to="/credits" style={{ color: 'inherit', fontWeight: 600 }}>Get credits →</Link>
+                            </span>
+                        </div>
+                    )}
                     <h1 className="db-page-title">Your lectures</h1>
                     <p className="db-page-sub">{loading ? '' : `${lectures.length} ${lectureWord}`}</p>
 
