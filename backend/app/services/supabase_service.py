@@ -1665,3 +1665,71 @@ def delete_announcement(announcement_id: int) -> None:
     if not supabase:
         raise Exception("Supabase not initialized")
     supabase.table("announcements").delete().eq("id", announcement_id).execute()
+
+
+# ── Content save helpers ───────────────────────────────────────────────────────
+
+def save_generated_content(lecture_id: str, content: dict) -> None:
+    """
+    Saves summary, flashcards, quiz, and glossary from a content_generator result.
+    Idempotent — safe to call multiple times.
+    """
+    import json as _json
+    db = _fresh_db()
+    update = {}
+    if content.get("summary"):
+        update["master_summary"] = content["summary"]
+    if content.get("flashcards") is not None:
+        update["flashcards"] = _json.dumps(content["flashcards"])
+    if content.get("quiz") is not None:
+        update["quiz"] = _json.dumps(content["quiz"])
+    if content.get("glossary") is not None:
+        update["glossary"] = _json.dumps(content["glossary"])
+    if update:
+        db.table("lectures").update(update).eq("id", lecture_id).execute()
+
+
+def get_stale_free_lectures(days: int = 30) -> list:
+    """
+    Returns lectures owned by free-tier users older than `days` days
+    where content has not yet been deleted.
+    """
+    from datetime import datetime, timezone, timedelta
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    db = _fresh_db()
+    try:
+        resp = db.table("lectures").select(
+            "id,user_id,title,created_at"
+        ).lt("created_at", cutoff).eq("content_deleted", False).execute()
+        rows = resp.data or []
+        # Filter to free-tier users
+        free_users = set()
+        if rows:
+            user_ids = list({r["user_id"] for r in rows if r.get("user_id")})
+            sub_resp = db.table("user_subscriptions").select(
+                "user_id"
+            ).in_("user_id", user_ids).eq("plan_tier", "free").execute()
+            free_users = {r["user_id"] for r in (sub_resp.data or [])}
+        return [r for r in rows if r.get("user_id") in free_users]
+    except Exception as e:
+        print(f"[retention] get_stale_free_lectures error: {e}")
+        return []
+
+
+def mark_content_deleted(lecture_id: str) -> None:
+    """Marks a lecture's content as deleted and schedules deletion date."""
+    _fresh_db().table("lectures").update({
+        "transcript": "",
+        "master_summary": "",
+        "flashcards": None,
+        "quiz": None,
+        "glossary": None,
+        "content_deleted": True,
+    }).eq("id", lecture_id).execute()
+
+
+def set_deletion_scheduled(lecture_id: str, scheduled_at: str) -> None:
+    """Sets the deletion_scheduled_at timestamp for user notification."""
+    _fresh_db().table("lectures").update({
+        "deletion_scheduled_at": scheduled_at,
+    }).eq("id", lecture_id).execute()
