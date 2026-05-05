@@ -23,8 +23,15 @@ import AdminSystem from './pages/admin/AdminSystem.jsx';
 import AdminCosts from './pages/admin/AdminCosts.jsx';
 import AdminAnalytics from './pages/admin/AdminAnalytics.jsx';
 import AdminAnnouncements from './pages/admin/AdminAnnouncements.jsx';
+import AdminTeams from './pages/admin/AdminTeams.jsx';
+import AdminTeamDetail from './pages/admin/AdminTeamDetail.jsx';
 import { ToastProvider } from './components/Toast.jsx';
+import TeamsApp from './TeamsApp.jsx';
 import './index.css';
+
+const IS_TEAMS_DOMAIN =
+    window.location.hostname === 'teams.neurativo.com' ||
+    window.location.hostname.startsWith('teams.');
 
 // Apply saved theme immediately (before first render to avoid flash)
 if (localStorage.getItem('neurativo_theme') === 'dark') {
@@ -84,6 +91,8 @@ function Root() {
                 <Route path="analytics" element={<AdminAnalytics />} />
                 <Route path="announcements" element={<AdminAnnouncements />} />
                 <Route path="system" element={<AdminSystem />} />
+                <Route path="teams" element={<AdminTeams />} />
+                <Route path="teams/:slug" element={<AdminTeamDetail />} />
             </Route>
 
             <Route path="*" element={isLoaded ? <NotFoundPage /> : null} />
@@ -114,12 +123,18 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 afterSignUpUrl="/app"
             >
             <BrowserRouter>
-                <AuthModalProvider>
+                {IS_TEAMS_DOMAIN ? (
                     <ToastProvider>
-                        <GradientOrbs />
-                        <Root />
+                        <TeamsApp />
                     </ToastProvider>
-                </AuthModalProvider>
+                ) : (
+                    <AuthModalProvider>
+                        <ToastProvider>
+                            <GradientOrbs />
+                            <Root />
+                        </ToastProvider>
+                    </AuthModalProvider>
+                )}
             </BrowserRouter>
         </ClerkProvider>
     </React.StrictMode>

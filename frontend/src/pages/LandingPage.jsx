@@ -1228,6 +1228,32 @@ function Pricing() {
                 </div>
 
             </div>
+
+            {/* Teams banner */}
+            <a
+                href="https://teams.neurativo.com"
+                style={{
+                    display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap',
+                    marginTop: 16, padding: '20px 24px',
+                    border: '1.5px solid #f0ede8', borderRadius: 14,
+                    background: '#fff', textDecoration: 'none', color: 'inherit',
+                    transition: 'border-color .15s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.borderColor = '#1a1a1a'}
+                onMouseLeave={e => e.currentTarget.style.borderColor = '#f0ede8'}
+            >
+                <div style={{ fontSize: 22 }}>👥</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 2 }}>Neurativo Teams — for organizations</div>
+                    <div style={{ fontSize: 13, color: '#6b6b6b' }}>
+                        Manage seats for your whole team. Student seats from $15/mo · Pro seats from $22/mo · Invite by email, link, or domain.
+                    </div>
+                </div>
+                <div style={{ fontSize: 13, fontWeight: 500, color: '#1a1a1a', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    Learn more <span>→</span>
+                </div>
+            </a>
+
         </section>
     );
 }

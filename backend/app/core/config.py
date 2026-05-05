@@ -28,7 +28,7 @@ class Settings:
         o.strip()
         for o in os.getenv(
             "ALLOWED_ORIGINS",
-            "https://neurativo.com,https://www.neurativo.com"
+            "https://neurativo.com,https://www.neurativo.com,https://teams.neurativo.com"
         ).split(",")
         if o.strip()
     ]
@@ -38,6 +38,9 @@ class Settings:
         for u in os.getenv("ADMIN_USER_IDS", "").split(",")
         if u.strip()
     ]
+    # Resend — transactional email (invite emails); optional
+    RESEND_API_KEY: str = os.getenv("RESEND_API_KEY", "")
+    RESEND_FROM_EMAIL: str = os.getenv("RESEND_FROM_EMAIL", "Neurativo <noreply@neurativo.com>")
 
 
 settings = Settings()
