@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { useUser, SignIn } from '@clerk/react';
 import { joinOrg } from '../../lib/teamsApi.js';
+import TeamsNav from '../../components/teams/TeamsNav.jsx';
 
 const CSS = `
   .oj *, .oj *::before, .oj *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -54,12 +55,7 @@ export default function OrgJoinPage() {
         return (
             <div className="oj">
                 <style>{CSS}</style>
-                <nav className="oj-nav">
-                    <a href="/" className="oj-logo">
-                        <div className="oj-logo-icon"><svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg></div>
-                        Neurativo <span className="oj-logo-badge">Teams</span>
-                    </a>
-                </nav>
+                <TeamsNav />
                 <div className="oj-body">
                     <div className="oj-card">
                         <div className="oj-icon">👋</div>
@@ -76,12 +72,7 @@ export default function OrgJoinPage() {
         return (
             <div className="oj">
                 <style>{CSS}</style>
-                <nav className="oj-nav">
-                    <a href="/" className="oj-logo">
-                        <div className="oj-logo-icon"><svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg></div>
-                        Neurativo <span className="oj-logo-badge">Teams</span>
-                    </a>
-                </nav>
+                <TeamsNav />
                 <div className="oj-body">
                     <div className="oj-card">
                         <div className="oj-icon">🎉</div>

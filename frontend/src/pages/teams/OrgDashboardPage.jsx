@@ -4,6 +4,7 @@ import { useUser } from '@clerk/react';
 import {
     getDashboard, createInvite, revokeInvite, updateMember, listInvites,
 } from '../../lib/teamsApi.js';
+import TeamsNav from '../../components/teams/TeamsNav.jsx';
 
 const CSS = `
   .od *, .od *::before, .od *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -180,17 +181,12 @@ export default function OrgDashboardPage() {
     return (
         <div className="od">
             <style>{CSS}</style>
-            <nav className="od-nav">
-                <a href="/" className="od-logo">
-                    <div className="od-logo-icon"><svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg></div>
-                    Neurativo <span className="od-logo-badge">Teams</span>
-                </a>
-                <span className="od-nav-org">/ {org.name}</span>
-                <div className="od-nav-right">
-                    <Link to={`/${slug}/settings`} className="od-btn-sm">Settings</Link>
-                    <a href="https://neurativo.com/app" className="od-btn-dark-sm">Open app</a>
-                </div>
-            </nav>
+            <TeamsNav orgName={org.name} right={
+                <>
+                    <Link to={`/${slug}/settings`} className="tn-btn-ghost">Settings</Link>
+                    <a href="https://neurativo.com/app" className="tn-btn-dark">Open app</a>
+                </>
+            } />
 
             <div className="od-body">
                 {/* Seat stats */}

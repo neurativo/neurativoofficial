@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useUser } from '@clerk/react';
 import { getDashboard, updateOrg } from '../../lib/teamsApi.js';
+import TeamsNav from '../../components/teams/TeamsNav.jsx';
 
 const CSS = `
   .os *, .os *::before, .os *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -97,16 +98,9 @@ export default function OrgSettingsPage() {
     return (
         <div className="os">
             <style>{CSS}</style>
-            <nav className="os-nav">
-                <a href="/" className="os-logo">
-                    <div className="os-logo-icon"><svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg></div>
-                    Neurativo <span className="os-logo-badge">Teams</span>
-                </a>
-                <span className="os-nav-org">/ {org?.name}</span>
-                <div className="os-nav-right">
-                    <Link to={`/${slug}/dashboard`} className="os-btn-sm">← Dashboard</Link>
-                </div>
-            </nav>
+            <TeamsNav orgName={org?.name} right={
+                <Link to={`/${slug}/dashboard`} className="tn-btn-ghost">← Dashboard</Link>
+            } />
 
             <div className="os-body">
                 <h1 className="os-title">Organization settings</h1>

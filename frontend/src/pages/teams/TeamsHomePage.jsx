@@ -1,10 +1,11 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useUser } from '@clerk/react';
+import TeamsNav from '../../components/teams/TeamsNav.jsx';
 
 const CSS = `
   .th *, .th *::before, .th *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  .th { font-family: 'Inter', sans-serif; background: #fafaf9; color: #1a1a1a; min-height: 100vh; -webkit-font-smoothing: antialiased; }
+  .th { font-family: 'Inter', sans-serif; background: transparent; color: #1a1a1a; min-height: 100vh; -webkit-font-smoothing: antialiased; }
 
   .th-nav {
     position: sticky; top: 0; z-index: 50; height: 60px;
@@ -76,28 +77,16 @@ export default function TeamsHomePage() {
         <div className="th">
             <style>{CSS}</style>
 
-            {/* Nav */}
-            <nav className="th-nav">
-                <a href="https://neurativo.com" className="th-logo">
-                    <div className="th-logo-icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
-                            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-                        </svg>
-                    </div>
-                    Neurativo
-                    <span className="th-logo-badge">Teams</span>
-                </a>
-                <div className="th-nav-right">
-                    {isSignedIn ? (
-                        <Link to="/new" className="th-btn-dark">Create organization</Link>
-                    ) : (
-                        <>
-                            <a href="https://neurativo.com" className="th-btn-ghost">Back to Neurativo</a>
-                            <Link to="/new" className="th-btn-dark">Get started</Link>
-                        </>
-                    )}
-                </div>
-            </nav>
+            <TeamsNav right={
+                isSignedIn ? (
+                    <Link to="/new" className="tn-btn-dark">Create organization</Link>
+                ) : (
+                    <>
+                        <a href="https://neurativo.com" className="tn-btn-ghost">Back to Neurativo</a>
+                        <Link to="/new" className="tn-btn-dark">Get started</Link>
+                    </>
+                )
+            } />
 
             {/* Hero */}
             <section className="th-hero">

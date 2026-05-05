@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUser, SignIn } from '@clerk/react';
 import { createOrg } from '../../lib/teamsApi.js';
+import TeamsNav from '../../components/teams/TeamsNav.jsx';
 
 const CSS = `
   .co *, .co *::before, .co *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -79,16 +80,7 @@ export default function CreateOrgPage() {
         return (
             <div className="co">
                 <style>{CSS}</style>
-                <nav className="co-nav">
-                    <a href="/" className="co-logo">
-                        <div className="co-logo-icon">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
-                                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-                            </svg>
-                        </div>
-                        Neurativo <span className="co-logo-badge">Teams</span>
-                    </a>
-                </nav>
+                <TeamsNav />
                 <div className="co-signin">
                     <h2>Sign in to create an organization</h2>
                     <p>You need a Neurativo account to create and manage a team.</p>

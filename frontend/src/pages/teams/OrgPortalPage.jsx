@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useUser } from '@clerk/react';
 import { getOrgPublic, getMyOrg } from '../../lib/teamsApi.js';
+import TeamsNav from '../../components/teams/TeamsNav.jsx';
 
 const CSS = `
   .op *, .op *::before, .op *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -54,12 +55,7 @@ export default function OrgPortalPage() {
     if (!org) return (
         <div className="op">
             <style>{CSS}</style>
-            <nav className="op-nav">
-                <a href="/" className="op-logo">
-                    <div className="op-logo-icon"><svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg></div>
-                    Neurativo <span className="op-logo-badge">Teams</span>
-                </a>
-            </nav>
+            <TeamsNav />
             <div className="op-notfound">
                 <h2>Organization not found</h2>
                 <p>This link may be invalid or the organization no longer exists.</p>
@@ -73,12 +69,7 @@ export default function OrgPortalPage() {
     return (
         <div className="op">
             <style>{CSS}</style>
-            <nav className="op-nav">
-                <a href="/" className="op-logo">
-                    <div className="op-logo-icon"><svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg></div>
-                    Neurativo <span className="op-logo-badge">Teams</span>
-                </a>
-            </nav>
+            <TeamsNav />
             <div className="op-body">
                 <div className="op-avatar">{org.name.charAt(0).toUpperCase()}</div>
                 <h1 className="op-name">{org.name}</h1>
