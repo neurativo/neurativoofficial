@@ -825,7 +825,8 @@ def get_lecture_full(lecture_id: str):
         response = db.table("lectures").select(
             "id, title, topic, language, transcript, master_summary, summary, "
             "total_chunks, total_sections, total_duration_seconds, created_at, "
-            "share_token, share_views, summary_status"
+            "share_token, share_views, summary_status, "
+            "flashcards, quiz, glossary, deletion_scheduled_at, content_deleted"
         ).eq("id", lecture_id).execute()
         if hasattr(response, "data") and response.data:
             return response.data[0]
@@ -835,7 +836,8 @@ def get_lecture_full(lecture_id: str):
         response = db.table("lectures").select(
             "id, title, topic, language, transcript, master_summary, summary, "
             "total_chunks, total_sections, total_duration_seconds, created_at, "
-            "share_token, share_views"
+            "share_token, share_views, "
+            "flashcards, quiz, glossary, deletion_scheduled_at, content_deleted"
         ).eq("id", lecture_id).execute()
         if hasattr(response, "data") and response.data:
             row = response.data[0]

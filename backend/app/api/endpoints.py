@@ -13,7 +13,7 @@ from app.core.config import settings
 from app.core.auth import get_current_user, get_active_user
 from app.core.plans import get_limits, is_unlimited
 from app.core.rate_limit import limiter
-from app.services.openai_service import transcribe_audio, transcribe_audio_bytes
+from app.services.openai_service import transcribe_audio, transcribe_audio_bytes, _bg_client, filter_segments_by_confidence
 from app.services.explanation_service import generate_explanation
 from app.services.qa_service import answer_lecture_question
 from app.services.pdf_service import generate_lecture_pdf
@@ -27,6 +27,11 @@ from app.services.recompute_service import recompute_final_summary
 from app.services.embedding_service import get_embeddings, cosine_similarity
 from app.services.cif_service import classify_chunk
 from app.services.credits_service import check_credits, deduct_credit, mark_credit_deducted, refund_credit
+from app.services.audio_service import compress, split_for_whisper
+from app.services.transcript_cleaner import clean as clean_transcript
+from app.services.content_generator import generate as generate_content, WHISPER_MODEL
+from app.services.job_queue import create_job, update_job_status, job_is_running
+from app.services.supabase_service import save_generated_content
 from app.services.supabase_service import (
     ensure_user_profile,
     save_lecture,
@@ -300,103 +305,152 @@ async def _check_audio_magic(file: UploadFile) -> bool:
     return False
 
 
-async def _transcribe_background(file_bytes: bytes, filename: str, lecture_id: str, user_id: str) -> None:
+async def _process_lecture_job(
+    file_bytes: bytes,
+    filename: str,
+    lecture_id: str,
+    user_id: str,
+) -> None:
     """
-    Background task: transcribe audio bytes, update the lecture, then summarize.
-    Not bound by HTTP timeout — runs until completion or failure.
-    Deducts 1 credit on success; refunds on failure if credit was already marked.
+    Full async processing pipeline for an uploaded lecture.
+    Updates processing_jobs status at every step.
+    Deducts 1 credit on success. Does NOT deduct on failure.
     """
-    # Signal that transcription is starting.
-    try:
-        set_summary_status(lecture_id, "importing")
-    except Exception:
-        pass
+    import asyncio as _asyncio
 
+    async def _step(status: str) -> None:
+        await _asyncio.to_thread(update_job_status, lecture_id, status)
+        try:
+            set_summary_status(lecture_id, status if status not in ("done",) else "final")
+        except Exception:
+            pass
+
+    # ── Step 1: Check transcript cache ────────────────────────────────────────
+    await _step("compressing")
     try:
-        transcript_text, language = await transcribe_audio_bytes(file_bytes, filename)
-        update_lecture_transcript(lecture_id, transcript_text, language)
+        cached = get_lecture_transcript(lecture_id)
+        if cached and cached.strip():
+            transcript_text = cached
+            language = get_lecture_language(lecture_id) or "en"
+            print(f"[pipeline] {lecture_id}: transcript cache hit — skipping Whisper")
+            await _process_from_transcript(lecture_id, user_id, transcript_text, language)
+            return
+    except Exception:
+        pass  # No cache — proceed normally
+
+    # ── Step 2: Compress audio ────────────────────────────────────────────────
+    try:
+        compressed = await _asyncio.to_thread(compress, file_bytes, filename)
+    except Exception as e:
+        await _asyncio.to_thread(update_job_status, lecture_id, "failed", str(e))
+        return
+
+    # ── Step 3: Transcribe via Whisper (with chunking if needed) ──────────────
+    await _step("transcribing")
+    try:
+        chunks = split_for_whisper(compressed, filename.rsplit(".", 1)[0] + ".mp3")
+        transcript_parts = []
+        detected_language = "en"
+
+        for chunk_bytes, chunk_name in chunks:
+            from io import BytesIO
+            file_obj = BytesIO(chunk_bytes)
+            file_obj.name = chunk_name
+            chunk_resp = await _asyncio.to_thread(
+                _bg_client.audio.transcriptions.create,
+                model=WHISPER_MODEL,
+                file=file_obj,
+                response_format="verbose_json",
+                temperature=0,
+            )
+            segs = getattr(chunk_resp, "segments", None) or []
+            if segs:
+                text = filter_segments_by_confidence(segs)
+                audio_sec = segs[-1].end if segs else 0.0
+            else:
+                text = chunk_resp.text or ""
+                audio_sec = 0.0
+            from app.services.cost_tracker import log_cost as _log_cost
+            _log_cost("whisper_import", WHISPER_MODEL, audio_seconds=audio_sec)
+            transcript_parts.append(text)
+            detected_language = getattr(chunk_resp, "language", None) or detected_language
+
+        transcript_text = " ".join(transcript_parts).strip()
         word_count = len(transcript_text.split())
         estimated_minutes = max(1, word_count // 150)
+        update_lecture_transcript(lecture_id, transcript_text, detected_language)
         try:
             increment_uploads_this_month(user_id, duration_minutes=estimated_minutes)
         except Exception:
             pass
-        print(f"[bg_transcribe] done lecture={lecture_id} lang={language} ~{estimated_minutes}min")
+
     except Exception as e:
-        print(f"[bg_transcribe] transcription failed for lecture={lecture_id}: {e}")
+        await _asyncio.to_thread(update_job_status, lecture_id, "failed", f"Transcription failed: {e}")
         return
 
-    # Transcript saved — signal that summarisation is starting.
+    await _process_from_transcript(lecture_id, user_id, transcript_text, detected_language)
+
+
+async def _process_from_transcript(
+    lecture_id: str,
+    user_id: str,
+    transcript_text: str,
+    language: str,
+) -> None:
+    """
+    Steps 4-6 of the pipeline: clean → generate → store.
+    Called both from fresh transcription AND cache-hit path.
+    """
+    import asyncio as _asyncio
+    from app.services.cost_tracker import log_cost as _log_cost
+
+    # ── Step 4: Clean transcript ───────────────────────────────────────────────
+    await _asyncio.to_thread(update_job_status, lecture_id, "cleaning")
     try:
-        set_summary_status(lecture_id, "summarizing")
-    except Exception:
-        pass
-
-    # Auto-summarize after transcription completes.
-    # Chunk the transcript into ~1500-word segments, summarise each via
-    # summarize_topic_segment (mirrors the live path's section summarisation),
-    # then combine with generate_master_summary for live-path quality.
-    try:
-        from app.services.summarization_service import (
-            generate_master_summary,
-            summarize_topic_segment,
-        )
-        import asyncio as _asyncio
-
-        # Fetch topic for better section context (non-fatal if unavailable).
-        try:
-            _lec = get_lecture_full(lecture_id)
-            topic = _lec.get("topic") if _lec else None
-        except Exception:
-            topic = None
-
-        words = transcript_text.split()
-        chunk_size = 1500
-        chunks = [
-            " ".join(words[i : i + chunk_size])
-            for i in range(0, max(len(words), 1), chunk_size)
-        ]
-
-        section_summaries = []
-        for idx, chunk in enumerate(chunks, start=1):
-            title = f"Part {idx}"
-            try:
-                sec = await _asyncio.to_thread(
-                    summarize_topic_segment, chunk, title, topic, language
-                )
-                section_summaries.append(sec)
-            except Exception as _e:
-                print(f"[bg_transcribe] section {idx} summarisation failed (skipped): {_e}")
-
-        if not section_summaries:
-            # Fallback: if all section summaries failed, pass raw text truncated.
-            section_summaries = [transcript_text[:6000]]
-
-        summary = await _asyncio.to_thread(
-            generate_master_summary, section_summaries, language=language
-        )
-        update_lecture_summary_only(lecture_id, summary)
-        print(f"[bg_transcribe] summary done lecture={lecture_id} sections={len(section_summaries)}")
+        cleaned = await _asyncio.to_thread(clean_transcript, transcript_text)
     except Exception as e:
-        print(f"[bg_transcribe] summarization failed for lecture={lecture_id}: {e}")
-        try:
-            refund_credit(user_id, lecture_id)
-        except Exception:
-            pass
+        await _asyncio.to_thread(update_job_status, lecture_id, "failed", f"Cleaning failed: {e}")
         return
 
-    # Deduct 1 credit — processing succeeded.
+    # ── Step 5: Single GPT call — generate all content ────────────────────────
+    await _asyncio.to_thread(update_job_status, lecture_id, "generating")
     try:
-        deduct_credit(user_id, lecture_id)
-        mark_credit_deducted(lecture_id)
-    except Exception as e:
-        print(f"[bg_transcribe] credit deduction failed (non-fatal): {e}")
+        lecture = get_lecture_full(lecture_id)
+        title   = (lecture or {}).get("title", "Lecture")
+        topic   = (lecture or {}).get("topic")
+        existing_summary    = (lecture or {}).get("master_summary") or ""
+        existing_flashcards = (lecture or {}).get("flashcards") or []
 
-    # Everything done — signal frontend to navigate.
+        content = await _asyncio.to_thread(
+            generate_content,
+            cleaned, title, topic, language,
+            False,  # force = False → use cache if available
+            existing_summary, existing_flashcards,
+        )
+    except Exception as e:
+        await _asyncio.to_thread(update_job_status, lecture_id, "failed", f"Content generation failed: {e}")
+        return
+
+    # ── Step 6: Store results ─────────────────────────────────────────────────
+    await _asyncio.to_thread(update_job_status, lecture_id, "storing")
     try:
+        if content is None:
+            print(f"[pipeline] {lecture_id}: using cached content (no GPT call needed)")
+        elif content:
+            await _asyncio.to_thread(save_generated_content, lecture_id, content)
+        # Mark done
         set_summary_status(lecture_id, "final")
-    except Exception:
-        pass
+        await _asyncio.to_thread(update_job_status, lecture_id, "done")
+
+        # Deduct 1 credit — only on success
+        try:
+            deduct_credit(user_id, lecture_id)
+            mark_credit_deducted(lecture_id)
+        except Exception as e:
+            print(f"[pipeline] credit deduction failed (non-fatal): {e}")
+
+    except Exception as e:
+        await _asyncio.to_thread(update_job_status, lecture_id, "failed", f"Storing failed: {e}")
 
 
 @router.post("/transcribe")
@@ -476,16 +530,53 @@ async def transcribe(
     except Exception:
         pass
 
-    # Increment upload counter now (non-reversible — uploading counts even if transcription fails)
+    # Reject if a job is already running for this lecture
+    if job_is_running(lecture_id):
+        return {"lecture_id": lecture_id, "status": "already_processing"}
+
+    # Create job record
     try:
-        increment_uploads_this_month(str(user.id))
-    except Exception:
-        pass
+        create_job(lecture_id, str(user.id))
+    except Exception as e:
+        print(f"[transcribe] create_job failed (non-fatal): {e}")
 
-    # Schedule transcription + summarization as a background task (not bound by HTTP timeout)
-    background_tasks.add_task(_transcribe_background, file_bytes, filename, lecture_id, str(user.id))
+    # Schedule job as background task
+    background_tasks.add_task(_process_lecture_job, file_bytes, filename, lecture_id, str(user.id))
+    return {"lecture_id": lecture_id, "status": "queued"}
 
-    return {"lecture_id": lecture_id, "status": "processing"}
+
+@router.post("/lectures/{lecture_id}/regenerate")
+@limiter.limit("3/minute")
+async def regenerate_content(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    lecture_id: str,
+    user=Depends(get_active_user),
+):
+    """
+    Re-runs content generation (GPT call) for an existing lecture.
+    Does NOT re-transcribe — uses the stored transcript.
+    Does NOT deduct credits (regeneration is free).
+    """
+    _check_owner(lecture_id, user.id)
+    _validate_uuid(lecture_id)
+
+    if job_is_running(lecture_id):
+        raise HTTPException(status_code=409, detail="A processing job is already running for this lecture.")
+
+    lecture = get_lecture_full(lecture_id)
+    transcript = (lecture or {}).get("transcript") or ""
+    if not transcript.strip():
+        raise HTTPException(status_code=400, detail="No transcript available to regenerate from.")
+
+    async def _regen():
+        import asyncio as _asyncio
+        language = get_lecture_language(lecture_id) or "en"
+        create_job(lecture_id, str(user.id))
+        await _process_from_transcript(lecture_id, str(user.id), transcript, language)
+
+    background_tasks.add_task(_regen)
+    return {"lecture_id": lecture_id, "status": "queued"}
 
 
 @router.get("/summarize/{lecture_id}")
@@ -1230,10 +1321,20 @@ def ask_question_auth(request: Request, lecture_id: str, body: QuestionRequest, 
 def get_lecture_full_endpoint(lecture_id: str, user=Depends(get_active_user)):
     """Returns the complete lecture data including transcript, summary, and share state."""
     _check_owner(lecture_id, user.id)
-    lecture = get_lecture_full(lecture_id)
-    if not lecture:
+    lecture_data = get_lecture_full(lecture_id)
+    if not lecture_data:
         raise HTTPException(status_code=404, detail="Lecture not found")
-    return lecture
+    import json as _json
+    for field in ("flashcards", "quiz", "glossary"):
+        val = lecture_data.get(field)
+        if isinstance(val, str):
+            try:
+                lecture_data[field] = _json.loads(val)
+            except Exception:
+                lecture_data[field] = []
+        elif val is None:
+            lecture_data[field] = []
+    return lecture_data
 
 
 @router.get("/lectures/{lecture_id}/visual-frames")
