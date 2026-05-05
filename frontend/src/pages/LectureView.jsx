@@ -199,6 +199,29 @@ const CSS = `
     .lv-drag-handle { display: flex; }
     .lv-left { border-bottom: none !important; }
   }
+
+  /* Flashcards */
+  .lv-card-flip { perspective: 800px; height: 160px; cursor: pointer; margin-bottom: 12px; }
+  .lv-card-inner { position: relative; width: 100%; height: 100%; transition: transform 0.45s; transform-style: preserve-3d; }
+  .lv-card-flip.flipped .lv-card-inner { transform: rotateY(180deg); }
+  .lv-card-face { position: absolute; inset: 0; border: 1px solid var(--color-border); border-radius: 12px; padding: 20px; background: var(--color-card); backface-visibility: hidden; display: flex; align-items: center; justify-content: center; font-size: 14px; line-height: 1.55; text-align: center; }
+  .lv-card-back { transform: rotateY(180deg); background: var(--color-dark); color: var(--color-dark-fg); }
+  .lv-fc-nav { display: flex; align-items: center; gap: 12px; justify-content: center; margin-top: 12px; }
+  .lv-fc-btn { padding: 6px 14px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-card); font-size: 12px; cursor: pointer; font-family: inherit; }
+
+  /* Quiz */
+  .lv-quiz-q { background: var(--color-card); border: 1px solid var(--color-border); border-radius: 12px; padding: 16px; margin-bottom: 12px; }
+  .lv-quiz-qtext { font-size: 14px; font-weight: 500; margin-bottom: 12px; line-height: 1.55; }
+  .lv-quiz-opt { display: block; width: 100%; text-align: left; padding: 8px 12px; margin-bottom: 6px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-bg); font-size: 13px; cursor: pointer; font-family: inherit; transition: background .15s; }
+  .lv-quiz-opt:hover { background: var(--color-border); }
+  .lv-quiz-opt.correct { background: #f0fdf4; border-color: #86efac; color: #15803d; }
+  .lv-quiz-opt.wrong   { background: #fef2f2; border-color: #fecaca; color: #dc2626; }
+  .lv-quiz-expl { font-size: 12px; color: var(--color-sec); margin-top: 8px; padding: 8px 12px; background: var(--color-bg); border-radius: 8px; line-height: 1.55; }
+
+  /* Glossary */
+  .lv-gloss-row { display: flex; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--color-border); font-size: 13px; }
+  .lv-gloss-term { font-weight: 600; min-width: 140px; flex-shrink: 0; color: var(--color-text); }
+  .lv-gloss-def  { color: var(--color-sec); line-height: 1.6; }
 `;
 
 // ─── Accent palette (cycles per card) ────────────────────────────────────────
@@ -480,6 +503,9 @@ export default function LectureView() {
     const [topicEditing, setTopicEditing] = useState(false);
     const [topicDraft, setTopicDraft]     = useState('');
     const [topicSaving, setTopicSaving]   = useState(false);
+    const [fcIdx, setFcIdx]         = useState(0);
+    const [fcFlipped, setFcFlipped] = useState(false);
+    const [quizAnswers, setQuizAnswers] = useState({});
     const bodyRef = useRef(null);
     const dragHandleRef = React.useRef(null);
     const dragCleanupRef = React.useRef(null);
@@ -788,6 +814,9 @@ export default function LectureView() {
                                     )}
                                 </button>
                             ))}
+                            <button className={`lv-tab ${activeTab === 'flashcards' ? 'active' : ''}`} onClick={() => setActiveTab('flashcards')}>Flashcards</button>
+                            <button className={`lv-tab ${activeTab === 'quiz' ? 'active' : ''}`} onClick={() => setActiveTab('quiz')}>Quiz</button>
+                            <button className={`lv-tab ${activeTab === 'glossary' ? 'active' : ''}`} onClick={() => setActiveTab('glossary')}>Glossary</button>
                         </div>
 
                         {/* Summary */}
@@ -919,6 +948,88 @@ export default function LectureView() {
                                 }
                             </div>
                         )}
+
+                        {/* Flashcards */}
+                        {activeTab === 'flashcards' && (() => {
+                            const cards = lecture?.flashcards || [];
+                            if (!cards.length) return <div className="lv-empty-panel">No flashcards yet</div>;
+                            const card = cards[fcIdx];
+                            return (
+                                <div className="lv-tab-body">
+                                    <div style={{ maxWidth: 480, margin: '0 auto' }}>
+                                        <div style={{ fontSize: 12, color: 'var(--color-muted)', textAlign: 'center', marginBottom: 12 }}>
+                                            {fcIdx + 1} / {cards.length} · Click card to flip
+                                        </div>
+                                        <div className={`lv-card-flip${fcFlipped ? ' flipped' : ''}`} onClick={() => setFcFlipped(f => !f)}>
+                                            <div className="lv-card-inner">
+                                                <div className="lv-card-face">{card.front}</div>
+                                                <div className="lv-card-face lv-card-back">{card.back}</div>
+                                            </div>
+                                        </div>
+                                        <div className="lv-fc-nav">
+                                            <button className="lv-fc-btn" onClick={() => { setFcIdx(i => Math.max(0, i-1)); setFcFlipped(false); }}>←</button>
+                                            <button className="lv-fc-btn" onClick={() => { setFcIdx(i => Math.min(cards.length-1, i+1)); setFcFlipped(false); }}>→</button>
+                                            <button className="lv-fc-btn" onClick={() => { setFcIdx(Math.floor(Math.random() * cards.length)); setFcFlipped(false); }}>Shuffle</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })()}
+
+                        {/* Quiz */}
+                        {activeTab === 'quiz' && (() => {
+                            const questions = lecture?.quiz || [];
+                            if (!questions.length) return <div className="lv-empty-panel">No quiz yet</div>;
+                            return (
+                                <div className="lv-tab-body">
+                                    {questions.map((q, qi) => {
+                                        const chosen = quizAnswers[qi];
+                                        const answered = chosen !== undefined;
+                                        const correctLetter = (q.answer || '').charAt(0).toUpperCase();
+                                        return (
+                                            <div key={qi} className="lv-quiz-q">
+                                                <div className="lv-quiz-qtext">{qi + 1}. {q.question}</div>
+                                                {(q.options || []).map((opt, oi) => {
+                                                    const letter = String.fromCharCode(65 + oi);
+                                                    let cls = 'lv-quiz-opt';
+                                                    if (answered) {
+                                                        if (letter === correctLetter) cls += ' correct';
+                                                        else if (letter === chosen) cls += ' wrong';
+                                                    }
+                                                    return (
+                                                        <button key={oi} className={cls}
+                                                            disabled={answered}
+                                                            onClick={() => setQuizAnswers(a => ({ ...a, [qi]: letter }))}>
+                                                            {opt}
+                                                        </button>
+                                                    );
+                                                })}
+                                                {answered && q.explanation && (
+                                                    <div className="lv-quiz-expl">💡 {q.explanation}</div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            );
+                        })()}
+
+                        {/* Glossary */}
+                        {activeTab === 'glossary' && (() => {
+                            const terms = lecture?.glossary || [];
+                            if (!terms.length) return <div className="lv-empty-panel">No glossary yet</div>;
+                            const sorted = [...terms].sort((a, b) => (a.term || '').localeCompare(b.term || ''));
+                            return (
+                                <div className="lv-tab-body">
+                                    {sorted.map((g, i) => (
+                                        <div key={i} className="lv-gloss-row">
+                                            <div className="lv-gloss-term">{g.term}</div>
+                                            <div className="lv-gloss-def">{g.definition}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            );
+                        })()}
 
                         {/* Visuals */}
                         {activeTab === 'visuals' && (
