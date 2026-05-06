@@ -1265,18 +1265,30 @@ def get_analytics(lecture_id: str, user=Depends(get_active_user)):
 @limiter.limit("3/minute")
 async def export_pdf(request: Request, lecture_id: str, user=Depends(get_active_user)):
     _check_owner(lecture_id, user.id)
+    profile   = get_user_profile(str(user.id))
+    plan_tier = profile.get("plan_tier") or "free"
+    limits    = get_limits(plan_tier)
+
+    if not limits.get("pdf_export"):
+        raise HTTPException(status_code=403, detail={
+            "error": "pdf_not_available",
+            "plan": plan_tier,
+        })
+
+    quality_map = {"free": "lite", "student": "standard", "pro": "full"}
+    quality = quality_map.get(plan_tier, "standard")
+
     try:
-        pdf_bytes = await generate_lecture_pdf(lecture_id)
-        return Response(
-            content=pdf_bytes,
-            media_type="application/pdf",
-            headers={"Content-Disposition": f"attachment; filename=lecture_{lecture_id}.pdf"}
-        )
-    except HTTPException:
-        raise
+        pdf_bytes = await generate_lecture_pdf(lecture_id, user_id=str(user.id), quality=quality)
     except Exception as e:
-        print(f"Error in export_pdf: {e}")
-        raise HTTPException(status_code=500, detail="Failed to generate PDF")
+        print(f"PDF export error: {e}")
+        raise HTTPException(status_code=500, detail="PDF generation failed")
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="lecture-{lecture_id[:8]}.pdf"'},
+    )
 
 
 @router.get("/lectures")

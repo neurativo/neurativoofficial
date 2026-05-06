@@ -567,14 +567,106 @@ def _render_pdf(html_content: str, title_short: str) -> bytes:
     return pdf_bytes
 
 
+# ── Lite-tier fast path (no GPT calls) ───────────────────────────────────────
+
+async def _generate_lite_pdf(
+    lecture_id: str,
+    title: str,
+    created_at: str,
+    duration_formatted: str,
+    word_count: int,
+    topic: str | None,
+    language: str,
+    raw_sections: list,
+) -> bytes:
+    """Generates a lite PDF with no GPT enrichment — summary text only."""
+    section_label, review_label, glossary_label = _get_domain_labels(topic)
+    domain_color = _get_domain_color(topic)
+
+    sections_data = []
+    for i, sec in enumerate(raw_sections):
+        lines = sec.split("\n")
+        sec_title = lines[0].strip()[:80] if lines[0].strip() else f"Section {i + 1}"
+        prose = "\n".join(lines[1:]).strip()
+        sections_data.append({
+            "title":         sec_title,
+            "lead_sentence": "",
+            "prose":         prose or sec,
+            "bullets":       [],
+            "concepts":      [],
+            "examples":      [],
+            "analogy":       None,
+            "mistake":       None,
+            "remember":      None,
+        })
+
+    n_sections = len(sections_data)
+
+    # Render template with same context keys as standard path
+    template_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "templates")
+    env = Environment(loader=FileSystemLoader(template_dir))
+
+    def _fmt_time_mmss(seconds):
+        m = (seconds or 0) // 60
+        s = (seconds or 0) % 60
+        return f"{m:02d}:{s:02d}"
+
+    env.filters["format_time"] = _fmt_time_mmss
+
+    def _truncate_words(s: str, n: int) -> str:
+        words = str(s).split()
+        return (" ".join(words[:n]) + "…") if len(words) > n else str(s)
+
+    env.filters["truncate_words"] = _truncate_words
+    template = env.get_template("lecture_template.html")
+
+    context = {
+        "title":                title,
+        "created_at":           created_at,
+        "duration_formatted":   duration_formatted,
+        "word_count":           f"{word_count:,}",
+        "total_chunks":         0,
+        "total_sections":       n_sections,
+        "total_concepts":       0,
+        "qa_pairs":             0,
+        "language":             language.upper(),
+        "topic":                topic,
+        "reading_time_minutes": max(1, word_count // 238),
+        "section_label":        section_label,
+        "review_label":         review_label,
+        "glossary_label":       glossary_label,
+        "executive_summary":    "",
+        "enriched_sections":    sections_data,
+        "glossary":             [],
+        "takeaways":            [],
+        "quick_review":         [],
+        "conceptual_map":       [],
+        "study_roadmap":        {"next_topics": [], "prerequisites": []},
+        "summary_html":         "",
+        "compression_ratio":    0.0,
+        "visual_frames":        [],
+        "key_stats":            [],
+        "accent_color":         domain_color,
+    }
+
+    html_content = template.render(**context)
+    title_short = title[:50] + ("…" if len(title) > 50 else "")
+    return await asyncio.to_thread(_render_pdf, html_content, title_short)
+
+
 # ── Main async entry point ────────────────────────────────────────────────────
 
-async def generate_lecture_pdf(lecture_id: str) -> bytes:
+async def generate_lecture_pdf(
+    lecture_id: str,
+    user_id: str | None = None,
+    quality: str = "standard",   # "lite" | "standard" | "full"
+) -> bytes:
     """
     Async PDF generator. All GPT enrichment calls run in parallel via
     asyncio.gather() + asyncio.to_thread(), making export ~5x faster than
     sequential calls.
     """
+    IS_LITE = quality == "lite"
     # 1. Fetch lecture data
     data = await asyncio.to_thread(get_lecture_for_summarization, lecture_id)
     if not data:
@@ -609,6 +701,20 @@ async def generate_lecture_pdf(lecture_id: str) -> bytes:
     raw_sections = [s.strip() for s in summary.split("## ") if s.strip()]
     n_sections   = len(raw_sections)
     n_questions  = _question_count(duration_sec)
+
+    # ── Lite tier: skip all GPT calls ────────────────────────────────────────
+    if IS_LITE:
+        raw_sections = raw_sections[:4]
+        return await _generate_lite_pdf(
+            lecture_id=lecture_id,
+            title=title,
+            created_at=created_at,
+            duration_formatted=duration_formatted,
+            word_count=word_count,
+            topic=topic,
+            language=language,
+            raw_sections=raw_sections,
+        )
 
     # 3. Build parallel task list
     tasks: list = []
