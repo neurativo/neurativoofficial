@@ -172,15 +172,15 @@ create index if not exists idx_cost_logs_feature on api_cost_logs(feature);
 
 -- ── audit_logs ────────────────────────────────────────────────────────────────
 create table if not exists audit_logs (
-    id        uuid        primary key default gen_random_uuid(),
-    timestamp timestamptz not null default now(),
-    admin_id  text        not null,
-    action    text        not null,
-    target_id text,
-    detail    text
+    id         uuid        primary key default gen_random_uuid(),
+    created_at timestamptz not null default now(),
+    admin_id   text        not null,
+    action     text        not null,
+    target_id  text,
+    detail     text
 );
 
-create index if not exists idx_audit_logs_time on audit_logs(timestamp desc);
+create index if not exists idx_audit_logs_time on audit_logs(created_at desc);
 
 -- ── announcements ─────────────────────────────────────────────────────────────
 create table if not exists announcements (

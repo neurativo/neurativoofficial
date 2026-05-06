@@ -58,7 +58,7 @@ _audit_log: collections.deque = collections.deque(maxlen=100)
 def _audit(admin_id: str, action: str, target_id: str = "", detail: str = "") -> None:
     """Write audit entry to Supabase (persistent) and in-memory buffer (fast display)."""
     entry = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
         "admin_id": admin_id,
         "action": action,
         "target_id": target_id,

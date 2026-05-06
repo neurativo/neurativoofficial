@@ -1276,7 +1276,7 @@ def admin_write_audit(
     try:
         from datetime import datetime, timezone
         supabase.table("audit_logs").insert({
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
             "admin_id": admin_id,
             "action": action,
             "target_id": target_id,
@@ -1299,7 +1299,7 @@ def admin_get_audit_log(
         return {"logs": [], "total": 0}
     try:
         offset = (page - 1) * page_size
-        q = supabase.table("audit_logs").select("*", count="exact").order("timestamp", desc=True)
+        q = supabase.table("audit_logs").select("*", count="exact").order("created_at", desc=True)
         if action_filter:
             q = q.eq("action", action_filter)
         res = q.range(offset, offset + page_size - 1).execute()
