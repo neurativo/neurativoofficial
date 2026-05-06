@@ -16,8 +16,16 @@ teamsApi.interceptors.request.use(async (config) => {
 teamsApi.interceptors.response.use(
     (r) => r,
     async (error) => {
-        if (error.response?.status === 401) {
-            await window.Clerk?.signOut();
+        const orig = error.config;
+        if (error.response?.status === 401 && !orig._retried) {
+            orig._retried = true;
+            try {
+                const freshToken = await window.Clerk?.session?.getToken({ skipCache: true });
+                if (freshToken) {
+                    orig.headers['Authorization'] = `Bearer ${freshToken}`;
+                    return teamsApi(orig);
+                }
+            } catch { /* session gone */ }
             window.location.href = '/';
         }
         return Promise.reject(error);

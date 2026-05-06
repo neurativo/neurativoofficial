@@ -1,7 +1,7 @@
 /**
  * Axios instance pre-configured with:
  * - Auth interceptor: attaches Bearer token from active Clerk session
- * - 401 handler: signs out + redirects to /auth on expired/invalid token
+ * - 401 handler: retries once with fresh token (skipCache) before redirecting
  */
 import axios from 'axios';
 
@@ -18,14 +18,28 @@ api.interceptors.request.use(async (config) => {
     return config;
 }, (error) => Promise.reject(error));
 
-// Response: sign out + redirect on 401
+// Response: on 401, retry once with a fresh token before redirecting.
+// After idle time the cached Clerk JWT may have expired; getToken({skipCache:true})
+// fetches a new one from Clerk's servers without requiring re-login.
 api.interceptors.response.use(
     (response) => response,
     async (error) => {
-        if (error.response?.status === 401) {
-            await window.Clerk?.signOut();
-            window.location.href = '/auth';
+        const orig = error.config;
+
+        if (error.response?.status === 401 && !orig._retried) {
+            orig._retried = true;
+            try {
+                const freshToken = await window.Clerk?.session?.getToken({ skipCache: true });
+                if (freshToken) {
+                    orig.headers['Authorization'] = `Bearer ${freshToken}`;
+                    return api(orig);
+                }
+            } catch { /* refresh failed — session is truly gone */ }
+
+            // Session expired for real — send home so Clerk can prompt sign-in
+            window.location.href = '/';
         }
+
         return Promise.reject(error);
     }
 );
