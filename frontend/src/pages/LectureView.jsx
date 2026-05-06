@@ -727,6 +727,19 @@ export default function LectureView() {
                     </div>
                 )}
 
+                {/* ── Deletion warning banner ── */}
+                {lecture?.deletion_scheduled_at && !lecture?.content_deleted && (
+                    <div style={{
+                        background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 8,
+                        padding: '10px 16px', fontSize: 13, color: '#92400e', marginBottom: 12,
+                        marginLeft: 20, marginRight: 20, marginTop: 12
+                    }}>
+                        ⚠ Your free plan content is scheduled for deletion on{' '}
+                        <strong>{new Date(lecture.deletion_scheduled_at).toLocaleDateString()}</strong>.{' '}
+                        <a href="/credits" style={{ color: '#92400e', fontWeight: 600, textDecoration: 'underline' }}>Upgrade to save it.</a>
+                    </div>
+                )}
+
                 {/* ── Two-panel body ── */}
                 <div className="lv-body" ref={bodyRef}>
                     {/* Left: transcript */}

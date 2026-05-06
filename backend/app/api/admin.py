@@ -41,6 +41,9 @@ from app.services.supabase_service import (
     get_announcements,
     create_announcement,
     delete_announcement,
+    get_stale_free_lectures,
+    mark_content_deleted,
+    set_deletion_scheduled,
 )
 from app.services.cost_tracker import PRICING, LKR_RATE
 
@@ -311,6 +314,48 @@ async def trigger_cleanup(
         raise HTTPException(status_code=500, detail=f"Cleanup failed: {e}")
     _audit(admin.id, "cleanup_chunks", detail=f"days={days} deleted={deleted}")
     return {"ok": True, "deleted_chunks": deleted}
+
+
+@router.post("/maintenance/cleanup")
+async def run_cleanup(user=Depends(get_admin_user)):
+    """
+    Retention policy enforcement.
+    - Lectures 27-29 days old: set deletion_scheduled_at (3-day warning)
+    - Lectures ≥ 30 days old: delete transcript + summary + generated content
+    Returns counts of actions taken.
+    """
+    from datetime import timedelta
+
+    now = datetime.now(timezone.utc)
+    warn_cutoff   = now - timedelta(days=27)
+    delete_cutoff = now - timedelta(days=30)
+
+    stale = get_stale_free_lectures(days=27)   # lectures ≥ 27 days old
+    warned  = 0
+    deleted = 0
+
+    for lec in stale:
+        created = lec.get("created_at", "")
+        try:
+            age = now - datetime.fromisoformat(created.replace("Z", "+00:00"))
+        except Exception:
+            continue
+
+        if age.days >= 30:
+            mark_content_deleted(lec["id"])
+            deleted += 1
+        elif age.days >= 27:
+            scheduled = (datetime.fromisoformat(created.replace("Z", "+00:00")) + timedelta(days=30)).isoformat()
+            set_deletion_scheduled(lec["id"], scheduled)
+            warned += 1
+
+    _audit(user.id, "retention_cleanup", detail=f"warned={warned} deleted={deleted}")
+    return {
+        "checked": len(stale),
+        "warned":  warned,
+        "deleted": deleted,
+        "ran_at":  now.isoformat(),
+    }
 
 
 @router.get("/audit-log")
