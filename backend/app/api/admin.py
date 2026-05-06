@@ -659,3 +659,109 @@ async def get_costs_summary(
 ):
     """Aggregated cost breakdown by feature and day."""
     return _cost_summary(days=days)
+
+
+# ---------------------------------------------------------------------------
+# Credits management endpoints
+# ---------------------------------------------------------------------------
+
+class AdjustCreditsRequest(BaseModel):
+    amount: int                         # positive = grant, negative = deduct
+    reason: str = "admin_grant"         # admin_grant | admin_deduct | starter_grant | plan_grant | refund | manual
+    product: str = ""
+
+
+class SetCreditsRequest(BaseModel):
+    amount: int                         # exact balance to set (≥ 0)
+    reason: str = "admin_set"
+
+
+class SetCreditsSubscriptionRequest(BaseModel):
+    status: str                         # "none" | "monthly"
+    expires_at: Optional[str] = None    # ISO-8601 or null
+
+
+from app.services.supabase_service import (
+    get_user_credits,
+    admin_adjust_credits,
+    admin_set_credits_subscription,
+)
+
+
+@router.get("/users/{user_id}/credits")
+async def get_credits(user_id: str, admin: User = Depends(get_admin_user)):
+    """Get a user's current credit balance, subscription status, and transaction history."""
+    return get_user_credits(user_id)
+
+
+@router.post("/users/{user_id}/credits/adjust")
+async def adjust_credits(
+    user_id: str,
+    body: AdjustCreditsRequest,
+    admin: User = Depends(get_admin_user),
+):
+    """
+    Add or deduct credits from a user's balance.
+    Positive amount = grant, negative = deduct.
+    """
+    valid_reasons = {"admin_grant", "admin_deduct", "starter_grant", "plan_grant", "monthly_refresh", "refund", "manual"}
+    if body.reason not in valid_reasons:
+        raise HTTPException(status_code=400, detail=f"reason must be one of: {', '.join(sorted(valid_reasons))}")
+    if body.amount == 0:
+        raise HTTPException(status_code=400, detail="amount must be non-zero")
+    try:
+        result = admin_adjust_credits(
+            user_id=user_id,
+            amount=body.amount,
+            reason=body.reason,
+            product=body.product,
+            set_absolute=False,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    action = "grant_credits" if body.amount > 0 else "deduct_credits"
+    _audit(admin.id, action, user_id, f"amount={body.amount} reason={body.reason} new_balance={result['credits']}")
+    return {"ok": True, **result}
+
+
+@router.post("/users/{user_id}/credits/set")
+async def set_credits(
+    user_id: str,
+    body: SetCreditsRequest,
+    admin: User = Depends(get_admin_user),
+):
+    """Set a user's credit balance to an exact value."""
+    if body.amount < 0:
+        raise HTTPException(status_code=400, detail="amount must be >= 0")
+    try:
+        result = admin_adjust_credits(
+            user_id=user_id,
+            amount=body.amount,
+            reason=body.reason,
+            set_absolute=True,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    _audit(admin.id, "set_credits", user_id, f"amount={body.amount} new_balance={result['credits']}")
+    return {"ok": True, **result}
+
+
+@router.post("/users/{user_id}/credits/subscription")
+async def set_credits_subscription(
+    user_id: str,
+    body: SetCreditsSubscriptionRequest,
+    admin: User = Depends(get_admin_user),
+):
+    """Set a user's credit subscription status (none | monthly)."""
+    if body.status not in ("none", "monthly"):
+        raise HTTPException(status_code=400, detail="status must be 'none' or 'monthly'")
+    try:
+        result = admin_set_credits_subscription(
+            user_id=user_id,
+            status=body.status,
+            expires_at=body.expires_at,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    _audit(admin.id, "set_credits_subscription", user_id, f"status={body.status} expires={body.expires_at}")
+    return {"ok": True, **result}

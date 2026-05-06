@@ -4,7 +4,7 @@
   "description": "Real-time AI lecture transcription, summaries, and Q&A. Free to start.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#1e1b4b",
+  "background_color": "#fafaf9",
   "theme_color": "#1a1a1a",
   "orientation": "any",
   "scope": "/",

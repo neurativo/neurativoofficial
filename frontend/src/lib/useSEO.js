@@ -3,14 +3,15 @@
  * a heavy dependency like react-helmet. Works fine for a SPA where the
  * index.html defaults already cover the landing page.
  */
-export function useSEO({ title, description, canonicalPath, ogImage } = {}) {
+export function useSEO({ title, description, canonicalPath, ogImage, noindex, ogType } = {}) {
     if (typeof document === 'undefined') return;
 
+    const BASE = 'https://www.neurativo.com';
     const siteTitle = 'Neurativo';
     const fullTitle = title ? `${title} – ${siteTitle}` : `${siteTitle} — AI Lecture Assistant`;
     const desc = description || 'Record any lecture and get live transcription, AI summaries, and instant Q&A in any language. The smartest way to study.';
-    const canonical = canonicalPath ? `https://neurativo.com${canonicalPath}` : 'https://neurativo.com/';
-    const image = ogImage || 'https://neurativo.com/og.png';
+    const canonical = canonicalPath ? `${BASE}${canonicalPath}` : `${BASE}/`;
+    const image = ogImage || `${BASE}/og.png`;
 
     // Update title
     document.title = fullTitle;
@@ -28,6 +29,8 @@ export function useSEO({ title, description, canonicalPath, ogImage } = {}) {
     };
 
     setMeta('meta[name="description"]',        'content', desc);
+    setMeta('meta[name="robots"]',             'content', noindex ? 'noindex, nofollow' : 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1');
+    setMeta('meta[property="og:type"]',        'content', ogType || 'website');
     setMeta('meta[property="og:title"]',        'content', fullTitle);
     setMeta('meta[property="og:description"]',  'content', desc);
     setMeta('meta[property="og:url"]',          'content', canonical);

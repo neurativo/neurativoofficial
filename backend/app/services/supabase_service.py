@@ -1735,3 +1735,101 @@ def set_deletion_scheduled(lecture_id: str, scheduled_at: str) -> None:
     _fresh_db().table("lectures").update({
         "deletion_scheduled_at": scheduled_at,
     }).eq("id", lecture_id).execute()
+
+
+# ---------------------------------------------------------------------------
+# Credits management (admin)
+# ---------------------------------------------------------------------------
+
+def get_user_credits(user_id: str) -> dict:
+    """
+    Returns user's credit balance, subscription status, and recent transactions.
+    Reads from profiles (credits, credits_sub_status, credits_sub_expires).
+    """
+    db = _fresh_db()
+    if not db:
+        return {"credits": 0, "credits_sub_status": "none", "credits_sub_expires": None, "transactions": []}
+    try:
+        row = db.table("profiles").select(
+            "credits, credits_sub_status, credits_sub_started, credits_sub_expires"
+        ).eq("id", user_id).execute()
+        profile = (row.data or [{}])[0] if row.data else {}
+        txn_row = db.table("credit_transactions").select("*").eq(
+            "user_id", user_id
+        ).order("created_at", desc=True).limit(30).execute()
+        return {
+            "credits":             profile.get("credits", 0) or 0,
+            "credits_sub_status":  profile.get("credits_sub_status", "none") or "none",
+            "credits_sub_started": profile.get("credits_sub_started"),
+            "credits_sub_expires": profile.get("credits_sub_expires"),
+            "transactions":        txn_row.data or [],
+        }
+    except Exception as e:
+        print(f"[credits] get_user_credits error: {e}")
+        return {"credits": 0, "credits_sub_status": "none", "credits_sub_expires": None, "transactions": []}
+
+
+def admin_adjust_credits(
+    user_id: str,
+    amount: int,
+    reason: str,
+    product: str = "",
+    set_absolute: bool = False,
+) -> dict:
+    """
+    Adjust (add/deduct) or set a user's credit balance.
+    set_absolute=False: adds amount to current balance (negative = deduct).
+    set_absolute=True : sets balance to exactly amount.
+    Logs every change to credit_transactions.
+    Returns {"credits": new_balance, "delta": delta}.
+    """
+    db = _fresh_db()
+    if not db:
+        raise RuntimeError("Supabase not configured")
+
+    row = db.table("profiles").select("credits").eq("id", user_id).execute()
+    current = ((row.data or [{}])[0].get("credits") or 0)
+
+    if set_absolute:
+        new_balance = max(0, amount)
+        delta = new_balance - current
+    else:
+        new_balance = max(0, current + amount)
+        delta = new_balance - current
+
+    db.table("profiles").upsert({"id": user_id, "credits": new_balance}).execute()
+
+    if delta != 0:
+        db.table("credit_transactions").insert({
+            "user_id":       user_id,
+            "amount":        delta,
+            "balance_after": new_balance,
+            "reason":        reason,
+            "product":       product or None,
+        }).execute()
+
+    return {"credits": new_balance, "delta": delta}
+
+
+def admin_set_credits_subscription(
+    user_id: str,
+    status: str,
+    expires_at,
+) -> dict:
+    """
+    Set a user's credit subscription status ('none' | 'monthly').
+    expires_at: ISO-8601 string or None.
+    """
+    from datetime import datetime, timezone
+    db = _fresh_db()
+    if not db:
+        raise RuntimeError("Supabase not configured")
+    update = {
+        "id": user_id,
+        "credits_sub_status": status,
+        "credits_sub_expires": expires_at,
+    }
+    if status != "none":
+        update["credits_sub_started"] = datetime.now(timezone.utc).isoformat()
+    db.table("profiles").upsert(update).execute()
+    return {"credits_sub_status": status, "credits_sub_expires": expires_at}

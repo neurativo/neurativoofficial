@@ -65,4 +65,22 @@ export const adminApi = {
         return res.data;
     },
     deleteAnnouncement:  (id)                  => _delete(`/announcements/${id}`),
+
+    // Credits management
+    getUserCredits: (userId) => _get(`/users/${userId}/credits`),
+    adjustCredits: async (userId, body) => {
+        const token = await _token();
+        const res = await axios.post(BASE + `/users/${userId}/credits/adjust`, body, { headers: _headers(token) });
+        return res.data;
+    },
+    setCredits: async (userId, body) => {
+        const token = await _token();
+        const res = await axios.post(BASE + `/users/${userId}/credits/set`, body, { headers: _headers(token) });
+        return res.data;
+    },
+    setCreditsSubscription: async (userId, body) => {
+        const token = await _token();
+        const res = await axios.post(BASE + `/users/${userId}/credits/subscription`, body, { headers: _headers(token) });
+        return res.data;
+    },
 };

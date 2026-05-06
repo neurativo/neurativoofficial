@@ -124,7 +124,7 @@ const ArrowIcon = () => (
 );
 
 export default function NotFoundPage() {
-    useSEO({ title: 'Page Not Found', description: 'This page does not exist.', canonicalPath: '/404' });
+    useSEO({ title: 'Page Not Found', description: 'This page does not exist.', canonicalPath: '/404', noindex: true });
 
     return (
         <>
