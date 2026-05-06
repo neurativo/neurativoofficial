@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 import { useClerk } from '@clerk/react';
 import Footer from '../components/Footer';
+import { useSEO } from '../lib/useSEO';
+import { useCreditsApi } from '../lib/creditsApi.js';
 
 const PLAN_COLORS = { free: '#6b7280', student: '#7c3aed', pro: '#0ea5e9' };
 const PLAN_LABELS = { free: 'Free', student: 'Student', pro: 'Pro' };
@@ -136,6 +138,17 @@ const CSS = `
     background: var(--color-dark); color: var(--color-dark-fg);
   }
   .pp-plan-btn-upgrade:hover { opacity: 0.82; }
+
+  /* Credits section */
+  .pp-credits-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .pp-credit-tile { flex: 1; min-width: 120px; background: var(--color-bg); border: 1px solid var(--color-border); border-radius: 12px; padding: 14px 16px; }
+  .pp-credit-tile-n { font-size: 26px; font-weight: 700; letter-spacing: -1px; color: var(--color-text); font-family: monospace; }
+  .pp-credit-tile-l { font-size: 11px; color: var(--color-muted); margin-top: 3px; }
+  .pp-credit-sub-badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 99px; font-size: 11px; font-weight: 600; }
+  .pp-credit-sub-badge.active { background: rgba(22,163,74,0.1); color: #16a34a; border: 1px solid rgba(22,163,74,0.25); }
+  .pp-credit-sub-badge.inactive { background: var(--color-border); color: var(--color-muted); border: 1px solid transparent; }
+  .pp-credits-link { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--color-muted); text-decoration: none; margin-top: 14px; border-top: 1px solid var(--color-border); padding-top: 12px; width: 100%; transition: color .15s; }
+  .pp-credits-link:hover { color: var(--color-text); }
 
   /* Stats grid */
   .pp-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
@@ -276,11 +289,14 @@ function PlanBadge({ tier }) {
 }
 
 export default function ProfilePage({ user }) {
+    useSEO({ title: 'Profile', noindex: true });
     const navigate = useNavigate();
     const { signOut } = useClerk();
+    const creditsApi = useCreditsApi();
 
     const [profile, setProfile]   = useState(null);
     const [usage,   setUsage]     = useState(null);
+    const [credits, setCredits]   = useState(null);
     const [loading, setLoading]   = useState(true);
     const [darkMode, setDarkMode] = useState(() => document.documentElement.classList.contains('dark'));
 
@@ -298,13 +314,15 @@ export default function ProfilePage({ user }) {
         Promise.all([
             api.get('/api/v1/profile'),
             api.get('/api/v1/usage'),
-        ]).then(([pRes, uRes]) => {
+            creditsApi.getBalance(),
+        ]).then(([pRes, uRes, cRes]) => {
             const p = pRes.data;
             setProfile(p);
             setDisplayName(p.display_name || '');
             setPrefLang(p.preferred_language || 'en');
             setPdfAuto(p.pdf_auto_download !== false);
             setUsage(uRes.data);
+            setCredits(cRes.data);
         }).catch(() => {}).finally(() => setLoading(false));
     }, []);
 
@@ -545,6 +563,58 @@ export default function ProfilePage({ user }) {
                                             : 'Unlimited live lectures on your plan'}
                                     </p>
                                 </>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Credits */}
+                    <div className="pp-section">
+                        <div className="pp-section-head">
+                            <div>
+                                <div className="pp-section-title">Credits</div>
+                                <div className="pp-section-sub">1 credit = 1 lecture processed</div>
+                            </div>
+                        </div>
+                        <div className="pp-section-body">
+                            {loading ? (
+                                <div className="pp-skeleton" style={{ width: '60%', height: 14 }} />
+                            ) : credits ? (() => {
+                                const subStatus  = credits.credits_sub_status || 'none';
+                                const subExpires = credits.credits_sub_expires;
+                                const subActive  = subStatus === 'monthly' && subExpires && new Date(subExpires) > new Date();
+                                return (
+                                    <>
+                                        <div className="pp-credits-row">
+                                            <div className="pp-credit-tile">
+                                                <div className="pp-credit-tile-n">{credits.credits ?? 0}</div>
+                                                <div className="pp-credit-tile-l">credits remaining</div>
+                                            </div>
+                                            <div className="pp-credit-tile">
+                                                <div style={{ marginBottom: 6 }}>
+                                                    <span className={`pp-credit-sub-badge ${subActive ? 'active' : 'inactive'}`}>
+                                                        {subActive ? '● Active' : '○ No sub'}
+                                                    </span>
+                                                </div>
+                                                <div className="pp-credit-tile-l">
+                                                    {subActive
+                                                        ? `Monthly subscription · expires ${new Date(subExpires).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+                                                        : 'No active subscription'}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {credits.low_credits && !subActive && (
+                                            <div style={{ marginTop: 12, fontSize: 12, color: '#b45309', background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 8, padding: '8px 12px' }}>
+                                                ⚠ Running low on credits
+                                            </div>
+                                        )}
+                                        <Link to="/credits" className="pp-credits-link">
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                                            Manage credits, buy packs, or subscribe →
+                                        </Link>
+                                    </>
+                                );
+                            })() : (
+                                <Link to="/credits" className="pp-credits-link">View credits →</Link>
                             )}
                         </div>
                     </div>

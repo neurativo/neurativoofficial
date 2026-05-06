@@ -1229,6 +1229,24 @@ function Pricing() {
 
             </div>
 
+            {/* Credits callout */}
+            <div style={{
+                marginTop: 16, padding: '20px 24px',
+                border: '1.5px solid #f0ede8', borderRadius: 14,
+                background: '#fff',
+                display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap',
+            }}>
+                <div style={{ width: 40, height: 40, borderRadius: 10, background: '#f5f3ff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 18 }}>⚡</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 3, color: '#1a1a1a' }}>Pay-per-lecture credits</div>
+                    <div style={{ fontSize: 13, color: '#6b6b6b', lineHeight: 1.55 }}>
+                        Don't need a subscription? Buy credits instead — 1 credit processes 1 lecture.{' '}
+                        <strong>Starter pack: 10 credits for $5.99</strong> · <strong>Best value: 30 credits for $14.99</strong>{' '}
+                        · <strong>Monthly sub: 30 fresh credits/month for $11.99</strong>. Credits never expire on packs.
+                    </div>
+                </div>
+            </div>
+
             {/* Teams banner */}
             <a
                 href="https://teams.neurativo.com"

@@ -7,6 +7,7 @@ import QAAnswer from '../components/QAAnswer';
 import { useSEO } from '../lib/useSEO';
 import { renderDomainContent } from '../lib/renderDomainContent.jsx';
 import JobProgress from '../components/JobProgress.jsx';
+import { useCreditsApi } from '../lib/creditsApi.js';
 
 function fmtTs(seconds) {
     const s = Math.floor(seconds);
@@ -36,6 +37,10 @@ const CSS = `
   .lv-nav-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
   .lv-btn-ghost { display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; font-size: 12px; font-weight: 500; color: ${C.text}; border: 1px solid ${C.border}; border-radius: 8px; background: ${C.card}; cursor: pointer; transition: border-color 0.15s; font-family: inherit; white-space: nowrap; }
   .lv-btn-ghost:hover { border-color: ${C.borderHov}; }
+  .lv-credits-chip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 8px; border: 1px solid ${C.border}; background: ${C.card}; font-size: 12px; font-weight: 500; color: ${C.sec}; text-decoration: none; transition: border-color .15s; white-space: nowrap; }
+  .lv-credits-chip:hover { border-color: ${C.borderHov}; color: ${C.text}; }
+  .lv-credits-chip.low { border-color: #fde68a; background: #fef3c7; color: #b45309; }
+  .lv-credits-chip.sub { border-color: rgba(22,163,74,0.35); background: rgba(22,163,74,0.07); color: #16a34a; }
 
   /* Two-panel body */
   .lv-body { display: flex; flex: 1; overflow: hidden; }
@@ -479,8 +484,10 @@ export default function LectureView() {
     const navigate = useNavigate();
     const addToast = useToast();
     const isDark = useIsDark();
+    const creditsApi = useCreditsApi();
 
     const [lecture, setLecture]         = useState(null);
+    const [creditsInfo, setCreditsInfo] = useState(null);
     const [isProcessing, setIsProcessing] = useState(false);
 
     useSEO({ title: lecture?.title || 'Lecture', noindex: true });
@@ -521,6 +528,7 @@ export default function LectureView() {
             })
             .catch(() => navigate('/app'))
             .finally(() => setLoading(false));
+        creditsApi.getBalance().then(res => setCreditsInfo(res.data)).catch(() => {});
     }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Poll every 3s while summary is being recomputed; stop when final
@@ -702,6 +710,18 @@ export default function LectureView() {
                     </Link>
                     <div className="lv-nav-title">{titleDisplay}</div>
                     <div className="lv-nav-right">
+                        {creditsInfo !== null && (() => {
+                            const subActive = creditsInfo.credits_sub_status === 'monthly'
+                                && creditsInfo.credits_sub_expires
+                                && new Date(creditsInfo.credits_sub_expires) > new Date();
+                            const cls = subActive ? 'sub' : creditsInfo.low_credits ? 'low' : '';
+                            return (
+                                <Link to="/credits" className={`lv-credits-chip${cls ? ' ' + cls : ''}`} title={subActive ? `Monthly subscription · expires ${new Date(creditsInfo.credits_sub_expires).toLocaleDateString()}` : `${creditsInfo.credits} credit${creditsInfo.credits !== 1 ? 's' : ''} remaining`}>
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                                    {subActive ? '∞ sub' : `${creditsInfo.credits} cr${creditsInfo.low_credits ? ' ⚠' : ''}`}
+                                </Link>
+                            );
+                        })()}
                         <button className="lv-btn-ghost" onClick={() => setExportOpen(true)}>
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                             <span className="lv-btn-text">Export PDF</span>

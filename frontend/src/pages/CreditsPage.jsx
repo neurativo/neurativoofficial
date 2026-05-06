@@ -24,11 +24,18 @@ const CSS = `
   .cr-sub { font-size: 13px; color: ${C.sec}; margin-bottom: 32px; }
 
   /* Balance card */
-  .cr-balance-card { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 16px; padding: 28px 32px; margin-bottom: 32px; display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
+  .cr-balance-card { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 16px; padding: 28px 32px; margin-bottom: 32px; display: flex; align-items: flex-start; gap: 24px; flex-wrap: wrap; }
   .cr-balance-num { font-size: 48px; font-weight: 700; letter-spacing: -2px; line-height: 1; }
   .cr-balance-label { font-size: 13px; color: ${C.sec}; margin-top: 4px; }
-  .cr-balance-info { flex: 1; }
+  .cr-balance-info { flex: 1; min-width: 180px; }
   .cr-low-warn { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: #b45309; background: #fef3c7; border: 1px solid #fde68a; border-radius: 6px; padding: 4px 10px; margin-top: 8px; }
+  /* Subscription status */
+  .cr-sub-card { border-left: 3px solid #16a34a; background: rgba(22,163,74,0.06); border-radius: 10px; padding: 14px 18px; min-width: 200px; flex-shrink: 0; }
+  .cr-sub-card.inactive { border-left-color: ${C.border}; background: ${C.bg}; }
+  .cr-sub-status { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: #16a34a; margin-bottom: 4px; }
+  .cr-sub-status.inactive { color: ${C.muted}; }
+  .cr-sub-detail { font-size: 13px; color: ${C.text}; font-weight: 500; }
+  .cr-sub-meta { font-size: 11px; color: ${C.muted}; margin-top: 3px; }
 
   /* Section heading */
   .cr-section-title { font-size: 15px; font-weight: 600; letter-spacing: -0.3px; margin-bottom: 16px; }
@@ -84,6 +91,9 @@ const REASON_LABELS = {
     plan_grant:        'Plan grant',
     lecture_processed: 'Lecture processed',
     refund:            'Refund',
+    admin_grant:       'Admin grant',
+    admin_deduct:      'Admin deduction',
+    manual:            'Manual adjustment',
 };
 
 function fmtDate(iso) {
@@ -130,9 +140,13 @@ export default function CreditsPage() {
 
     if (loading) return <div className="cr"><style>{CSS}</style><div className="cr-loading">Loading…</div></div>;
 
-    const products = balance?.products || {};
-    const credits  = balance?.credits ?? 0;
-    const lowWarn  = balance?.low_credits;
+    const products   = balance?.products || {};
+    const credits    = balance?.credits ?? 0;
+    const lowWarn    = balance?.low_credits;
+    const subStatus  = balance?.credits_sub_status || 'none';
+    const subExpires = balance?.credits_sub_expires;
+    const subActive  = subStatus === 'monthly' && subExpires && new Date(subExpires) > new Date();
+    const subStarted = balance?.credits_sub_started;
 
     return (
         <div className="cr">
@@ -162,10 +176,28 @@ export default function CreditsPage() {
                     <div className="cr-balance-info">
                         <div className="cr-balance-num">{credits}</div>
                         <div className="cr-balance-label">credits remaining</div>
-                        {lowWarn && (
+                        {lowWarn && !subActive && (
                             <div className="cr-low-warn">
                                 ⚠ Running low — buy more to keep processing lectures
                             </div>
+                        )}
+                    </div>
+                    {/* Subscription status tile */}
+                    <div className={`cr-sub-card${subActive ? '' : ' inactive'}`}>
+                        <div className={`cr-sub-status${subActive ? '' : ' inactive'}`}>
+                            {subActive ? '● Monthly subscription' : '○ No subscription'}
+                        </div>
+                        {subActive ? (
+                            <>
+                                <div className="cr-sub-detail">Active</div>
+                                <div className="cr-sub-meta">Renews / expires {fmtDate(subExpires)}</div>
+                                {subStarted && <div className="cr-sub-meta">Started {fmtDate(subStarted)}</div>}
+                            </>
+                        ) : (
+                            <>
+                                <div className="cr-sub-detail">One-time credits only</div>
+                                <div className="cr-sub-meta">Subscribe below for monthly credits</div>
+                            </>
                         )}
                     </div>
                 </div>
@@ -204,18 +236,30 @@ export default function CreditsPage() {
                     </div>
 
                     {/* Monthly sub */}
-                    <div className="cr-pack">
-                        <div className="cr-pack-tag">Monthly</div>
+                    <div className={`cr-pack${subActive ? ' cr-pack-featured' : ''}`}>
+                        <div className={`cr-pack-tag${subActive ? ' cr-pack-tag-best' : ''}`}>
+                            {subActive ? '✓ Active' : 'Monthly'}
+                        </div>
                         <div className="cr-pack-credits">{products.monthly_sub?.credits ?? 30} <span>/ month</span></div>
                         <div className="cr-pack-price">${products.monthly_sub?.price_usd?.toFixed(2) ?? '11.99'}<span style={{fontSize:11,color:'var(--color-muted)'}}>/mo</span></div>
-                        <div className="cr-pack-desc">30 fresh credits every month. Best for regular use.</div>
-                        <button
-                            className="cr-pack-btn cr-pack-btn-outline"
-                            onClick={() => handleBuy('monthly_sub')}
-                            disabled={!!pending}
-                        >
-                            {pending === 'monthly_sub' ? 'Processing…' : 'Subscribe'}
-                        </button>
+                        <div className="cr-pack-desc">
+                            {subActive
+                                ? `Your subscription is active. Next renewal: ${fmtDate(subExpires)}.`
+                                : '30 fresh credits every month. Best for regular use.'}
+                        </div>
+                        {subActive ? (
+                            <span className="cr-pack-btn" style={{background:'rgba(22,163,74,0.1)',color:'#16a34a',cursor:'default',border:'1px solid rgba(22,163,74,0.3)'}}>
+                                Subscribed ✓
+                            </span>
+                        ) : (
+                            <button
+                                className="cr-pack-btn cr-pack-btn-outline"
+                                onClick={() => handleBuy('monthly_sub')}
+                                disabled={!!pending}
+                            >
+                                {pending === 'monthly_sub' ? 'Processing…' : 'Subscribe'}
+                            </button>
+                        )}
                     </div>
                 </div>
 

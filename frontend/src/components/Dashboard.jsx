@@ -187,6 +187,8 @@ const CSS = `
   .db-credits-chip:hover { border-color: ${C.dark}; color: ${C.text}; }
   .db-credits-chip.low { border-color: #fde68a; background: #fef3c7; color: #b45309; }
   .dark .db-credits-chip.low { background: rgba(217,119,6,0.15); border-color: rgba(251,191,36,0.3); color: #fbbf24; }
+  .db-credits-chip.sub { border-color: rgba(22,163,74,0.35); background: rgba(22,163,74,0.07); color: #16a34a; }
+  .dark .db-credits-chip.sub { background: rgba(22,163,74,0.12); border-color: rgba(22,163,74,0.3); color: #4ade80; }
 
   /* ── Dark mode overrides ── */
   .dark .db-pill-topic { background: #2d1a4a; color: #c4b5fd; border-color: #4c2d7a; }
@@ -575,13 +577,21 @@ export default function Dashboard({ user }) {
                     </Link>
                     <div className="db-header-right">
                         <ThemeToggle />
-                        {credits !== null && (
-                            <Link to="/credits" className={`db-credits-chip${credits.low_credits ? ' low' : ''}`}>
-                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-                                {credits.credits} cr
-                                {credits.low_credits ? ' ⚠' : ''}
-                            </Link>
-                        )}
+                        {credits !== null && (() => {
+                            const subActive = credits.credits_sub_status === 'monthly'
+                                && credits.credits_sub_expires
+                                && new Date(credits.credits_sub_expires) > new Date();
+                            const chipClass = subActive ? ' sub' : credits.low_credits ? ' low' : '';
+                            const chipTitle = subActive
+                                ? `Monthly subscription active · expires ${new Date(credits.credits_sub_expires).toLocaleDateString()}`
+                                : `${credits.credits} credit${credits.credits !== 1 ? 's' : ''} remaining`;
+                            return (
+                                <Link to="/credits" className={`db-credits-chip${chipClass}`} title={chipTitle}>
+                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                                    {subActive ? '∞ sub' : `${credits.credits} cr${credits.low_credits ? ' ⚠' : ''}`}
+                                </Link>
+                            );
+                        })()}
                         <button className="db-btn-import" onClick={() => setImportOpen(true)}>
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
