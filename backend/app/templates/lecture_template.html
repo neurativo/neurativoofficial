@@ -1,182 +1,110 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <title>{{ title }} – Neurativo</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=JetBrains+Mono:wght@400;500;600&display=swap">
 
     <style>
-        /* ─── Reset & Variables ─────────────────────────────────────── */
-        * {
+        /* ═══════════════════════════════════════════════════════════
+           NEURATIVO LECTURE REPORT — Design System v2
+           Nature journal × Notion AI aesthetic
+           Fonts: Inter (UI/body) · Lora (display/serif) · JetBrains Mono (code/eq)
+           Print-faithful: greyscale-safe hierarchy via weight + rule + scale
+        ═══════════════════════════════════════════════════════════ */
+
+        /* ─── 1. TOKENS ─────────────────────────────────────────── */
+        :root {
+            --ink:    #111827;
+            --ink-2:  #374151;
+            --ink-3:  #6b7280;
+            --ink-4:  #9ca3af;
+            --ink-5:  #d1d5db;
+            --ink-6:  #e5e7eb;
+            --ink-7:  #f3f4f6;
+            --paper:  #ffffff;
+            --paper-2:#fafaf7;
+
+            /* Accent — injected via body style attribute */
+            --accent:      #2563eb;
+            --accent-dark: color-mix(in oklab, var(--accent) 70%, #000);
+            --accent-text: color-mix(in oklab, var(--accent) 85%, #000 15%);
+            --accent-lt:   color-mix(in oklab, var(--accent) 8%,  #fff 92%);
+            --accent-mid:  color-mix(in oklab, var(--accent) 28%, #fff 72%);
+            --accent-rule: color-mix(in oklab, var(--accent) 55%, #fff 45%);
+
+            --serif: 'Lora', 'Iowan Old Style', Georgia, serif;
+            --sans:  'Inter', -apple-system, 'Segoe UI', sans-serif;
+            --mono:  'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
+
+            --rule:     0.5pt solid var(--ink-5);
+            --rule-2:   0.75pt solid var(--ink-4);
+            --hairline: 0.25pt solid var(--ink-6);
+            --radius:   4px;
+        }
+
+        /* ─── 2. PAGE / RESET ───────────────────────────────────── */
+        @page {
+            size: A4;
+            margin: 18mm 16mm 20mm;
+            @bottom-right {
+                content: counter(page) " / " counter(pages);
+                font-family: 'Inter', sans-serif;
+                font-size: 7pt;
+                color: #9ca3af;
+                letter-spacing: 0.1em;
+            }
+        }
+        @page :first { margin-top: 12mm; }
+
+        *, *::before, *::after {
             box-sizing: border-box;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
         }
-
-        @page {
-            size: A4;
-        }
-
-        /* Reduce top margin on cover to leave room for Playwright header */
-        @page :first {
-            margin-top: 12mm;
-        }
-
-        :root {
-            --ink:        #111827;
-            --ink-2:      #374151;
-            --ink-3:      #6b7280;
-            --ink-4:      #9ca3af;
-            --accent:     #2563eb;
-            --accent-lt:  #eff6ff;
-            --accent-mid: #bfdbfe;
-            --accent-bg:  #eff6ff;
-            --slate-100:  #f1f5f9;
-            --slate-200:  #e2e8f0;
-            --slate-300:  #cbd5e1;
-            --border:     #e5e7eb;
-            --rule:       #e2e8f0;
-            --mono:       'Courier New', Courier, monospace;
-        }
-
+        html, body { margin: 0; padding: 0; }
         body {
-            margin: 0;
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            font-family: var(--sans);
+            font-size: 10.25pt;
+            line-height: 1.55;
             color: var(--ink-2);
-            font-size: 10pt;
-            line-height: 1.75;
-            background: #ffffff;
+            background: var(--paper);
+            font-feature-settings: "ss01","cv11","kern";
         }
+        p { margin: 0 0 0.65em; orphans: 3; widows: 3; }
+        strong { color: var(--ink); font-weight: 600; }
+        em { font-style: italic; }
 
-        .container {
-            max-width: 660px;
-            margin: 0 auto;
-        }
-
-        /* ─── COVER PAGE ────────────────────────────────────────────── */
-        .cover {
-            page-break-after: always;
-            min-height: 255mm;
-            display: flex;
-            flex-direction: column;
-            padding-bottom: 6mm;
-        }
-
-        .cover-top {
-            display: flex;
-            justify-content: space-between;
-            align-items: baseline;
-            padding-bottom: 0;
-        }
-
-        .cover-wordmark {
-            font-family: 'Lora', Georgia, serif;
-            font-size: 11pt;
-            font-weight: 700;
+        /* ─── 3. TYPE SCALE ─────────────────────────────────────── */
+        h1, h2, h3, h4 {
+            font-family: var(--serif);
             color: var(--ink);
-            letter-spacing: -0.2px;
-        }
-
-        .cover-report-type {
-            font-size: 7pt;
             font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 1.8px;
-            color: var(--ink-4);
-        }
-
-        .cover-middle {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            padding: 28mm 0 18mm;
-        }
-
-        .cover-title {
-            font-family: 'Lora', Georgia, "Times New Roman", serif;
-            font-size: 28pt;
-            font-weight: 700;
+            letter-spacing: -0.01em;
             line-height: 1.2;
-            letter-spacing: -0.5px;
-            color: var(--ink);
-            margin: 0 0 9mm 0;
+            margin: 0;
         }
-
-        .cover-badges {
-            display: flex;
-            gap: 7px;
-            margin-bottom: 9mm;
-            flex-wrap: wrap;
-        }
-
-        .badge {
-            display: inline-block;
-            padding: 2px 10px;
-            border-radius: 20px;
-            font-size: 7.5pt;
-            font-weight: 600;
-            letter-spacing: 0.3px;
-        }
-
-        .badge-topic {
-            background: #f5f3ff;
-            color: #7c3aed;
-            border: 1px solid #ede9fe;
-            text-transform: capitalize;
-        }
-
-        .badge-lang {
-            background: var(--accent-lt);
-            color: #1d4ed8;
-            border: 1px solid var(--accent-mid);
-            text-transform: uppercase;
-        }
-
-        .cover-rule {
-            border: none;
-            border-top: 1px solid var(--border);
-            margin: 0 0 8mm 0;
-        }
-
-        .cover-meta {
-            display: flex;
-            gap: 32px;
-            flex-wrap: wrap;
-        }
-
-        .cover-meta-item {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .cover-meta-label {
-            font-size: 7pt;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.9px;
-            color: var(--ink-4);
-            margin-bottom: 3px;
-        }
-
-        .cover-meta-value {
+        h1 { font-size: 40pt; font-weight: 500; letter-spacing: -0.025em; }
+        h2 { font-size: 16pt; }
+        h3 { font-size: 12pt; }
+        h4 {
             font-size: 10.5pt;
-            font-weight: 500;
-            color: var(--ink);
+            font-family: var(--sans);
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+            color: var(--ink-2);
         }
-
-        .cover-bottom {
-            text-align: center;
-            font-size: 7.5pt;
-            color: var(--ink-4);
-            padding-top: 6mm;
+        .eyebrow-label {
+            font-size: 7pt;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1.6px;
+            color: var(--accent-text);
         }
-
-        /* ─── SECTION EYEBROW ───────────────────────────────────────── */
         .eyebrow-row {
             display: flex;
             justify-content: space-between;
@@ -184,124 +112,334 @@
             padding-top: 9mm;
             margin-bottom: 2mm;
         }
-
-        .eyebrow-label {
-            font-size: 7pt;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 1.6px;
-            color: var(--accent);
-        }
-
-        .eyebrow-counter {
-            font-size: 7.5pt;
-            font-weight: 500;
-            color: var(--ink-4);
-        }
-
         .eyebrow-rule {
             border: none;
-            border-top: 1px solid var(--slate-200);
-            margin: 0 0 5mm 0;
+            border-top: var(--hairline);
+            margin: 0 0 5mm;
+        }
+        .pb-before { page-break-before: always; }
+
+        /* ─── 4. COVER ──────────────────────────────────────────── */
+        .cover {
+            page-break-after: always;
+            height: 257mm;
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+            padding: 4mm 0;
         }
 
-        /* ─── DOCUMENT SECTION HEADINGS (h2) ────────────────────────── */
-        h2 {
-            font-family: 'Lora', Georgia, serif;
+        /* Top bar: wordmark + report type */
+        .cover-mark {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            border-bottom: var(--rule);
+            padding-bottom: 7mm;
+        }
+        .cover-mark .wordmark {
+            font-family: var(--serif);
             font-size: 15pt;
-            font-weight: 700;
-            margin: 0 0 5mm 0;
-            letter-spacing: -0.3px;
+            font-weight: 600;
+            letter-spacing: -0.015em;
             color: var(--ink);
+            display: flex;
+            align-items: center;
+            gap: 9px;
+        }
+        .cover-mark .wordmark::before {
+            content: "";
+            width: 10px;
+            height: 10px;
+            background: var(--accent);
+            display: inline-block;
+            transform: rotate(45deg);
+        }
+        .cover-mark .label {
+            font-family: var(--sans);
+            font-size: 7.5pt;
+            font-weight: 500;
+            letter-spacing: 0.22em;
+            text-transform: uppercase;
+            color: var(--ink-3);
+        }
+        .cover-mark .label .sep {
+            display: inline-block;
+            width: 16px;
+            border-top: var(--rule);
+            margin: 0 10px 3px;
+            vertical-align: middle;
         }
 
-        /* ─── EXECUTIVE SUMMARY ─────────────────────────────────────── */
-        .exec-card {
-            background: var(--accent-lt);
-            border-radius: 10px;
-            padding: 7mm 8mm;
+        /* Middle: accent bar + meta + title + deck + stat strip */
+        .cover-body {
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            padding: 0 6mm 4mm;
+        }
+        .cover-accent {
+            width: 40mm;
+            height: 1pt;
+            background: var(--accent);
+            margin: 0 0 6mm;
+            flex: 0 0 auto;
+        }
+        .cover-meta {
+            font-family: var(--sans);
+            font-size: 8pt;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: var(--ink-3);
             margin-bottom: 10mm;
+            display: flex;
+            gap: 14mm;
+            align-items: baseline;
+            padding-bottom: 4mm;
+            border-bottom: var(--hairline);
         }
-
-        .exec-card p {
-            margin: 0 0 4mm 0;
-            font-size: 10.5pt;
-            line-height: 1.8;
+        .cover-meta b { color: var(--ink); font-weight: 600; }
+        .cover-title {
+            font-family: var(--serif);
+            font-size: 40pt;
+            font-weight: 500;
+            line-height: 1.08;
+            letter-spacing: -0.025em;
+            color: var(--ink);
+            max-width: 17cm;
+            margin: 0 0 10mm;
+        }
+        .cover-deck {
+            font-family: var(--serif);
+            font-style: italic;
+            font-size: 12pt;
             color: var(--ink-2);
+            line-height: 1.45;
+            max-width: 14cm;
+            margin: 0 0 14mm;
+            font-weight: 400;
         }
 
-        .exec-card p:last-child {
-            margin-bottom: 0;
+        /* Horizontal 4-tile stat strip */
+        .cover-strip {
+            border-top: var(--rule-2);
+            border-bottom: var(--hairline);
+            background:
+                linear-gradient(var(--paper-2), var(--paper-2)),
+                repeating-linear-gradient(135deg, transparent 0 9px, rgba(0,0,0,0.018) 9px 10px);
+            background-blend-mode: multiply;
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+        }
+        .cover-strip .tile {
+            padding: 7mm 6mm 6mm;
+            border-right: var(--hairline);
+            display: grid;
+            gap: 3mm;
+        }
+        .cover-strip .tile:last-child { border-right: 0; }
+        .cover-strip .tile .k {
+            font-family: var(--sans);
+            font-size: 6.75pt;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: var(--ink-3);
+            font-weight: 600;
+        }
+        .cover-strip .tile .v {
+            font-family: var(--serif);
+            font-size: 24pt;
+            font-weight: 500;
+            color: var(--ink);
+            line-height: 1;
+            letter-spacing: -0.01em;
+        }
+        .cover-strip .tile .v sup {
+            font-size: 11pt;
+            color: var(--ink-3);
+            font-weight: 400;
+            margin-left: 2px;
+        }
+        .cover-strip .tile .u {
+            font-family: var(--sans);
+            font-size: 7.5pt;
+            color: var(--ink-3);
         }
 
-        /* Drop cap — first letter of executive summary */
-        .drop-cap::first-letter {
-            float: left;
-            font-family: 'Lora', Georgia, serif;
-            font-size: 3.2em;
-            line-height: 0.8;
-            padding-right: 4px;
-            padding-top: 5px;
-            color: var(--accent);
-        }
-
-        /* ─── SECTION CARDS ─────────────────────────────────────────── */
-        .section-card {
-            margin-bottom: 7mm;
-            page-break-inside: avoid;
-        }
-
-        .section-card-header {
+        /* Footer: brand + issue info */
+        .cover-foot {
+            border-top: var(--rule);
+            padding-top: 6mm;
             display: flex;
             justify-content: space-between;
             align-items: baseline;
-            margin-bottom: 1.5mm;
-        }
-
-        .section-card-title {
-            font-family: 'Lora', Georgia, serif;
-            font-size: 12pt;
-            font-weight: 700;
-            color: var(--ink);
-        }
-
-        .section-progress {
+            gap: 10mm;
+            font-family: var(--sans);
             font-size: 7.5pt;
-            color: var(--ink-4);
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            color: var(--ink-3);
+        }
+        .cover-foot .brand {
+            font-family: var(--serif);
+            font-style: italic;
+            font-size: 10.5pt;
+            color: var(--ink-2);
+            letter-spacing: 0;
+            text-transform: none;
+        }
+        .cover-foot .issue { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+        /* ─── 5. TABLE OF CONTENTS ──────────────────────────────── */
+        .toc-page { page-break-after: always; padding-top: 4mm; }
+        .toc-h { font-family: var(--serif); font-size: 22pt; font-weight: 600; color: var(--ink); margin: 0 0 6mm; }
+        .toc-row { display: flex; align-items: baseline; gap: 4px; margin-bottom: 3.5mm; page-break-inside: avoid; }
+        .toc-num { font-family: var(--serif); font-style: italic; font-size: 8pt; font-weight: 500; color: var(--accent-text); min-width: 26px; }
+        .toc-sec-title { font-family: var(--serif); font-size: 10.5pt; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 420px; }
+        .toc-dots { flex: 1; border-bottom: 0.4pt dotted var(--ink-5); margin: 0 4px 3px; }
+        .toc-page-num { font-size: 7.5pt; color: var(--ink-4); font-family: var(--mono); white-space: nowrap; }
+
+        /* ─── 6. EXECUTIVE SUMMARY ──────────────────────────────── */
+        .exec-card {
+            background: var(--accent-lt);
+            border-radius: 8px;
+            padding: 6mm 7mm;
+            margin-bottom: 8mm;
+            border-top: 1.5pt solid var(--accent-rule);
+        }
+        .exec-card p { margin: 0 0 4mm; font-size: 10.5pt; line-height: 1.8; color: var(--ink-2); }
+        .exec-card p:last-child { margin-bottom: 0; }
+        .exec-card .drop-cap::first-letter {
+            float: left;
+            font-family: var(--serif);
+            font-size: 3.2em;
+            line-height: 0.82;
+            padding-right: 5px;
+            padding-top: 4px;
+            color: var(--accent-text);
             font-weight: 500;
+        }
+
+        /* Key stats row (below exec summary) */
+        .stat-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+            gap: 0;
+            margin: 4mm 0 8mm;
+            border-top: var(--rule);
+            border-bottom: var(--rule);
+        }
+        .stat-row .stat {
+            padding: 4mm 5mm;
+            border-right: var(--hairline);
+            display: flex;
+            align-items: baseline;
+            gap: 4mm;
+        }
+        .stat-row .stat:last-child { border-right: 0; }
+        .stat-row .stat .num {
+            font-family: var(--serif);
+            font-size: 22pt;
+            font-weight: 500;
+            color: var(--ink);
+            letter-spacing: -0.02em;
+            line-height: 1;
+            font-variant-numeric: tabular-nums;
             white-space: nowrap;
-            padding-left: 8px;
+        }
+        .stat-row .stat .num small { font-size: 10pt; color: var(--ink-3); margin-left: 2px; font-weight: 400; }
+        .stat-row .stat .lbl { font-family: var(--sans); font-size: 8.25pt; color: var(--ink-3); line-height: 1.35; }
+        .stat-row .stat .lbl b { display: block; color: var(--ink-2); font-weight: 600; font-size: 9pt; margin-bottom: 1pt; }
+
+        /* ─── 7. SECTION CARD ───────────────────────────────────── */
+        .section {
+            position: relative;
+            padding: 10mm 0 8mm;
+            border-top: var(--rule-2);
+            page-break-inside: avoid;
+            break-inside: avoid;
+        }
+        .section + .section { padding-top: 9mm; }
+
+        /* 3-column header: §N | title+sub | watermark space */
+        .section-head {
+            display: grid;
+            grid-template-columns: 12mm 1fr 22mm;
+            gap: 0 6mm;
+            align-items: baseline;
+            margin-bottom: 6mm;
+        }
+        .section-spacer { grid-column: 3; }
+        .section-num {
+            font-family: var(--serif);
+            font-size: 11pt;
+            font-style: italic;
+            color: var(--accent-text);
+            font-variant-numeric: tabular-nums;
+            letter-spacing: 0;
+            padding-top: 4pt;
+            white-space: nowrap;
+            font-weight: 500;
+        }
+        .section-title {
+            font-family: var(--serif);
+            font-size: 16pt;
+            font-weight: 600;
+            color: var(--ink);
+            letter-spacing: -0.015em;
+            line-height: 1.2;
+        }
+        .section-sub {
+            grid-column: 2;
+            font-family: var(--serif);
+            font-style: italic;
+            color: var(--ink-3);
+            font-size: 10.5pt;
+            margin-top: 2mm;
         }
 
-        .section-bar {
-            border: none;
-            border-top: 2px solid var(--accent);
-            width: 28px;
-            margin: 0 0 3.5mm 0;
+        /* Large faint watermark numeral */
+        .section-watermark {
+            position: absolute;
+            top: 8mm;
+            right: 0;
+            font-family: var(--serif);
+            font-size: 60pt;
+            font-weight: 500;
+            line-height: 1;
+            color: var(--ink-7);
+            letter-spacing: -0.04em;
+            pointer-events: none;
+            z-index: 0;
+            font-variant-numeric: tabular-nums;
+        }
+        .section-body { position: relative; z-index: 1; }
+
+        /* Drop cap on first paragraph of each section */
+        .section-body > p:first-of-type::first-letter {
+            font-family: var(--serif);
+            font-size: 2.6em;
+            float: left;
+            line-height: 0.9;
+            padding: 4pt 6pt 0 0;
+            color: var(--ink);
+            font-weight: 500;
         }
 
-        /* Section lead-in sentence */
+        /* Lead sentence (when no analogy) */
         .ls-lead {
+            font-family: var(--serif);
             font-size: 11.5pt;
             font-weight: 500;
             color: var(--ink);
-            margin: 0 0 3mm 0;
-            line-height: 1.65;
+            margin: 0 0 3.5mm;
+            line-height: 1.6;
         }
 
-        .section-card p {
-            font-size: 9.5pt;
-            color: var(--ink-3);
-            margin: 0 0 2.5mm 0;
-            line-height: 1.7;
-        }
+        /* Section prose */
+        .section-body p { font-size: 9.5pt; color: var(--ink-3); margin: 0 0 2.5mm; line-height: 1.7; }
 
-        .section-bullets {
-            list-style: none;
-            padding: 0;
-            margin: 3mm 0 0 0;
-        }
-
+        /* Bullet list */
+        .section-bullets { list-style: none; padding: 0; margin: 3mm 0 0; }
         .section-bullets li {
             display: flex;
             gap: 7px;
@@ -311,200 +449,17 @@
             color: var(--ink-2);
             line-height: 1.6;
         }
-
         .section-bullets li::before {
             content: "→";
-            color: var(--accent);
+            color: var(--accent-text);
             font-size: 8pt;
             flex-shrink: 0;
             margin-top: 2px;
         }
 
-        /* ─── CONCEPTUAL MAP ─────────────────────────────────────────── */
-        .connection-block {
-            border-left: 2px solid var(--slate-300);
-            padding: 3mm 5mm 3mm 5mm;
-            margin-bottom: 4mm;
-            page-break-inside: avoid;
-        }
-
-        .connection-heading {
-            font-variant: small-caps;
-            font-size: 8.5pt;
-            font-weight: 600;
-            color: var(--ink-3);
-            margin-bottom: 1.5mm;
-            letter-spacing: 0.3px;
-        }
-
-        .connection-block p {
-            font-size: 9.5pt;
-            color: var(--ink-2);
-            margin: 0;
-            line-height: 1.7;
-        }
-
-        /* ─── KEY TAKEAWAYS ─────────────────────────────────────────── */
-        .takeaway-list {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-        }
-
-        .takeaway-list li {
-            display: flex;
-            gap: 8px;
-            align-items: flex-start;
-            padding: 3mm 4mm;
-            margin-bottom: 2mm;
-            background: #f9fafb;
-            border-radius: 7px;
-            font-size: 9.5pt;
-            color: var(--ink-2);
-            line-height: 1.65;
-        }
-
-        .takeaway-num {
-            font-weight: 700;
-            color: var(--accent);
-            min-width: 16px;
-            font-size: 9pt;
-            padding-top: 1px;
-        }
-
-        /* ─── GLOSSARY ──────────────────────────────────────────────── */
-        .glossary-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 3mm;
-        }
-
-        .glossary-item {
-            border: 1px solid var(--slate-100);
-            border-radius: 7px;
-            padding: 3mm 4mm;
-            page-break-inside: avoid;
-        }
-
-        .glossary-term {
-            font-size: 9pt;
-            font-weight: 700;
-            color: var(--ink);
-            margin-bottom: 1.5mm;
-        }
-
-        .glossary-def {
-            font-size: 8.5pt;
-            color: var(--ink-3);
-            line-height: 1.55;
-        }
-
-        /* ─── SELF-TEST ──────────────────────────────────────────────── */
-        .review-item {
-            margin-bottom: 6mm;
-            page-break-inside: avoid;
-        }
-
-        .review-header {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            margin-bottom: 2mm;
-        }
-
-        .review-num {
-            font-weight: 700;
-            font-size: 9.5pt;
-            color: var(--ink);
-        }
-
-        .review-dot {
-            color: var(--ink-4);
-            font-size: 9pt;
-        }
-
-        .difficulty-badge {
-            font-size: 7pt;
-            font-weight: 600;
-            padding: 1px 8px;
-            border-radius: 10px;
-        }
-
-        .diff-recall        { background: var(--slate-100); color: #475569; }
-        .diff-understanding { background: var(--accent-lt); color: #1d4ed8; }
-        .diff-application   { background: #fffbeb;          color: #b45309; }
-
-        .review-question {
-            font-size: 10pt;
-            font-weight: 500;
-            color: var(--ink);
-            margin-bottom: 2mm;
-            line-height: 1.6;
-        }
-
-        .review-answer {
-            background: #f9fafb;
-            border: 1px solid var(--slate-100);
-            border-radius: 7px;
-            padding: 3mm 4mm;
-            font-size: 9pt;
-            color: var(--ink-3);
-            line-height: 1.65;
-        }
-
-        /* ─── LEARNING PATH ──────────────────────────────────────────── */
-        .roadmap-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 6mm;
-        }
-
-        .roadmap-col-heading {
-            font-size: 7.5pt;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.8px;
-            margin-bottom: 3mm;
-            padding-bottom: 2mm;
-            border-bottom: 1px solid var(--slate-200);
-        }
-
-        .roadmap-before { color: var(--ink-3); }
-        .roadmap-next   { color: var(--accent); }
-
-        .roadmap-list {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-        }
-
-        .roadmap-list li {
-            margin-bottom: 3.5mm;
-            page-break-inside: avoid;
-        }
-
-        .roadmap-concept {
-            font-size: 9.5pt;
-            font-weight: 600;
-            color: var(--ink);
-            margin-bottom: 0.8mm;
-        }
-
-        .roadmap-reason {
-            font-size: 8.5pt;
-            color: var(--ink-3);
-            line-height: 1.55;
-        }
-
-        /* ─── CONCEPTS & EXAMPLES GRID (per section) ────────────────── */
-        .ce-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 3mm;
-            margin-top: 3.5mm;
-        }
-
-        .ce-col-label {
+        /* Concept pills */
+        .concepts-wrap { margin: 3.5mm 0 4mm; }
+        .concepts-label {
             font-size: 7pt;
             font-weight: 700;
             text-transform: uppercase;
@@ -512,211 +467,535 @@
             color: var(--ink-4);
             margin-bottom: 2mm;
         }
-
-        .ce-list {
-            list-style: none;
-            padding: 0;
-            margin: 0;
+        .concepts-pills { display: flex; flex-wrap: wrap; gap: 4px; }
+        .concept-pill {
+            background: var(--accent-lt);
+            color: var(--accent-text);
+            border: 0.5px solid var(--accent-mid);
+            border-radius: 20px;
+            padding: 2px 10px;
+            font-size: 8.5pt;
+            font-weight: 500;
         }
 
-        .ce-list li {
-            font-size: 9pt;
-            color: var(--ink-2);
-            line-height: 1.6;
-            padding: 1.5mm 0;
-            border-bottom: 1px solid var(--slate-100);
-        }
-
-        .ce-list li:last-child {
-            border-bottom: none;
-        }
-
-        /* ─── VISUAL FRAMES ──────────────────────────────────────────── */
-        .visual-frame {
-            border-left: 2px solid var(--rule);
-            padding: 3mm 5mm;
+        /* Examples */
+        .examples-wrap {
+            border-left: 2px solid #5dcaa5;
+            padding-left: 8px;
             margin-bottom: 4mm;
-            page-break-inside: avoid;
         }
-        .vf-time {
-            font-family: var(--mono);
-            font-size: 7.5pt;
+        .examples-label {
+            font-size: 7pt;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
             color: var(--ink-4);
-            margin-bottom: 1.5mm;
-        }
-        .vf-title {
-            font-size: 11pt;
-            font-weight: 600;
-            color: var(--ink);
             margin-bottom: 2mm;
         }
-        .vf-label {
-            font-size: 7pt;
-            font-weight: 600;
-            letter-spacing: 1px;
+        .example-row { font-size: 9pt; color: #334155; margin-bottom: 1.5mm; }
+        .example-arrow { color: #1d9e75; font-weight: 600; margin-right: 4px; }
+
+        /* Analogy two-column box */
+        .analogy-box {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            margin-bottom: 4mm;
+            border: var(--hairline);
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        .analogy-left  { padding: 3.5mm 4mm; background: var(--paper-2); border-right: var(--hairline); }
+        .analogy-right { padding: 3.5mm 4mm; background: #f0fff4; }
+        .analogy-col-label {
+            font-size: 6.5pt;
+            font-weight: 700;
             text-transform: uppercase;
-            color: var(--ink-3);
+            letter-spacing: 1px;
+            color: var(--ink-4);
+            margin-bottom: 2mm;
+        }
+        .analogy-right .analogy-col-label { color: #059669; }
+        .analogy-text { font-size: 9pt; color: var(--ink-2); line-height: 1.6; }
+        .analogy-right .analogy-text { color: #134e4a; }
+
+        /* Mistake + Remember two-column box */
+        .mr-box {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            margin-top: 4mm;
+            border: 0.5pt solid #fde68a;
+            border-radius: 7px;
+            overflow: hidden;
+        }
+        .mr-mistake { padding: 3mm 4mm; background: #fffbeb; border-right: 0.5pt solid #fde68a; }
+        .mr-remember { padding: 3mm 4mm; background: #f0fff4; }
+        .mr-label {
+            font-size: 6.5pt;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
             margin-bottom: 1.5mm;
         }
-        .vf-eq {
+        .mr-mistake .mr-label  { color: #b45309; }
+        .mr-remember .mr-label { color: #059669; }
+        .mr-text { font-size: 8.5pt; line-height: 1.6; }
+        .mr-mistake .mr-text  { color: #78350f; }
+        .mr-remember .mr-text { color: #134e4a; }
+
+        /* Notes lines at bottom of each section */
+        .section-notes { margin-top: 4mm; padding-top: 3mm; border-top: var(--hairline); }
+        .notes-label {
+            font-size: 6.5pt;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--ink-5);
+            margin-bottom: 2mm;
+        }
+        .notes-lines {
+            height: 12mm;
+            background-image: repeating-linear-gradient(
+                to bottom,
+                transparent, transparent 5.5mm,
+                var(--ink-6) 5.5mm, var(--ink-6) 6mm
+            );
+        }
+
+        /* ─── 8. EQUATION BLOCK ─────────────────────────────────── */
+        .equation-block {
+            display: grid;
+            grid-template-columns: 5em 1fr 5em;
+            align-items: center;
+            margin: 5mm 0;
+            padding: 5mm 0;
+            background: var(--ink-7);
+            border-top: var(--rule);
+            border-bottom: var(--rule);
+            page-break-inside: avoid;
+        }
+        .equation-block .eq-tag {
             font-family: var(--mono);
-            font-size: 10pt;
-            color: var(--accent);
-            margin-bottom: 1mm;
-            padding: 2mm 3mm;
-            background: var(--accent-bg);
-            border-radius: 3px;
-        }
-        .vf-text {
-            font-size: 9.5pt;
-            color: var(--ink-2);
-            line-height: 1.6;
-        }
-        .vf-diagram {
             font-size: 9pt;
             color: var(--ink-3);
-            font-style: italic;
-            margin-bottom: 1mm;
+            text-align: center;
+        }
+        .equation-block .eq-body {
+            font-family: var(--mono);
+            font-size: 11.5pt;
+            text-align: center;
+            color: var(--ink);
+            letter-spacing: 0.01em;
+            line-height: 1.5;
+        }
+        .equation-block .eq-body i,
+        .equation-block .eq-body var { font-family: var(--serif); font-style: italic; }
+        .equation-block .eq-body sup,
+        .equation-block .eq-body sub  { font-family: var(--mono); font-size: 0.75em; }
+
+        /* Inline equation reference */
+        .eq-inline {
+            font-family: var(--mono);
+            font-size: 0.92em;
+            background: var(--accent-lt);
+            color: var(--accent-text);
+            padding: 0.5pt 4pt;
+            border-radius: 2px;
+            border: 0.4pt solid var(--accent-mid);
+            white-space: nowrap;
         }
 
-        /* ─── TABLE OF CONTENTS ─────────────────────────────────────────── */
-        .toc-page { page-break-after: always; padding-top: 4mm; }
-        .toc-title-h { font-family: 'Lora', Georgia, serif; font-size: 15pt; font-weight: 700; color: var(--ink); margin: 0 0 6mm 0; }
-        .toc-row { display: flex; align-items: baseline; gap: 4px; margin-bottom: 3.5mm; page-break-inside: avoid; }
-        .toc-num { font-size: 8pt; font-weight: 700; color: var(--accent); min-width: 22px; }
-        .toc-sec-title { font-family: 'Lora', Georgia, serif; font-size: 10pt; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 420px; }
-        .toc-dots { flex: 1; border-bottom: 1px dotted var(--slate-300); margin: 0 4px 3px; }
-        .toc-page-num { font-size: 8pt; color: var(--ink-4); font-family: 'Courier New', monospace; white-space: nowrap; }
+        /* ─── 9. CODE BLOCK ─────────────────────────────────────── */
+        .code-block {
+            position: relative;
+            margin: 5mm 0;
+            background: #1e1e2e;
+            color: #e4e4ef;
+            font-family: var(--mono);
+            font-size: 8.75pt;
+            line-height: 1.55;
+            border-radius: var(--radius);
+            overflow: hidden;
+            page-break-inside: avoid;
+        }
+        .code-block .code-lang {
+            position: absolute;
+            top: 6pt; right: 8pt;
+            font-family: var(--sans);
+            font-size: 7pt;
+            font-weight: 600;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: #9aa0b4;
+            background: rgba(255,255,255,0.06);
+            padding: 2pt 6pt;
+            border-radius: 99px;
+            border: 0.4pt solid rgba(255,255,255,0.12);
+        }
+        .code-block pre {
+            margin: 0;
+            padding: 8pt 10pt 8pt 0;
+            display: grid;
+            grid-template-columns: 3.2em 1fr;
+        }
+        .code-block .gutter {
+            text-align: right;
+            padding-right: 10pt;
+            color: #5a5f7a;
+            border-right: 0.5pt solid rgba(255,255,255,0.08);
+            user-select: none;
+            font-variant-numeric: tabular-nums;
+            font-size: 8pt;
+        }
+        .code-block .src { padding-left: 12pt; white-space: pre; }
+        /* CSS-only token classes */
+        .tk-kw  { color: #c4a4ff; font-weight: 500; }
+        .tk-fn  { color: #8ec5ff; }
+        .tk-str { color: #a6e3a1; }
+        .tk-num { color: #ffd29a; }
+        .tk-com { color: #6b7090; font-style: italic; }
+        .tk-op  { color: #f5c2e7; }
+        .tk-cls { color: #ffd29a; }
 
-        /* ─── COVER TILES ───────────────────────────────────────────────── */
-        .cover-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4mm; margin-top: 2mm; }
-        .cover-tile { border: 1px solid var(--slate-200); border-radius: 10px; padding: 4mm 5mm; background: #fafbfc; }
-        .tile-value { font-family: 'Lora', Georgia, serif; font-size: 18pt; font-weight: 700; color: var(--ink); line-height: 1.1; margin-bottom: 2px; }
-        .tile-label { font-size: 7pt; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--ink-4); }
+        /* ─── 10. THEOREM / LEMMA ───────────────────────────────── */
+        .theorem {
+            position: relative;
+            margin: 5mm 0;
+            padding: 5mm 6mm 4mm;
+            background: var(--paper);
+            border-top: 1.25pt double var(--ink-3);
+            border-bottom: 1.25pt double var(--ink-3);
+            page-break-inside: avoid;
+        }
+        .theorem-head { display: flex; align-items: baseline; gap: 10pt; margin-bottom: 3mm; flex-wrap: wrap; }
+        .theorem-head .kind {
+            font-family: var(--sans);
+            font-size: 7.5pt;
+            font-weight: 700;
+            letter-spacing: 0.22em;
+            text-transform: uppercase;
+            color: var(--ink);
+            white-space: nowrap;
+        }
+        .theorem-head .name {
+            font-family: var(--serif);
+            font-style: italic;
+            font-size: 10.5pt;
+            color: var(--ink-3);
+        }
+        .theorem-statement {
+            font-family: var(--serif);
+            font-style: italic;
+            font-size: 11pt;
+            color: var(--ink);
+            line-height: 1.5;
+            margin: 0 0 3mm;
+        }
+        .theorem-proof { font-family: var(--sans); font-size: 10pt; color: var(--ink-2); }
+        .theorem-proof::before {
+            content: "Proof.\00a0";
+            font-variant: small-caps;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            color: var(--ink);
+        }
+        .theorem-proof::after { content: "\00a0\25A0"; font-size: 0.85em; color: var(--ink); margin-left: 2pt; }
+        .theorem.is-lemma { border-top: var(--rule); border-bottom: var(--rule); background: var(--ink-7); }
+        .theorem.is-lemma .theorem-statement { font-size: 10.5pt; }
 
-        /* ─── SECTION NUMBER WATERMARK ──────────────────────────────────── */
-        .section-card { position: relative; }
-        .section-num-bg { position: absolute; right: -2mm; top: -6mm; font-size: 52pt; font-weight: 700; color: #f1f5f9; font-family: 'Lora', serif; line-height: 1; pointer-events: none; user-select: none; z-index: 0; }
-        .section-card-header { position: relative; z-index: 1; }
+        /* ─── 11. CASE STUDY ────────────────────────────────────── */
+        .case {
+            margin: 5mm 0 5mm 6mm;
+            padding: 4mm 6mm;
+            background: var(--paper-2);
+            border-left: 0.75pt solid var(--ink-4);
+            position: relative;
+            page-break-inside: avoid;
+        }
+        .case::before {
+            content: "Case";
+            font-family: var(--sans);
+            font-size: 7pt;
+            font-weight: 700;
+            letter-spacing: 0.22em;
+            text-transform: uppercase;
+            color: var(--ink-3);
+            position: absolute;
+            top: -3pt; left: 6mm;
+            background: var(--paper);
+            padding: 0 6pt;
+        }
+        .case .case-eyebrow { font-family: var(--sans); font-size: 7.5pt; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 2mm; }
+        .case .case-title   { font-family: var(--serif); font-size: 11.5pt; font-weight: 600; color: var(--ink); margin: 0 0 2mm; font-style: italic; }
+        .case p { font-size: 9.75pt; }
 
-        /* ─── ACTIVE RECALL Q&A ─────────────────────────────────────────── */
-        .review-question-block { border-left: 3px solid var(--accent); padding: 3mm 4mm; background: #ffffff; border-radius: 0 7px 7px 0; margin-bottom: 2mm; }
-        .fold-line { position: relative; border-top: 1.5px dashed #cbd5e1; margin: 3mm 0; }
-        .fold-label { position: absolute; top: -7px; left: 50%; transform: translateX(-50%); background: white; padding: 0 8px; font-size: 6.5pt; color: #94a3b8; letter-spacing: 0.4px; white-space: nowrap; }
-        .review-answer-block { background: #f8fafc; border: 1px solid var(--slate-100); border-radius: 7px; padding: 3mm 4mm; }
+        /* ─── 12. PULL QUOTE ────────────────────────────────────── */
+        .pull {
+            margin: 5mm 4mm;
+            padding: 0 0 0 8mm;
+            border-left: 1.5pt solid var(--accent);
+            font-family: var(--serif);
+            font-style: italic;
+            font-size: 13pt;
+            line-height: 1.45;
+            color: var(--ink);
+            page-break-inside: avoid;
+        }
+        .pull .attr { display: block; font-family: var(--sans); font-style: normal; font-size: 8pt; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-3); margin-top: 3mm; }
 
-        /* ─── GLOSSARY MNEMONIC ─────────────────────────────────────────── */
+        /* ─── 13. CONCEPTUAL MAP ────────────────────────────────── */
+        .connection-block { border-left: 2pt solid var(--ink-5); padding: 3mm 5mm; margin-bottom: 4mm; page-break-inside: avoid; }
+        .connection-heading { font-variant: small-caps; font-size: 8.5pt; font-weight: 600; color: var(--ink-3); margin-bottom: 1.5mm; letter-spacing: 0.3px; }
+        .connection-block p { font-size: 9.5pt; color: var(--ink-2); margin: 0; line-height: 1.7; }
+
+        /* ─── 14. KEY TAKEAWAYS ─────────────────────────────────── */
+        .takeaway-list { list-style: none; padding: 0; margin: 0; }
+        .takeaway-list li {
+            display: flex;
+            gap: 8px;
+            align-items: flex-start;
+            padding: 3mm 4mm;
+            margin-bottom: 2mm;
+            background: var(--ink-7);
+            border-radius: 6px;
+            font-size: 9.5pt;
+            color: var(--ink-2);
+            line-height: 1.65;
+        }
+        .takeaway-num { font-weight: 700; color: var(--accent-text); min-width: 16px; font-size: 9pt; padding-top: 1px; }
+
+        /* ─── 15. GLOSSARY ──────────────────────────────────────── */
+        .glossary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 3mm; }
+        .glossary-item { border: var(--hairline); border-radius: 6px; padding: 3mm 4mm; page-break-inside: avoid; }
+        .glossary-term { font-size: 9pt; font-weight: 700; color: var(--ink); margin-bottom: 1.5mm; font-family: var(--serif); }
+        .glossary-def  { font-size: 8.5pt; color: var(--ink-3); line-height: 1.55; }
         .glossary-mnemonic { font-size: 8pt; color: #7c3aed; font-style: italic; margin-top: 2mm; line-height: 1.45; }
 
-        /* ─── SECTION NOTES LINES ───────────────────────────────────────── */
-        .section-notes { margin-top: 4mm; padding-top: 3mm; border-top: 1px solid #f1f5f9; }
-        .notes-label { font-size: 6.5pt; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: #d1d5db; margin-bottom: 2mm; }
-        .notes-lines { height: 12mm; background-image: repeating-linear-gradient(to bottom, transparent, transparent 5.5mm, #e5e7eb 5.5mm, #e5e7eb 6mm); }
+        /* ─── 16. VISUAL FRAMES ─────────────────────────────────── */
+        .visual-frame { border-left: 2pt solid var(--ink-6); padding: 3mm 5mm; margin-bottom: 4mm; page-break-inside: avoid; }
+        .vf-time   { font-family: var(--mono); font-size: 7.5pt; color: var(--ink-4); margin-bottom: 1.5mm; }
+        .vf-title  { font-size: 11pt; font-weight: 600; color: var(--ink); margin-bottom: 2mm; }
+        .vf-label  { font-size: 7pt; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: var(--ink-3); margin-bottom: 1.5mm; }
+        .vf-eq     { font-family: var(--mono); font-size: 10pt; color: var(--accent-text); margin-bottom: 1mm; padding: 2mm 3mm; background: var(--accent-lt); border-radius: 3px; }
+        .vf-text   { font-size: 9.5pt; color: var(--ink-2); line-height: 1.6; }
+        .vf-diagram{ font-size: 9pt; color: var(--ink-3); font-style: italic; margin-bottom: 1mm; }
 
-        /* ─── CHEAT SHEET ───────────────────────────────────────────────── */
-        .cheat-sheet-page { page-break-before: always; }
-        .cs-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6mm; margin-top: 4mm; }
-        .cs-col-heading { font-size: 7pt; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--ink-4); border-bottom: 1.5px solid var(--slate-200); padding-bottom: 2mm; margin-bottom: 3mm; }
-        .cs-term-row { display: flex; gap: 4px; margin-bottom: 2.5mm; font-size: 7.5pt; line-height: 1.4; }
-        .cs-term { font-weight: 700; color: var(--ink); white-space: nowrap; }
-        .cs-def { color: var(--ink-3); }
-        .cs-pill { display: inline-block; background: var(--accent-lt); color: var(--accent); border: 0.5px solid var(--accent-mid); border-radius: 20px; padding: 1px 7px; font-size: 7pt; font-weight: 500; margin: 1.5px 2px; }
-        .cs-takeaway { font-size: 8pt; color: var(--ink-2); line-height: 1.5; margin-bottom: 2.5mm; display: flex; gap: 5px; }
-        .cs-takeaway-num { font-weight: 700; color: var(--accent); min-width: 14px; }
-        .cs-footer { text-align: center; font-size: 7pt; color: var(--ink-4); margin-top: 5mm; border-top: 1px solid var(--slate-100); padding-top: 3mm; }
+        /* ─── 17. SELF-TEST ─────────────────────────────────────── */
+        .review-item { margin-bottom: 6mm; page-break-inside: avoid; }
+        .review-header { display: flex; align-items: center; gap: 5px; margin-bottom: 2mm; }
+        .review-num  { font-weight: 700; font-size: 9.5pt; color: var(--ink); }
+        .review-dot  { color: var(--ink-4); font-size: 9pt; }
+        .difficulty-badge { font-size: 7pt; font-weight: 600; padding: 1px 8px; border-radius: 10px; }
+        .diff-recall       { background: var(--ink-7); color: #475569; }
+        .diff-understanding{ background: var(--accent-lt); color: var(--accent-text); }
+        .diff-application  { background: #fffbeb; color: #b45309; }
+        .review-question-block { border-left: 2pt solid var(--accent-rule); padding: 3mm 4mm; background: var(--paper); border-radius: 0 6px 6px 0; margin-bottom: 2mm; }
+        .review-question { font-size: 10pt; font-weight: 500; color: var(--ink); margin-bottom: 2mm; line-height: 1.6; }
+        .review-answer-block { background: var(--ink-7); border: var(--hairline); border-radius: 6px; padding: 3mm 4mm; }
+        .review-answer { font-size: 9pt; color: var(--ink-3); line-height: 1.65; }
 
-        /* ─── PAGE BREAK STRATEGY ───────────────────────────────────────── */
-        .pb-before { page-break-before: always; }
+        /* ─── 18. FOLD RULE ─────────────────────────────────────── */
+        .fold {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            align-items: center;
+            gap: 6mm;
+            margin: 8mm 0;
+            page-break-inside: avoid;
+        }
+        .fold .line { height: 0; border-top: 0.6pt dashed var(--ink-4); }
+        .fold .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6pt;
+            padding: 3pt 9pt 3pt 6pt;
+            border: 0.5pt solid var(--ink-4);
+            border-radius: 999px;
+            background: var(--paper);
+            font-family: var(--sans);
+            font-size: 7.5pt;
+            font-weight: 600;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: var(--ink-3);
+        }
+        .fold .scissor {
+            display: inline-grid;
+            place-items: center;
+            width: 14pt; height: 14pt;
+            border: 0.5pt solid var(--ink-4);
+            border-radius: 50%;
+            font-size: 8.5pt;
+            color: var(--ink-2);
+            transform: rotate(-12deg);
+        }
+
+        /* ─── 19. CHEAT SHEET ───────────────────────────────────── */
+        .cheat-page { page-break-before: always; padding-top: 4mm; }
+        .cheat-head {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            border-bottom: var(--rule-2);
+            padding-bottom: 4mm;
+            margin-bottom: 6mm;
+        }
+        .cheat-head h2 { font-size: 22pt; }
+        .cheat-head .meta { font-family: var(--sans); font-size: 7.5pt; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-3); }
+        /* 4-column grid: Term | Concept | Formula/Rule | Takeaway */
+        .cheat-grid {
+            display: grid;
+            grid-template-columns: 1.1fr 1.4fr 1.1fr 1.4fr;
+            gap: 0;
+            border-top: var(--hairline);
+            border-left: var(--hairline);
+        }
+        .cheat-grid .col-head {
+            font-family: var(--sans);
+            font-size: 7pt;
+            font-weight: 700;
+            letter-spacing: 0.22em;
+            text-transform: uppercase;
+            color: var(--ink-3);
+            padding: 3mm 4mm;
+            background: var(--ink-7);
+            border-right: var(--hairline);
+            border-bottom: var(--rule);
+        }
+        .cheat-grid .cell {
+            padding: 3.5mm 4mm;
+            border-right: var(--hairline);
+            border-bottom: var(--hairline);
+            font-size: 9pt;
+            line-height: 1.45;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5mm;
+        }
+        .cheat-grid .cell .term {
+            display: block;
+            font-family: var(--serif);
+            font-weight: 600;
+            font-size: 10pt;
+            color: var(--ink);
+            letter-spacing: -0.005em;
+            padding-bottom: 1.5mm;
+            border-bottom: var(--hairline);
+        }
+        .cheat-grid .cell .desc    { display: block; color: var(--ink-2); font-size: 8.5pt; }
+        .cheat-grid .cell .formula { font-family: var(--mono); font-size: 8.75pt; color: var(--ink); background: var(--ink-7); padding: 1pt 4pt; border-radius: 2px; }
+        .cheat-grid .cell .takeaway{ font-style: italic; color: var(--ink-2); font-size: 8.5pt; }
+        .cheat-grid .cell.is-accent { background: var(--accent-lt); }
+
+        /* ─── 20. LEARNING PATH ─────────────────────────────────── */
+        .roadmap-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; }
+        .roadmap-col-heading { font-size: 7.5pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 3mm; padding-bottom: 2mm; border-bottom: var(--hairline); }
+        .roadmap-before { color: var(--ink-3); }
+        .roadmap-next   { color: var(--accent-text); }
+        .roadmap-list { list-style: none; padding: 0; margin: 0; }
+        .roadmap-list li { margin-bottom: 3.5mm; page-break-inside: avoid; }
+        .roadmap-concept { font-size: 9.5pt; font-weight: 600; color: var(--ink); margin-bottom: 0.8mm; }
+        .roadmap-reason  { font-size: 8.5pt; color: var(--ink-3); line-height: 1.55; }
+
+        /* ─── 21. STATIC FOOTER ─────────────────────────────────── */
+        .foot-static {
+            margin-top: 12mm;
+            border-top: var(--hairline);
+            padding-top: 2mm;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10mm;
+            font-family: var(--sans);
+            font-size: 7pt;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: var(--ink-4);
+            white-space: nowrap;
+        }
+        .foot-static .lhs { display: flex; gap: 10pt; align-items: center; }
+        .foot-static .lhs .dot { width: 5px; height: 5px; background: var(--accent); display: inline-block; transform: rotate(45deg); }
     </style>
 </head>
 
 <body style="--accent: {{ accent_color }};">
-<div class="container">
 
-    <!-- ══════════════════════════════════════════
+    <!-- ══════════════════════════════════════
          COVER PAGE
-    ══════════════════════════════════════════ -->
+    ══════════════════════════════════════ -->
     <div class="cover">
-        <div class="cover-top">
-            <div class="cover-wordmark">Neurativo</div>
-            <div class="cover-report-type">Lecture Intelligence Report</div>
-        </div>
+        <header class="cover-mark">
+            <div class="wordmark">Neurativo</div>
+            <div class="label">Lecture <span class="sep"></span> Intelligence Report</div>
+        </header>
 
-        <div class="cover-middle">
-            <div class="cover-title">{{ title }}</div>
-
-            {% if topic or language %}
-            <div class="cover-badges">
-                {% if topic %}
-                <span class="badge badge-topic">{{ topic }}</span>
-                {% endif %}
-                {% if language %}
-                <span class="badge badge-lang">{{ language }}</span>
-                {% endif %}
+        <div class="cover-body">
+            <div class="cover-accent"></div>
+            <div class="cover-meta">
+                {% if topic %}<div><b>{{ topic }}</b></div>{% endif %}
+                {% if language %}<div>{{ language | upper }}</div>{% endif %}
+                <div>{{ created_at }}</div>
             </div>
+
+            <h1 class="cover-title">{{ title }}</h1>
+
+            {% if executive_summary %}
+            <p class="cover-deck">{{ executive_summary.split('\n\n')[0] | truncate(220, True) }}</p>
             {% endif %}
 
-            <hr class="cover-rule">
-
-            <div class="cover-tiles">
-                <div class="cover-tile">
-                    <div class="tile-value">{{ created_at }}</div>
-                    <div class="tile-label">Date</div>
+            <div class="cover-strip">
+                <div class="tile">
+                    <div class="k">Duration</div>
+                    <div class="v">{{ duration_formatted }}</div>
+                    <div class="u">Lecture length</div>
                 </div>
-                <div class="cover-tile">
-                    <div class="tile-value">{{ duration_formatted }}</div>
-                    <div class="tile-label">Duration</div>
+                <div class="tile">
+                    <div class="k">Words Spoken</div>
+                    <div class="v">{{ word_count }}</div>
+                    <div class="u">Transcribed</div>
                 </div>
-                <div class="cover-tile">
-                    <div class="tile-value">{{ word_count }}</div>
-                    <div class="tile-label">Words Spoken</div>
+                <div class="tile">
+                    <div class="k">Sections</div>
+                    <div class="v">{{ total_sections }}</div>
+                    <div class="u">In this report</div>
                 </div>
-                <div class="cover-tile">
-                    <div class="tile-value">{{ reading_time_minutes }} min</div>
-                    <div class="tile-label">Est. Reading</div>
+                <div class="tile">
+                    <div class="k">Reading</div>
+                    <div class="v">{{ reading_time_minutes }}<sup>min</sup></div>
+                    <div class="u">Estimated</div>
                 </div>
-                <div class="cover-tile">
-                    <div class="tile-value">{{ total_sections }}</div>
-                    <div class="tile-label">Sections</div>
-                </div>
-                {% if qa_pairs %}
-                <div class="cover-tile">
-                    <div class="tile-value">{{ qa_pairs }}</div>
-                    <div class="tile-label">Q&amp;A Pairs</div>
-                </div>
-                {% endif %}
             </div>
         </div>
 
-        <div class="cover-bottom">
-            Generated by Neurativo AI · neurativo.app
-        </div>
+        <footer class="cover-foot">
+            <div class="brand">neurativo.app</div>
+            <div class="issue">Generated {{ created_at }}{% if total_sections %} · {{ total_sections }} sections{% endif %}</div>
+        </footer>
     </div>
 
 
-    <!-- ══════════════════════════════════════════
+    <!-- ══════════════════════════════════════
          TABLE OF CONTENTS
-    ══════════════════════════════════════════ -->
+    ══════════════════════════════════════ -->
     {% if enriched_sections | length > 1 %}
     <div class="toc-page">
         <div class="eyebrow-row" style="padding-top: 2mm;">
             <span class="eyebrow-label">Contents</span>
         </div>
         <hr class="eyebrow-rule">
-        <div class="toc-title-h">Table of Contents</div>
+        <h2 class="toc-h">Table of Contents</h2>
 
         {% if executive_summary %}
         <div class="toc-row">
             <span class="toc-num">—</span>
             <span class="toc-sec-title">Executive Summary</span>
             <span class="toc-dots"></span>
-            <span class="toc-page-num">p. ~2</span>
+            <span class="toc-page-num">p. 2</span>
         </div>
         {% endif %}
 
         {% for sec in enriched_sections %}
         <div class="toc-row">
-            <span class="toc-num">{{ "%02d"|format(loop.index) }}</span>
+            <span class="toc-num">§{{ loop.index }}</span>
             <span class="toc-sec-title">{{ sec.title }}</span>
             <span class="toc-dots"></span>
             <span class="toc-page-num">p. ~{{ (3 + loop.index * 1.5) | int }}</span>
@@ -750,9 +1029,10 @@
     </div>
     {% endif %}
 
-    <!-- ══════════════════════════════════════════
+
+    <!-- ══════════════════════════════════════
          EXECUTIVE SUMMARY
-    ══════════════════════════════════════════ -->
+    ══════════════════════════════════════ -->
     {% if executive_summary %}
     <div class="eyebrow-row pb-before">
         <span class="eyebrow-label">Executive Summary</span>
@@ -772,11 +1052,11 @@
     </div>
 
     {% if key_stats %}
-    <div style="display:grid;grid-template-columns:repeat({{ key_stats|length }},1fr);gap:3mm;margin-top:4mm;margin-bottom:2mm;">
+    <div class="stat-row">
         {% for stat in key_stats %}
-        <div style="text-align:center;padding:4mm 3mm;background:var(--accent-lt);border-radius:8px;border:1px solid var(--accent-mid);">
-            <div style="font-family:'Lora',Georgia,serif;font-size:18pt;font-weight:700;color:var(--accent);line-height:1.1;margin-bottom:2mm;">{{ stat.value }}</div>
-            <div style="font-size:7.5pt;color:var(--ink-3);line-height:1.4;">{{ stat.label }}</div>
+        <div class="stat">
+            <div class="num">{{ stat.value }}</div>
+            <div class="lbl">{{ stat.label }}</div>
         </div>
         {% endfor %}
     </div>
@@ -784,9 +1064,9 @@
     {% endif %}
 
 
-    <!-- ══════════════════════════════════════════
+    <!-- ══════════════════════════════════════
          SECTION BREAKDOWN
-    ══════════════════════════════════════════ -->
+    ══════════════════════════════════════ -->
     {% if enriched_sections %}
     <div class="eyebrow-row pb-before">
         <span class="eyebrow-label">{{ section_label }}</span>
@@ -794,106 +1074,106 @@
     <hr class="eyebrow-rule">
 
     {% for sec in enriched_sections %}
-    <div class="section-card">
-        <div class="section-num-bg">{{ "%02d"|format(loop.index) }}</div>
-        <div class="section-card-header">
-            <div class="section-card-title">{{ sec.title }}</div>
-            <div class="section-progress">Section {{ loop.index }} of {{ enriched_sections | length }}</div>
-        </div>
-        <hr class="section-bar">
+    <article class="section">
+        <div class="section-watermark">{{ "%02d"|format(loop.index) }}</div>
 
-        {% if sec.analogy %}
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;margin-bottom:4mm;border:1px solid var(--slate-200);border-radius:8px;overflow:hidden;">
-            <div style="padding:3.5mm 4mm;background:#fafbfc;border-right:1px solid var(--slate-200);">
-                <div style="font-size:6.5pt;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--ink-4);margin-bottom:2mm;">What it is</div>
-                <div style="font-size:9pt;color:var(--ink-2);line-height:1.6;">{{ sec.lead_sentence }}</div>
+        <header class="section-head">
+            <div class="section-num">§&thinsp;{{ loop.index }}</div>
+            <div>
+                <h2 class="section-title">{{ sec.title }}</h2>
+                {% if sec.lead_sentence and sec.analogy %}
+                <div class="section-sub">{{ sec.lead_sentence }}</div>
+                {% endif %}
             </div>
-            <div style="padding:3.5mm 4mm;background:#f0fff4;">
-                <div style="font-size:6.5pt;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#059669;margin-bottom:2mm;">Real-world analogy</div>
-                <div style="font-size:9pt;color:#134e4a;line-height:1.6;">{{ sec.analogy }}</div>
+            <div class="section-spacer"></div>
+        </header>
+
+        <div class="section-body">
+
+            {% if sec.analogy %}
+            <div class="analogy-box">
+                <div class="analogy-left">
+                    <div class="analogy-col-label">What it is</div>
+                    <div class="analogy-text">{{ sec.lead_sentence }}</div>
+                </div>
+                <div class="analogy-right">
+                    <div class="analogy-col-label">Real-world analogy</div>
+                    <div class="analogy-text">{{ sec.analogy }}</div>
+                </div>
             </div>
-        </div>
-        {% else %}
-        {% if sec.lead_sentence %}
-        <p class="ls-lead">{{ sec.lead_sentence }}</p>
-        {% endif %}
-        {% endif %}
+            {% elif sec.lead_sentence %}
+            <p class="ls-lead">{{ sec.lead_sentence }}</p>
+            {% endif %}
 
-        {% if sec.prose %}
-            {% for para in sec.prose.split('\n\n') %}
-            <p>{{ para }}</p>
-            {% endfor %}
-        {% endif %}
+            {% if sec.prose %}
+                {% for para in sec.prose.split('\n\n') %}
+                <p>{{ para }}</p>
+                {% endfor %}
+            {% endif %}
 
-        {% if sec.bullets %}
-        <ul class="section-bullets">
-            {% for bullet in sec.bullets %}
-            <li>{{ bullet }}</li>
-            {% endfor %}
-        </ul>
-        {% endif %}
+            {% if sec.bullets %}
+            <ul class="section-bullets">
+                {% for bullet in sec.bullets %}
+                <li>{{ bullet }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
 
-        {% if sec.highlight %}
-        <div style="background:#FAEEDA;border-left:3px solid #BA7517;border-radius:0 5px 5px 0;padding:4mm 5mm;margin-bottom:4mm;">
-            <p style="font-style:italic;color:#633806;font-size:10pt;margin:0;line-height:1.6;">{{ sec.highlight }}</p>
-        </div>
-        {% endif %}
+            {% if sec.concepts %}
+            <div class="concepts-wrap">
+                <div class="concepts-label">Key Concepts</div>
+                <div class="concepts-pills">
+                    {% for c in sec.concepts %}
+                    <span class="concept-pill">{{ c }}</span>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
 
-        {% if sec.concepts %}
-        <div style="margin-bottom:4mm;">
-            <div class="ce-col-label">Key Concepts</div>
-            <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:2mm;">
-                {% for c in sec.concepts %}
-                <span style="background:#EFF6FF;color:#1D4ED8;border:0.5px solid #BFDBFE;border-radius:20px;padding:2px 10px;font-size:8.5pt;font-weight:500;display:inline-block;margin:2px 3px;">{{ c }}</span>
+            {% if sec.examples %}
+            <div class="examples-wrap">
+                <div class="examples-label">Examples</div>
+                {% for e in sec.examples %}
+                <div class="example-row"><span class="example-arrow">→</span>{{ e }}</div>
                 {% endfor %}
             </div>
-        </div>
-        {% endif %}
-
-        {% if sec.examples %}
-        <div style="border-left:2px solid #5DCAA5;padding-left:8px;margin-bottom:4mm;">
-            <div class="ce-col-label" style="margin-bottom:2mm;">Examples</div>
-            {% for e in sec.examples %}
-            <div style="font-size:9pt;color:#334155;margin-bottom:1.5mm;">
-                <span style="color:#1D9E75;font-weight:600;margin-right:4px;">→</span>{{ e }}
-            </div>
-            {% endfor %}
-        </div>
-        {% endif %}
-
-        {% if sec.mistake or sec.remember %}
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;margin-top:4mm;border-radius:8px;overflow:hidden;border:1px solid #fde68a;">
-            {% if sec.mistake %}
-            <div style="padding:3mm 4mm;background:#fffbeb;border-right:1px solid #fde68a;">
-                <div style="font-size:6.5pt;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#b45309;margin-bottom:1.5mm;">Common Mistake</div>
-                <div style="font-size:8.5pt;color:#78350f;line-height:1.6;">{{ sec.mistake }}</div>
-            </div>
-            {% else %}
-            <div style="background:#fffbeb;border-right:1px solid #fde68a;"></div>
             {% endif %}
-            {% if sec.remember %}
-            <div style="padding:3mm 4mm;background:#f0fff4;">
-                <div style="font-size:6.5pt;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#059669;margin-bottom:1.5mm;">Remember This</div>
-                <div style="font-size:8.5pt;color:#134e4a;line-height:1.6;">{{ sec.remember }}</div>
-            </div>
-            {% else %}
-            <div style="background:#f0fff4;"></div>
-            {% endif %}
-        </div>
-        {% endif %}
 
-        <div class="section-notes">
-            <div class="notes-label">My Notes</div>
-            <div class="notes-lines"></div>
+            {% if sec.mistake or sec.remember %}
+            <div class="mr-box">
+                {% if sec.mistake %}
+                <div class="mr-mistake">
+                    <div class="mr-label">Common Mistake</div>
+                    <div class="mr-text">{{ sec.mistake }}</div>
+                </div>
+                {% else %}
+                <div class="mr-mistake"></div>
+                {% endif %}
+                {% if sec.remember %}
+                <div class="mr-remember">
+                    <div class="mr-label">Remember This</div>
+                    <div class="mr-text">{{ sec.remember }}</div>
+                </div>
+                {% else %}
+                <div class="mr-remember"></div>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            <div class="section-notes">
+                <div class="notes-label">My Notes</div>
+                <div class="notes-lines"></div>
+            </div>
+
         </div>
-    </div>
+    </article>
     {% endfor %}
     {% endif %}
 
 
-    <!-- ══════════════════════════════════════════
+    <!-- ══════════════════════════════════════
          CONCEPTUAL MAP
-    ══════════════════════════════════════════ -->
+    ══════════════════════════════════════ -->
     {% if conceptual_map %}
     <div class="eyebrow-row pb-before">
         <span class="eyebrow-label">How It All Connects</span>
@@ -912,9 +1192,9 @@
     {% endif %}
 
 
-    <!-- ══════════════════════════════════════════
+    <!-- ══════════════════════════════════════
          KEY TAKEAWAYS
-    ══════════════════════════════════════════ -->
+    ══════════════════════════════════════ -->
     {% if takeaways %}
     <div class="eyebrow-row pb-before">
         <span class="eyebrow-label">Key Takeaways</span>
@@ -933,9 +1213,9 @@
     {% endif %}
 
 
-    <!-- ══════════════════════════════════════════
+    <!-- ══════════════════════════════════════
          GLOSSARY
-    ══════════════════════════════════════════ -->
+    ══════════════════════════════════════ -->
     {% if glossary %}
     <div class="eyebrow-row pb-before">
         <span class="eyebrow-label">{{ glossary_label }}</span>
@@ -957,12 +1237,12 @@
     {% endif %}
 
 
-    <!-- ══════════════════════════════════════════
-         VISUAL CONTENT CAPTURED
-    ══════════════════════════════════════════ -->
+    <!-- ══════════════════════════════════════
+         VISUAL CONTENT
+    ══════════════════════════════════════ -->
     {% if visual_frames %}
     <div class="eyebrow-row pb-before">
-        <span class="eyebrow-label">Visual content captured</span>
+        <span class="eyebrow-label">Visual Content Captured</span>
     </div>
     <hr class="eyebrow-rule">
     <h2>Visual Content</h2>
@@ -971,26 +1251,18 @@
     {% if frame.formatted_text %}
     <div class="visual-frame">
         <div class="vf-time">{{ frame.timestamp_seconds | format_time }}</div>
-        {% if frame.title %}
-        <div class="vf-title">{{ frame.title }}</div>
-        {% endif %}
+        {% if frame.title %}<div class="vf-title">{{ frame.title }}</div>{% endif %}
         {% if frame.equations %}
-        <div class="vf-equations">
+        <div>
             <div class="vf-label">Equations</div>
-            {% for eq in frame.equations %}
-            <div class="vf-eq">{{ eq }}</div>
-            {% endfor %}
+            {% for eq in frame.equations %}<div class="vf-eq">{{ eq }}</div>{% endfor %}
         </div>
         {% endif %}
-        {% if frame.text_content %}
-        <div class="vf-text">{{ frame.text_content }}</div>
-        {% endif %}
+        {% if frame.text_content %}<div class="vf-text">{{ frame.text_content }}</div>{% endif %}
         {% if frame.diagrams %}
-        <div class="vf-diagrams">
+        <div>
             <div class="vf-label">Diagrams</div>
-            {% for d in frame.diagrams %}
-            <div class="vf-diagram">{{ d }}</div>
-            {% endfor %}
+            {% for d in frame.diagrams %}<div class="vf-diagram">{{ d }}</div>{% endfor %}
         </div>
         {% endif %}
     </div>
@@ -999,15 +1271,24 @@
     {% endif %}
 
 
-    <!-- ══════════════════════════════════════════
+    <!-- ══════════════════════════════════════
          SELF-TEST
-    ══════════════════════════════════════════ -->
+    ══════════════════════════════════════ -->
     {% if quick_review %}
     <div class="eyebrow-row pb-before">
         <span class="eyebrow-label">{{ review_label }}</span>
     </div>
     <hr class="eyebrow-rule">
     <h2>{{ review_label }}</h2>
+
+    <div class="fold">
+        <div class="line"></div>
+        <div class="badge">
+            <span class="scissor">✂</span>
+            <span>Fold here · Self-test below</span>
+        </div>
+        <div class="line"></div>
+    </div>
 
     {% for item in quick_review %}
     <div class="review-item">
@@ -1027,9 +1308,6 @@
         <div class="review-question-block">
             <div class="review-question">{{ item.question }}</div>
         </div>
-        <div class="fold-line">
-            <span class="fold-label">✂ fold here to self-test</span>
-        </div>
         <div class="review-answer-block">
             <div class="review-answer">{{ item.answer }}</div>
         </div>
@@ -1038,65 +1316,51 @@
     {% endif %}
 
 
-    <!-- ══════════════════════════════════════════
-         CHEAT SHEET
-    ══════════════════════════════════════════ -->
-    {% if glossary or takeaways or enriched_sections %}
-    <div class="cheat-sheet-page">
-        <div class="eyebrow-row">
-            <span class="eyebrow-label">Quick Reference</span>
-        </div>
-        <hr class="eyebrow-rule">
-        <h2>Cheat Sheet</h2>
-
-        <div class="cs-grid">
-
-            <!-- Column 1: Key Terms -->
-            <div class="cs-col">
-                <div class="cs-col-heading">Key Terms</div>
-                {% for item in glossary %}
-                <div class="cs-term-row">
-                    <span class="cs-term">{{ item.term }}:</span>
-                    <span class="cs-def">{{ item.definition | truncate_words(8) }}</span>
-                </div>
-                {% endfor %}
-            </div>
-
-            <!-- Column 2: Core Concepts (deduplicated) -->
-            <div class="cs-col">
-                <div class="cs-col-heading">Core Concepts</div>
-                {% set seen = namespace(concepts=[]) %}
-                {% for sec in enriched_sections %}
-                    {% for c in sec.concepts %}
-                        {% if c not in seen.concepts %}
-                            {% set seen.concepts = seen.concepts + [c] %}
-                            <span class="cs-pill">{{ c }}</span>
-                        {% endif %}
-                    {% endfor %}
-                {% endfor %}
-            </div>
-
-            <!-- Column 3: Top Takeaways -->
-            <div class="cs-col">
-                <div class="cs-col-heading">Top Takeaways</div>
-                {% for t in takeaways[:5] %}
-                <div class="cs-takeaway">
-                    <span class="cs-takeaway-num">{{ loop.index }}.</span>
-                    <span>{{ t }}</span>
-                </div>
-                {% endfor %}
-            </div>
-
+    <!-- ══════════════════════════════════════
+         CHEAT SHEET (4-col: Term · Concept · Rule · Takeaway)
+    ══════════════════════════════════════ -->
+    {% if glossary or takeaways %}
+    <div class="cheat-page">
+        <div class="cheat-head">
+            <h2>Cheat Sheet</h2>
+            <div class="meta">Quick Reference{% if glossary %} · {{ glossary|length }} entries{% endif %} · Print &amp; keep</div>
         </div>
 
-        <div class="cs-footer">Cut out and keep · Generated by Neurativo</div>
+        <div class="cheat-grid">
+            <div class="col-head">Term</div>
+            <div class="col-head">Definition</div>
+            <div class="col-head">Rule / Mnemonic</div>
+            <div class="col-head">Takeaway</div>
+
+            {% for item in glossary %}
+            <div class="cell{% if loop.index % 3 == 0 %} is-accent{% endif %}">
+                <span class="term">{{ item.term }}</span>
+                <span class="desc">{{ item.definition | truncate_words(8) }}</span>
+            </div>
+            <div class="cell{% if loop.index % 3 == 0 %} is-accent{% endif %}">
+                <span class="desc">{{ item.definition }}</span>
+            </div>
+            <div class="cell{% if loop.index % 3 == 0 %} is-accent{% endif %}">
+                {% if item.mnemonic %}
+                <span class="formula">{{ item.mnemonic }}</span>
+                {% else %}
+                <span class="desc">—</span>
+                {% endif %}
+            </div>
+            <div class="cell{% if loop.index % 3 == 0 %} is-accent{% endif %}">
+                {% if takeaways and loop.index0 < takeaways|length %}
+                <span class="takeaway">{{ takeaways[loop.index0] | truncate_words(14) }}</span>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
     </div>
     {% endif %}
 
 
-    <!-- ══════════════════════════════════════════
+    <!-- ══════════════════════════════════════
          LEARNING PATH
-    ══════════════════════════════════════════ -->
+    ══════════════════════════════════════ -->
     {% if study_roadmap and (study_roadmap.prerequisites or study_roadmap.next_topics) %}
     <div class="eyebrow-row pb-before">
         <span class="eyebrow-label">Your Learning Path</span>
@@ -1105,9 +1369,8 @@
     <h2>Your Learning Path</h2>
 
     <div class="roadmap-grid">
-
         {% if study_roadmap.prerequisites %}
-        <div class="roadmap-col">
+        <div>
             <div class="roadmap-col-heading roadmap-before">Before this lecture</div>
             <ul class="roadmap-list">
                 {% for item in study_roadmap.prerequisites %}
@@ -1121,7 +1384,7 @@
         {% endif %}
 
         {% if study_roadmap.next_topics %}
-        <div class="roadmap-col">
+        <div>
             <div class="roadmap-col-heading roadmap-next">What to study next</div>
             <ul class="roadmap-list">
                 {% for item in study_roadmap.next_topics %}
@@ -1133,10 +1396,8 @@
             </ul>
         </div>
         {% endif %}
-
     </div>
     {% endif %}
 
-</div>
 </body>
 </html>
