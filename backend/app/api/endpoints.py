@@ -31,8 +31,8 @@ from app.services.audio_service import compress, split_for_whisper
 from app.services.transcript_cleaner import clean as clean_transcript
 from app.services.content_generator import generate as generate_content, WHISPER_MODEL
 from app.services.job_queue import create_job, update_job_status, job_is_running
-from app.services.supabase_service import save_generated_content
 from app.services.supabase_service import (
+    save_generated_content,
     ensure_user_profile,
     save_lecture,
     create_lecture,
