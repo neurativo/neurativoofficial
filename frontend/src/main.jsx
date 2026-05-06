@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { ClerkProvider, useUser } from '@clerk/react';
+import { ClerkProvider, useUser, useSession } from '@clerk/react';
 import { AuthModalProvider } from './components/AuthModal.jsx';
 import App from './App.jsx';
 import Dashboard from './components/Dashboard.jsx';
@@ -37,6 +37,24 @@ const IS_TEAMS_DOMAIN =
 // Apply saved theme immediately (before first render to avoid flash)
 if (localStorage.getItem('neurativo_theme') === 'dark') {
     document.documentElement.classList.add('dark');
+}
+
+// ─── Session heartbeat ───────────────────────────────────────────────────────
+// Calls session.touch() every 30 minutes while the tab is open.
+// This resets Clerk's inactivity timer so users aren't logged out
+// during a normal study session without needing Clerk Pro settings.
+function SessionHeartbeat() {
+    const { session } = useSession();
+    React.useEffect(() => {
+        if (!session) return;
+        // Touch immediately on mount (handles "came back after a while" case)
+        session.touch().catch(() => {});
+        const id = setInterval(() => {
+            session.touch().catch(() => {});
+        }, 30 * 60 * 1000); // every 30 minutes
+        return () => clearInterval(id);
+    }, [session?.id]);
+    return null;
 }
 
 // ─── Section redirect — /features, /pricing etc → landing page + scroll ─────
@@ -132,6 +150,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 ) : (
                     <AuthModalProvider>
                         <ToastProvider>
+                            <SessionHeartbeat />
                             <GradientOrbs />
                             <Root />
                         </ToastProvider>
