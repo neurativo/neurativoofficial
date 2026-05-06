@@ -1,31 +1,7 @@
 -- Neurativo Credits System — migration
--- Run in Supabase SQL editor after 002
+-- Run in Supabase SQL editor after 001 and 002
+-- Requires: lectures and profiles tables (created by 001_initial_schema.sql)
 -- Safe to run on existing databases (IF NOT EXISTS / ADD COLUMN IF NOT EXISTS throughout)
-
--- ── lectures table (create if it doesn't exist yet) ───────────────────────────
-create table if not exists lectures (
-    id                      uuid primary key default gen_random_uuid(),
-    title                   text,
-    transcript              text,
-    master_summary          text,
-    summary                 text,
-    language                text default 'en',
-    topic                   text,
-    duration_seconds        int,
-    total_chunks            int  default 0,
-    total_sections          int  default 0,
-    total_duration_seconds  int  default 0,
-    word_count              int  default 0,
-    user_id                 text,
-    summary_status          text default 'pending',
-    share_token             text unique,
-    share_views             int  default 0,
-    created_at              timestamptz not null default now(),
-    updated_at              timestamptz not null default now()
-);
-
-create index if not exists idx_lectures_user_id on lectures(user_id);
-create index if not exists idx_lectures_created on lectures(created_at desc);
 
 -- ── Add credit fields to profiles ─────────────────────────────────────────────
 alter table profiles
