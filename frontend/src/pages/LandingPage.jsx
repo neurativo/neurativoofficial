@@ -375,13 +375,6 @@ const CSS = `
     .lp-nast-h2 { font-size: 24px; }
   }
 
-  /* ── UNIVERSITY BAR ── */
-  .lp-uni-bar { padding: 0 40px 60px; }
-  .lp-uni-bar-inner { border-top: 1px solid #f0ede8; border-bottom: 1px solid #f0ede8; padding: 20px 0; display: flex; align-items: center; gap: 32px; overflow: hidden; }
-  .lp-uni-label { font-size: 11px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: #c8c4be; flex-shrink: 0; }
-  .lp-uni-names { display: flex; gap: 28px; flex-wrap: wrap; }
-  .lp-uni-name { font-size: 13px; font-weight: 500; color: #c8c4be; white-space: nowrap; }
-
   /* ── TESTIMONIALS ── */
   .lp-testi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
   .lp-testi-card { background: #fff; border: 1px solid #f0ede8; border-radius: 14px; padding: 24px; transition: border-color 0.15s; }
@@ -443,9 +436,7 @@ const CSS = `
     .lp-steps { grid-template-columns: 1fr; }
     .lp-pricing { grid-template-columns: 1fr; }
     .lp-plan-feat { order: -1; }
-    .lp-uni-bar { padding: 0 24px 48px; }
     .lp-testi-grid { grid-template-columns: 1fr; }
-    .lp-uni-names { gap: 16px; }
 
     .lp-cta-wrap { padding: 0 24px 60px; }
     .lp-cta { padding: 40px 24px; }
@@ -466,7 +457,6 @@ const CSS = `
     .lp-sec-h2 { font-size: 22px; }
     .lp-sec-sub { font-size: 13px; }
     .lp-nast-wrap { padding: 0 16px 48px; }
-    .lp-uni-bar { padding: 0 16px 40px; }
     .lp-cta-wrap { padding: 0 16px 48px; }
     .lp-cta { padding: 32px 20px; border-radius: 18px; }
     .lp-cta-h2 { font-size: 22px; }
@@ -586,10 +576,6 @@ const CSS = `
 
   .dark .lp-nast-inner { background: #0a0a0a; border: 1px solid rgba(255,255,255,0.06); }
 
-  .dark .lp-uni-bar-inner { border-color: var(--color-border); }
-  .dark .lp-uni-label { color: var(--color-muted); }
-  .dark .lp-uni-name { color: var(--color-muted); }
-
   .dark .lp-testi-card { background: var(--color-card); border-color: var(--color-border); }
   .dark .lp-testi-card:hover { border-color: var(--color-border-hov); }
   .dark .lp-testi-quote { color: var(--color-sec); }
@@ -656,7 +642,6 @@ const IconLogo = () => (
 
 // ─── Section sub-components ───────────────────────────────────────────────────
 
-const CYCLE_WORDS = ['wish', 'wished', 'hoped', 'always wished'];
 
 function NavAvatar({ user }) {
     const [open, setOpen] = useState(false);
@@ -749,19 +734,7 @@ function Navbar({ user }) {
 }
 
 function Hero({ user }) {
-    const [wordIdx, setWordIdx] = useState(0);
-    const [fading, setFading]   = useState(false);
     const { openSignUp } = useAuthModal();
-    useEffect(() => {
-        const t = setInterval(() => {
-            setFading(true);
-            setTimeout(() => {
-                setWordIdx(i => (i + 1) % CYCLE_WORDS.length);
-                setFading(false);
-            }, 220);
-        }, 2200);
-        return () => clearInterval(t);
-    }, []);
     return (
         <section className="lp-hero">
             <div className="lp-eyebrow">
@@ -770,9 +743,7 @@ function Hero({ user }) {
             </div>
             <h1 className="lp-h1">
                 The lecture notes you{' '}
-                <em className="lp-h1-em" style={{ transition: 'opacity 0.22s', opacity: fading ? 0 : 1 }}>
-                    {CYCLE_WORDS[wordIdx]}
-                </em>
+                <em className="lp-h1-em">always wished</em>
                 {' '}you had taken
             </h1>
             <p className="lp-hero-sub">
@@ -790,7 +761,7 @@ function Hero({ user }) {
                     : <Link to="/how-it-works" className="lp-btn-ghost-md">See how it works</Link>
                 }
             </div>
-            <p className="lp-proof">Trusted by students at 40+ universities · 10,000+ lectures transcribed</p>
+            <p className="lp-proof">Free to start · No credit card required · 40+ languages</p>
         </section>
     );
 }
@@ -882,19 +853,6 @@ function NASTSection() {
     );
 }
 
-function UniversityBar() {
-    const unis = ['MIT', 'Stanford', 'UCL', 'Imperial College', 'ETH Zürich', 'NUS', 'University of Toronto', "King's College"];
-    return (
-        <div className="lp-uni-bar">
-            <div className="lp-uni-bar-inner">
-                <span className="lp-uni-label">Trusted at</span>
-                <div className="lp-uni-names">
-                    {unis.map(u => <span key={u} className="lp-uni-name">{u}</span>)}
-                </div>
-            </div>
-        </div>
-    );
-}
 
 function Mockup() {
     return (
@@ -1040,19 +998,19 @@ function Testimonials() {
         {
             text: "I used to miss half the lecture trying to keep up with notes. With Neurativo I just focus and review the summary after. It's honestly changed how I study.",
             name: 'Sara M.',
-            school: 'UCL · Biomedical Science',
+            school: 'Biomedical Science student',
             initials: 'SM',
         },
         {
             text: "The AI Q&A is incredible. I asked a question about a concept from 45 minutes into the lecture and it found the exact passage and explained it clearly.",
             name: 'James K.',
-            school: 'Imperial College · Computer Science',
+            school: 'Computer Science student',
             initials: 'JK',
         },
         {
             text: "My Arabic lectures finally have perfect transcripts. Neurativo handles the language switch mid-sentence without missing a word. Nothing else comes close.",
             name: 'Nora A.',
-            school: 'University of Toronto · Medicine',
+            school: 'Medicine student',
             initials: 'NA',
         },
     ];
@@ -1060,7 +1018,7 @@ function Testimonials() {
         <section className="lp-sec">
             <div className="lp-sec-eye">What students say</div>
             <h2 className="lp-sec-h2">Used in lectures every day</h2>
-            <p className="lp-sec-sub">Students across 40+ universities rely on Neurativo to keep up in fast-paced lectures.</p>
+            <p className="lp-sec-sub">Students rely on Neurativo to keep up in fast-paced lectures and review them later.</p>
             <div className="lp-testi-grid">
                 {quotes.map(q => (
                     <div key={q.name} className="lp-testi-card">
@@ -1369,7 +1327,6 @@ export default function LandingPage({ user }) {
                 <main>
                     <Hero user={user} />
                     <Mockup />
-                    <UniversityBar />
                     <StatsBar />
                     <Features />
                     <NASTSection />

@@ -97,7 +97,7 @@ function Root() {
                 <Route path="teams/:slug" element={<AdminTeamDetail />} />
             </Route>
 
-            <Route path="*" element={isLoaded ? <NotFoundPage /> : null} />
+            <Route path="*" element={isLoaded ? <NotFoundPage /> : <Navigate to="/" replace />} />
         </Routes>
     );
 }
