@@ -26,7 +26,7 @@ from app.services.summarization_service import (
 from app.services.recompute_service import recompute_final_summary
 from app.services.embedding_service import get_embeddings, cosine_similarity
 from app.services.cif_service import classify_chunk
-from app.services.credits_service import check_credits, deduct_credit, mark_credit_deducted, refund_credit, credits_for_duration
+from app.services.credits_service import check_credits, deduct_credit, mark_credit_deducted, refund_credit, credits_for_duration, maybe_grant_starter
 from app.services.audio_service import compress, split_for_whisper
 from app.services.transcript_cleaner import clean as clean_transcript
 from app.services.content_generator import generate as generate_content, WHISPER_MODEL
@@ -468,6 +468,8 @@ async def transcribe(
     if not file.filename.lower().endswith(_ALLOWED_AUDIO_EXTENSIONS):
         raise HTTPException(status_code=400, detail="Invalid file format")
 
+    # Grant starter credits on first upload (idempotent)
+    maybe_grant_starter(str(user.id), email=user.email, email_verified=user.email_verified)
     # Credit check — must have at least 1 credit before processing
     check_credits(str(user.id))
 
@@ -595,6 +597,8 @@ def summarize(lecture_id: str, user=Depends(get_active_user)):
 @router.post("/live/start")
 @limiter.limit("10/minute")
 def start_live_session(request: Request, body: StartSessionBody = StartSessionBody(), user=Depends(get_active_user)):
+    # Grant starter credits on first session (idempotent — no-op if already granted)
+    maybe_grant_starter(str(user.id), email=user.email, email_verified=user.email_verified)
     # Credit check — must have at least 1 credit before starting a session
     check_credits(str(user.id))
     try:
