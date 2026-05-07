@@ -209,8 +209,8 @@ export default function CreditsPage() {
                     <div className="cr-pack">
                         <div className="cr-pack-tag">Starter</div>
                         <div className="cr-pack-credits">{products.small_pack?.credits ?? 10} <span>credits</span></div>
-                        <div className="cr-pack-price">${products.small_pack?.price_usd?.toFixed(2) ?? '5.99'}</div>
-                        <div className="cr-pack-desc">Great for occasional use. No expiry.</div>
+                        <div className="cr-pack-price">${products.small_pack?.price_usd?.toFixed(2) ?? '4.99'}</div>
+                        <div className="cr-pack-desc">Rs. 1,520 &middot; $0.50 each &middot; never expire.</div>
                         <button
                             className="cr-pack-btn cr-pack-btn-outline"
                             onClick={() => handleBuy('small_pack')}
@@ -224,8 +224,8 @@ export default function CreditsPage() {
                     <div className="cr-pack cr-pack-featured">
                         <div className="cr-pack-tag cr-pack-tag-best">Best value</div>
                         <div className="cr-pack-credits">{products.large_pack?.credits ?? 30} <span>credits</span></div>
-                        <div className="cr-pack-price">${products.large_pack?.price_usd?.toFixed(2) ?? '14.99'}</div>
-                        <div className="cr-pack-desc">Stock up and save. Credits never expire.</div>
+                        <div className="cr-pack-price">${products.large_pack?.price_usd?.toFixed(2) ?? '11.99'}</div>
+                        <div className="cr-pack-desc">Rs. 3,660 &middot; $0.40 each &middot; never expire.</div>
                         <button
                             className="cr-pack-btn cr-pack-btn-dark"
                             onClick={() => handleBuy('large_pack')}
@@ -235,31 +235,19 @@ export default function CreditsPage() {
                         </button>
                     </div>
 
-                    {/* Monthly sub */}
-                    <div className={`cr-pack${subActive ? ' cr-pack-featured' : ''}`}>
-                        <div className={`cr-pack-tag${subActive ? ' cr-pack-tag-best' : ''}`}>
-                            {subActive ? '✓ Active' : 'Monthly'}
-                        </div>
-                        <div className="cr-pack-credits">{products.monthly_sub?.credits ?? 30} <span>/ month</span></div>
-                        <div className="cr-pack-price">${products.monthly_sub?.price_usd?.toFixed(2) ?? '11.99'}<span style={{fontSize:11,color:'var(--color-muted)'}}>/mo</span></div>
-                        <div className="cr-pack-desc">
-                            {subActive
-                                ? `Your subscription is active. Next renewal: ${fmtDate(subExpires)}.`
-                                : '30 fresh credits every month. Best for regular use.'}
-                        </div>
-                        {subActive ? (
-                            <span className="cr-pack-btn" style={{background:'rgba(22,163,74,0.1)',color:'#16a34a',cursor:'default',border:'1px solid rgba(22,163,74,0.3)'}}>
-                                Subscribed ✓
-                            </span>
-                        ) : (
-                            <button
-                                className="cr-pack-btn cr-pack-btn-outline"
-                                onClick={() => handleBuy('monthly_sub')}
-                                disabled={!!pending}
-                            >
-                                {pending === 'monthly_sub' ? 'Processing…' : 'Subscribe'}
-                            </button>
-                        )}
+                    {/* Pro pack */}
+                    <div className="cr-pack">
+                        <div className="cr-pack-tag">Power pack</div>
+                        <div className="cr-pack-credits">{products.pro_pack?.credits ?? 60} <span>credits</span></div>
+                        <div className="cr-pack-price">${products.pro_pack?.price_usd?.toFixed(2) ?? '19.99'}</div>
+                        <div className="cr-pack-desc">Rs. 6,100 &middot; $0.33 each &middot; best rate.</div>
+                        <button
+                            className="cr-pack-btn cr-pack-btn-outline"
+                            onClick={() => handleBuy('pro_pack')}
+                            disabled={!!pending}
+                        >
+                            {pending === 'pro_pack' ? 'Processing…' : 'Buy pack'}
+                        </button>
                     </div>
                 </div>
 

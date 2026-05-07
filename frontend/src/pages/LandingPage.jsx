@@ -245,7 +245,17 @@ const CSS = `
   .lp-plan-div { height: 1px; background: #f0ede8; margin: 20px 0; }
   .lp-plan-items { list-style: none; margin-bottom: 24px; display: flex; flex-direction: column; gap: 9px; }
   .lp-plan-item { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; color: #6b6b6b; line-height: 1.45; }
+  .lp-plan-item.no { opacity: 0.38; }
   .lp-check { color: #1a1a1a; flex-shrink: 0; margin-top: 1px; }
+  .lp-no { color: #c4c0bb; flex-shrink: 0; margin-top: 1px; }
+  .lp-credits-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; }
+  .lp-credit-pack { border: 1px solid #f0ede8; border-radius: 12px; padding: 16px 18px; background: #fff; }
+  .lp-credit-pack.best { border-color: #1a1a1a; }
+  .lp-credit-pack-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #a3a3a3; margin-bottom: 6px; }
+  .lp-credit-pack.best .lp-credit-pack-label { color: #1a1a1a; }
+  .lp-credit-pack-credits { font-size: 24px; font-weight: 700; color: #1a1a1a; margin-bottom: 2px; }
+  .lp-credit-pack-price { font-size: 13px; color: #6b6b6b; margin-bottom: 2px; }
+  .lp-credit-pack-per { font-size: 11px; color: #c0bdb8; }
   .lp-btn-plan-dark {
     display: block; width: 100%; text-align: center; font-size: 13px; font-weight: 500;
     color: #fafaf9; background: #1a1a1a; border: none; cursor: pointer;
@@ -548,6 +558,10 @@ const CSS = `
   .dark .lp-price-lkr { color: var(--color-muted); }
   .dark .lp-plan-div { background: var(--color-border); }
   .dark .lp-plan-item { color: var(--color-sec); }
+  .dark .lp-credit-pack { background: var(--color-card); border-color: var(--color-border); }
+  .dark .lp-credit-pack.best { border-color: var(--color-text); }
+  .dark .lp-credit-pack-credits { color: var(--color-text); }
+  .dark .lp-credit-pack-price { color: var(--color-sec); }
   .dark .lp-check { color: var(--color-text); }
   .dark .lp-btn-plan-dark { background: var(--color-dark); color: var(--color-dark-fg); }
   .dark .lp-btn-plan-outline { background: var(--color-card); color: var(--color-text); border-color: var(--color-border); }
@@ -1073,7 +1087,7 @@ function FAQ() {
         },
         {
             q: "What's the difference between Free, Student, and Pro?",
-            a: 'Free gives 5 live lectures (30 min each) and 3 imports/month — 2.5 hrs total. Student ($19/mo · Rs. 5,795) gives unlimited live lectures up to 3 hours each, 20 imports, and 25 hrs/month total. Pro ($39/mo · Rs. 11,895) gives unlimited everything with a 60 hrs/month ceiling.',
+            a: 'Free gives 5 starter credits (5 lectures), 30 min max per live session, 60 min per import, and a basic 2-section summary. Student ($9.99/mo · Rs. 3,050) includes 30 credits/month, unlimited live sessions up to 3 hrs, 20 imports, full summaries, PDF export, Q&A, and sharing. Pro ($19.99/mo · Rs. 6,100) includes 60 credits/month, unlimited everything up to 60 hrs/month total, plus priority processing and early feature access.',
         },
     ];
     return (
@@ -1098,10 +1112,13 @@ function FAQ() {
     );
 }
 
-function PlanItem({ text }) {
+function PlanItem({ text, no }) {
     return (
-        <li className="lp-plan-item">
-            <span className="lp-check"><IconCheck /></span>
+        <li className={'lp-plan-item' + (no ? ' no' : '')}>
+            {no
+                ? <span className="lp-no">✕</span>
+                : <span className="lp-check"><IconCheck /></span>
+            }
             {text}
         </li>
     );
@@ -1128,12 +1145,15 @@ function Pricing() {
                     <div className="lp-price-lkr">Rs. 0</div>
                     <div className="lp-plan-div" />
                     <ul className="lp-plan-items">
-                        <PlanItem text="5 live lectures / month" />
-                        <PlanItem text="30 min max per lecture" />
-                        <PlanItem text="3 audio imports / month" />
-                        <PlanItem text="Up to 60 min per import" />
-                        <PlanItem text="2.5 hrs total / month" />
-                        <PlanItem text="PDF export · 40+ languages" />
+                        <PlanItem text="5 free credits on signup" />
+                        <PlanItem text="Live recording · 30 min/session" />
+                        <PlanItem text="Audio imports · 60 min/file" />
+                        <PlanItem text="AI transcription · 40+ languages" />
+                        <PlanItem text="Basic AI summary (2 sections)" />
+                        <PlanItem no text="Full summary · all sections" />
+                        <PlanItem no text="PDF export" />
+                        <PlanItem no text="Q&A chat" />
+                        <PlanItem no text="Shareable links" />
                     </ul>
                     <button className="lp-btn-plan-outline" onClick={openSignUp}>Get started free</button>
                 </div>
@@ -1145,19 +1165,22 @@ function Pricing() {
                     <div className="lp-plan-tagline">For serious students</div>
                     <div className="lp-price-row">
                         <span className="lp-price-sign">$</span>
-                        <span className="lp-price-big">19</span>
+                        <span className="lp-price-big">9.99</span>
                     </div>
                     <div className="lp-price-mo">per month</div>
-                    <div className="lp-price-lkr">Rs. 5,795 / month</div>
+                    <div className="lp-price-lkr">Rs. 3,050 / month</div>
                     <div className="lp-plan-div" />
                     <ul className="lp-plan-items">
-                        <PlanItem text="Unlimited live lectures" />
-                        <PlanItem text="Up to 3 hours per lecture" />
-                        <PlanItem text="20 audio imports / month" />
-                        <PlanItem text="Up to 3 hours per import" />
-                        <PlanItem text="25 hrs total / month" />
-                        <PlanItem text="Everything in Free" />
-                        <PlanItem text="Share lecture links" />
+                        <PlanItem text="30 credits / month included" />
+                        <PlanItem text="Unlimited live sessions · 3 hrs max" />
+                        <PlanItem text="20 imports / month · 3 hrs max" />
+                        <PlanItem text="25 hours / month total" />
+                        <PlanItem text="Full AI summary · all sections" />
+                        <PlanItem text="PDF report export" />
+                        <PlanItem text="Q&A chat with your lecture" />
+                        <PlanItem text="Shareable lecture links" />
+                        <PlanItem text="Real-world analogies & key stats" />
+                        <PlanItem text="40+ languages" />
                     </ul>
                     <button className="lp-btn-plan-dark" onClick={openSignUp}>Start Student</button>
                 </div>
@@ -1165,22 +1188,22 @@ function Pricing() {
                 {/* Pro */}
                 <div className="lp-plan">
                     <div className="lp-plan-name">Pro</div>
-                    <div className="lp-plan-tagline">For researchers &amp; power users</div>
+                    <div className="lp-plan-tagline">For researchers & power users</div>
                     <div className="lp-price-row">
                         <span className="lp-price-sign">$</span>
-                        <span className="lp-price-big">39</span>
+                        <span className="lp-price-big">19.99</span>
                     </div>
                     <div className="lp-price-mo">per month</div>
-                    <div className="lp-price-lkr">Rs. 11,895 / month</div>
+                    <div className="lp-price-lkr">Rs. 6,100 / month</div>
                     <div className="lp-plan-div" />
                     <ul className="lp-plan-items">
-                        <PlanItem text="Unlimited live lectures" />
-                        <PlanItem text="No per-lecture duration cap" />
-                        <PlanItem text="Unlimited audio imports" />
-                        <PlanItem text="Up to 5 GB per file" />
-                        <PlanItem text="60 hrs total / month" />
+                        <PlanItem text="60 credits / month included" />
+                        <PlanItem text="Unlimited live sessions · no cap" />
+                        <PlanItem text="Unlimited imports · any size" />
+                        <PlanItem text="60 hours / month total" />
                         <PlanItem text="Everything in Student" />
-                        <PlanItem text="Early feature access" />
+                        <PlanItem text="Priority processing" />
+                        <PlanItem text="Early access to new features" />
                     </ul>
                     <button className="lp-btn-plan-outline" onClick={openSignUp}>Start Pro</button>
                 </div>
@@ -1188,19 +1211,32 @@ function Pricing() {
             </div>
 
             {/* Credits callout */}
-            <div style={{
-                marginTop: 16, padding: '20px 24px',
-                border: '1.5px solid #f0ede8', borderRadius: 14,
-                background: '#fff',
-                display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap',
-            }}>
-                <div style={{ width: 40, height: 40, borderRadius: 10, background: '#f5f3ff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 18 }}>⚡</div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 3, color: '#1a1a1a' }}>Pay-per-lecture credits</div>
-                    <div style={{ fontSize: 13, color: '#6b6b6b', lineHeight: 1.55 }}>
-                        Don't need a subscription? Buy credits instead — 1 credit processes 1 lecture.{' '}
-                        <strong>Starter pack: 10 credits for $5.99</strong> · <strong>Best value: 30 credits for $14.99</strong>{' '}
-                        · <strong>Monthly sub: 30 fresh credits/month for $11.99</strong>. Credits never expire on packs.
+            <div style={{ marginTop: 16, padding: '20px 24px', border: '1.5px solid #f0ede8', borderRadius: 14, background: '#fff' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 9, background: '#f5f3ff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 16 }}>⚡</div>
+                    <div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: '#1a1a1a' }}>Pay-per-lecture credits</div>
+                        <div style={{ fontSize: 12, color: '#888' }}>No subscription needed · 1 credit = 1 lecture · never expire</div>
+                    </div>
+                </div>
+                <div className="lp-credits-grid">
+                    <div className="lp-credit-pack">
+                        <div className="lp-credit-pack-label">Starter</div>
+                        <div className="lp-credit-pack-credits">10 credits</div>
+                        <div className="lp-credit-pack-price">$4.99</div>
+                        <div className="lp-credit-pack-per">Rs. 1,520 · $0.50 each</div>
+                    </div>
+                    <div className="lp-credit-pack best">
+                        <div className="lp-credit-pack-label">Best value</div>
+                        <div className="lp-credit-pack-credits">30 credits</div>
+                        <div className="lp-credit-pack-price">$11.99</div>
+                        <div className="lp-credit-pack-per">Rs. 3,660 · $0.40 each</div>
+                    </div>
+                    <div className="lp-credit-pack">
+                        <div className="lp-credit-pack-label">Power pack</div>
+                        <div className="lp-credit-pack-credits">60 credits</div>
+                        <div className="lp-credit-pack-price">$19.99</div>
+                        <div className="lp-credit-pack-per">Rs. 6,100 · $0.33 each</div>
                     </div>
                 </div>
             </div>
@@ -1222,7 +1258,7 @@ function Pricing() {
                 <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 2 }}>Neurativo Teams — for organizations</div>
                     <div style={{ fontSize: 13, color: '#6b6b6b' }}>
-                        Manage seats for your whole team. Student seats from $15/mo · Pro seats from $22/mo · Invite by email, link, or domain.
+                        Manage seats for your whole team. Student seats from $8/seat · Pro seats from $16/seat · Invite by email, link, or domain.
                     </div>
                 </div>
                 <div style={{ fontSize: 13, fontWeight: 500, color: '#1a1a1a', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4 }}>

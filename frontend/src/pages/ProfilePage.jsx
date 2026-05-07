@@ -259,21 +259,21 @@ const PLANS = [
         name: 'Free',
         price: '$0',
         period: '',
-        features: ['5 live lectures/month', '30 min max per lecture', '3 audio imports/month', '60 min / 500 MB import'],
+        features: ['5 free starter credits', 'Live recording · 30 min/session', 'Audio imports · 60 min/file', 'Basic summary · 2 sections'],
     },
     {
         key: 'student',
         name: 'Student',
-        price: '$9',
+        price: '$9.99',
         period: '/mo',
-        features: ['Unlimited live lectures', '3 hours max per lecture', '20 audio imports/month', '4 hours / 2 GB import'],
+        features: ['30 credits/month included', 'Unlimited live · 3 hrs max', '20 imports/month · 3 hrs max', 'Full summary · PDF · Q&A · Sharing'],
     },
     {
         key: 'pro',
         name: 'Pro',
-        price: '$19',
+        price: '$19.99',
         period: '/mo',
-        features: ['Unlimited live lectures', 'Unlimited duration', 'Unlimited audio imports', 'Unlimited import size'],
+        features: ['60 credits/month included', 'Unlimited live · no cap', 'Unlimited imports · any size', '60 hrs/month · priority processing'],
     },
 ];
 

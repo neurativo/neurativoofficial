@@ -13,9 +13,16 @@ from app.services.supabase_service import _fresh_db
 # ── Pricing catalogue ──────────────────────────────────────────────────────────
 
 PRODUCTS = {
-    "small_pack":  {"credits": 10,  "price_usd": 5.99},
-    "large_pack":  {"credits": 30,  "price_usd": 14.99},
-    "monthly_sub": {"credits": 30,  "price_usd": 11.99},
+    # 1 credit = 1 lecture processed. Cost ~$0.22/lecture → target 55%+ gross margin.
+    "small_pack":  {"credits": 10,  "price_usd": 4.99,  "label": "Starter",    "per_credit": 0.50},
+    "large_pack":  {"credits": 30,  "price_usd": 11.99, "label": "Best value", "per_credit": 0.40},
+    "pro_pack":    {"credits": 60,  "price_usd": 19.99, "label": "Power pack", "per_credit": 0.33},
+}
+
+# Subscription plan monthly credit grants
+PLAN_PRICES_USD = {
+    "student": 9.99,
+    "pro":     19.99,
 }
 
 STARTER_CREDITS = 5

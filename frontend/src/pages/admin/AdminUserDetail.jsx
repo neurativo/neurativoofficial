@@ -446,9 +446,9 @@ export default function AdminUserDetail() {
                                     <div className="adm-card-title">Allocate Plan</div>
                                     <div className="adm-plan-form">
                                         <select className="adm-select" value={planValue} onChange={e => setPlanValue(e.target.value)}>
-                                            <option value="free">Free</option>
-                                            <option value="student">Student</option>
-                                            <option value="pro">Pro</option>
+                                            <option value="free">Free — $0</option>
+                                            <option value="student">Student — $9.99/mo</option>
+                                            <option value="pro">Pro — $19.99/mo</option>
                                         </select>
                                         <button className="adm-btn adm-btn-primary" onClick={savePlan} disabled={savingPlan}>
                                             {savingPlan ? 'Saving…' : 'Save Plan'}
