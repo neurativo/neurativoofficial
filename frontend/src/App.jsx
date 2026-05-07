@@ -1377,6 +1377,7 @@ function App({ user }) {
 
     if (sessionStatus === 'idle') {
         return (
+            <>
             <div className="min-h-screen bg-[#fafaf9] flex items-center justify-center p-6 relative overflow-hidden">
 
                 {/* Resilience 6: Session recovery modal */}
@@ -1523,6 +1524,87 @@ function App({ user }) {
                     )}
                 </div>
             </div>
+
+            {/* ── Domain Picker Modal ── */}
+            {showDomainPicker && (
+                <div className="dp-overlay" onClick={e => { if (e.target === e.currentTarget) setShowDomainPicker(false); }}>
+                    <div className="dp-modal">
+                        <p className="dp-title">What are you recording?</p>
+                        <p className="dp-sub">Optional — AI auto-detects if you skip.</p>
+                        <div className="dp-grid">
+                            {KNOWN_TOPICS_LIST.map(t => (
+                                <button
+                                    key={t}
+                                    className={`dp-pill${selectedDomain === t ? ' active' : ''}`}
+                                    onClick={() => setSelectedDomain(d => d === t ? '' : t)}
+                                >
+                                    {t}
+                                </button>
+                            ))}
+                        </div>
+                        <div className="dp-actions">
+                            <button className="dp-btn-ghost" disabled={isStarting} onClick={() => { setShowDomainPicker(false); startLiveSession(''); }}>
+                                Skip
+                            </button>
+                            <button className="dp-btn-primary" disabled={isStarting} onClick={() => { setShowDomainPicker(false); startLiveSession(selectedDomain); }}>
+                                {isStarting ? 'Starting…' : selectedDomain ? `Start — ${selectedDomain}` : 'Start Recording'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Limit Modal (no credits / plan limit) ── */}
+            {limitModal.show && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-950/50 backdrop-blur-md animate-fade-in">
+                    <div className="bg-white w-full max-w-sm rounded-2xl p-8 shadow-2xl animate-slide-up border border-[#f0ede8]">
+                        <div className="flex items-center justify-center mb-5">
+                            <div className="w-14 h-14 rounded-2xl bg-amber-50 flex items-center justify-center">
+                                <svg className="w-7 h-7 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                            </div>
+                        </div>
+                        {limitModal.reason === 'no_credits' ? (
+                            <>
+                                <h3 className="text-[17px] font-bold text-[#1a1a1a] mb-1 font-heading text-center">Out of credits</h3>
+                                <p className="text-[#a3a3a3] text-sm text-center mb-2 leading-relaxed">
+                                    {limitModal.required > 1
+                                        ? <>This session needs <strong className="text-[#1a1a1a]">{limitModal.required} credits</strong>. You have <strong className="text-[#1a1a1a]">{limitModal.credits}</strong>.</>
+                                        : <>You need at least <strong className="text-[#1a1a1a]">1 credit</strong> to start. You currently have <strong className="text-[#1a1a1a]">0</strong>.</>
+                                    }
+                                </p>
+                                <p className="text-[#a3a3a3] text-[11px] text-center mb-5">1 credit = up to 30 min · 4-hr lecture = 8 credits</p>
+                                <div className="flex flex-col gap-2">
+                                    <button
+                                        onClick={() => { setLimitModal(p => ({ ...p, show: false })); navigate('/credits'); }}
+                                        className="w-full py-2.5 bg-[#1a1a1a] text-[#fafaf9] text-sm font-semibold rounded-xl hover:opacity-80 transition-opacity">
+                                        Buy credits →
+                                    </button>
+                                    <button
+                                        onClick={() => setLimitModal(p => ({ ...p, show: false }))}
+                                        className="w-full py-2.5 border border-[#f0ede8] text-[#6b6b6b] text-sm rounded-xl hover:text-[#1a1a1a] transition-colors">
+                                        Cancel
+                                    </button>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <h3 className="text-[17px] font-bold text-[#1a1a1a] mb-1 font-heading text-center">Monthly limit reached</h3>
+                                <p className="text-[#a3a3a3] text-sm text-center mb-6 leading-relaxed">
+                                    Your <strong className="text-[#1a1a1a]">{limitModal.plan}</strong> plan allows <strong className="text-[#1a1a1a]">{limitModal.limit}</strong> live sessions/month. Resets {limitModal.resetsAt}.
+                                </p>
+                                <button
+                                    onClick={() => setLimitModal(p => ({ ...p, show: false }))}
+                                    className="w-full py-2.5 bg-[#1a1a1a] text-[#fafaf9] text-sm font-semibold rounded-xl hover:opacity-80 transition-opacity">
+                                    OK
+                                </button>
+                            </>
+                        )}
+                    </div>
+                </div>
+            )}
+            </>
         );
     }
 
