@@ -1152,7 +1152,7 @@ function Pricing() {
                     <div className="lp-price-lkr">Rs. 0</div>
                     <div className="lp-plan-div" />
                     <ul className="lp-plan-items">
-                        <PlanItem text="5 free credits on signup" />
+                        <PlanItem text="5 starter credits included" />
                         <PlanItem text="Live recording · 30 min/session" />
                         <PlanItem text="Audio imports · 60 min/file" />
                         <PlanItem text="AI transcription · 40+ languages" />
