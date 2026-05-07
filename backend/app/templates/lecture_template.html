@@ -73,12 +73,25 @@
             line-height: 1.55;
             color: var(--ink-2);
             background: var(--paper);
-            /* Disable ligatures: prevents OpenType glyph-index scrambling in Chromium PDF subsetting */
+            /* Disable ligatures & zero letter/word spacing: prevents Chromium PDF
+               text-layer interleaving when glyphs are subsetted with ligature encodings */
             font-variant-ligatures: none;
             -webkit-font-variant-ligatures: none;
-            font-feature-settings: "kern";
+            font-feature-settings: "kern", "liga" 0, "calt" 0;
+            letter-spacing: 0;
+            word-spacing: 0;
+            /* geometricPrecision + no subpixel smoothing = clean single-glyph advances */
+            text-rendering: geometricPrecision;
+            -webkit-font-smoothing: none;
         }
-        p { margin: 0 0 0.65em; orphans: 3; widows: 3; }
+        p {
+            margin: 0 0 0.65em;
+            orphans: 3;
+            widows: 3;
+            /* Explicit reset on p so any inherited value is never non-zero */
+            letter-spacing: 0 !important;
+            word-spacing: 0 !important;
+        }
         strong { color: var(--ink); font-weight: 600; }
         em { font-style: italic; }
 

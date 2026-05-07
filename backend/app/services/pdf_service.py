@@ -3,6 +3,7 @@ import json
 import math
 import os
 import re
+from collections import Counter
 from datetime import datetime
 
 from jinja2 import Environment, FileSystemLoader
@@ -129,18 +130,26 @@ def _extract_lead_sentence(prose: str) -> tuple[str, str]:
 
 # ── GPT worker functions (all sync — called via asyncio.to_thread) ────────────
 
-def _call_executive_summary(transcript: str, title: str, topic: str | None) -> str:
+def _call_executive_summary(transcript: str, title: str, topic: str | None, strict: bool = False) -> str:
     if not _client:
         return ""
     hint = f" The lecture is about {topic}." if topic else ""
+    strict_rule = (
+        " ABSOLUTE RULE: every sentence must be directly supported by the transcript above. "
+        "If you cannot find content for a sentence in the transcript, do not write it. "
+        "Never infer, generalise, or draw on external knowledge."
+    ) if strict else ""
     resp = _client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
             {
                 "role": "system",
                 "content": (
-                    "You are an expert academic summarizer. Write dense, precise prose. "
-                    "Use present tense ('The lecture examines...'). No bullet points."
+                    "You are summarizing a specific lecture transcript provided below. "
+                    "Only use information from this transcript. "
+                    "Do not add any external knowledge, context, or content from any other source. "
+                    "If something is not in the transcript, do not include it. "
+                    "Write dense, precise prose. Use present tense ('The lecture examines...'). No bullet points."
                 ),
             },
             {
@@ -149,11 +158,11 @@ def _call_executive_summary(transcript: str, title: str, topic: str | None) -> s
                     f"TRANSCRIPT:\n{transcript[:6000]}\n\n"
                     f"Write a 3-paragraph executive summary of the lecture titled \"{title}\".{hint} "
                     "Each paragraph is 3-4 sentences. Separate paragraphs with a blank line. "
-                    "Return only the summary text, no preamble."
+                    f"Return only the summary text, no preamble.{strict_rule}"
                 ),
             },
         ],
-        temperature=0.4,
+        temperature=0.2 if strict else 0.4,
         max_tokens=650,
     )
     log_cost("pdf_executive_summary", "gpt-4o-mini",
@@ -350,35 +359,48 @@ def _call_study_roadmap(
     topic: str | None,
     title: str,
     section_titles: list[str],
+    transcript: str = "",
 ) -> dict:
-    """GPT-4o: recommends prerequisite concepts and next topics for this lecture."""
+    """GPT-4o: recommends prerequisite concepts and next topics for this lecture.
+    Uses the actual transcript so forward references (e.g. 'we'll cover unit 8 next')
+    are surfaced as explicit next-step recommendations."""
     if not _client:
         return {"next_topics": [], "prerequisites": []}
     topic_hint = f"Topic: {topic}. " if topic else ""
     titles_str = ", ".join(section_titles) if section_titles else "N/A"
+    # Include a slice of the transcript so GPT can extract forward references
+    transcript_excerpt = transcript[:4000].strip() if transcript else ""
     resp = _client.chat.completions.create(
         model="gpt-4o",
         messages=[
             {
                 "role": "system",
-                "content": "You are an expert curriculum designer who maps academic learning paths.",
+                "content": (
+                    "You are an expert curriculum designer who maps academic learning paths. "
+                    "You only use information from the transcript provided — never from general knowledge about the subject. "
+                    "If the professor explicitly mentions future topics, unit numbers, or follow-up lessons, "
+                    "those must appear as the first entries in next_topics."
+                ),
             },
             {
                 "role": "user",
                 "content": (
                     "Note: The transcript may contain mixed languages. Extract meaning from all languages present. Respond in English.\n\n"
+                    f"TRANSCRIPT (excerpt):\n{transcript_excerpt}\n\n"
                     f"Lecture title: \"{title}\"\n"
                     f"{topic_hint}Sections covered: {titles_str}\n\n"
-                    "Return a JSON object with exactly two fields:\n"
+                    "Based ONLY on the lecture transcript provided above, return a JSON object with exactly two fields:\n"
                     "- \"next_topics\": array of 3-5 objects, each with \"topic\" (name) and "
-                    "\"reason\" (one sentence explaining why it logically follows this lecture)\n"
+                    "\"reason\" (one sentence). If the professor mentioned specific units, topics, "
+                    "or subjects to study next, list those first. Do not recommend topics that were "
+                    "not mentioned or clearly implied by this specific lecture.\n"
                     "- \"prerequisites\": array of 2-3 objects, each with \"concept\" (name) and "
-                    "\"reason\" (one sentence explaining why knowing it helps with this lecture)\n"
-                    "Be specific to the academic domain. Do not be generic."
+                    "\"reason\" (one sentence explaining why knowing it helps with this lecture).\n"
+                    "Be specific to this lecture's content. Do not be generic."
                 ),
             },
         ],
-        temperature=0.4,
+        temperature=0.3,
         max_tokens=700,
         response_format={"type": "json_object"},
     )
@@ -480,6 +502,24 @@ def _call_mnemonics(glossary: list[dict]) -> list[dict]:
     except Exception as e:
         print(f"_call_mnemonics error (non-fatal): {e}")
         return glossary
+
+
+_STOPWORDS = {
+    "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
+    "have", "has", "had", "do", "does", "did", "will", "would", "could",
+    "should", "may", "might", "shall", "can", "this", "that", "these",
+    "those", "with", "from", "into", "about", "also", "just", "very",
+    "and", "but", "for", "not", "you", "they", "what", "which", "who",
+    "when", "where", "how", "all", "each", "some", "such", "more", "most",
+    "then", "than", "only", "its", "our", "their", "your", "his", "her",
+}
+
+
+def _top_terms(text: str, n: int = 5) -> list[str]:
+    """Returns n most frequent non-stopword tokens (>=4 chars) from text."""
+    words = re.findall(r'[a-z]{4,}', text.lower())
+    counts = Counter(w for w in words if w not in _STOPWORDS)
+    return [term for term, _ in counts.most_common(n)]
 
 
 def _call_key_stats(transcript: str, topic: str | None) -> list[dict]:
@@ -774,9 +814,11 @@ async def generate_lecture_pdf(
         tasks.append(asyncio.to_thread(_call_conceptual_map, raw_sections))
 
     # Study roadmap — always generated (GPT-4o, curriculum positioning)
+    # Pass transcript so forward references ("we'll cover unit 8 next") are surfaced
     tasks.append(asyncio.to_thread(
         _call_study_roadmap, topic, title,
         [s.split('\n')[0].strip() for s in raw_sections],   # first line = section title
+        transcript,
     ))
 
     # Key stats — extracted from transcript for exec summary callout
@@ -838,13 +880,26 @@ async def generate_lecture_pdf(
     r = results[ri]; ri += 1
     key_stats: list[dict] = r if not isinstance(r, Exception) else []
 
-    # 5b. Title fallback: if title is still generic, extract from exec_summary first sentence
-    _GENERIC_TITLES = {"live session", "lecture notes", "untitled", "untitled lecture"}
-    if title.lower().strip() in _GENERIC_TITLES and exec_summary:
-        first_sentence = re.split(r'(?<=[.!?])\s', exec_summary)[0]
-        words = first_sentence.split()[:8]
-        if words:
-            title = " ".join(words).rstrip(".,;:").title()
+    # 5b. Validate exec_summary content aligns with the transcript.
+    # Extracts the top 5 meaningful terms from the transcript and checks that
+    # at least 3 appear in the summary. Catches cross-job contamination early.
+    if exec_summary and transcript:
+        top_terms = _top_terms(transcript[:8000], n=5)
+        summary_lower = exec_summary.lower()
+        matched = sum(1 for t in top_terms if t in summary_lower)
+        if matched < 3:
+            print(f"[pdf] exec_summary validation: only {matched}/5 transcript terms found "
+                  f"({top_terms}). Regenerating with strict prompt.")
+            try:
+                exec_summary = await asyncio.to_thread(
+                    _call_executive_summary, transcript, title, topic, True
+                )
+                matched_retry = sum(1 for t in top_terms if t in exec_summary.lower())
+                if matched_retry < 3:
+                    print(f"[pdf] exec_summary still failed after strict retry ({matched_retry}/5). "
+                          f"Keeping retry output but flagging lecture_id={lecture_id} for review.")
+            except Exception as e:
+                print(f"[pdf] exec_summary retry error (non-fatal): {e}")
 
     # 6. Estimate reading time (total enriched words ÷ 238 wpm)
     doc_word_count = (
