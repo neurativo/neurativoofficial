@@ -148,6 +148,10 @@ function App({ user }) {
     const [qaHistory, setQaHistory]           = useState([]);
     const [qaLoading, setQaLoading]           = useState(false);
 
+    // ── Audio source ──────────────────────────────────────
+    const [audioSource, setAudioSource]       = useState('mic'); // 'mic' | 'tab'
+    const audioSourceRef                      = useRef('mic');
+
     // ── Audio calibration ─────────────────────────────────
     const [isCalibrating, setIsCalibrating]   = useState(false);
 
@@ -730,77 +734,118 @@ function App({ user }) {
             // stopAudioMonitoring doesn't kill the fresh micStream via micStreamRef
             stopAudioMonitoring();
 
-            const micStream = await navigator.mediaDevices.getUserMedia({
-                audio: {
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: true,
-                },
-            });
-            micStreamRef.current = micStream;
+            const isTabMode = audioSourceRef.current === 'tab';
+            let captureStream;
 
-            // Fix 6: recover from unexpected microphone disconnects
-            micStream.getTracks().forEach(track => {
-                track.onended = () => {
-                    // If we stopped intentionally (pause/end), isRecordingRef is already false — ignore
-                    if (!isRecordingRef.current) return;
-                    showError('Microphone disconnected. Reconnecting…', 0);
-                    isRecordingRef.current = false;
-                    setSessionStatus('paused');
-                    stopAudioMonitoring();
-                    setTimeout(() => startRecording(targetId), 2000);
-                };
-            });
+            if (isTabMode) {
+                // ── Tab / online-class audio ────────────────────────────────
+                // getDisplayMedia opens Chrome's share dialog. User selects a tab
+                // and checks "Share tab audio". We stop the video track immediately.
+                const displayStream = await navigator.mediaDevices.getDisplayMedia({
+                    video: { width: 1, height: 1 },  // required by Chrome; stopped right away
+                    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+                });
+                displayStream.getVideoTracks().forEach(t => t.stop());
+                const audioTracks = displayStream.getAudioTracks();
+                if (audioTracks.length === 0) {
+                    setIsStarting(false);
+                    showError('No audio captured. Make sure to check "Share tab audio" in the dialog.', 6000);
+                    return;
+                }
+                captureStream = new MediaStream(audioTracks);
+                micStreamRef.current = captureStream;
+                audioTracks.forEach(track => {
+                    track.onended = () => {
+                        if (!isRecordingRef.current) return;
+                        showError('Tab audio ended. Recording paused.', 0);
+                        isRecordingRef.current = false;
+                        setSessionStatus('paused');
+                        stopAudioMonitoring();
+                    };
+                });
+            } else {
+                // ── Microphone ─────────────────────────────────────────────
+                captureStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true,
+                    },
+                });
+                micStreamRef.current = captureStream;
+                // Fix 6: recover from unexpected microphone disconnects
+                captureStream.getTracks().forEach(track => {
+                    track.onended = () => {
+                        if (!isRecordingRef.current) return;
+                        showError('Microphone disconnected. Reconnecting…', 0);
+                        isRecordingRef.current = false;
+                        setSessionStatus('paused');
+                        stopAudioMonitoring();
+                        setTimeout(() => startRecording(targetId), 2000);
+                    };
+                });
+            }
+
             const AudioCtx = window.AudioContext || window.webkitAudioContext;
             audioContextRef.current = new AudioCtx();
             await audioContextRef.current.resume();
             analyserRef.current = audioContextRef.current.createAnalyser();
             analyserRef.current.fftSize = 256;
 
-            // Audio chain: bandpass filters strip non-speech frequencies before gain/compression.
-            // Highpass 80Hz removes AC hum, fan noise, desk vibration, traffic rumble.
-            // Lowpass 8kHz removes high-frequency hiss; speech intelligibility lives below 8kHz.
-            // Gain boost for distant lecture recording (phone in a classroom).
-            // Compressor after gain prevents clipping when mic is close.
-            const micSource = audioContextRef.current.createMediaStreamSource(micStream);
+            const captureSource = audioContextRef.current.createMediaStreamSource(captureStream);
+            let recordingStream;
 
-            const highpass = audioContextRef.current.createBiquadFilter();
-            highpass.type = 'highpass';
-            highpass.frequency.value = 80;
+            if (isTabMode) {
+                // Tab audio: clean signal, no gain boost or compression needed.
+                // Route through analyser for waveform visualisation.
+                const tabDest = audioContextRef.current.createMediaStreamDestination();
+                captureSource.connect(analyserRef.current);
+                captureSource.connect(tabDest);
+                recordingStream = tabDest.stream;
+            } else {
+                // Audio chain: bandpass filters strip non-speech frequencies before gain/compression.
+                // Highpass 80Hz removes AC hum, fan noise, desk vibration, traffic rumble.
+                // Lowpass 8kHz removes high-frequency hiss; speech intelligibility lives below 8kHz.
+                // Gain boost for distant lecture recording (phone in a classroom).
+                // Compressor after gain prevents clipping when mic is close.
+                const highpass = audioContextRef.current.createBiquadFilter();
+                highpass.type = 'highpass';
+                highpass.frequency.value = 80;
 
-            const lowpass = audioContextRef.current.createBiquadFilter();
-            lowpass.type = 'lowpass';
-            lowpass.frequency.value = 8000;
+                const lowpass = audioContextRef.current.createBiquadFilter();
+                lowpass.type = 'lowpass';
+                lowpass.frequency.value = 8000;
 
-            const gainNode = audioContextRef.current.createGain();
-            gainNode.gain.value = 2.5;
-            const compressor = audioContextRef.current.createDynamicsCompressor();
-            compressor.threshold.value = -24;  // start compressing at -24 dBFS
-            compressor.knee.value       = 30;  // soft knee
-            compressor.ratio.value      = 12;  // heavy limiting above threshold
-            compressor.attack.value     = 0.003;
-            compressor.release.value    = 0.25;
-            const gainDest = audioContextRef.current.createMediaStreamDestination();
-            micSource.connect(highpass);
-            highpass.connect(lowpass);
-            lowpass.connect(gainNode);
-            gainNode.connect(compressor);
-            compressor.connect(analyserRef.current);
-            compressor.connect(gainDest);
+                const gainNode = audioContextRef.current.createGain();
+                gainNode.gain.value = 2.5;
+                const compressor = audioContextRef.current.createDynamicsCompressor();
+                compressor.threshold.value = -24;
+                compressor.knee.value       = 30;
+                compressor.ratio.value      = 12;
+                compressor.attack.value     = 0.003;
+                compressor.release.value    = 0.25;
+                const gainDest = audioContextRef.current.createMediaStreamDestination();
+                captureSource.connect(highpass);
+                highpass.connect(lowpass);
+                lowpass.connect(gainNode);
+                gainNode.connect(compressor);
+                compressor.connect(analyserRef.current);
+                compressor.connect(gainDest);
 
-            // Merge screen audio into recording stream if screen share is active with audio
-            let recordingStream = gainDest.stream;
-            const screenAudioTracks = screenStreamRef.current?.getAudioTracks() || [];
-            if (screenAudioTracks.length > 0) {
-                if (mergeAudioCtxRef.current && mergeAudioCtxRef.current.state !== 'closed') {
-                    mergeAudioCtxRef.current.close();
+                // Merge screen audio into recording stream if screen share is active with audio
+                recordingStream = gainDest.stream;
+                const screenAudioTracks = screenStreamRef.current?.getAudioTracks() || [];
+                if (screenAudioTracks.length > 0) {
+                    if (mergeAudioCtxRef.current && mergeAudioCtxRef.current.state !== 'closed') {
+                        mergeAudioCtxRef.current.close();
+                    }
+                    const mergeCtx = new AudioCtx();
+                    const dest = mergeCtx.createMediaStreamDestination();
+                    mergeCtx.createMediaStreamSource(gainDest.stream).connect(dest);
+                    mergeCtx.createMediaStreamSource(screenStreamRef.current).connect(dest);
+                    mergeAudioCtxRef.current = mergeCtx;
+                    recordingStream = dest.stream;
                 }
-                const mergeCtx = new AudioCtx();
-                const dest = mergeCtx.createMediaStreamDestination();
-                mergeCtx.createMediaStreamSource(gainDest.stream).connect(dest);
-                mergeCtx.createMediaStreamSource(screenStreamRef.current).connect(dest);
-                mergeAudioCtxRef.current = mergeCtx;
-                recordingStream = dest.stream;
             }
 
             const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
@@ -1478,6 +1523,33 @@ function App({ user }) {
                         ))}
                     </div>
 
+                    {/* Audio source toggle */}
+                    <div className="flex rounded-xl overflow-hidden border border-slate-200 mb-4">
+                        <button
+                            onClick={() => { setAudioSource('mic'); audioSourceRef.current = 'mic'; }}
+                            disabled={isStarting}
+                            className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-[12px] font-semibold transition-colors ${audioSource === 'mic' ? 'bg-[#1a1a1a] text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}`}>
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                            </svg>
+                            Microphone
+                        </button>
+                        <button
+                            onClick={() => { setAudioSource('tab'); audioSourceRef.current = 'tab'; }}
+                            disabled={isStarting}
+                            className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-[12px] font-semibold transition-colors border-l border-slate-200 ${audioSource === 'tab' ? 'bg-[#1a1a1a] text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}`}>
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                            </svg>
+                            Online Class / Tab
+                        </button>
+                    </div>
+                    {audioSource === 'tab' && (
+                        <p className="text-[11px] text-blue-600 bg-blue-50 rounded-lg px-3 py-2 mb-3 leading-snug">
+                            A browser dialog will open. Select the tab with your online class and check <strong>"Share tab audio"</strong>.
+                        </p>
+                    )}
+
                     {/* CTA */}
                     <button
                         onClick={() => { if (!isStarting) { setSelectedDomain(''); setShowDomainPicker(true); } }}
@@ -1494,13 +1566,18 @@ function App({ user }) {
                         ) : (
                             <>
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                                    {audioSource === 'tab'
+                                        ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                        : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                                    }
                                 </svg>
-                                Start Live Session
+                                {audioSource === 'tab' ? 'Start — Select Tab' : 'Start Live Session'}
                             </>
                         )}
                     </button>
-                    <p className="text-center text-xs text-[#a3a3a3] mt-3">Microphone access required</p>
+                    <p className="text-center text-xs text-[#a3a3a3] mt-3">
+                        {audioSource === 'tab' ? 'Captures audio directly from a browser tab' : 'Microphone access required'}
+                    </p>
 
                     {/* Recent sessions */}
                     {recentSessions.length > 0 && (

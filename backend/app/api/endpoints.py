@@ -914,8 +914,10 @@ async def process_live_chunk(
         try:
             transcript_so_far = get_lecture_transcript(lecture_id)
             if transcript_so_far:
+                # 50 words is enough context to prevent boundary duplication.
+                # 200 words risks Whisper looping the prompt content into output.
                 words = transcript_so_far.split()
-                whisper_prompt = " ".join(words[-200:])
+                whisper_prompt = " ".join(words[-50:])
         except Exception:
             pass
 

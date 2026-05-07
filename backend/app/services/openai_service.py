@@ -87,6 +87,19 @@ def _is_hallucinated(text: str) -> bool:
         if top_word_count / len(words) >= 0.60:
             return True
 
+    # Phrase/sentence repetition loop: if a 3–5 word N-gram repeats ≥4 times,
+    # Whisper is stuck in a loop (e.g. "you have money" × 30).
+    if len(words) >= 12:
+        from collections import Counter
+        for n in (3, 4, 5):
+            if len(words) < n:
+                break
+            ngrams = [' '.join(words[i:i+n]) for i in range(len(words) - n + 1)]
+            if ngrams:
+                top_count = Counter(ngrams).most_common(1)[0][1]
+                if top_count >= 4:
+                    return True
+
     return False
 
 
