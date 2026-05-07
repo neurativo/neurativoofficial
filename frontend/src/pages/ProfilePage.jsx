@@ -273,7 +273,7 @@ const PLANS = [
         name: 'Pro',
         price: '$19.99',
         period: '/mo',
-        features: ['30 credits/month included', 'Unlimited live · no per-session cap', 'Unlimited imports · no size limit', '60 hrs/month ceiling · priority processing'],
+        features: ['30 credits/month included', 'Unlimited live · 4 hrs max/session', 'Unlimited imports · 4 hrs max/file', '40 hrs/month ceiling · priority processing'],
     },
 ];
 

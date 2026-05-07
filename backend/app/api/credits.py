@@ -29,9 +29,14 @@ def get_balance(user=Depends(get_active_user)):
     """
     Returns current credit balance and subscription status.
     Also grants starter credits on first call (idempotent).
+    Starter credits are only granted to users with a verified email address.
     """
     user_id = str(user.id)
-    maybe_grant_starter(user_id)
+    maybe_grant_starter(
+        user_id,
+        email=getattr(user, "email", "") or "",
+        email_verified=getattr(user, "email_verified", True),
+    )
     balance = get_credit_balance(user_id)
     return {
         **balance,

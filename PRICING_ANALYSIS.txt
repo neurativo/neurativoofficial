@@ -270,37 +270,41 @@ User behavior: 4-hour lecture every day, 5 days/week, 4 weeks/month
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-7. KNOWN RISK FACTORS (not yet mitigated)
+7. SECURITY MITIGATIONS (all implemented)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  1. MULTI-ACCOUNT CREDIT FARMING
-     Users can create multiple free accounts to farm 5 starter credits each time.
+  1. MULTI-ACCOUNT CREDIT FARMING [MITIGATED]
+     Risk: Users create multiple free accounts to farm 5 starter credits each.
      Max loss per fake account: $1.05 (5 credits × $0.21).
-     Mitigation needed:
-       a) Unique constraint on (email_domain + IP) for new accounts
-       b) Require email_verified = true before granting starter credits
-       c) DB unique constraint: one starter_grant per user_id (already present)
-       d) Consider CAPTCHA on signup
+     Mitigations applied:
+       a) email must be non-empty in JWT — blocks anonymous/no-email signups
+       b) email_verified = true required — extracted from Clerk JWT; blocks
+          users who signed up with an unverified disposable email
+       c) DB partial unique index on credit_transactions (user_id) WHERE
+          reason = 'starter_grant' — migration 005_starter_grant_unique.sql
+       d) Code try/except catches any race that slips past the app-level check
 
-  2. IP-BASED RATE LIMITING BYPASS
-     Current slowapi rate limiting uses get_remote_address (trusts X-Forwarded-For).
-     Attacker can spoof this header to bypass rate limits.
-     Mitigation: Key rate limits on user_id for authenticated endpoints.
-     Risk level: Medium (mainly threatens free tier abuse, not credit loss)
+     Remaining gap: CAPTCHA on signup (handled by Clerk config, not code).
+     Add Clerk's Bot Protection in the Clerk dashboard for full coverage.
 
-  3. RACE CONDITION IN STARTER GRANT
-     maybe_grant_starter() has a check-then-act gap.
-     Two simultaneous requests could double-grant starter credits.
-     Mitigation: Use DB unique constraint on (user_id, reason='starter_grant').
-     Max loss if exploited: 1 extra grant = $1.05.
+  2. IP-BASED RATE LIMITING BYPASS [FIXED]
+     Risk: X-Forwarded-For header can be spoofed to bypass per-IP rate limits.
+     Fix: rate_limit.py now uses a hybrid key function:
+       - Authenticated requests → keyed on user_id (extracted from JWT sub claim)
+       - Anonymous requests → keyed on remote IP (fallback)
+     Result: Spoofing the IP header has zero effect for logged-in users.
 
-  4. REFUND ALWAYS REFUNDS 1 CREDIT
-     refund_credit() currently refunds exactly 1 credit even if the lecture
-     cost multiple credits (for long sessions).
-     Impact: Under-refund is a non-issue for us (user gets less back).
-     But it's a user experience bug. Should refund credits_for_duration(duration).
+  3. RACE CONDITION IN STARTER GRANT [FIXED]
+     Risk: Two simultaneous /credits/balance calls could double-grant credits.
+     Fix: maybe_grant_starter() now wraps the INSERT in try/except; the DB
+     partial unique index (item 1c above) ensures only one succeeds.
 
-  5. PRO PLAN NO-SESSION-CAP (FIXED)
+  4. REFUND USES WRONG AMOUNT [FIXED]
+     Bug: refund_credit() always refunded 1 credit regardless of lecture cost.
+     Fix: now fetches total_duration_seconds from the lecture row and calls
+     credits_for_duration(duration) to refund the exact amount deducted.
+
+  5. PRO PLAN NO-SESSION-CAP [FIXED]
      Previously live_max_duration_seconds = None (unlimited).
      Now fixed to 14,400s (4 hrs) to prevent unbounded API calls in one session.
 

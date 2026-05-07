@@ -186,29 +186,33 @@ def deduct_credit(user_id: str, lecture_id: str, duration_seconds: int = 0) -> i
 
 def refund_credit(user_id: str, lecture_id: str) -> None:
     """
-    Refunds 1 credit when lecture processing fails.
+    Refunds the correct number of credits when lecture processing fails.
+    The refund amount matches what was originally deducted (based on duration).
     Safe to call even if already refunded (idempotent via credit_deducted check).
     """
     db = _fresh_db()
 
     # Only refund if credit was actually deducted for this lecture
-    lec_resp = db.table("lectures").select("credit_deducted").eq("id", lecture_id).execute()
+    lec_resp = db.table("lectures").select("credit_deducted,total_duration_seconds").eq("id", lecture_id).execute()
     if not lec_resp.data or not lec_resp.data[0].get("credit_deducted"):
         return
 
-    # Add 1 credit back
+    # Calculate original deduction amount based on recorded duration
+    duration_seconds = lec_resp.data[0].get("total_duration_seconds") or 0
+    refund_amount = credits_for_duration(duration_seconds)
+
     bal_resp = db.table("profiles").select("credits").eq("id", user_id).execute()
     if not bal_resp.data:
         return
 
-    new_balance = bal_resp.data[0]["credits"] + 1
+    new_balance = bal_resp.data[0]["credits"] + refund_amount
     db.table("profiles").update({"credits": new_balance}).eq("id", user_id).execute()
     db.table("lectures").update({"credit_deducted": False}).eq("id", lecture_id).execute()
 
     _log_transaction(
         db,
         user_id=user_id,
-        amount=+1,
+        amount=+refund_amount,
         balance_after=new_balance,
         reason="refund",
         lecture_id=lecture_id,
@@ -249,20 +253,39 @@ def add_credits(
     return new_balance
 
 
-def maybe_grant_starter(user_id: str) -> bool:
+def maybe_grant_starter(user_id: str, email: str = "", email_verified: bool = True) -> bool:
     """
     Grants 5 starter credits exactly once per user.
-    Returns True if credits were granted, False if already granted.
+    Returns True if credits were granted, False if already granted or ineligible.
+
+    Guards:
+    1. Email must be non-empty — blocks anonymous/OAuth users with no email.
+    2. email_verified must be True — blocks unverified disposable-email signups.
+    3. The credit_transactions table has a partial unique index on
+       (user_id) WHERE reason = 'starter_grant', so even if two requests
+       race past the check simultaneously, only one INSERT succeeds.
     """
+    if not email or not email_verified:
+        return False
+
     db = _fresh_db()
 
-    # Check if starter_grant already issued
+    # Fast path: check if already granted (avoids unnecessary INSERT attempt)
     existing = db.table("credit_transactions").select("id").eq("user_id", user_id).eq("reason", "starter_grant").limit(1).execute()
     if existing.data:
         return False
 
-    add_credits(user_id, STARTER_CREDITS, reason="starter_grant")
-    return True
+    # Race-safe: attempt the transaction INSERT first (unique index prevents duplicate).
+    # If two requests slip past the check above simultaneously, the DB rejects the second.
+    try:
+        add_credits(user_id, STARTER_CREDITS, reason="starter_grant")
+        return True
+    except Exception as e:
+        err_str = str(e).lower()
+        if "unique" in err_str or "duplicate" in err_str or "23505" in err_str:
+            # Another request already granted — not an error
+            return False
+        raise
 
 
 def mark_credit_deducted(lecture_id: str) -> None:

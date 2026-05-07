@@ -68,6 +68,17 @@ const CSS = `
   .cr-intent-btn:hover { opacity: .8; }
   .cr-intent-close { background: none; border: none; font-size: 13px; color: ${C.sec}; cursor: pointer; text-decoration: underline; }
 
+  /* How credits work */
+  .cr-how { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 14px; padding: 22px 24px; margin-bottom: 32px; }
+  .cr-how-intro { font-size: 13px; color: ${C.sec}; margin-bottom: 16px; line-height: 1.6; }
+  .cr-how-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .cr-how-table th { text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: ${C.muted}; padding: 0 10px 8px; border-bottom: 1px solid ${C.border}; }
+  .cr-how-table td { padding: 9px 10px; border-bottom: 1px solid ${C.border}; color: ${C.text}; }
+  .cr-how-table tr:last-child td { border-bottom: none; }
+  .cr-how-table td:first-child { color: ${C.sec}; }
+  .cr-how-table td.cr-how-credits { font-weight: 600; }
+  .cr-how-note { font-size: 11px; color: ${C.muted}; margin-top: 12px; line-height: 1.5; }
+
   /* History */
   .cr-history { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 14px; overflow: hidden; margin-bottom: 32px; }
   .cr-history-row { display: flex; align-items: center; padding: 12px 18px; border-bottom: 1px solid ${C.border}; font-size: 13px; gap: 12px; }
@@ -200,6 +211,76 @@ export default function CreditsPage() {
                             </>
                         )}
                     </div>
+                </div>
+
+                {/* How credits work */}
+                <div className="cr-section-title">How credits work</div>
+                <div className="cr-how">
+                    <p className="cr-how-intro">
+                        Each lecture costs <strong>1 credit per 30-minute block</strong> (rounded up).
+                        Credits are deducted after processing completes — never before.
+                        Subscription plans include credits every month; extra packs never expire.
+                    </p>
+                    <table className="cr-how-table">
+                        <thead>
+                            <tr>
+                                <th>Lecture duration</th>
+                                <th>Credits used</th>
+                                <th>Plan included</th>
+                                <th>Equivalent lectures</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Up to 30 min</td>
+                                <td className="cr-how-credits">1 cr</td>
+                                <td>Free — 5 cr starter</td>
+                                <td>5 lectures</td>
+                            </tr>
+                            <tr>
+                                <td>31 – 60 min</td>
+                                <td className="cr-how-credits">2 cr</td>
+                                <td>Student — 15 cr / mo</td>
+                                <td>7–15 lectures</td>
+                            </tr>
+                            <tr>
+                                <td>61 – 90 min</td>
+                                <td className="cr-how-credits">3 cr</td>
+                                <td>Pro — 30 cr / mo</td>
+                                <td>10–30 lectures</td>
+                            </tr>
+                            <tr>
+                                <td>91 – 120 min</td>
+                                <td className="cr-how-credits">4 cr</td>
+                                <td></td>
+                                <td></td>
+                            </tr>
+                            <tr>
+                                <td>2 hrs 1 min – 2.5 hrs</td>
+                                <td className="cr-how-credits">5 cr</td>
+                                <td></td>
+                                <td></td>
+                            </tr>
+                            <tr>
+                                <td>3 hrs (Student max)</td>
+                                <td className="cr-how-credits">6 cr</td>
+                                <td></td>
+                                <td></td>
+                            </tr>
+                            <tr>
+                                <td>4 hrs (Pro max)</td>
+                                <td className="cr-how-credits">8 cr</td>
+                                <td></td>
+                                <td></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p className="cr-how-note">
+                        Session limits: Free = 30 min · Student = 3 hrs · Pro = 4 hrs.
+                        Monthly time ceiling: Free = 2.5 hrs · Student = 25 hrs · Pro = 40 hrs.
+                        Credits are the primary gate — without credits, no lecture is processed.
+                        If processing fails after credit deduction, the full amount is refunded automatically.
+                    </p>
                 </div>
 
                 {/* Packs */}

@@ -19,6 +19,7 @@ _jwks_client: PyJWKClient | None = None
 class User:
     id: str
     email: str
+    email_verified: bool = True  # True by default; False only when Clerk explicitly sets it
 
 
 def _get_jwks_client() -> PyJWKClient:
@@ -71,7 +72,11 @@ async def get_current_user(authorization: str = Header(None)) -> User:
             raise HTTPException(status_code=401, detail="Invalid token")
 
         email = payload.get("email", "")
-        return User(id=user_id, email=email)
+        # Clerk includes email_verified when configured in JWT template.
+        # Default True so social-login users (whose email is pre-verified) aren't
+        # accidentally blocked — Clerk only sets it False for unverified email/pwd signups.
+        email_verified = payload.get("email_verified", True)
+        return User(id=user_id, email=email, email_verified=bool(email_verified))
 
     except HTTPException:
         raise
