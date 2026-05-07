@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { useAuth } from '@clerk/react';
 
-const BASE = import.meta.env.VITE_API_URL || 'https://api.neurativo.com';
+const BASE = import.meta.env.VITE_API_URL || 'https://neurativoofficial-production.up.railway.app';
 
 function makeClient(getToken) {
     const client = axios.create({ baseURL: BASE });
