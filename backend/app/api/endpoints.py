@@ -560,8 +560,7 @@ async def regenerate_content(
     Does NOT re-transcribe — uses the stored transcript.
     Does NOT deduct credits (regeneration is free).
     """
-    _check_owner(lecture_id, user.id)
-    _validate_uuid(lecture_id)
+    _check_owner(lecture_id, user.id)  # already calls _validate_uuid internally
 
     if job_is_running(lecture_id):
         raise HTTPException(status_code=409, detail="A processing job is already running for this lecture.")
@@ -1113,12 +1112,17 @@ async def stream_summary(lecture_id: str, token: str = Query(None)):
         raise HTTPException(status_code=401, detail="Not authenticated")
     user = await get_current_user(f"Bearer {token}")
     _check_owner(lecture_id, user.id)
+    profile = get_user_profile(str(user.id))
+    _stream_limits = get_limits(profile.get("plan_tier", "free"))
+    _plan_max = _stream_limits.get("live_max_duration_seconds")
+    # Cap SSE session to the user's plan live duration; fall back to 4 h absolute max
+    _sse_max = int(_plan_max) if _plan_max is not None else 14400
     async def event_generator():
         last_summary  = None
         last_topic    = None
         idle_ticks    = 0           # counts 2-second polls with no change
-        elapsed       = 0           # total seconds elapsed (Fix 5: max 4 h cap)
-        max_duration  = 14400       # 4 hours in seconds
+        elapsed       = 0           # total seconds elapsed
+        max_duration  = _sse_max    # respects plan limit (free=1800, student=10800, pro=14400)
 
         try:
             while True:
@@ -1320,6 +1324,10 @@ def get_lecture_details(lecture_id: str, user=Depends(get_active_user)):
 @limiter.limit("20/minute")
 def ask_question_auth(request: Request, lecture_id: str, body: QuestionRequest, user=Depends(get_active_user)):
     _check_owner(lecture_id, user.id)
+    profile = get_user_profile(str(user.id))
+    limits = get_limits(profile.get("plan_tier", "free"))
+    if not limits.get("qa_enabled"):
+        raise HTTPException(status_code=403, detail={"error": "feature_locked", "feature": "qa"})
     try:
         topic = get_lecture_topic(lecture_id)
         answer = answer_lecture_question(lecture_id, body.question, topic=topic)

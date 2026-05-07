@@ -285,9 +285,9 @@ export default function ImportModal({ onClose }) {
                         {!busy && usage && (
                             <p style={{ fontSize: 12, color: C.muted, marginTop: 10, textAlign: 'center' }}>
                                 {usage.plan_tier === 'free'
-                                    ? `Free plan: up to ${usage.upload_max_duration_label || '60 min'} audio · ${usage.uploads_limit} imports/month (${usage.uploads_this_month} used)`
+                                    ? `Free plan: up to ${usage.upload_max_duration_label || '60 min'} audio · ${usage.uploads_limit ?? 3} imports/month (${usage.uploads_this_month} used)`
                                     : usage.plan_tier === 'student'
-                                    ? `Student plan: up to ${usage.upload_max_duration_label || '4 hours'} · ${usage.uploads_limit} imports/month (${usage.uploads_this_month} used)`
+                                    ? `Student plan: up to ${usage.upload_max_duration_label || '3 hours'} · Unlimited imports`
                                     : 'Pro plan: unlimited imports · any file size'
                                 }
                             </p>

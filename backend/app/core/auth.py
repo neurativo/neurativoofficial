@@ -105,7 +105,7 @@ async def get_active_user(authorization: str = Header(None)) -> User:
     if user.email and "@" in user.email:
         import asyncio
         from app.services.teams_service import maybe_auto_join_by_domain
-        asyncio.get_event_loop().run_in_executor(
+        asyncio.get_running_loop().run_in_executor(
             None, maybe_auto_join_by_domain, user.id, user.email
         )
     return user

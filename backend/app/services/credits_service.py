@@ -1,6 +1,7 @@
 """
 Credits service — check, deduct, add, and history for the credit-based pricing system.
-1 credit = 1 lecture processed (upload or live session).
+1 credit = up to 30 minutes of audio (ceil(duration_minutes / 30)).
+A 1-hr lecture costs 2 credits; a 90-min lecture costs 3 credits; etc.
 All DB calls use _fresh_db() for thread safety.
 """
 from datetime import datetime, timezone
@@ -13,7 +14,7 @@ from app.services.supabase_service import _fresh_db
 # ── Pricing catalogue ──────────────────────────────────────────────────────────
 
 PRODUCTS = {
-    # 1 credit = 1 lecture processed. Cost ~$0.22/lecture → target 55%+ gross margin.
+    # 1 credit = 30 min of audio. Avg lecture 30 min = ~$0.20 cost → target 55%+ gross margin.
     "small_pack":  {"credits": 10,  "price_usd": 4.99,  "label": "Starter",    "per_credit": 0.50},
     "large_pack":  {"credits": 30,  "price_usd": 11.99, "label": "Best value", "per_credit": 0.40},
     "pro_pack":    {"credits": 60,  "price_usd": 21.99, "label": "Power pack", "per_credit": 0.37},

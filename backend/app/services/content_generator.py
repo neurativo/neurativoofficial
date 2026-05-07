@@ -27,6 +27,51 @@ _client = OpenAI(
 WHISPER_MODEL = "whisper-1"
 
 
+_DEPTH_INSTRUCTION = (
+    " Preserve the exact technical depth of the speaker. "
+    "If graduate-level terminology, notation, or domain jargon is used, reproduce it faithfully — "
+    "do not simplify or paraphrase technical terms for a general audience."
+)
+
+_MATH_TOPICS = {
+    "mathematics", "physics", "chemistry", "statistics", "calculus",
+    "linear algebra", "quantum mechanics", "thermodynamics", "signal processing",
+    "electrical engineering", "civil engineering", "mechanical engineering",
+    "biology", "economics", "quantitative finance",
+}
+
+_CODE_TOPICS = {
+    "computer science", "software engineering", "programming", "algorithms",
+    "data structures", "machine learning", "deep learning", "artificial intelligence",
+    "neural networks", "operating systems", "databases", "computer architecture",
+    "cybersecurity", "networking",
+}
+
+
+def _format_guidance(topic: str | None) -> str:
+    if not topic:
+        return ""
+    t = topic.lower().strip()
+    hints = []
+    is_math = (t in _MATH_TOPICS or any(k in t for k in (
+        "math", "physic", "chem", "quant", "statistic", "biolog",
+        "econom", "signal", "circuit", "thermodynam", "mechan",
+    )))
+    is_code = (t in _CODE_TOPICS or any(k in t for k in (
+        "computer", "software", "programm", "algorithm", "data structure",
+        "machine learn", "neural", "deep learn",
+    )))
+    if is_math:
+        hints.append(
+            "Use LaTeX for mathematical expressions: inline with $...$ and display equations with $$...$$."
+        )
+    if is_code:
+        hints.append(
+            "Use fenced code blocks with a language tag for any code, pseudocode, or algorithmic notation."
+        )
+    return (" " + " ".join(hints)) if hints else ""
+
+
 def _topic_hint(topic: str | None) -> str:
     if not topic or topic.strip().lower() in ("", "general"):
         return ""
@@ -60,13 +105,17 @@ def _build_prompt(
     n_flash      = _flashcard_count(word_count)
     n_quiz       = _quiz_count(word_count)
     topic_hint   = _topic_hint(topic)
+    fmt          = _format_guidance(topic)
     lang_note    = (
         "" if language == "en"
         else f" The transcript is in {language}. Write all output in the same language."
     )
+    # Dynamic word budget: scales with transcript length
+    word_budget = min(1800, max(1000, 400 + word_count // 10))
 
     system = (
-        f"You are Neurativo, an elite academic AI for students from undergrad to PhD level.{topic_hint}{lang_note}\n"
+        f"You are Neurativo, an elite academic AI for students from undergrad to PhD level.{topic_hint}"
+        f"{_DEPTH_INSTRUCTION}{fmt}{lang_note}\n"
         "You generate four types of learning content from a lecture transcript in a single response.\n"
         "Return ONLY valid JSON — no markdown fences, no preamble.\n\n"
         "JSON schema:\n"
@@ -84,7 +133,7 @@ def _build_prompt(
         "- Key concepts: `term1`, `term2`, `term3` (mandatory, backticks only)\n"
         "- Examples: → first example → second example (mandatory)\n"
         "- Do NOT use **bold**. Use `backticks` for key terms only.\n"
-        f"- Maximum 1000 words total across all sections\n\n"
+        f"- Maximum {word_budget} words total across all sections\n\n"
         f"FLASHCARD RULES: {n_flash} cards. Front = question or key term. Back = precise answer or definition. "
         "Cover the most testable concepts from the lecture.\n\n"
         f"QUIZ RULES: {n_quiz} multiple-choice questions. Bloom's taxonomy: mix recall, understanding, and application. "
@@ -143,7 +192,7 @@ def generate(
                     {"role": "user",   "content": user},
                 ],
                 temperature=0.2,
-                max_tokens=4000,   # enough for all four sections combined
+                max_tokens=5000,   # enough for all four sections combined (larger summaries for long lectures)
                 response_format={"type": "json_object"},
             )
             log_cost(
