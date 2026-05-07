@@ -30,6 +30,35 @@ _bg_client = OpenAI(
 ) if settings.OPENAI_API_KEY else None
 
 
+# Whisper hallucination phrases — emitted when audio is near-silent or muffled.
+# These pass the no_speech_prob filter (Whisper "thinks" it heard speech) but are
+# fake. Matching is case-insensitive and checks the entire normalised text.
+_HALLUCINATION_PHRASES = {
+    "thank you for watching",
+    "thank you for watching my video",
+    "thank you for watching this video",
+    "thanks for watching",
+    "thanks for watching my video",
+    "thank you for listening",
+    "thanks for listening",
+    "please subscribe",
+    "like and subscribe",
+    "subscribe to my channel",
+    "don't forget to subscribe",
+    "see you in the next video",
+    "see you next time",
+    "i'll see you in the next one",
+    "bye",
+    "bye bye",
+}
+
+
+def _is_hallucinated(text: str) -> bool:
+    """Return True if text matches a known Whisper hallucination phrase."""
+    normalised = text.strip().lower().rstrip("!.").strip()
+    return normalised in _HALLUCINATION_PHRASES
+
+
 def filter_segments_by_confidence(segments: list, threshold: float = 0.6) -> str:
     """
     Returns joined text from segments whose no_speech_prob is at or below threshold.
@@ -92,6 +121,11 @@ async def transcribe_audio(file: UploadFile, prompt: str = None, language: str =
             text = filter_segments_by_confidence(segments)
         else:
             text = transcript_response.text or ""
+
+        # Drop known Whisper hallucination phrases (emitted on near-silent audio).
+        if _is_hallucinated(text):
+            print(f"[whisper] Hallucination discarded: {text!r}")
+            text = ""
 
         audio_seconds = segments[-1].end if segments else 0.0
         await log_cost_async("whisper_transcription", "whisper-1", audio_seconds=audio_seconds)
