@@ -6,7 +6,8 @@
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=JetBrains+Mono:wght@400;500;600&display=swap">
+    <!-- display=block: Chrome waits for fonts before rendering (prevents mid-swap PDF snapshot scrambling) -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=JetBrains+Mono:wght@400;500;600&display=block">
 
     <style>
         /* ═══════════════════════════════════════════════════════════
@@ -72,7 +73,10 @@
             line-height: 1.55;
             color: var(--ink-2);
             background: var(--paper);
-            font-feature-settings: "ss01","cv11","kern";
+            /* Disable ligatures: prevents OpenType glyph-index scrambling in Chromium PDF subsetting */
+            font-variant-ligatures: none;
+            -webkit-font-variant-ligatures: none;
+            font-feature-settings: "kern";
         }
         p { margin: 0 0 0.65em; orphans: 3; widows: 3; }
         strong { color: var(--ink); font-weight: 600; }

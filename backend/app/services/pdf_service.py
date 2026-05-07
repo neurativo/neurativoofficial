@@ -533,6 +533,9 @@ def _render_pdf(html_content: str, title_short: str, watermark: bool = False) ->
             page = browser.new_page()
             try:
                 page.set_content(html_content, wait_until="networkidle")
+                # Explicitly wait for all fonts to finish loading before snapshotting.
+                # networkidle alone doesn't guarantee font-swap has completed — this does.
+                page.evaluate("() => document.fonts.ready")
                 footer = (
                     "<div style='"
                     "width:100%;font-size:7pt;color:#94a3b8;"

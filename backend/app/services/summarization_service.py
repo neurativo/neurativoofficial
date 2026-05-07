@@ -141,6 +141,17 @@ _DEPTH_INSTRUCTION = (
     "do not simplify or paraphrase technical terms for a general audience."
 )
 
+# Injected into every summarization prompt to prevent hallucination.
+_TRANSCRIPT_ONLY_RULE = (
+    " CRITICAL RULE — TRANSCRIPT FIDELITY:"
+    " Only include information explicitly stated in the transcript."
+    " Do NOT add background knowledge, textbook context, or explanations the professor did not give."
+    " If a concept is mentioned but not elaborated on, note it briefly as 'mentioned in passing' rather than expanding it."
+    " Preserve specific numbers, names, dates, and terms exactly as spoken."
+    " Do not rewrite or academicise informal speech — keep the professor's own examples and phrasing."
+    " It is correct and expected to produce a shorter summary when the lecture content is sparse."
+)
+
 _MATH_TOPICS = {
     "physics", "mathematics", "chemistry", "engineering",
     "economics", "biology", "computer science",
@@ -213,7 +224,9 @@ def generate_micro_summary(text: str, language: str = "en", topic: str | None = 
                         "content": (
                             f"You are Neurativo. Summarize the following "
                             f"{topic + ' ' if topic and topic.strip() and topic.strip() != 'general' else ''}lecture chunk "
-                            "into 2-4 extremely concise bullet points."
+                            "into 2-4 extremely concise bullet points. "
+                            "Only include points explicitly stated in the text. "
+                            "Do not add background knowledge or context the speaker did not provide."
                             + fmt + lang_note
                         )
                     },
@@ -255,9 +268,11 @@ def generate_section_summary(micro_summaries: list, language: str = "en", topic:
                     {
                         "role": "system",
                         "content": (
-                            "You are Neurativo. Create a unified, formal section summary "
-                            "from these micro-summaries. Use clear paragraph form."
-                            + topic_note + _DEPTH_INSTRUCTION + fmt + lang_note
+                            "You are Neurativo. Create a unified section summary "
+                            "from these micro-summaries. Use clear paragraph form. "
+                            "Synthesise ONLY what is explicitly present in the micro-summaries — "
+                            "do not introduce concepts, context, or background not mentioned."
+                            + topic_note + _DEPTH_INSTRUCTION + _TRANSCRIPT_ONLY_RULE + fmt + lang_note
                         )
                     },
                     {"role": "user", "content": combined_micro}
@@ -320,6 +335,21 @@ def generate_master_summary(section_summaries: list, language: str = "en", topic
         "- Do not repeat information across sections. Prioritize high-signal concepts.\n"
     )
 
+    # Short-lecture detection: if total section content is sparse, use compact format.
+    combined_word_count = len(combined_sections.split())
+    is_short_lecture = combined_word_count < 250  # roughly < 15 min of lecture
+
+    if is_short_lecture:
+        short_format = (
+            "This is a short lecture. Generate ONE compact summary (no ## section headers needed). "
+            "Write 2-3 paragraphs covering the main points. "
+            "Include a 'Key concepts:' line with backtick-wrapped terms if any were named. "
+            "Do NOT force multiple sections or blockquotes if the content doesn't support them."
+        )
+        active_format = short_format
+    else:
+        active_format = section_format
+
     last_err = None
     for attempt in range(3):
         try:
@@ -334,8 +364,8 @@ def generate_master_summary(section_summaries: list, language: str = "en", topic
                             f" Create a Master Summary from the following section summaries."
                             f" Keep it under {word_budget} words.\n\n"
                             + structure + "\n\n"
-                            + section_format
-                            + _DEPTH_INSTRUCTION + fmt + lang_note
+                            + active_format
+                            + _DEPTH_INSTRUCTION + _TRANSCRIPT_ONLY_RULE + fmt + lang_note
                         )
                     },
                     {"role": "user", "content": combined_sections}

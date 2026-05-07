@@ -33,6 +33,16 @@ _DEPTH_INSTRUCTION = (
     "do not simplify or paraphrase technical terms for a general audience."
 )
 
+_TRANSCRIPT_ONLY_RULE = (
+    "\n\nCRITICAL — TRANSCRIPT FIDELITY:"
+    " Only include information explicitly stated in the transcript."
+    " Do NOT add background knowledge, textbook context, or explanations the professor did not give."
+    " If a concept is mentioned but not elaborated on, note it briefly as 'mentioned in passing' rather than expanding it."
+    " Preserve specific numbers, names, dates, and terms exactly as spoken."
+    " Do not rewrite or academicise informal speech — keep the professor's own examples and phrasing."
+    " It is correct and expected to produce shorter output when the lecture content is sparse."
+)
+
 _MATH_TOPICS = {
     "mathematics", "physics", "chemistry", "statistics", "calculus",
     "linear algebra", "quantum mechanics", "thermodynamics", "signal processing",
@@ -115,7 +125,8 @@ def _build_prompt(
 
     system = (
         f"You are Neurativo, an elite academic AI for students from undergrad to PhD level.{topic_hint}"
-        f"{_DEPTH_INSTRUCTION}{fmt}{lang_note}\n"
+        f"{_DEPTH_INSTRUCTION}{fmt}{lang_note}"
+        f"{_TRANSCRIPT_ONLY_RULE}\n\n"
         "You generate four types of learning content from a lecture transcript in a single response.\n"
         "Return ONLY valid JSON — no markdown fences, no preamble.\n\n"
         "JSON schema:\n"
