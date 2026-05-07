@@ -135,6 +135,47 @@ def _section_guidance(topic: str | None) -> str:
     )
 
 
+_DEPTH_INSTRUCTION = (
+    " Preserve the exact technical depth of the speaker. "
+    "If graduate-level terminology, notation, or domain jargon is used, reproduce it faithfully — "
+    "do not simplify or paraphrase technical terms for a general audience."
+)
+
+_MATH_TOPICS = {
+    "physics", "mathematics", "chemistry", "engineering",
+    "economics", "biology", "computer science",
+}
+_CODE_TOPICS = {"computer science", "engineering"}
+
+
+def _format_guidance(topic: str | None) -> str:
+    """Injects LaTeX and/or code-block formatting instructions for relevant topics."""
+    if not topic:
+        return ""
+    t = topic.lower().strip()
+    hints = []
+    is_math = (t in _MATH_TOPICS or any(k in t for k in (
+        "math", "physic", "chem", "quant", "statistic", "biolog",
+        "econom", "signal", "circuit", "thermodynam", "mechan",
+    )))
+    is_code = (t in _CODE_TOPICS or any(k in t for k in (
+        "computer", "software", "programm", "algorithm", "data structure",
+        "machine learn", "neural", "deep learn",
+    )))
+    if is_math:
+        hints.append(
+            "Use LaTeX for all mathematical expressions: "
+            "inline with $...$ (e.g. $E = mc^2$, $O(n \\log n)$) and "
+            "display equations on their own line with $$...$$."
+        )
+    if is_code:
+        hints.append(
+            "Use fenced code blocks with a language tag for any code, "
+            "pseudocode, or algorithmic notation (e.g. ```python ... ```)."
+        )
+    return (" " + " ".join(hints)) if hints else ""
+
+
 def _master_structure(topic: str | None) -> str:
     base = _TITLE_INSTRUCTION
     stripped = topic.strip() if topic else ""
@@ -163,6 +204,7 @@ def generate_micro_summary(text: str, language: str = "en", topic: str | None = 
     last_err = None
     for attempt in range(3):
         try:
+            fmt = _format_guidance(topic)
             response = openai_service.client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
@@ -171,13 +213,14 @@ def generate_micro_summary(text: str, language: str = "en", topic: str | None = 
                         "content": (
                             f"You are Neurativo. Summarize the following "
                             f"{topic + ' ' if topic and topic.strip() and topic.strip() != 'general' else ''}lecture chunk "
-                            "into 2-4 extremely concise bullet points." + lang_note
+                            "into 2-4 extremely concise bullet points."
+                            + fmt + lang_note
                         )
                     },
                     {"role": "user", "content": text}
                 ],
                 temperature=0.2,
-                max_tokens=150
+                max_tokens=200
             )
             log_cost("micro_summary", "gpt-4o-mini",
                      input_tokens=response.usage.prompt_tokens,
@@ -202,6 +245,7 @@ def generate_section_summary(micro_summaries: list, language: str = "en", topic:
     combined_micro = "\n".join(micro_summaries)
     lang_note      = _multilingual_instruction()
     topic_note     = _section_guidance(topic)
+    fmt            = _format_guidance(topic)
     last_err = None
     for attempt in range(3):
         try:
@@ -213,13 +257,13 @@ def generate_section_summary(micro_summaries: list, language: str = "en", topic:
                         "content": (
                             "You are Neurativo. Create a unified, formal section summary "
                             "from these micro-summaries. Use clear paragraph form."
-                            + topic_note + lang_note
+                            + topic_note + _DEPTH_INSTRUCTION + fmt + lang_note
                         )
                     },
                     {"role": "user", "content": combined_micro}
                 ],
                 temperature=0.2,
-                max_tokens=400
+                max_tokens=600
             )
             log_cost("section_summary", "gpt-4o-mini",
                      input_tokens=response.usage.prompt_tokens,
@@ -245,6 +289,11 @@ def generate_master_summary(section_summaries: list, language: str = "en", topic
     lang_note         = _multilingual_instruction()
     structure         = _master_structure(topic)
     topic_label       = f" This is a {topic} lecture." if topic and topic != "general" else ""
+    fmt               = _format_guidance(topic)
+    # Scale word budget: more sections = more content = allow longer master summary
+    n_sections   = len(section_summaries)
+    word_budget  = min(1800, max(1000, 600 + n_sections * 120))
+    token_budget = min(2400, max(1400, word_budget * 2))
 
     # Per-section format template injected into the prompt so GPT outputs
     # structured markdown that the frontend parseSummary() function can parse.
@@ -282,17 +331,17 @@ def generate_master_summary(section_summaries: list, language: str = "en", topic
                         "content": (
                             "You are Neurativo, an academic lecture summarizer."
                             + topic_label +
-                            " Create a Master Summary from the following section summaries."
-                            " Keep it under 900 words.\n\n"
+                            f" Create a Master Summary from the following section summaries."
+                            f" Keep it under {word_budget} words.\n\n"
                             + structure + "\n\n"
                             + section_format
-                            + lang_note
+                            + _DEPTH_INSTRUCTION + fmt + lang_note
                         )
                     },
                     {"role": "user", "content": combined_sections}
                 ],
                 temperature=0.2,
-                max_tokens=1200
+                max_tokens=token_budget
             )
             log_cost("master_summary", "gpt-4o-mini",
                      input_tokens=response.usage.prompt_tokens,
@@ -307,9 +356,9 @@ def generate_master_summary(section_summaries: list, language: str = "en", topic
         print(f"Master summary error after 3 attempts: {last_err}")
         return ""
 
-    # Hard word cap — compress if over 900 words
-    if len(master_summary.split()) > 900:
-        print("Master summary exceeds 900 words. Compressing...")
+    # Hard word cap — compress if over budget
+    if len(master_summary.split()) > word_budget:
+        print(f"Master summary exceeds {word_budget} words. Compressing...")
         for attempt in range(3):
             try:
                 compression_response = openai_service.client.chat.completions.create(
@@ -318,19 +367,20 @@ def generate_master_summary(section_summaries: list, language: str = "en", topic
                         {
                             "role": "system",
                             "content": (
-                                "You are Neurativo. Compress this structured summary to under 900 words "
+                                f"You are Neurativo. Compress this structured summary to under {word_budget} words "
                                 "while preserving its exact markdown structure "
-                                "(## headers, Key concepts: lines, Examples: with → arrows, > blockquotes) "
-                                "and all key insights." + lang_note
+                                "(## headers, Key concepts: lines, Examples: with → arrows, > blockquotes), "
+                                "all LaTeX expressions, all code blocks, and all key insights."
+                                + _DEPTH_INSTRUCTION + lang_note
                             )
                         },
                         {
                             "role": "user",
-                            "content": f"Compress to under 900 words:\n\n{master_summary}"
+                            "content": f"Compress to under {word_budget} words:\n\n{master_summary}"
                         }
                     ],
                     temperature=0.2,
-                    max_tokens=1200
+                    max_tokens=token_budget
                 )
                 log_cost("master_summary_compression", "gpt-4o-mini",
                          input_tokens=compression_response.usage.prompt_tokens,
@@ -448,6 +498,7 @@ def summarize_topic_segment(
         return ""
 
     lang_note  = _multilingual_instruction()
+    fmt        = _format_guidance(topic)
     topic_line = (
         f" This is a {topic} lecture."
         f" Use precise {topic} terminology exactly as the speaker used it."
@@ -493,15 +544,17 @@ def summarize_topic_segment(
                             "5. Write content directly — do not use 'the speaker says' or 'in this section'.\n"
                             "6. No filler phrases: no 'it is important to note', "
                             "'in conclusion', 'as we can see', 'as mentioned above'.\n"
-                            "7. Do NOT use **bold**. Use `backticks` for key terms only.\n\n"
+                            "7. Do NOT use **bold**. Use `backticks` for key terms only.\n"
+                            "8. Preserve the exact technical depth of the speaker. "
+                            "Do not simplify graduate-level terminology or notation.\n\n"
                             + section_format
-                            + lang_note
+                            + _DEPTH_INSTRUCTION + fmt + lang_note
                         )
                     },
                     {"role": "user", "content": segment_text}
                 ],
                 temperature=0.1,
-                max_tokens=500,
+                max_tokens=700,
             )
             log_cost(
                 "topic_segment_summary", "gpt-4o-mini",
