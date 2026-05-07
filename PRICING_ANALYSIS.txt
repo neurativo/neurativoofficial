@@ -6,23 +6,97 @@ Currency: USD unless stated
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. COST MODEL (per minute of audio processed)
+1. COST MODEL
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+A. LECTURE PROCESSING COST (per minute of audio)
+─────────────────────────────────────────────────
   Whisper transcription:   $0.006  / minute
   GPT-4o-mini (AI calls):  $0.0007 / minute  (summarization, Q&A, enrichment)
   ─────────────────────────────────────────
   TOTAL cost per minute:   $0.0067 / minute
   Rounded up (safe margin):$0.007  / minute
 
-  Reference costs:
+  Reference processing costs (Whisper + summarization only):
     30-min lecture:   30 × $0.007 = $0.21
-    45-min lecture:   45 × $0.007 = $0.315
     60-min lecture:   60 × $0.007 = $0.42
     90-min lecture:   90 × $0.007 = $0.63
     120-min lecture: 120 × $0.007 = $0.84
     180-min lecture: 180 × $0.007 = $1.26
-    240-min lecture: 240 × $0.007 = $1.68  (4-hour lecture)
+    240-min lecture: 240 × $0.007 = $1.68  (4-hour lecture, Pro max)
+
+
+B. PDF EXPORT COST (per export, on-demand — NOT included in per-minute cost above)
+────────────────────────────────────────────────────────────────────────────────────
+  PDF generation triggers 9 separate GPT calls in parallel.
+  IMPORTANT: Two of these use gpt-4o (full model), NOT gpt-4o-mini.
+  These two calls alone account for ~75% of total PDF cost.
+
+  Model pricing used:
+    gpt-4o-mini: $0.15/1M input tokens,  $0.60/1M output tokens
+    gpt-4o:      $2.50/1M input tokens, $10.00/1M output tokens
+
+  PDF calls per export:
+  ┌────────────────────────┬──────────────┬───────────┬────────────┬──────────┐
+  │ Call                   │ Model        │ In tokens │ Out tokens │ Cost     │
+  ├────────────────────────┼──────────────┼───────────┼────────────┼──────────┤
+  │ executive_summary      │ gpt-4o-mini  │   1,600   │    400     │ $0.00048 │
+  │ enrich_section (per §) │ gpt-4o-mini  │     500   │    600     │ $0.00044 │
+  │ glossary               │ gpt-4o-mini  │   1,350   │    400     │ $0.00044 │
+  │ takeaways              │ gpt-4o-mini  │     830   │    250     │ $0.00027 │
+  │ quick_review           │ gpt-4o-mini  │   1,650   │    700     │ $0.00067 │
+  │ key_stats              │ gpt-4o-mini  │   1,350   │    150     │ $0.00029 │
+  │ mnemonics              │ gpt-4o-mini  │     600   │    350     │ $0.00030 │
+  │ conceptual_map  ★      │ gpt-4o       │   2,200   │    500     │ $0.01050 │
+  │ study_roadmap   ★      │ gpt-4o       │     300   │    400     │ $0.00475 │
+  └────────────────────────┴──────────────┴───────────┴────────────┴──────────┘
+  ★ = uses full gpt-4o (expensive)
+
+  Fixed cost per export (calls that don't scale with sections):
+    executive_summary + glossary + takeaways + quick_review + key_stats
+    + mnemonics + conceptual_map + study_roadmap = ~$0.01770 fixed
+
+  Variable cost per section (enrich_section):
+    ~$0.00044 per section
+
+  TOTAL PDF EXPORT COST BY LECTURE SIZE:
+  ┌──────────────────────┬──────────┬──────────┬──────────────┬────────────────────┐
+  │ Lecture duration     │ Sections │ Fixed    │ Variable     │ Total per export   │
+  ├──────────────────────┼──────────┼──────────┼──────────────┼────────────────────┤
+  │ Up to 30 min         │  2–3     │ $0.0177  │ $0.0009–0013 │ ~$0.019            │
+  │ 30–60 min            │  3–5     │ $0.0177  │ $0.0013–0022 │ ~$0.020            │
+  │ 60–90 min            │  5–8     │ $0.0177  │ $0.0022–0035 │ ~$0.021            │
+  │ 90–120 min           │  6–10    │ $0.0177  │ $0.0026–0044 │ ~$0.022            │
+  │ 3 hrs (Student max)  │ 10–15    │ $0.0177  │ $0.0044–0066 │ ~$0.024            │
+  │ 4 hrs (Pro max)      │ 15–20    │ $0.0177  │ $0.0066–0088 │ ~$0.026            │
+  └──────────────────────┴──────────┴──────────┴──────────────┴────────────────────┘
+
+  KEY FINDING: PDF export costs ~$0.019–0.026 per export regardless of lecture length.
+  The cost is dominated by the two fixed GPT-4o calls (~$0.015), not by section count.
+  Switching conceptual_map and study_roadmap to gpt-4o-mini would cut PDF cost by ~75%
+  to ~$0.005 per export, at some quality trade-off.
+
+  NOTE: PDF export is triggered on-demand by the user (not automatic after every lecture).
+  Average users export a fraction of their lectures. Worst-case assumes 100% export rate.
+
+
+C. TOTAL COST PER LECTURE (processing + worst-case PDF)
+─────────────────────────────────────────────────────────
+  ┌─────────────────┬──────────────────┬──────────────┬──────────────────────┐
+  │ Duration        │ Processing cost  │ + PDF export │ Total worst case     │
+  ├─────────────────┼──────────────────┼──────────────┼──────────────────────┤
+  │ 30 min          │ $0.21            │ $0.019       │ $0.229               │
+  │ 60 min          │ $0.42            │ $0.020       │ $0.440               │
+  │ 90 min          │ $0.63            │ $0.021       │ $0.651               │
+  │ 120 min         │ $0.84            │ $0.022       │ $0.862               │
+  │ 3 hrs           │ $1.26            │ $0.024       │ $1.284               │
+  │ 4 hrs (Pro)     │ $1.68            │ $0.026       │ $1.706               │
+  └─────────────────┴──────────────────┴──────────────┴──────────────────────┘
+
+  PDF adds ≤ $0.026 per lecture (≤10% overhead on processing cost).
+  For credit pricing: the credit cost per lecture already has 37%+ floor margin.
+  PDF overhead reduces that margin by ~3-5 percentage points at most, and only
+  if the user exports every lecture. See updated margin table in section 5.
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -219,29 +293,42 @@ User behavior: 4-hour lecture every day, 5 days/week, 4 weeks/month
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-5. SUMMARY — MARGIN TABLE (all scenarios)
+5. SUMMARY — MARGIN TABLE (all scenarios, including PDF costs)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  Plan/Scenario                          Revenue    Cost     Profit   Margin
-  ──────────────────────────────────────────────────────────────────────────
-  Free (5 starter credits, worst case)   $0.00      $1.05    -$1.05   N/A
-  Student — average (8 lectures/mo)      $9.99      $1.68    $8.31    83.2%
-  Student — worst case (15 × 30-min)     $9.99      $3.15    $6.84    68.5%
-  Student — credit bypass + cap hit      $9.99      $10.50   -$0.51   LOSS*
-  Pro — average (15 lectures/mo)         $19.99     $3.15    $16.84   84.2%
-  Pro — worst case (30 plan credits)     $19.99     $6.30    $13.69   68.5%
-  Pro — aggressive (cap hit + 1 pack)    $39.98     $16.80   $23.18   58.0%
-  Pack purchase (Power, 60 cr)           $19.99     $12.60†  $7.39    37.0%
-  Pack purchase (Best Value, 30 cr)      $11.99     $6.30†   $5.69    47.5%
-  Pack purchase (Starter, 10 cr)         $4.99      $2.10†   $2.89    57.8%
-  ──────────────────────────────────────────────────────────────────────────
-  * Only possible if credit check is bypassed (bug). Time cap is last resort.
-  † Assumes all credits used at maximum 30-min cost ($0.21/credit).
+  "Processing cost" = Whisper + summarization GPT (per minute × duration).
+  "PDF cost" = worst case assumes every lecture is exported to PDF ($0.020/export avg).
+  Actual PDF usage is typically 30-50% of lectures — real cost is lower.
 
-  MINIMUM GUARANTEED MARGIN (no loss scenarios):
-    - Credit packs:        37.0% floor  (Power Pack, all at 30-min lectures)
-    - Subscription plans:  68.5% floor  (plan credits used, no bypass)
-    - Any plan + pack:     37.0% floor  (worst case credit price × worst-case duration)
+  Plan/Scenario                          Revenue  Process   PDF†    Total    Margin
+  ────────────────────────────────────────────────────────────────────────────────
+  Free (5 starter creds, worst case)     $0.00    $1.05     $0.10   $1.15    N/A
+  Student — average (8 × 60-min)         $9.99    $3.36     $0.16   $3.52    64.8%
+  Student — worst case (15 × 30-min)     $9.99    $3.15     $0.30   $3.45    65.5%
+  Student — credit bypass + cap hit      $9.99    $10.50    $0.30   $10.80   LOSS*
+  Pro — average (15 × 60-min)            $19.99   $6.30     $0.30   $6.60    67.0%
+  Pro — worst case (30 credits)          $19.99   $6.30     $0.60   $6.90    65.5%
+  Pro — aggressive (cap hit + 1 pack)    $39.98   $16.80    $0.26   $17.06   57.3%
+  Pack purchase (Power, 60 cr)           $19.99   $12.60‡   $1.20   $13.80   31.0%
+  Pack purchase (Best Value, 30 cr)      $11.99   $6.30‡    $0.60   $6.90    42.5%
+  Pack purchase (Starter, 10 cr)         $4.99    $2.10‡    $0.20   $2.30    53.9%
+  ────────────────────────────────────────────────────────────────────────────────
+  * Only possible if credit check is bypassed (bug). Time cap is last resort.
+  † PDF cost assumes every lecture exported (100% rate, $0.020 avg per export).
+  ‡ Processing cost assumes all credits used at max $0.21/credit (30-min lectures).
+
+  PACK MARGINS WITH PDF — IMPORTANT NOTE:
+  If all 60 Power Pack credits are exported as PDFs, margin falls to 31%.
+  At 50% export rate (30 PDFs): cost = $12.60 + $0.60 = $13.20, margin = 34%.
+  At 0% export rate: cost = $12.60, margin = 37%.
+  The PDF export does erode pack margins at high export rates.
+  Mitigation: limit PDF exports per pack purchase if needed, or price packs slightly higher.
+
+  CURRENT MINIMUM GUARANTEED MARGINS:
+    - Credit packs (no PDF):    37.0% floor
+    - Credit packs (100% PDF):  31.0% floor  ← NEW — slightly below comfort zone
+    - Subscription plans:       65.5% floor  (processing + PDF, no bypass)
+    - Any plan + pack:          31.0% absolute floor (all worst cases combined)
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
