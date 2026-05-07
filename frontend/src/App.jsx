@@ -530,7 +530,8 @@ function App({ user }) {
         }
         if (!token) { console.warn('[SSE] No auth token — SSE skipped, polling will cover updates'); return; }
         const qs = `?token=${encodeURIComponent(token)}`;
-        const es = new EventSource(`/api/v1/live/${id}/stream${qs}`);
+        const BASE_URL = import.meta.env.VITE_API_URL || 'https://neurativoofficial-production.up.railway.app';
+        const es = new EventSource(`${BASE_URL}/api/v1/live/${id}/stream${qs}`);
 
         es.onmessage = (e) => {
             // Resilience 10: reset reconnect counter on any successful message
