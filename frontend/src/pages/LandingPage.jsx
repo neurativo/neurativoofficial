@@ -1343,6 +1343,7 @@ export default function LandingPage({ user }) {
         title: null, // use default full title from index.html
         description: 'Neurativo records your lecture, transcribes every word, and builds structured AI summaries in real time — so you can focus on learning, not writing. Free to start.',
         canonicalPath: '/',
+        keywords: 'AI lecture notes, real-time lecture transcription, lecture summary generator, AI note taking app, automatic lecture notes, student AI assistant, lecture recorder app, online class notes, AI study tool',
     });
 
     // Scroll to section when navigated from a section route (e.g. /pricing → /)

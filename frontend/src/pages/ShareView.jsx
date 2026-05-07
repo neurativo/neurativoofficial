@@ -162,8 +162,12 @@ export default function ShareView() {
     // Dynamic SEO — updates once lecture loads
     useSEO(lecture ? {
         title: lecture.title || 'Shared Lecture',
-        description: `AI-generated lecture notes shared via Neurativo${lecture.topic ? ` · ${lecture.topic}` : ''}. View the full transcript and summary.`,
+        description: `AI-generated lecture notes for "${lecture.title || 'this lecture'}"${lecture.topic ? ` (${lecture.topic})` : ''} — transcript, section summaries, and key concepts, shared via Neurativo.`,
         canonicalPath: `/share/${token}`,
+        ogType: 'article',
+        keywords: lecture.topic
+            ? `${lecture.topic} lecture notes, AI lecture notes, ${lecture.topic} summary, Neurativo`
+            : 'AI lecture notes, lecture summary, Neurativo',
     } : {
         title: 'Shared Lecture',
         description: 'View AI-generated lecture notes shared via Neurativo — transcript, summary, and key concepts.',
