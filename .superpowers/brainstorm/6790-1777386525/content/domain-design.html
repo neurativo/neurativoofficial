@@ -1,0 +1,61 @@
+<h2>Domain-Aware Platform — Full Design</h2>
+<p class="subtitle">5 components, all connected. Here's what gets built.</p>
+
+<div class="section">
+  <div class="label">1 · Backend — Universal Summarization</div>
+  <div style="background:#f8f7f5;border-radius:10px;padding:16px;margin-top:8px;font-size:13px;line-height:1.7">
+    <strong>Extend domain guidance to all 20+ fields</strong> — add the 8 missing ones (business, linguistics, political science, sociology, art, music, architecture, etc.) to <code>_SECTION_TOPIC_GUIDANCE</code>.<br><br>
+    <strong>Dynamic fallback for any unknown topic</strong> — if a topic isn't in the dict, inject: <em>"Apply domain-appropriate summarization for a {topic} lecture, focusing on terminology, key concepts, and methodologies specific to this field."</em> Handles niche fields like actuarial science, marine biology, game design — anything.<br><br>
+    <strong>Topic hint in micro summaries (Phase 1)</strong> — currently topic-agnostic. Add a light domain hint so even the 12-second chunk bullets are field-aware.<br><br>
+    <strong>Result:</strong> Any field, any topic — the AI adapts automatically.
+  </div>
+</div>
+
+<div class="section">
+  <div class="label">2 · Backend — Domain-Aware Q&A</div>
+  <div style="background:#f8f7f5;border-radius:10px;padding:16px;margin-top:8px;font-size:13px;line-height:1.7">
+    Currently <code>answer_lecture_question()</code> has no domain context. Fix:<br><br>
+    • The <code>/ask</code> endpoint fetches topic and passes it to the QA service<br>
+    • QA system prompt gets: <em>"This is a {topic} lecture. Apply domain-appropriate terminology and reasoning when answering."</em><br>
+    • Law Q&A cites principles correctly. Math Q&A uses proper notation. CS Q&A discusses algorithms precisely.
+  </div>
+</div>
+
+<div class="section">
+  <div class="label">3 · Backend — Manual Topic Override Endpoint</div>
+  <div style="background:#f8f7f5;border-radius:10px;padding:16px;margin-top:8px;font-size:13px;line-height:1.7">
+    New endpoint: <code>PUT /api/v1/lectures/{id}/topic</code><br>
+    Body: <code>{"topic": "law"}</code> — owner-only, updates <code>lectures.topic</code>.<br><br>
+    Also: a <code>topic</code> field on the <code>POST /live/start</code> request — so users can declare their domain <em>before</em> the first chunk is processed, not after.
+  </div>
+</div>
+
+<div class="section">
+  <div class="label">4 · Frontend — Domain Selection UI</div>
+  <div style="background:#f8f7f5;border-radius:10px;padding:16px;margin-top:8px;font-size:13px;line-height:1.7">
+    <strong>Before recording (Start Session modal):</strong> optional domain picker — 20 pills to tap + "Other" free text. Skip = auto-detect.<br><br>
+    <strong>During recording:</strong> topic badge (already exists as purple pill) becomes clickable → inline dropdown to correct if auto-detect got it wrong.<br><br>
+    <strong>LectureView & Import flow:</strong> same clickable badge — change domain at any time. Change triggers a re-summarization prompt if summaries already exist.<br><br>
+    <strong>Dashboard cards:</strong> domain badge already shows — no change needed.
+  </div>
+</div>
+
+<div class="section">
+  <div class="label">5 · Frontend — Domain-Specific Content Rendering</div>
+  <div style="background:#f8f7f5;border-radius:10px;padding:16px;margin-top:8px;font-size:13px;line-height:1.7">
+    GPT already outputs LaTeX and code blocks — we just don't render them.<br><br>
+    <strong>Math / Physics / Engineering:</strong> add <strong>KaTeX</strong> — detects <code>$...$</code> and <code>$$...$$</code> in summaries, Q&A answers, and Smart Explain output. Renders inline and block equations.<br><br>
+    <strong>CS / Programming:</strong> add <strong>highlight.js</strong> — detects ``` code fences, renders with syntax highlighting.<br><br>
+    <strong>Applies to:</strong> summary panel, Q&A answers, Smart Explain panel — anywhere AI text is displayed.
+  </div>
+</div>
+
+<div class="section" style="background:#f3f0ff;border-radius:10px;padding:16px;border:1px solid #e9d5ff">
+  <div class="label" style="color:#7c3aed">What stays the same</div>
+  <div style="font-size:13px;line-height:1.7;margin-top:6px">
+    No DB schema changes needed — <code>lectures.topic</code> already exists.<br>
+    Auto-detection still fires on chunk_idx == 1 as fallback.<br>
+    All 20 existing KNOWN_TOPICS supported + unlimited custom topics via dynamic fallback.<br>
+    SSE stream already pushes topic to frontend — no streaming changes needed.
+  </div>
+</div>

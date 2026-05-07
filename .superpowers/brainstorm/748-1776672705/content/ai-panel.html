@@ -1,0 +1,114 @@
+<h2>AI Panel — Right Side</h2>
+<p class="subtitle">The Summary and Q&A panel. How should it present information?</p>
+
+<div class="cards">
+
+  <div class="card" data-choice="A" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#fff;padding:10px;border-radius:6px;font-family:system-ui;min-height:240px;border:1px solid #e5e7eb;">
+      <!-- Structured sections with visual hierarchy -->
+      <div style="overflow:hidden;height:220px;">
+        <!-- Tabs -->
+        <div style="display:flex;border-bottom:1px solid #f3f4f6;margin-bottom:10px;gap:0;">
+          <div style="padding:4px 10px;border-bottom:2px solid #111827;font-size:8px;font-weight:600;color:#111827;">Summary</div>
+          <div style="padding:4px 10px;font-size:8px;color:#9ca3af;">Ask</div>
+          <div style="padding:4px 10px;font-size:8px;color:#9ca3af;">Stats</div>
+          <div style="padding:4px 10px;font-size:8px;color:#9ca3af;">Visuals</div>
+        </div>
+        <!-- Section label -->
+        <div style="font-size:7px;color:#9ca3af;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px;">Section 1 of 2 · 8 min</div>
+        <!-- Bullet summary -->
+        <div style="margin-bottom:10px;">
+          <div style="display:flex;gap:6px;align-items:flex-start;margin-bottom:5px;">
+            <div style="width:4px;height:4px;background:#111827;border-radius:50%;margin-top:4px;flex-shrink:0;"></div>
+            <div style="font-size:8.5px;color:#111827;line-height:1.6;">Neural networks learn hierarchical representations through layered nodes</div>
+          </div>
+          <div style="display:flex;gap:6px;align-items:flex-start;margin-bottom:5px;">
+            <div style="width:4px;height:4px;background:#111827;border-radius:50%;margin-top:4px;flex-shrink:0;"></div>
+            <div style="font-size:8.5px;color:#111827;line-height:1.6;">Backpropagation adjusts weights via gradient descent</div>
+          </div>
+          <div style="display:flex;gap:6px;align-items:flex-start;">
+            <div style="width:4px;height:4px;background:#111827;border-radius:50%;margin-top:4px;flex-shrink:0;"></div>
+            <div style="font-size:8.5px;color:#111827;line-height:1.6;">Each layer captures progressively abstract features</div>
+          </div>
+        </div>
+        <div style="height:1px;background:#f3f4f6;margin-bottom:10px;"></div>
+        <!-- Master summary -->
+        <div style="font-size:7px;color:#9ca3af;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px;">Lecture so far</div>
+        <div style="font-size:8px;color:#6b7280;line-height:1.7;">The lecture introduces deep learning through neural network fundamentals, covering layer structure, training via backpropagation, and optimization strategies.</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Structured Hierarchy</h3>
+      <p>Section summaries stacked above master summary. Clear labels, visual dividers. Feels like a structured study guide — scannable and organized.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="B" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#fff;padding:10px;border-radius:6px;font-family:system-ui;min-height:240px;border:1px solid #e5e7eb;">
+      <!-- Card-based, more visual -->
+      <div style="overflow:hidden;height:220px;">
+        <!-- Pill tabs -->
+        <div style="display:flex;gap:4px;margin-bottom:10px;background:#f9fafb;padding:3px;border-radius:6px;border:1px solid #f3f4f6;">
+          <div style="padding:3px 8px;background:#111827;border-radius:4px;font-size:7.5px;font-weight:600;color:#fff;">Summary</div>
+          <div style="padding:3px 8px;font-size:7.5px;color:#9ca3af;">Ask</div>
+          <div style="padding:3px 8px;font-size:7.5px;color:#9ca3af;">Stats</div>
+          <div style="padding:3px 8px;font-size:7.5px;color:#9ca3af;">Visuals</div>
+        </div>
+        <!-- Summary card -->
+        <div style="background:#f9fafb;border-radius:6px;padding:8px;margin-bottom:6px;border:1px solid #f3f4f6;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+            <div style="font-size:7.5px;font-weight:600;color:#111827;">Section 1</div>
+            <div style="font-size:7px;color:#9ca3af;">0:00–8:00</div>
+          </div>
+          <div style="font-size:8px;color:#374151;line-height:1.6;">• Layered nodes learn hierarchical features<br>• Backprop = gradient-based weight updates<br>• Depth = abstraction level</div>
+        </div>
+        <div style="background:#f9fafb;border-radius:6px;padding:8px;border:1px solid #f3f4f6;border-left:3px solid #111827;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+            <div style="font-size:7.5px;font-weight:600;color:#111827;">Section 2 · live</div>
+            <div style="font-size:7px;color:#9ca3af;">8:00–now</div>
+          </div>
+          <div style="font-size:8px;color:#374151;line-height:1.6;">• Optimization: SGD, Adam, learning rate decay<br>• Batch normalization prevents vanishing gradients</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Summary Cards</h3>
+      <p>Each section is a distinct card with time range. Active section has a left-border accent (matching the transcript). Grows naturally as sections accumulate during the lecture.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="C" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#fff;padding:10px;border-radius:6px;font-family:system-ui;min-height:240px;border:1px solid #e5e7eb;">
+      <!-- Q&A focused with summary at top -->
+      <div style="overflow:hidden;height:220px;">
+        <!-- Underline tabs -->
+        <div style="display:flex;border-bottom:1px solid #f3f4f6;margin-bottom:8px;">
+          <div style="padding:4px 10px;border-bottom:2px solid #111827;font-size:8px;font-weight:600;color:#111827;">Summary</div>
+          <div style="padding:4px 10px;font-size:8px;color:#9ca3af;">Ask</div>
+          <div style="padding:4px 10px;font-size:8px;color:#9ca3af;">Stats</div>
+          <div style="padding:4px 10px;font-size:8px;color:#9ca3af;">Visuals</div>
+        </div>
+        <!-- Collapsible master at top -->
+        <div style="background:#111827;border-radius:5px;padding:7px 9px;margin-bottom:8px;">
+          <div style="font-size:7px;color:#9ca3af;font-weight:600;letter-spacing:1px;text-transform:uppercase;margin-bottom:3px;">Master Summary</div>
+          <div style="font-size:8px;color:#f9fafb;line-height:1.6;">Deep learning lecture covering neural architecture, backpropagation, and optimization for modern AI systems.</div>
+        </div>
+        <!-- Micro summaries below -->
+        <div style="font-size:7px;color:#9ca3af;font-weight:600;letter-spacing:1px;text-transform:uppercase;margin-bottom:5px;">Section Summaries</div>
+        <div style="display:flex;gap:4px;align-items:baseline;margin-bottom:3px;">
+          <div style="font-size:7px;color:#9ca3af;font-family:monospace;min-width:24px;">S1</div>
+          <div style="font-size:8px;color:#374151;line-height:1.6;">Layered nodes, backprop, feature hierarchy</div>
+        </div>
+        <div style="display:flex;gap:4px;align-items:baseline;">
+          <div style="font-size:7px;color:#9ca3af;font-family:monospace;min-width:24px;">S2</div>
+          <div style="font-size:8px;color:#374151;line-height:1.6;">SGD, Adam optimizer, batch normalization</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Master First</h3>
+      <p>Dark master summary pinned at top (always current, always visible). Section summaries listed below as compact rows. Inverse hierarchy — the big picture leads, details follow.</p>
+    </div>
+  </div>
+
+</div>

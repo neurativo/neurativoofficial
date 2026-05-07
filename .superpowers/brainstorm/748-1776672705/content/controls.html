@@ -1,0 +1,126 @@
+<h2>Recording Controls & Header</h2>
+<p class="subtitle">Where do the session controls live? This affects the whole page's hierarchy.</p>
+
+<div class="cards">
+
+  <div class="card" data-choice="A" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#fff;border-radius:6px;font-family:system-ui;min-height:230px;border:1px solid #e5e7eb;overflow:hidden;">
+      <!-- Top bar controls -->
+      <div style="background:#fff;border-bottom:1px solid #f3f4f6;padding:8px 12px;display:flex;align-items:center;justify-content:space-between;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="font-size:8px;color:#9ca3af;">←</div>
+          <div style="font-size:9px;font-weight:600;color:#111827;">Neural Networks — Lecture 4</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <div style="display:flex;align-items:center;gap:3px;background:#fef2f2;border:1px solid #fecaca;border-radius:4px;padding:3px 7px;">
+            <div style="width:5px;height:5px;background:#ef4444;border-radius:50%;"></div>
+            <div style="font-size:7.5px;color:#ef4444;font-weight:600;">12:34</div>
+          </div>
+          <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:4px;padding:3px 7px;font-size:7.5px;color:#374151;">⏸ Pause</div>
+          <div style="background:#111827;border-radius:4px;padding:3px 8px;font-size:7.5px;color:#fff;font-weight:600;">Stop</div>
+        </div>
+      </div>
+      <!-- Two panel below -->
+      <div style="display:flex;gap:0;height:180px;">
+        <div style="flex:1;padding:10px;border-right:1px solid #f3f4f6;overflow:hidden;">
+          <div style="font-size:8px;color:#9ca3af;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Transcript</div>
+          <div style="border-left:3px solid #6366f1;padding-left:8px;">
+            <div style="font-size:8.5px;color:#111827;line-height:1.7;">Backpropagation computes gradients by the chain rule and updates weights…</div>
+          </div>
+        </div>
+        <div style="width:130px;padding:10px;overflow:hidden;">
+          <div style="font-size:8px;color:#9ca3af;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Summary</div>
+          <div style="background:#f9fafb;border-radius:4px;padding:6px;border:1px solid #f3f4f6;border-left:2px solid #111827;">
+            <div style="font-size:7.5px;color:#374151;line-height:1.6;">• Layered nodes<br>• Backprop weights<br>• Feature levels</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Top Bar</h3>
+      <p>Controls live in the navbar alongside the lecture title. Always visible, never in the way. Compact: red pill timer, pause, stop. The rest of the screen is pure content.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="B" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#fff;border-radius:6px;font-family:system-ui;min-height:230px;border:1px solid #e5e7eb;overflow:hidden;">
+      <!-- Floating bottom controls -->
+      <div style="background:#fff;border-bottom:1px solid #f3f4f6;padding:6px 12px;display:flex;align-items:center;gap:6px;">
+        <div style="font-size:8px;color:#9ca3af;">←</div>
+        <div style="font-size:9px;font-weight:600;color:#111827;">Neural Networks — Lecture 4</div>
+        <div style="flex:1;"></div>
+        <div style="font-size:7.5px;color:#9ca3af;">Export</div>
+        <div style="font-size:7.5px;color:#9ca3af;">Share</div>
+      </div>
+      <div style="display:flex;gap:0;height:150px;position:relative;">
+        <div style="flex:1;padding:10px;border-right:1px solid #f3f4f6;overflow:hidden;">
+          <div style="border-left:3px solid #6366f1;padding-left:8px;">
+            <div style="font-size:8.5px;color:#111827;line-height:1.7;">Backpropagation computes gradients by the chain rule…</div>
+          </div>
+        </div>
+        <div style="width:130px;padding:10px;overflow:hidden;">
+          <div style="background:#f9fafb;border-radius:4px;padding:6px;border:1px solid #f3f4f6;border-left:2px solid #111827;">
+            <div style="font-size:7.5px;color:#374151;line-height:1.6;">• Layered nodes<br>• Backprop weights<br>• Feature levels</div>
+          </div>
+        </div>
+      </div>
+      <!-- Floating pill bar at bottom -->
+      <div style="display:flex;justify-content:center;padding:6px;">
+        <div style="background:#111827;border-radius:20px;padding:5px 12px;display:flex;align-items:center;gap:10px;box-shadow:0 4px 12px rgba(0,0,0,.15);">
+          <div style="display:flex;align-items:center;gap:4px;">
+            <div style="width:5px;height:5px;background:#ef4444;border-radius:50%;"></div>
+            <div style="font-size:8px;color:#fff;font-weight:600;font-family:monospace;">12:34</div>
+          </div>
+          <div style="width:1px;height:12px;background:#374151;"></div>
+          <div style="font-size:8px;color:#d1d5db;">⏸</div>
+          <div style="font-size:8px;color:#d1d5db;">■</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Floating Pill</h3>
+      <p>Controls float as a dark pill at the bottom center. Feels like a media player. Disappears from perception while reading but always reachable. Very mobile-friendly.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="C" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#fff;border-radius:6px;font-family:system-ui;min-height:230px;border:1px solid #e5e7eb;overflow:hidden;">
+      <!-- Left panel header with integrated controls -->
+      <div style="background:#fff;border-bottom:1px solid #f3f4f6;padding:6px 12px;display:flex;align-items:center;gap:6px;">
+        <div style="font-size:8px;color:#9ca3af;">←</div>
+        <div style="font-size:9px;font-weight:600;color:#111827;flex:1;">Neural Networks — Lecture 4</div>
+        <div style="font-size:7.5px;color:#9ca3af;">Export · Share</div>
+      </div>
+      <div style="display:flex;gap:0;height:184px;">
+        <div style="flex:1;border-right:1px solid #f3f4f6;overflow:hidden;display:flex;flex-direction:column;">
+          <!-- Transcript header with controls -->
+          <div style="padding:7px 10px;border-bottom:1px solid #f3f4f6;display:flex;align-items:center;justify-content:space-between;background:#fafafa;">
+            <div style="display:flex;align-items:center;gap:5px;">
+              <div style="width:5px;height:5px;background:#ef4444;border-radius:50%;"></div>
+              <div style="font-size:7.5px;color:#374151;font-family:monospace;font-weight:600;">12:34</div>
+            </div>
+            <div style="display:flex;gap:4px;">
+              <div style="border:1px solid #e5e7eb;border-radius:3px;padding:2px 6px;font-size:7px;color:#374151;">⏸ Pause</div>
+              <div style="background:#111827;border-radius:3px;padding:2px 6px;font-size:7px;color:#fff;">Stop</div>
+            </div>
+          </div>
+          <div style="flex:1;padding:10px;overflow:hidden;">
+            <div style="border-left:3px solid #6366f1;padding-left:8px;">
+              <div style="font-size:8.5px;color:#111827;line-height:1.7;">Backpropagation computes gradients and updates weights…</div>
+            </div>
+          </div>
+        </div>
+        <div style="width:130px;padding:10px;overflow:hidden;">
+          <div style="background:#f9fafb;border-radius:4px;padding:6px;border:1px solid #f3f4f6;border-left:2px solid #111827;">
+            <div style="font-size:7.5px;color:#374151;line-height:1.6;">• Layered nodes<br>• Backprop weights</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Transcript Sub-header</h3>
+      <p>Controls sit in a thin sub-header bar inside the transcript panel itself. Timer and stop/pause are contextually tied to the content they control. Navbar stays completely clean.</p>
+    </div>
+  </div>
+
+</div>

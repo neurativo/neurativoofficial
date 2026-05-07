@@ -48,7 +48,7 @@ async def add_security_headers(request: Request, call_next):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    response.headers["Permissions-Policy"] = "geolocation=(), camera=()"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(self), camera=(self)"
     response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload"
     # Remove server fingerprinting header
     if "server" in response.headers:
