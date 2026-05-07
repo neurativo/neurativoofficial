@@ -1797,7 +1797,8 @@ def admin_adjust_credits(
         new_balance = max(0, current + amount)
         delta = new_balance - current
 
-    db.table("profiles").upsert({"id": user_id, "credits": new_balance}).execute()
+    # Use update+eq to avoid sending Clerk user ID in JSON body (avoids UUID cast error)
+    db.table("profiles").update({"credits": new_balance}).eq("id", user_id).execute()
 
     if delta != 0:
         db.table("credit_transactions").insert({
@@ -1824,12 +1825,12 @@ def admin_set_credits_subscription(
     db = _fresh_db()
     if not db:
         raise RuntimeError("Supabase not configured")
-    update = {
-        "id": user_id,
+    payload = {
         "credits_sub_status": status,
         "credits_sub_expires": expires_at,
     }
     if status != "none":
-        update["credits_sub_started"] = datetime.now(timezone.utc).isoformat()
-    db.table("profiles").upsert(update).execute()
+        payload["credits_sub_started"] = datetime.now(timezone.utc).isoformat()
+    # Use update+eq to avoid sending Clerk user ID in JSON body (avoids UUID cast error)
+    db.table("profiles").update(payload).eq("id", user_id).execute()
     return {"credits_sub_status": status, "credits_sub_expires": expires_at}

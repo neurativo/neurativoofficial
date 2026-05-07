@@ -77,10 +77,10 @@ def get_credit_balance(user_id: str) -> dict:
 
     row = resp.data[0]
     expires = row.get("credits_sub_expires")
+    # expires=None means indefinite (no expiry set by admin) — still active
     sub_active = (
         row.get("credits_sub_status") == "monthly"
-        and expires is not None
-        and expires > _now()
+        and (expires is None or expires > _now())
     )
     return {
         "credits": row.get("credits", 0),
