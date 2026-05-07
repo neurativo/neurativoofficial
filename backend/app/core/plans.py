@@ -38,7 +38,7 @@ PLAN_LIMITS = {
         # $19/month — target margin: ~55% at average usage
         "live_lectures_per_month":     None,    # unlimited count
         "live_max_duration_seconds":   10800,   # 3 hours per lecture
-        "uploads_per_month":           20,
+        "uploads_per_month":           None,    # unlimited count — credits already govern cost
         "upload_max_duration_seconds": 10800,   # 3 hours per file
         "upload_max_bytes":            2 * 1024 * 1024 * 1024,  # 2 GB
         "total_minutes_per_month":     1500,    # 25 hrs hard ceiling — worst-case Whisper: $9.00 (~= $9.99 revenue; credits run out first at 15 lectures)

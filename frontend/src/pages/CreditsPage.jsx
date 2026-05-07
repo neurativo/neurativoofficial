@@ -322,7 +322,7 @@ export default function CreditsPage() {
                         <div className="cr-pack-tag">Power pack</div>
                         <div className="cr-pack-credits">{products.pro_pack?.credits ?? 60} <span>credits</span></div>
                         <div className="cr-pack-price">${products.pro_pack?.price_usd?.toFixed(2) ?? '19.99'}</div>
-                        <div className="cr-pack-desc">Rs. 6,100 &middot; $0.33 each &middot; best rate.</div>
+                        <div className="cr-pack-desc">Rs. 6,700 &middot; $0.37 each &middot; best rate.</div>
                         <button
                             className="cr-pack-btn cr-pack-btn-outline"
                             onClick={() => handleBuy('pro_pack')}

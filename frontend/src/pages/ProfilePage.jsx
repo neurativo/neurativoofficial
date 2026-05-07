@@ -266,7 +266,7 @@ const PLANS = [
         name: 'Student',
         price: '$9.99',
         period: '/mo',
-        features: ['15 credits/month included', 'Unlimited live · 3 hrs max', '20 imports/month · 3 hrs max', 'Full summary · PDF · Q&A · Sharing'],
+        features: ['15 credits/month included', 'Unlimited live · 3 hrs max', 'Unlimited imports · 3 hrs max', 'Full summary · PDF · Q&A · Sharing'],
     },
     {
         key: 'pro',

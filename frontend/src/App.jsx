@@ -178,7 +178,7 @@ function App({ user }) {
     const [maxDurationSeconds, setMaxDurationSeconds] = useState(null);
     const [isUnlimitedDuration, setIsUnlimitedDuration] = useState(true);
     const [planTier, setPlanTier]                     = useState('free');
-    const [limitModal, setLimitModal]                 = useState({ show: false, reason: '', plan: '', limit: 0, limitLabel: '', resetsAt: '' });
+    const [limitModal, setLimitModal]                 = useState({ show: false, reason: '', plan: '', limit: 0, limitLabel: '', resetsAt: '', credits: 0, required: 1 });
 
     // ── Visual Lecture Intelligence (screen capture) ──────
     const [screenShareActive, setScreenShareActive]   = useState(false);
@@ -665,12 +665,15 @@ function App({ user }) {
             startSummaryPoll(res.data.lecture_id);
             startRecording(res.data.lecture_id);
         } catch (err) {
-            if (err?.response?.status === 403 && err?.response?.data?.detail?.error === 'live_limit_reached') {
+            if (err?.response?.status === 402) {
+                const d = err.response.data?.detail || {};
+                setLimitModal({ show: true, reason: 'no_credits', plan: '', limit: 0, limitLabel: '', resetsAt: '', credits: d.credits ?? 0, required: d.required ?? 1 });
+            } else if (err?.response?.status === 403 && err?.response?.data?.detail?.error === 'live_limit_reached') {
                 const d = err.response.data.detail;
                 const resetDate = d.resets_at
                     ? new Date(d.resets_at).toLocaleDateString(undefined, { month: 'long', day: 'numeric' })
                     : 'next month';
-                setLimitModal({ show: true, reason: 'monthly', plan: d.plan, limit: d.limit, limitLabel: '', resetsAt: resetDate });
+                setLimitModal({ show: true, reason: 'monthly', plan: d.plan, limit: d.limit, limitLabel: '', resetsAt: resetDate, credits: 0, required: 1 });
             } else {
                 const detail = err?.response?.data?.detail || err?.message || 'Unknown error';
                 showError(`Failed to start session: ${detail}`, 0);
@@ -2589,7 +2592,30 @@ function App({ user }) {
                             </div>
                         </div>
 
-                        {limitModal.reason === 'duration' ? (
+                        {limitModal.reason === 'no_credits' ? (
+                            <>
+                                <h3 className="text-[17px] font-bold text-[#1a1a1a] mb-1 font-heading text-center">Out of credits</h3>
+                                <p className="text-[#a3a3a3] text-sm text-center mb-2 leading-relaxed">
+                                    {limitModal.required > 1
+                                        ? <>This lecture needs <strong className="text-[#1a1a1a]">{limitModal.required} credits</strong> based on its length. You have <strong className="text-[#1a1a1a]">{limitModal.credits}</strong>.</>
+                                        : <>You need at least <strong className="text-[#1a1a1a]">1 credit</strong> to start. You currently have <strong className="text-[#1a1a1a]">0</strong>.</>
+                                    }
+                                </p>
+                                <p className="text-[#a3a3a3] text-[11px] text-center mb-5">1 credit = up to 30 min of lecture · 4-hr lecture = 8 credits</p>
+                                <div className="flex flex-col gap-2">
+                                    <button
+                                        onClick={() => { setLimitModal(p => ({ ...p, show: false })); navigate('/credits'); }}
+                                        className="w-full py-2.5 bg-[#1a1a1a] text-[#fafaf9] text-sm font-semibold rounded-xl hover:opacity-80 transition-opacity">
+                                        Buy credits →
+                                    </button>
+                                    <button
+                                        onClick={() => setLimitModal(p => ({ ...p, show: false }))}
+                                        className="w-full py-2.5 border border-[#f0ede8] text-[#6b6b6b] text-sm rounded-xl hover:text-[#1a1a1a] transition-colors">
+                                        Cancel
+                                    </button>
+                                </div>
+                            </>
+                        ) : limitModal.reason === 'duration' ? (
                             <>
                                 <h3 className="text-[17px] font-bold text-[#1a1a1a] mb-1 font-heading text-center">Session ended</h3>
                                 <p className="text-[#a3a3a3] text-sm text-center mb-6 leading-relaxed">

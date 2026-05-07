@@ -56,6 +56,19 @@ const CSS = `
   /* Error */
   .im-error { font-size: 12px; color: #ef4444; margin-top: 10px; background: #fff5f5; border: 1px solid #fecaca; border-radius: 8px; padding: 8px 12px; }
 
+  /* No-credits inline card */
+  .im-no-credits { margin-top: 12px; background: #fefce8; border: 1px solid #fde68a; border-radius: 12px; padding: 14px 16px; }
+  .im-no-credits-title { font-size: 13px; font-weight: 600; color: #92400e; margin: 0 0 4px; }
+  .im-no-credits-body { font-size: 12px; color: #78350f; margin: 0 0 10px; line-height: 1.5; }
+  .im-no-credits-hint { font-size: 11px; color: #a16207; margin: 0 0 10px; }
+  .im-no-credits-btn { display: inline-block; padding: 7px 14px; background: #d97706; color: #fff; font-size: 12px; font-weight: 600; border: none; border-radius: 8px; cursor: pointer; font-family: 'Inter', sans-serif; transition: opacity 0.15s; }
+  .im-no-credits-btn:hover { opacity: 0.85; }
+  .dark .im-no-credits { background: rgba(253,230,138,0.08); border-color: rgba(253,230,138,0.25); }
+  .dark .im-no-credits-title { color: #fbbf24; }
+  .dark .im-no-credits-body { color: #fcd34d; }
+  .dark .im-no-credits-hint { color: #f59e0b; }
+  .dark .im-no-credits-btn { background: #b45309; }
+
   /* Footer */
   .im-footer { display: flex; gap: 8px; margin-top: 20px; }
   .im-btn-cancel { flex: 1; padding: 10px; background: ${C.bg}; color: ${C.text}; font-size: 13px; border: 1px solid ${C.border}; border-radius: 10px; cursor: pointer; font-family: inherit; transition: border-color 0.15s; }
@@ -201,7 +214,11 @@ export default function ImportModal({ onClose }) {
             const status = err?.response?.status;
             const detail = err?.response?.data?.detail;
             let msg;
-            if (status === 403 && detail?.error === 'upload_limit_reached') {
+            if (status === 402) {
+                const required = detail?.required ?? 1;
+                const have     = detail?.credits  ?? 0;
+                msg = `__no_credits__:${required}:${have}`;
+            } else if (status === 403 && detail?.error === 'upload_limit_reached') {
                 const resetDate = detail.resets_at
                     ? new Date(detail.resets_at).toLocaleDateString(undefined, { month: 'long', day: 'numeric' })
                     : 'next month';
@@ -326,8 +343,31 @@ export default function ImportModal({ onClose }) {
                             </div>
                         )}
 
-                        {/* Error */}
-                        {error && <div className="im-error">{error}</div>}
+                        {/* Error / no-credits */}
+                        {error && (() => {
+                            if (error.startsWith('__no_credits__:')) {
+                                const [, req, have] = error.split(':');
+                                const required = Number(req);
+                                const credits  = Number(have);
+                                return (
+                                    <div className="im-no-credits">
+                                        <p className="im-no-credits-title">Not enough credits</p>
+                                        <p className="im-no-credits-body">
+                                            This import needs <strong>{required} credit{required !== 1 ? 's' : ''}</strong>.
+                                            You have <strong>{credits}</strong>.
+                                        </p>
+                                        <p className="im-no-credits-hint">1 credit = up to 30 min · 2-hr lecture = 4 credits</p>
+                                        <button
+                                            className="im-no-credits-btn"
+                                            onClick={() => { onClose(); navigate('/credits'); }}
+                                        >
+                                            Buy credits →
+                                        </button>
+                                    </div>
+                                );
+                            }
+                            return <div className="im-error">{error}</div>;
+                        })()}
 
                         {/* Footer */}
                         <div className="im-footer">

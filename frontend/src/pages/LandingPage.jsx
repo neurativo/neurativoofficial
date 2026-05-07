@@ -1174,7 +1174,7 @@ function Pricing() {
                     <ul className="lp-plan-items">
                         <PlanItem text="15 credits / month included" />
                         <PlanItem text="Unlimited live sessions · 3 hrs max" />
-                        <PlanItem text="20 imports / month · 3 hrs max" />
+                        <PlanItem text="Unlimited imports · 3 hrs max/file" />
                         <PlanItem text="25 hours / month total" />
                         <PlanItem text="Full AI summary · all sections" />
                         <PlanItem text="PDF report export" />
@@ -1237,8 +1237,8 @@ function Pricing() {
                     <div className="lp-credit-pack">
                         <div className="lp-credit-pack-label">Power pack</div>
                         <div className="lp-credit-pack-credits">60 credits</div>
-                        <div className="lp-credit-pack-price">$19.99</div>
-                        <div className="lp-credit-pack-per">Rs. 6,100 · $0.33 each</div>
+                        <div className="lp-credit-pack-price">$21.99</div>
+                        <div className="lp-credit-pack-per">Rs. 6,700 · $0.37 each</div>
                     </div>
                 </div>
             </div>

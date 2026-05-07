@@ -16,7 +16,7 @@ PRODUCTS = {
     # 1 credit = 1 lecture processed. Cost ~$0.22/lecture → target 55%+ gross margin.
     "small_pack":  {"credits": 10,  "price_usd": 4.99,  "label": "Starter",    "per_credit": 0.50},
     "large_pack":  {"credits": 30,  "price_usd": 11.99, "label": "Best value", "per_credit": 0.40},
-    "pro_pack":    {"credits": 60,  "price_usd": 19.99, "label": "Power pack", "per_credit": 0.33},
+    "pro_pack":    {"credits": 60,  "price_usd": 21.99, "label": "Power pack", "per_credit": 0.37},
 }
 
 # Subscription plan monthly credit grants
