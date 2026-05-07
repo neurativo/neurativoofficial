@@ -1,7 +1,8 @@
 ================================================================================
 NEURATIVO — PRICING & COST ANALYSIS
 ================================================================================
-Generated: 2026-05-07
+Generated: 2026-05-07  (last updated: 2026-05-07 — Power Pack $21.99, Student
+           upload cap removed, out-of-credits UX implemented)
 Currency: USD unless stated
 
 
@@ -74,10 +75,16 @@ B. PDF EXPORT COST (per export, on-demand — NOT included in per-minute cost ab
   KEY FINDING: PDF export costs ~$0.019–0.026 per export regardless of lecture length.
   The cost is dominated by the two fixed GPT-4o calls (~$0.015), not by section count.
   Switching conceptual_map and study_roadmap to gpt-4o-mini would cut PDF cost by ~75%
-  to ~$0.005 per export, at some quality trade-off.
+  to ~$0.005 per export, at some quality trade-off (lever available but not pulled yet).
 
   NOTE: PDF export is triggered on-demand by the user (not automatic after every lecture).
   Average users export a fraction of their lectures. Worst-case assumes 100% export rate.
+
+  FREE TIER PDF (quality='free' — watermarked preview):
+    Skips ALL GPT calls. Playwright renders first 2 sections only.
+    Cost: ~$0.00 per export (no API calls, just browser rendering).
+    Output: 2-section PDF with purple pill badge "Neurativo Free — upgrade for the full report".
+    Purpose: organic conversion tool. Free user shares PDF → others see Neurativo branding.
 
 
 C. TOTAL COST PER LECTURE (processing + worst-case PDF)
@@ -94,9 +101,9 @@ C. TOTAL COST PER LECTURE (processing + worst-case PDF)
   └─────────────────┴──────────────────┴──────────────┴──────────────────────┘
 
   PDF adds ≤ $0.026 per lecture (≤10% overhead on processing cost).
-  For credit pricing: the credit cost per lecture already has 37%+ floor margin.
-  PDF overhead reduces that margin by ~3-5 percentage points at most, and only
-  if the user exports every lecture. See updated margin table in section 5.
+  For credit pricing: the credit cost per lecture already has 42.8% floor margin
+  (Power Pack $21.99). PDF overhead reduces that margin by ~5–6 percentage points at
+  most, and only if the user exports every lecture. See updated margin table in section 5.
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -105,13 +112,13 @@ C. TOTAL COST PER LECTURE (processing + worst-case PDF)
 
 Credit formula: ceil(minutes / 30) credits per lecture
   → 1 credit covers up to 30 minutes of processing
-  → GUARANTEED floor margin: 37% at cheapest pack price
+  → GUARANTEED floor margin: 42.8% at cheapest pack price (Power Pack $21.99)
 
   Pack            Credits  Price    Per-credit  Floor margin  Max cost/cr  Profit/cr
   ─────────────────────────────────────────────────────────────────────────────────
-  Starter          10 cr   $4.99    $0.499      57.8%         $0.21        $0.289
+  Starter          10 cr   $4.99    $0.499      57.9%         $0.21        $0.289
   Best Value       30 cr   $11.99   $0.400      47.5%         $0.21        $0.190
-  Power Pack       60 cr   $19.99   $0.333      37.0%         $0.21        $0.123
+  Power Pack       60 cr   $21.99   $0.367      42.8%         $0.21        $0.157
   ─────────────────────────────────────────────────────────────────────────────────
 
   "Max cost/credit" = cost of a full 30-min block = $0.21 (worst case per credit).
@@ -119,26 +126,26 @@ Credit formula: ceil(minutes / 30) credits per lecture
 
   Key insight: The per-credit cost IMPROVES if a lecture doesn't fill exactly 30 mins.
   Example: 20-min lecture still costs 1 credit but only uses 20 × $0.007 = $0.14.
-  So $0.333/cr vs $0.14 cost = 58% margin on a short lecture.
+  So $0.367/cr vs $0.14 cost = 61.8% margin on a short lecture.
 
   CREDIT DEDUCTION TABLE (ceil(min/30)):
     Duration      Credits  AI Cost  Revenue*  Margin*
     ──────────────────────────────────────────────────
-    1–30 min       1 cr    $0.21    $0.333    37.0%
-    31–60 min      2 cr    $0.42    $0.666    37.0%
-    61–90 min      3 cr    $0.63    $0.999    37.0%
-    91–120 min     4 cr    $0.84    $1.332    37.0%
-    121–150 min    5 cr    $1.05    $1.665    37.0%
-    151–180 min    6 cr    $1.26    $1.998    37.0%
-    181–210 min    7 cr    $1.47    $2.331    37.0%
-    211–240 min    8 cr    $1.68    $2.664    37.0%
+    1–30 min       1 cr    $0.21    $0.367    42.8%
+    31–60 min      2 cr    $0.42    $0.734    42.8%
+    61–90 min      3 cr    $0.63    $1.101    42.8%
+    91–120 min     4 cr    $0.84    $1.468    42.8%
+    121–150 min    5 cr    $1.05    $1.835    42.8%
+    151–180 min    6 cr    $1.26    $2.202    42.8%
+    181–210 min    7 cr    $1.47    $2.569    42.8%
+    211–240 min    8 cr    $1.68    $2.936    42.8%
     ──────────────────────────────────────────────────
-    * Revenue and margin calculated at cheapest pack ($0.333/cr) — the floor case.
+    * Revenue and margin calculated at cheapest pack ($0.367/cr) — the floor case.
       Actual margin is higher for Starter and Best Value packs.
 
   NOTE: The old 45-min tier system had a 5.4% floor margin at the power pack price.
   (45 min × $0.007 = $0.315 cost vs $0.333 revenue = only $0.018 profit per credit.)
-  The new ceil(min/30) formula guarantees a 37% floor margin instead.
+  The new ceil(min/30) formula guarantees a 42.8% floor margin at Power Pack pricing.
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -151,32 +158,33 @@ FREE PLAN — $0.00/month
   Live session cap:     30 min per session
   Upload cap:           60 min per file
   Monthly time ceiling: 150 min (2.5 hrs)
-  Features:             2-section summary; watermarked PDF preview (first 2 sections only);
-                        no Q&A, no sharing, no full summary
+  Features:             2-section summary; watermarked PDF preview (first 2 sections only,
+                        Playwright-only — no GPT calls); no Q&A, no sharing, no full summary
 
-  PDF cost (watermarked):  per export ~$0.018 (no GPT enrichment, 2 sections only)
-                           No section enrichment calls → near-zero variable cost.
-                           Fixed cost: conceptual_map + study_roadmap = ~$0.015 — SKIPPED
-                           for free tier (lite path = no GPT at all). Actual PDF cost ~$0.00
-                           (Playwright render only, no GPT calls in lite mode).
+  PDF cost (watermarked):  ~$0.00 per export.
+                           Free-tier PDF skips ALL GPT enrichment calls.
+                           Playwright renders a 2-section HTML template only.
+                           Footer pill reads: "Neurativo Free — upgrade for the full report"
   Worst-case cost: 5 credits × $0.21 = $1.05 (acquisition cost — paid once)
   Revenue:         $0.00
   MARGIN:          -$1.05 one-time (customer acquisition cost)
 
   RATIONALE FOR FREE PDF: The watermarked 2-section PDF is the product's "wow moment."
   A free user who exports and shares their PDF becomes a walking advertisement.
-  "Neurativo Free — upgrade for the full report" on every page drives organic conversions.
   The PDF itself costs ~$0.00 to generate (lite path skips all GPT calls — Playwright only).
   The cost of NOT showing the PDF is far higher (lower conversion, lower word of mouth).
+  This is the single highest-leverage conversion tool in the product at zero marginal cost.
 
 
 STUDENT PLAN — $9.99/month
 ──────────────────────────
   Credits/month:         15 (auto-granted on each monthly refresh)
   Live session cap:      3 hours per session
-  Upload cap:            3 hours per file, 20 imports/month
+  Upload cap:            3 hours per file; no import count limit
+                         (upload count cap removed — credits already gate cost; a count cap
+                          created user confusion without adding meaningful protection)
   Monthly time ceiling:  1,500 min (25 hrs) — hard safety cap
-  Features:              All core features (PDF, Q&A, sharing, etc.)
+  Features:              All core features (full PDF, Q&A, sharing, etc.)
 
   HOW CREDITS GATE COST:
     Credits are the primary cost control. Without credits, no lecture processes.
@@ -208,6 +216,7 @@ STUDENT PLAN — $9.99/month
 
   CONCLUSION: Student plan is ALWAYS profitable under normal operation.
   The 25-hr cap is a security backstop, not expected to be hit under honest usage.
+  Removing the 20-import/month cap has no margin impact — credits are the real gate.
 
 
 PRO PLAN — $19.99/month
@@ -233,17 +242,16 @@ PRO PLAN — $19.99/month
     Scenario B — 4-hr lectures (8 credits each):
       3 lectures × 240 min = 720 min; 24 credits used; cost $5.04; revenue $19.99
       After 3 lectures: 6 credits left → can do 6 more 30-min lectures.
-      Total 4 × 240 min = 960 min (16 hrs in 4-hr sessions), plus shorter ones.
       HITS CREDIT WALL at ~3.75 four-hour lectures (30 ÷ 8 = 3.75).
       Must buy credits to continue.
 
     Scenario C — Hitting the 40-hr cap (worst worst case):
       40 hrs = 2,400 min. 10 × 4-hr lectures = 80 credits needed.
       Plan gives 30 credits → user must buy 50 more credits.
-      Extra credit purchase (power pack, 60 cr @ $19.99): +$19.99 spend.
-      Our total revenue: $19.99 + $19.99 = $39.98
+      Extra credit purchase (Power Pack, 60 cr @ $21.99): +$21.99 spend.
+      Our total revenue: $19.99 + $21.99 = $41.98
       Our total cost: 2,400 min × $0.007 = $16.80
-      Profit: $23.18  →  Margin: 58.1%  ← STRONG PROFIT even in this scenario
+      Profit: $25.18  →  Margin: 59.9%  ← STRONG PROFIT even in this scenario
 
     THE 40-HR CAP SCENARIO (credits bypassed — edge case):
       If 2,400 min processed without credits:
@@ -277,15 +285,15 @@ User behavior: 4-hour lecture every day, 5 days/week, 4 weeks/month
 
   COST BREAKDOWN:
     Our API cost: 10 × 240 min × $0.007 = $16.80
-    Their spend:  $19.99 (plan) + 1 power pack $19.99 (60 cr) = $39.98
-    Our profit:   $39.98 - $16.80 = $23.18  (58% margin)
+    Their spend:  $19.99 (plan) + 1 Power Pack $21.99 (60 cr) = $41.98
+    Our profit:   $41.98 - $16.80 = $25.18  (59.9% margin)
 
   COMPARISON: Can this user do 20 lectures (80 hrs)?
     No. The 40-hr/month ceiling stops them at 10 sessions.
     They cannot buy their way past the time ceiling — it is enforced by plan limits.
     This is intentional: the time cap protects server capacity and prevents abuse.
 
-  RESULT: Even the most aggressive realistic Pro user generates $23.18/month profit.
+  RESULT: Even the most aggressive realistic Pro user generates $25.18/month profit.
 
 
   STUDENT USER: 4-hr lectures every day (same scenario)
@@ -311,33 +319,34 @@ User behavior: 4-hour lecture every day, 5 days/week, 4 weeks/month
 
   Plan/Scenario                          Revenue  Process   PDF†    Total    Margin
   ────────────────────────────────────────────────────────────────────────────────
-  Free (5 starter creds, worst case)     $0.00    $1.05     $0.10   $1.15    N/A
+  Free (5 starter creds, worst case)     $0.00    $1.05     $0.00   $1.05    N/A
   Student — average (8 × 60-min)         $9.99    $3.36     $0.16   $3.52    64.8%
   Student — worst case (15 × 30-min)     $9.99    $3.15     $0.30   $3.45    65.5%
   Student — credit bypass + cap hit      $9.99    $10.50    $0.30   $10.80   LOSS*
   Pro — average (15 × 60-min)            $19.99   $6.30     $0.30   $6.60    67.0%
   Pro — worst case (30 credits)          $19.99   $6.30     $0.60   $6.90    65.5%
-  Pro — aggressive (cap hit + 1 pack)    $39.98   $16.80    $0.26   $17.06   57.3%
-  Pack purchase (Power, 60 cr)           $19.99   $12.60‡   $1.20   $13.80   31.0%
+  Pro — aggressive (cap hit + 1 pack)    $41.98   $16.80    $0.26   $17.06   59.3%
+  Pack purchase (Power, 60 cr @ $21.99)  $21.99   $12.60‡   $1.20   $13.80   37.2%
   Pack purchase (Best Value, 30 cr)      $11.99   $6.30‡    $0.60   $6.90    42.5%
   Pack purchase (Starter, 10 cr)         $4.99    $2.10‡    $0.20   $2.30    53.9%
   ────────────────────────────────────────────────────────────────────────────────
   * Only possible if credit check is bypassed (bug). Time cap is last resort.
-  † PDF cost assumes every lecture exported (100% rate, $0.020 avg per export).
+  † PDF cost for Free plan = $0.00 (free-tier uses Playwright-only lite path, no GPT).
+    For all other plans, assumes every lecture exported at $0.020 avg.
   ‡ Processing cost assumes all credits used at max $0.21/credit (30-min lectures).
 
-  PACK MARGINS WITH PDF — IMPORTANT NOTE:
-  If all 60 Power Pack credits are exported as PDFs, margin falls to 31%.
-  At 50% export rate (30 PDFs): cost = $12.60 + $0.60 = $13.20, margin = 34%.
-  At 0% export rate: cost = $12.60, margin = 37%.
-  The PDF export does erode pack margins at high export rates.
-  Mitigation: limit PDF exports per pack purchase if needed, or price packs slightly higher.
+  PACK MARGINS WITH PDF — POWER PACK ($21.99):
+    At 100% export rate (60 PDFs): cost = $12.60 + $1.20 = $13.80, margin = 37.2%
+    At  50% export rate (30 PDFs): cost = $12.60 + $0.60 = $13.20, margin = 40.0%
+    At   0% export rate:           cost = $12.60,           margin = 42.7%
+    FIX APPLIED: Power Pack price raised from $19.99 → $21.99 to restore 37%+ floor
+    even at 100% PDF export rate. At $19.99 the 100% export floor was 31% (too thin).
 
   CURRENT MINIMUM GUARANTEED MARGINS:
-    - Credit packs (no PDF):    37.0% floor
-    - Credit packs (100% PDF):  31.0% floor  ← NEW — slightly below comfort zone
+    - Credit packs (no PDF):    42.7% floor  (Power Pack $21.99)
+    - Credit packs (100% PDF):  37.2% floor  (Power Pack $21.99)  ← FIXED
     - Subscription plans:       65.5% floor  (processing + PDF, no bypass)
-    - Any plan + pack:          31.0% absolute floor (all worst cases combined)
+    - Any plan + pack:          37.2% absolute floor (all worst cases combined)
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -349,18 +358,20 @@ User behavior: 4-hour lecture every day, 5 days/week, 4 weeks/month
     upload_max_duration_seconds: 3,600  (60 min)
     total_minutes_per_month:       150  (2.5 hrs)
     Starter credits: 5 (one-time)
+    pdf_export: True — watermarked 2-section preview, no GPT calls, ~$0.00 cost
 
   Student:
     live_max_duration_seconds:  10,800  (3 hrs)
     upload_max_duration_seconds:10,800  (3 hrs)
-    uploads_per_month:              20
+    uploads_per_month:            None  (unlimited — removed; credits already gate cost.
+                                         A count cap was redundant and caused user confusion.)
     total_minutes_per_month:     1,500  (25 hrs)
     Plan credits/month: 15
 
   Pro:
     live_max_duration_seconds:  14,400  (4 hrs)
     upload_max_duration_seconds:14,400  (4 hrs)
-    uploads_per_month:           None  (unlimited)
+    uploads_per_month:            None  (unlimited)
     total_minutes_per_month:     2,400  (40 hrs)
     Plan credits/month: 30
 
@@ -382,6 +393,9 @@ User behavior: 4-hour lecture every day, 5 days/week, 4 weeks/month
 
      Remaining gap: CAPTCHA on signup (handled by Clerk config, not code).
      Add Clerk's Bot Protection in the Clerk dashboard for full coverage.
+
+     MANUAL ACTION REQUIRED: Run migration in Supabase SQL editor before launch:
+       backend/migrations/005_starter_grant_unique.sql
 
   2. IP-BASED RATE LIMITING BYPASS [FIXED]
      Risk: X-Forwarded-For header can be spoofed to bypass per-IP rate limits.
@@ -406,7 +420,49 @@ User behavior: 4-hour lecture every day, 5 days/week, 4 weeks/month
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-8. CUSTOMER VALUE PERSPECTIVE
+8. OUT-OF-CREDITS UX (HTTP 402 handling — implemented)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  The "out of credits" moment mid-month is the single highest-conversion touchpoint.
+  A user who just ran out of credits has already seen value and wants more. Showing a
+  generic error throws that moment away. We show a purpose-built conversion UI instead.
+
+  BACKEND (endpoints.py):
+    When credit check fails, returns HTTP 402 with:
+      { "error": "no_credits", "credits": <balance>, "required": <needed> }
+    This applies to: POST /live/start, POST /transcribe, POST /ask, POST /explain
+
+  FRONTEND — Live session (App.jsx):
+    402 on live/start → dedicated "Out of credits" modal (not a generic error banner).
+    Shows:
+      - "Out of credits" heading
+      - "This lecture needs N credits. You have M."
+      - "1 credit = up to 30 min · 4-hr lecture = 8 credits" hint
+      - "Buy credits →" button  → navigates to /credits page
+      - "Cancel" button
+    Context: user was about to start a live session. The modal keeps them on the page
+    and routes them directly to purchase instead of losing them to a dead end.
+
+  FRONTEND — Import modal (ImportModal.jsx):
+    402 on /transcribe → inline amber "Not enough credits" card inside the modal.
+    Shows:
+      - "Not enough credits" heading (amber color scheme — attention, not error red)
+      - "This import needs N credits. You have M."
+      - "1 credit = up to 30 min · 2-hr lecture = 4 credits" hint
+      - "Buy credits →" button → closes modal, navigates to /credits
+    Context: user had already selected a file. The card appears inside the existing
+    modal so they see their file is still there if they come back after buying credits.
+    Amber (warning) rather than red (error) — "you need more" not "something broke."
+
+  WHY THIS MATTERS FOR REVENUE:
+    Users who hit the credit wall are your highest-intent buyers.
+    Generic error: most users give up and leave.
+    Purpose-built UX: direct path to /credits page with context ("you need N credits")
+    = measurably higher conversion at zero additional cost.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+9. CUSTOMER VALUE PERSPECTIVE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   Is this fair to customers?
@@ -415,21 +471,27 @@ User behavior: 4-hour lecture every day, 5 days/week, 4 weeks/month
     Gets 15 credits = at least 15 lectures (≤30 min each) or fewer longer ones.
     At 1-hr lectures: 7 lectures/month = 7 hrs of AI-assisted study.
     Compared to buying credits separately: 15 cr at $0.499/cr = $7.49 value.
-    Plus unlimited sessions (within credit limit), PDF export, Q&A, sharing.
+    Plus unlimited sessions (within credit limit), full PDF export, Q&A, sharing.
     Equivalent commercial AI tools: $20-40/month. We're at $9.99. FAIR.
 
   Pro ($19.99/month):
     Gets 30 credits + 4-hr session cap + 40-hr/month ceiling.
-    Heavy user buying 80 credits/month separately: 2 × 60cr power packs = $39.98.
-    With Pro plan: $19.99 plan gives 30 credits, then 1 power pack ($19.99) for 50 more = $39.98 total.
-    Same cost, but Pro plan also unlocks all premium features.
+    Heavy user buying 80 credits/month separately: 2 × 60cr power packs = $43.98.
+    With Pro plan: $19.99 plan gives 30 credits, then 1 Power Pack ($21.99) for 60 more.
+    Total: $41.98. Same or less than pure credit purchases, plus all premium features.
     FAIR — customer pays same or less than pure credit purchases.
 
   Credits (pay-per-lecture):
     No subscription, no commitment.
-    Power pack: 60 lectures for $19.99 = $0.33/lecture.
+    Power Pack: 60 lectures for $21.99 = $0.37/lecture.
     Compare: Otter.ai, Fireflies.ai charge $8-18/month for just transcription.
     We offer full AI analysis (summary, Q&A, PDF, sharing) per lecture. FAIR.
+
+  Free (starter):
+    5 credits → 5 lectures (30 min each) or 1-2 longer ones.
+    Gets full live recording, transcription, summary, Smart Explain, watermarked PDF.
+    No credit card required. Zero risk for the user.
+    Cost to us: $1.05. Worth it if even 5% convert to paid.
 
 ================================================================================
 END OF ANALYSIS
