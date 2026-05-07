@@ -1216,7 +1216,8 @@ function Pricing() {
                     <div style={{ width: 36, height: 36, borderRadius: 9, background: '#f5f3ff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 16 }}>⚡</div>
                     <div>
                         <div style={{ fontSize: 14, fontWeight: 600, color: '#1a1a1a' }}>Pay-per-lecture credits</div>
-                        <div style={{ fontSize: 12, color: '#888' }}>No subscription needed · 1 credit = 1 lecture · never expire</div>
+                        <div style={{ fontSize: 12, color: '#888' }}>No subscription needed · credits scale with duration · never expire</div>
+                        <div style={{ fontSize: 11, color: '#b0aca6', marginTop: 3 }}>≤45 min = 1 credit · 45–90 min = 2 · 90–135 min = 3 · 135–180 min = 4 · 180+ min = 5</div>
                     </div>
                 </div>
                 <div className="lp-credits-grid">

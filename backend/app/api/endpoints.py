@@ -26,7 +26,7 @@ from app.services.summarization_service import (
 from app.services.recompute_service import recompute_final_summary
 from app.services.embedding_service import get_embeddings, cosine_similarity
 from app.services.cif_service import classify_chunk
-from app.services.credits_service import check_credits, deduct_credit, mark_credit_deducted, refund_credit
+from app.services.credits_service import check_credits, deduct_credit, mark_credit_deducted, refund_credit, credits_for_duration
 from app.services.audio_service import compress, split_for_whisper
 from app.services.transcript_cleaner import clean as clean_transcript
 from app.services.content_generator import generate as generate_content, WHISPER_MODEL
@@ -442,9 +442,11 @@ async def _process_from_transcript(
         set_summary_status(lecture_id, "final")
         await _asyncio.to_thread(update_job_status, lecture_id, "done")
 
-        # Deduct 1 credit — only on success
+        # Deduct credits scaled by lecture duration — only on success
         try:
-            deduct_credit(user_id, lecture_id)
+            lec_data = get_lecture_for_summarization(lecture_id)
+            dur_secs = (lec_data or {}).get("total_duration_seconds") or 0
+            deduct_credit(user_id, lecture_id, duration_seconds=dur_secs)
             mark_credit_deducted(lecture_id)
         except Exception as e:
             print(f"[pipeline] credit deduction failed (non-fatal): {e}")
@@ -1222,9 +1224,11 @@ def end_session_endpoint(lecture_id: str, background_tasks: BackgroundTasks, use
         set_summary_status(lecture_id, "recomputing")
         background_tasks.add_task(recompute_final_summary, lecture_id)
 
-        # Deduct 1 credit for the completed live session
+        # Deduct credits scaled by live session duration
         try:
-            deduct_credit(str(user.id), lecture_id)
+            lec_live = get_lecture_for_summarization(lecture_id)
+            live_dur = (lec_live or {}).get("total_duration_seconds") or 0
+            deduct_credit(str(user.id), lecture_id, duration_seconds=live_dur)
             mark_credit_deducted(lecture_id)
         except Exception as e:
             print(f"[live/end] credit deduction failed (non-fatal): {e}")

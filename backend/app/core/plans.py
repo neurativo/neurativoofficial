@@ -66,7 +66,7 @@ PLAN_LIMITS = {
         "uploads_per_month":           None,    # unlimited
         "upload_max_duration_seconds": None,    # unlimited per file
         "upload_max_bytes":            None,    # unlimited
-        "total_minutes_per_month":     3600,    # 60 hrs hard ceiling — worst-case Whisper: $21.60 (below $19.99 when credits run out first)
+        "total_minutes_per_month":     2400,    # 40 hrs hard ceiling — worst-case API cost: $16.08 vs $19.99 = 20% floor margin
         # Feature flags
         "max_summary_sections":        None,    # all sections
         "pdf_export":                  True,

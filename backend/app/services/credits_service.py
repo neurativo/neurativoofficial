@@ -101,29 +101,56 @@ def get_credit_balance(user_id: str) -> dict:
     }
 
 
-def check_credits(user_id: str) -> None:
+def credits_for_duration(duration_seconds: int) -> int:
     """
-    Raises HTTP 402 if user has 0 credits.
-    Call this before starting any lecture processing.
+    Returns how many credits a lecture costs based on its duration.
+    Keeps margins safe for long sessions (a 4-hr lecture costs ~8× a 30-min one).
+
+    Tiers (each additional 45-min block = 1 more credit):
+        0 – 45 min  → 1 credit
+       45 – 90 min  → 2 credits
+       90 – 135 min → 3 credits
+      135 – 180 min → 4 credits
+      180+ min      → 5 credits  (hard cap — beyond 3 hrs is Pro territory anyway)
+    """
+    minutes = max(1, duration_seconds // 60)
+    if minutes <= 45:
+        return 1
+    elif minutes <= 90:
+        return 2
+    elif minutes <= 135:
+        return 3
+    elif minutes <= 180:
+        return 4
+    else:
+        return 5
+
+
+def check_credits(user_id: str, required: int = 1) -> None:
+    """
+    Raises HTTP 402 if user has fewer credits than required.
+    Pass required=credits_for_duration(seconds) for pre-flight check on long sessions.
     """
     balance = get_credit_balance(user_id)
-    if balance["credits"] <= 0:
+    if balance["credits"] < required:
         raise HTTPException(
             status_code=402,
             detail={
                 "error": "no_credits",
-                "message": "You have no credits. Purchase more to continue.",
-                "credits": 0,
+                "message": f"You need {required} credit(s) for this lecture. Purchase more to continue.",
+                "credits": balance["credits"],
+                "required": required,
             },
         )
 
 
-def deduct_credit(user_id: str, lecture_id: str) -> int:
+def deduct_credit(user_id: str, lecture_id: str, duration_seconds: int = 0) -> int:
     """
-    Atomically deducts 1 credit from user's balance.
-    Uses WHERE credits > 0 as guard against race conditions.
-    Returns new balance, or raises if insufficient credits.
+    Deducts credits proportional to lecture duration (see credits_for_duration).
+    Uses a guarded UPDATE to handle race conditions.
+    Returns new balance, or raises 402 if insufficient.
     """
+    cost = credits_for_duration(duration_seconds)
     db = _fresh_db()
 
     # Fetch current balance
@@ -132,19 +159,18 @@ def deduct_credit(user_id: str, lecture_id: str) -> int:
         raise HTTPException(status_code=402, detail={"error": "no_credits", "credits": 0})
 
     current = resp.data[0]["credits"]
-    if current <= 0:
+    if current < cost:
         raise HTTPException(
             status_code=402,
-            detail={"error": "no_credits", "message": "Insufficient credits.", "credits": 0},
+            detail={"error": "no_credits", "message": f"Insufficient credits (need {cost}, have {current}).", "credits": current},
         )
 
-    new_balance = current - 1
+    new_balance = current - cost
 
-    # Update with guard: only updates if credits still > 0 (race-condition safe)
-    update_resp = db.table("profiles").update({"credits": new_balance}).eq("id", user_id).gt("credits", 0).execute()
+    # Guarded update: only succeeds if balance hasn't dropped below cost since we read it
+    update_resp = db.table("profiles").update({"credits": new_balance}).eq("id", user_id).gte("credits", cost).execute()
 
     if not update_resp.data:
-        # Another request consumed the last credit
         raise HTTPException(
             status_code=402,
             detail={"error": "no_credits", "message": "Insufficient credits.", "credits": 0},
@@ -153,7 +179,7 @@ def deduct_credit(user_id: str, lecture_id: str) -> int:
     _log_transaction(
         db,
         user_id=user_id,
-        amount=-1,
+        amount=-cost,
         balance_after=new_balance,
         reason="lecture_processed",
         lecture_id=lecture_id,
