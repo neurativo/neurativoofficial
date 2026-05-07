@@ -226,6 +226,7 @@ function App({ user }) {
     const sseReconnectRef     = useRef(0);            // SSE reconnect attempt count
     const summaryPollRef      = useRef(null);         // fallback 15s summary poll
     const micStreamRef        = useRef(null);         // active mic stream — stopped on pause/end
+    const tabAudioStreamRef   = useRef(null);         // tab audio stream — kept alive across pause/resume
 
     // ── Screen capture refs ───────────────────────────────
     const screenStreamRef      = useRef(null);
@@ -696,10 +697,21 @@ function App({ user }) {
             audioContextRef.current?.close();
             audioContextRef.current = null;
         }
-        // Explicitly stop mic tracks so browser releases the mic indicator immediately
         if (micStreamRef.current) {
-            micStreamRef.current.getTracks().forEach(t => t.stop());
+            // Tab audio tracks are kept alive in tabAudioStreamRef for pause/resume reuse.
+            // Only stop them when the session fully ends (releaseTabAudio handles that).
+            if (audioSourceRef.current !== 'tab') {
+                micStreamRef.current.getTracks().forEach(t => t.stop());
+            }
             micStreamRef.current = null;
+        }
+    };
+
+    // Fully releases tab audio stream — called on session end, not on pause.
+    const releaseTabAudio = () => {
+        if (tabAudioStreamRef.current) {
+            tabAudioStreamRef.current.getTracks().forEach(t => t.stop());
+            tabAudioStreamRef.current = null;
         }
     };
 
@@ -739,30 +751,54 @@ function App({ user }) {
 
             if (isTabMode) {
                 // ── Tab / online-class audio ────────────────────────────────
-                // getDisplayMedia opens Chrome's share dialog. User selects a tab
-                // and checks "Share tab audio". We stop the video track immediately.
-                const displayStream = await navigator.mediaDevices.getDisplayMedia({
-                    video: { width: 1, height: 1 },  // required by Chrome; stopped right away
-                    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
-                });
-                displayStream.getVideoTracks().forEach(t => t.stop());
-                const audioTracks = displayStream.getAudioTracks();
-                if (audioTracks.length === 0) {
+                if (!navigator.mediaDevices?.getDisplayMedia) {
                     setIsStarting(false);
-                    showError('No audio captured. Make sure to check "Share tab audio" in the dialog.', 6000);
+                    showError('Tab audio capture is not supported on this browser/device. Use Microphone mode instead.', 6000);
                     return;
                 }
-                captureStream = new MediaStream(audioTracks);
+
+                // Reuse existing live tab stream on resume (avoids repeat share dialog)
+                const existingTracks = tabAudioStreamRef.current?.getAudioTracks() || [];
+                const hasLiveTracks = existingTracks.some(t => t.readyState === 'live');
+
+                if (hasLiveTracks) {
+                    captureStream = new MediaStream(existingTracks);
+                } else {
+                    let displayStream;
+                    try {
+                        displayStream = await navigator.mediaDevices.getDisplayMedia({
+                            video: { width: 1, height: 1 },  // required by Chrome; stopped right away
+                            audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+                        });
+                    } catch (e) {
+                        // User cancelled the share dialog or permission denied
+                        setIsStarting(false);
+                        if (e.name !== 'NotAllowedError' && e.name !== 'AbortError') {
+                            showError('Could not access tab audio. Please try again.', 4000);
+                        }
+                        return;
+                    }
+                    displayStream.getVideoTracks().forEach(t => t.stop());
+                    const audioTracks = displayStream.getAudioTracks();
+                    if (audioTracks.length === 0) {
+                        setIsStarting(false);
+                        showError('No audio captured. Make sure to check "Share tab audio" in the dialog.', 6000);
+                        return;
+                    }
+                    tabAudioStreamRef.current = new MediaStream(audioTracks);
+                    captureStream = new MediaStream(audioTracks);
+                    audioTracks.forEach(track => {
+                        track.onended = () => {
+                            if (!isRecordingRef.current) return;
+                            showError('Tab audio ended. Recording paused.', 0);
+                            isRecordingRef.current = false;
+                            setSessionStatus('paused');
+                            stopAudioMonitoring();
+                            tabAudioStreamRef.current = null;
+                        };
+                    });
+                }
                 micStreamRef.current = captureStream;
-                audioTracks.forEach(track => {
-                    track.onended = () => {
-                        if (!isRecordingRef.current) return;
-                        showError('Tab audio ended. Recording paused.', 0);
-                        isRecordingRef.current = false;
-                        setSessionStatus('paused');
-                        stopAudioMonitoring();
-                    };
-                });
             } else {
                 // ── Microphone ─────────────────────────────────────────────
                 captureStream = await navigator.mediaDevices.getUserMedia({
@@ -897,7 +933,9 @@ function App({ user }) {
                 mediaRecorderRef.current = recorder;
                 recorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
                 recorder.onstop = () => {
-                    const isSilent = peakSpeechEnergyRef.current < speechThreshold;
+                    // Tab audio is a clean digital signal — never skip as "silent".
+                    // Mic audio uses energy threshold to skip silent chunks.
+                    const isSilent = !isTabMode && peakSpeechEnergyRef.current < speechThreshold;
                     if (audioChunksRef.current.length > 0 && !isSilent) {
                         silentChunksRef.current = 0;
                         const blobType = recorder.mimeType || supportedMime || 'audio/webm';
@@ -1050,6 +1088,7 @@ function App({ user }) {
 
     const endSession = async () => {
         pauseSession(); // stops worker + releases wake lock
+        releaseTabAudio(); // stop tab audio tracks if active
         disconnectSSE();
         stopSummaryPoll();
         sseReconnectRef.current = 0;
@@ -1821,6 +1860,8 @@ function App({ user }) {
                     </button>
                     {sessionStatus === 'ended' && (
                         <button onClick={() => {
+                                releaseTabAudio();
+                                setAudioSource('mic'); audioSourceRef.current = 'mic';
                                 setSessionStatus('idle');
                                 setLectureId(null);
                                 setTranscript([]);

@@ -1,5 +1,6 @@
 import asyncio
 import httpx
+from collections import Counter
 from openai import OpenAI
 from fastapi import UploadFile, HTTPException
 from app.core.config import settings
@@ -82,7 +83,6 @@ def _is_hallucinated(text: str) -> bool:
     # Word repetition: if the most common word accounts for ≥60% of all words
     words = text.split()
     if len(words) >= 6:
-        from collections import Counter
         top_word_count = Counter(words).most_common(1)[0][1]
         if top_word_count / len(words) >= 0.60:
             return True
@@ -90,7 +90,6 @@ def _is_hallucinated(text: str) -> bool:
     # Phrase/sentence repetition loop: if a 3–5 word N-gram repeats ≥4 times,
     # Whisper is stuck in a loop (e.g. "you have money" × 30).
     if len(words) >= 12:
-        from collections import Counter
         for n in (3, 4, 5):
             if len(words) < n:
                 break
@@ -103,11 +102,12 @@ def _is_hallucinated(text: str) -> bool:
     return False
 
 
-def filter_segments_by_confidence(segments: list, threshold: float = 0.6) -> str:
+def filter_segments_by_confidence(segments: list, threshold: float = 0.5) -> str:
     """
     Returns joined text from segments whose no_speech_prob is at or below threshold.
     Segments above threshold are Whisper's own signal that the audio is non-speech.
-    Threshold 0.6 matches Whisper's open-source reference implementation.
+    Threshold 0.5 (down from 0.6) catches more marginal hallucinations while still
+    keeping genuine low-energy speech (measured empirically).
     Returns empty string when all segments are discarded or input is empty.
     """
     kept = [
@@ -190,7 +190,9 @@ async def transcribe_live_chunk(file_bytes: bytes, prompt: str = None) -> tuple[
     """
     if not client:
         raise Exception("OpenAI client not initialized")
-    if not file_bytes:
+    # Guard: Whisper rejects very small payloads. A genuine 12-second WebM chunk
+    # is typically 50–500 KB; anything under 1 KB is almost certainly empty/corrupt.
+    if not file_bytes or len(file_bytes) < 1000:
         return "", "en"
 
     file_obj = BytesIO(file_bytes)

@@ -899,6 +899,9 @@ async def process_live_chunk(
     chunk_bytes = await file.read()
     if len(chunk_bytes) > _MAX_CHUNK:
         raise HTTPException(status_code=413, detail="Audio chunk too large")
+    # Skip empty/corrupt chunks immediately — Whisper would reject them anyway.
+    if len(chunk_bytes) < 1000:
+        return {"lecture_id": lecture_id, "chunk_transcript": "", "message": "Chunk too small — skipped"}
 
     # Fetch plan limits once per chunk (one lightweight DB call)
     profile = get_user_profile(str(user.id))
