@@ -27,10 +27,13 @@ PLAN_PRICES_USD = {
 
 STARTER_CREDITS = 5
 
-# Credits auto-granted on monthly refresh per plan tier
+# Credits auto-granted on monthly refresh per plan tier.
+# Set conservatively to protect margins — heavy users buy extra packs.
+# Student worst-case: 15 × $0.39 = $5.85 cost vs $9.99 → 41% floor margin.
+# Pro worst-case: 30 × $0.39 = $11.70 cost vs $19.99 → 41% floor margin.
 PLAN_MONTHLY_CREDITS = {
-    "student": 30,
-    "pro":     60,
+    "student": 15,
+    "pro":     30,
 }
 
 

@@ -266,14 +266,14 @@ const PLANS = [
         name: 'Student',
         price: '$9.99',
         period: '/mo',
-        features: ['30 credits/month included', 'Unlimited live · 3 hrs max', '20 imports/month · 3 hrs max', 'Full summary · PDF · Q&A · Sharing'],
+        features: ['15 credits/month included', 'Unlimited live · 3 hrs max', '20 imports/month · 3 hrs max', 'Full summary · PDF · Q&A · Sharing'],
     },
     {
         key: 'pro',
         name: 'Pro',
         price: '$19.99',
         period: '/mo',
-        features: ['60 credits/month included', 'Unlimited live · no cap', 'Unlimited imports · any size', '60 hrs/month · priority processing'],
+        features: ['30 credits/month included', 'Unlimited live · no per-session cap', 'Unlimited imports · no size limit', '60 hrs/month ceiling · priority processing'],
     },
 ];
 

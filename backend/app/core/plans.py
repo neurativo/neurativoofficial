@@ -1,3 +1,13 @@
+# Subscription prices (USD/month) — reference only, no payment gateway yet
+PLAN_PRICES_USD = {
+    "free":    0.00,
+    "student": 9.99,
+    "pro":    19.99,
+}
+
+# Cost model: Whisper $0.006/min + GPT-4o-mini ~$0.0007/min = ~$0.0067/min total.
+# 1 credit = 1 lecture. Avg lecture 30 min = ~$0.20 cost.
+# Included credits set low to protect margins — heavy users buy extra packs.
 PLAN_LIMITS = {
     "free": {
         # 5 live × 30 min + 3 imports × 60 min avg = ~330 min max = ~$1.98 Whisper worst case
@@ -31,7 +41,7 @@ PLAN_LIMITS = {
         "uploads_per_month":           20,
         "upload_max_duration_seconds": 10800,   # 3 hours per file
         "upload_max_bytes":            2 * 1024 * 1024 * 1024,  # 2 GB
-        "total_minutes_per_month":     1500,    # 25 hrs hard ceiling
+        "total_minutes_per_month":     1500,    # 25 hrs hard ceiling — worst-case Whisper: $9.00 (~= $9.99 revenue; credits run out first at 15 lectures)
         # Feature flags
         "max_summary_sections":        None,    # all sections
         "pdf_export":                  True,
@@ -56,7 +66,7 @@ PLAN_LIMITS = {
         "uploads_per_month":           None,    # unlimited
         "upload_max_duration_seconds": None,    # unlimited per file
         "upload_max_bytes":            None,    # unlimited
-        "total_minutes_per_month":     3600,    # 60 hrs hard ceiling
+        "total_minutes_per_month":     3600,    # 60 hrs hard ceiling — worst-case Whisper: $21.60 (below $19.99 when credits run out first)
         # Feature flags
         "max_summary_sections":        None,    # all sections
         "pdf_export":                  True,

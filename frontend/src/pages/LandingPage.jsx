@@ -1087,7 +1087,7 @@ function FAQ() {
         },
         {
             q: "What's the difference between Free, Student, and Pro?",
-            a: 'Free gives 5 starter credits (5 lectures), 30 min max per live session, 60 min per import, and a basic 2-section summary. Student ($9.99/mo · Rs. 3,050) includes 30 credits/month, unlimited live sessions up to 3 hrs, 20 imports, full summaries, PDF export, Q&A, and sharing. Pro ($19.99/mo · Rs. 6,100) includes 60 credits/month, unlimited everything up to 60 hrs/month total, plus priority processing and early feature access.',
+            a: 'Free gives 5 starter credits (5 lectures), 30 min max per live session, 60 min per import, and a basic 2-section summary. Student ($9.99/mo · Rs. 3,050) includes 15 credits/month, unlimited live sessions up to 3 hrs, 20 imports, full summaries, PDF export, Q&A, and sharing. Pro ($19.99/mo · Rs. 6,100) includes 30 credits/month, unlimited live sessions with no per-session cap, unlimited imports with no size limit, 60 hrs/month hard ceiling, priority processing, and early feature access. Additional credits can be bought as packs anytime.',
         },
     ];
     return (
@@ -1171,7 +1171,7 @@ function Pricing() {
                     <div className="lp-price-lkr">Rs. 3,050 / month</div>
                     <div className="lp-plan-div" />
                     <ul className="lp-plan-items">
-                        <PlanItem text="30 credits / month included" />
+                        <PlanItem text="15 credits / month included" />
                         <PlanItem text="Unlimited live sessions · 3 hrs max" />
                         <PlanItem text="20 imports / month · 3 hrs max" />
                         <PlanItem text="25 hours / month total" />
@@ -1197,10 +1197,10 @@ function Pricing() {
                     <div className="lp-price-lkr">Rs. 6,100 / month</div>
                     <div className="lp-plan-div" />
                     <ul className="lp-plan-items">
-                        <PlanItem text="60 credits / month included" />
-                        <PlanItem text="Unlimited live sessions · no cap" />
-                        <PlanItem text="Unlimited imports · any size" />
-                        <PlanItem text="60 hours / month total" />
+                        <PlanItem text="30 credits / month included" />
+                        <PlanItem text="Unlimited live sessions · no per-session cap" />
+                        <PlanItem text="Unlimited imports · no size limit" />
+                        <PlanItem text="60 hrs / month hard ceiling" />
                         <PlanItem text="Everything in Student" />
                         <PlanItem text="Priority processing" />
                         <PlanItem text="Early access to new features" />
