@@ -1087,7 +1087,7 @@ function FAQ() {
         },
         {
             q: "What's the difference between Free, Student, and Pro?",
-            a: 'Free gives 5 starter credits (up to 5 lectures), 30-min live sessions, 60-min imports, and a basic 2-section summary. Student ($9.99/mo · Rs. 3,050) includes 15 credits/month, unlimited live sessions up to 3 hrs each, 20 imports up to 3 hrs each, full summaries, PDF export, Q&A, and sharing. Pro ($19.99/mo · Rs. 6,100) includes 30 credits/month, unlimited live sessions up to 4 hrs each, unlimited imports up to 4 hrs each, 40 hrs/month hard ceiling, priority processing, and early feature access. All plans use 1 credit per 30-min block — extra packs available anytime.',
+            a: 'Free gives 5 starter credits, 30-min live sessions, 60-min imports, a 2-section summary, and a watermarked PDF preview of the first 2 sections — enough to see the quality before committing. Student ($9.99/mo · Rs. 3,050) includes 15 credits/month, 3-hr sessions, full summaries, full PDF export (no watermark), Q&A, and sharing. Pro ($19.99/mo · Rs. 6,100) includes 30 credits/month, 4-hr sessions, 40 hrs/month ceiling, priority processing, and early feature access. All plans use 1 credit per 30-min block — extra packs available anytime.',
         },
     ];
     return (
@@ -1150,8 +1150,9 @@ function Pricing() {
                         <PlanItem text="Audio imports · 60 min/file" />
                         <PlanItem text="AI transcription · 40+ languages" />
                         <PlanItem text="Basic AI summary (2 sections)" />
+                        <PlanItem text="PDF preview · 2 sections · watermarked" />
                         <PlanItem no text="Full summary · all sections" />
-                        <PlanItem no text="PDF export" />
+                        <PlanItem no text="Full PDF · no watermark" />
                         <PlanItem no text="Q&A chat" />
                         <PlanItem no text="Shareable links" />
                     </ul>

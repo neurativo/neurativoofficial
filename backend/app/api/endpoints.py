@@ -1273,13 +1273,8 @@ async def export_pdf(request: Request, lecture_id: str, user=Depends(get_active_
     plan_tier = profile.get("plan_tier") or "free"
     limits    = get_limits(plan_tier)
 
-    if not limits.get("pdf_export"):
-        raise HTTPException(status_code=403, detail={
-            "error": "pdf_not_available",
-            "plan": plan_tier,
-        })
-
-    quality_map = {"free": "lite", "student": "standard", "pro": "full"}
+    # free plan gets a watermarked 2-section preview PDF (not blocked)
+    quality_map = {"free": "free", "student": "standard", "pro": "full"}
     quality = quality_map.get(plan_tier, "standard")
 
     try:

@@ -259,7 +259,7 @@ const PLANS = [
         name: 'Free',
         price: '$0',
         period: '',
-        features: ['5 free starter credits', 'Live recording · 30 min/session', 'Audio imports · 60 min/file', 'Basic summary · 2 sections'],
+        features: ['5 free starter credits', 'Live recording · 30 min/session', 'Audio imports · 60 min/file', 'PDF preview · 2 sections · watermarked'],
     },
     {
         key: 'student',

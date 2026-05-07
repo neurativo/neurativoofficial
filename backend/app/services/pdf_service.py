@@ -525,16 +525,40 @@ def _call_key_stats(transcript: str, topic: str | None) -> list[dict]:
 
 # ── PDF renderer (sync, run in thread) ───────────────────────────────────────
 
-def _render_pdf(html_content: str, title_short: str) -> bytes:
-    # Bug 3 fix: use a per-call context manager instead of a global browser singleton.
-    # The singleton became invalid after the first PDF export and caused 500 errors
-    # on subsequent calls (including the /chunk endpoint due to import-time side effects).
+def _render_pdf(html_content: str, title_short: str, watermark: bool = False) -> bytes:
+    # Use a per-call context manager instead of a global browser singleton.
     with sync_playwright() as pw:
         browser = pw.chromium.launch(headless=True)
         try:
             page = browser.new_page()
             try:
                 page.set_content(html_content, wait_until="networkidle")
+                footer = (
+                    "<div style='"
+                    "width:100%;font-size:7pt;color:#94a3b8;"
+                    "font-family:Arial,sans-serif;"
+                    "text-align:center;padding:0 22mm;"
+                    "box-sizing:border-box;"
+                    "'>Page <span class='pageNumber'></span> "
+                    "of <span class='totalPages'></span> · Neurativo</div>"
+                )
+                if watermark:
+                    footer = (
+                        "<div style='"
+                        "width:100%;font-family:Arial,sans-serif;"
+                        "box-sizing:border-box;padding:0 22mm;"
+                        "display:flex;justify-content:space-between;align-items:center;"
+                        "'>"
+                        "<span style='font-size:7pt;color:#94a3b8;'>"
+                        "Page <span class='pageNumber'></span> of <span class='totalPages'></span>"
+                        "</span>"
+                        "<span style='font-size:7pt;font-weight:600;color:#7c3aed;"
+                        "background:#f5f3ff;padding:2px 8px;border-radius:4px;"
+                        "border:1px solid #ddd8fe;'>"
+                        "Neurativo Free — upgrade for the full report"
+                        "</span>"
+                        "</div>"
+                    )
                 pdf_bytes = page.pdf(
                     format="A4",
                     margin={"top": "28mm", "bottom": "16mm", "left": "22mm", "right": "22mm"},
@@ -550,15 +574,7 @@ def _render_pdf(html_content: str, title_short: str) -> bytes:
                         f"'><span>{title_short}</span>"
                         "<span>Lecture Intelligence Report</span></div>"
                     ),
-                    footer_template=(
-                        "<div style='"
-                        "width:100%;font-size:7pt;color:#94a3b8;"
-                        "font-family:Arial,sans-serif;"
-                        "text-align:center;padding:0 22mm;"
-                        "box-sizing:border-box;"
-                        "'>Page <span class='pageNumber'></span> "
-                        "of <span class='totalPages'></span> · Neurativo</div>"
-                    ),
+                    footer_template=footer,
                 )
             finally:
                 page.close()
@@ -578,8 +594,11 @@ async def _generate_lite_pdf(
     topic: str | None,
     language: str,
     raw_sections: list,
+    watermark: bool = False,
 ) -> bytes:
-    """Generates a lite PDF with no GPT enrichment — summary text only."""
+    """Generates a lite PDF with no GPT enrichment — summary text only.
+    When watermark=True, adds a 'Neurativo Free — upgrade for full report'
+    badge on every page footer and limits to first 2 sections."""
     section_label, review_label, glossary_label = _get_domain_labels(topic)
     domain_color = _get_domain_color(topic)
 
@@ -651,7 +670,7 @@ async def _generate_lite_pdf(
 
     html_content = template.render(**context)
     title_short = title[:50] + ("…" if len(title) > 50 else "")
-    return await asyncio.to_thread(_render_pdf, html_content, title_short)
+    return await asyncio.to_thread(_render_pdf, html_content, title_short, watermark)
 
 
 # ── Main async entry point ────────────────────────────────────────────────────
@@ -659,14 +678,22 @@ async def _generate_lite_pdf(
 async def generate_lecture_pdf(
     lecture_id: str,
     user_id: str | None = None,
-    quality: str = "standard",   # "lite" | "standard" | "full"
+    quality: str = "standard",   # "free" | "lite" | "standard" | "full"
 ) -> bytes:
     """
     Async PDF generator. All GPT enrichment calls run in parallel via
     asyncio.gather() + asyncio.to_thread(), making export ~5x faster than
     sequential calls.
+
+    quality="free":     2-section preview with watermark footer, no GPT enrichment.
+                        Given to free-plan users so they see the output and feel the
+                        upgrade pull rather than seeing a 403 error.
+    quality="lite":     4-section preview, no watermark, no GPT enrichment.
+    quality="standard": Full sections + GPT enrichment (Student plan).
+    quality="full":     Full sections + GPT enrichment + all extras (Pro plan).
     """
-    IS_LITE = quality == "lite"
+    IS_FREE = quality == "free"
+    IS_LITE = quality == "lite" or IS_FREE
     # 1. Fetch lecture data
     data = await asyncio.to_thread(get_lecture_for_summarization, lecture_id)
     if not data:
@@ -702,9 +729,11 @@ async def generate_lecture_pdf(
     n_sections   = len(raw_sections)
     n_questions  = _question_count(duration_sec)
 
-    # ── Lite tier: skip all GPT calls ────────────────────────────────────────
+    # ── Lite/Free tier: skip all GPT calls ───────────────────────────────────
     if IS_LITE:
-        raw_sections = raw_sections[:4]
+        # Free plan: first 2 sections + watermark; Lite: first 4 sections, no watermark
+        section_limit = 2 if IS_FREE else 4
+        raw_sections = raw_sections[:section_limit]
         return await _generate_lite_pdf(
             lecture_id=lecture_id,
             title=title,
@@ -714,6 +743,7 @@ async def generate_lecture_pdf(
             topic=topic,
             language=language,
             raw_sections=raw_sections,
+            watermark=IS_FREE,
         )
 
     # 3. Build parallel task list
@@ -893,5 +923,5 @@ async def generate_lecture_pdf(
 
     # 8. Generate PDF in thread (Playwright is sync)
     title_short = title[:50] + ("…" if len(title) > 50 else "")
-    pdf_bytes   = await asyncio.to_thread(_render_pdf, html_content, title_short)
+    pdf_bytes   = await asyncio.to_thread(_render_pdf, html_content, title_short, False)
     return pdf_bytes

@@ -151,14 +151,23 @@ FREE PLAN — $0.00/month
   Live session cap:     30 min per session
   Upload cap:           60 min per file
   Monthly time ceiling: 150 min (2.5 hrs)
-  Features:             Transcript only; first 2 sections summarized; no PDF, Q&A, sharing
+  Features:             2-section summary; watermarked PDF preview (first 2 sections only);
+                        no Q&A, no sharing, no full summary
 
+  PDF cost (watermarked):  per export ~$0.018 (no GPT enrichment, 2 sections only)
+                           No section enrichment calls → near-zero variable cost.
+                           Fixed cost: conceptual_map + study_roadmap = ~$0.015 — SKIPPED
+                           for free tier (lite path = no GPT at all). Actual PDF cost ~$0.00
+                           (Playwright render only, no GPT calls in lite mode).
   Worst-case cost: 5 credits × $0.21 = $1.05 (acquisition cost — paid once)
   Revenue:         $0.00
   MARGIN:          -$1.05 one-time (customer acquisition cost)
 
-  This is intentional: free users are acquisition funnel, not revenue.
-  A free user who upgrades to Student in month 1 immediately generates profit.
+  RATIONALE FOR FREE PDF: The watermarked 2-section PDF is the product's "wow moment."
+  A free user who exports and shares their PDF becomes a walking advertisement.
+  "Neurativo Free — upgrade for the full report" on every page drives organic conversions.
+  The PDF itself costs ~$0.00 to generate (lite path skips all GPT calls — Playwright only).
+  The cost of NOT showing the PDF is far higher (lower conversion, lower word of mouth).
 
 
 STUDENT PLAN — $9.99/month

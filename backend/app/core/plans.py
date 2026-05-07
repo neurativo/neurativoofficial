@@ -19,7 +19,7 @@ PLAN_LIMITS = {
         "total_minutes_per_month":     150,     # 2.5 hrs hard ceiling
         # Feature flags
         "max_summary_sections":        2,       # only first 2 sections summarized
-        "pdf_export":                  False,
+        "pdf_export":                  True,    # watermarked, 2-section preview
         "qa_enabled":                  False,
         "sharing":                     False,
         "multilingual":                False,

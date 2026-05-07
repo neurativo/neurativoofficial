@@ -279,6 +279,7 @@ export default function CreditsPage() {
                         Session limits: Free = 30 min · Student = 3 hrs · Pro = 4 hrs.
                         Monthly time ceiling: Free = 2.5 hrs · Student = 25 hrs · Pro = 40 hrs.
                         Credits are the primary gate — without credits, no lecture is processed.
+                        PDF: Free = 2-section watermarked preview · Student &amp; Pro = full PDF, no watermark.
                         If processing fails after credit deduction, the full amount is refunded automatically.
                     </p>
                 </div>
