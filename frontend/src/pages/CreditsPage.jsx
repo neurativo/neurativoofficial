@@ -14,7 +14,6 @@ const CSS = `
 
   .cr-header { height: 56px; background: ${C.card}; border-bottom: 1px solid ${C.border}; display: flex; align-items: center; padding: 0 24px; gap: 12px; position: sticky; top: 0; z-index: 20; }
   .cr-logo { display: flex; align-items: center; gap: 8px; text-decoration: none; }
-  .cr-logo-icon { width: 24px; height: 24px; background: ${C.dark}; border-radius: 7px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
   .cr-wordmark { font-size: 14px; font-weight: 600; color: ${C.text}; letter-spacing: -0.3px; }
   .cr-back { margin-left: auto; font-size: 13px; color: ${C.sec}; text-decoration: none; padding: 6px 12px; border: 1px solid ${C.border}; border-radius: 8px; transition: border-color .15s; }
   .cr-back:hover { border-color: ${C.dark}; color: ${C.text}; }
@@ -166,11 +165,7 @@ export default function CreditsPage() {
             {/* Header */}
             <header className="cr-header">
                 <a href="/app" className="cr-logo">
-                    <div className="cr-logo-icon">
-                        <svg width="14" height="14" viewBox="0 0 32 32" fill="none">
-                            <path d="M18 4L8 18h7v10l9-12h-7L18 4z" fill="#fafaf9"/>
-                        </svg>
-                    </div>
+                    <img src="/logo.png" alt="Neurativo" style={{ width: 24, height: 24, borderRadius: 6 }} />
                     <span className="cr-wordmark">Neurativo</span>
                 </a>
                 <Link to="/app" className="cr-back">← Dashboard</Link>

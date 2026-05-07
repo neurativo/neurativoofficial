@@ -23,10 +23,6 @@ const CSS = `
     position: sticky; top: 0; z-index: 20;
   }
   .pp-logo { display: flex; align-items: center; gap: 8px; text-decoration: none; }
-  .pp-logo-icon {
-    width: 24px; height: 24px; background: var(--color-dark); border-radius: 7px;
-    display: flex; align-items: center; justify-content: center;
-  }
   .pp-wordmark { font-size: 14px; font-weight: 600; color: var(--color-text); letter-spacing: -0.3px; }
   .pp-back {
     margin-left: auto; display: flex; align-items: center; gap: 5px;
@@ -381,11 +377,7 @@ export default function ProfilePage({ user }) {
                 {/* Header */}
                 <header className="pp-header">
                     <Link to="/" className="pp-logo">
-                        <div className="pp-logo-icon">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--color-dark-fg)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M13 10V3L4 14h7v7l9-11h-7z"/>
-                            </svg>
-                        </div>
+                        <img src="/logo.png" alt="Neurativo" style={{ width: 24, height: 24, borderRadius: 6 }} />
                         <span className="pp-wordmark">Neurativo</span>
                     </Link>
                     <Link to="/app" className="pp-back">
