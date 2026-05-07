@@ -13,7 +13,7 @@ from app.core.config import settings
 from app.core.auth import get_current_user, get_active_user
 from app.core.plans import get_limits, is_unlimited
 from app.core.rate_limit import limiter
-from app.services.openai_service import transcribe_audio, transcribe_audio_bytes, _bg_client, filter_segments_by_confidence
+from app.services.openai_service import transcribe_audio, transcribe_audio_bytes, transcribe_live_chunk, _bg_client, filter_segments_by_confidence
 from app.services.explanation_service import generate_explanation
 from app.services.qa_service import answer_lecture_question
 from app.services.pdf_service import generate_lecture_pdf
@@ -894,11 +894,11 @@ async def process_live_chunk(
     if not await _check_audio_magic(file):
         raise HTTPException(status_code=400, detail="Invalid audio format")
 
-    # Read + secondary size guard (covers clients that omit Content-Length)
+    # Read into memory — used for size guard and passed directly to Whisper.
+    # Reading once here avoids any double-read / seek issues downstream.
     chunk_bytes = await file.read()
     if len(chunk_bytes) > _MAX_CHUNK:
         raise HTTPException(status_code=413, detail="Audio chunk too large")
-    await file.seek(0)
 
     # Fetch plan limits once per chunk (one lightweight DB call)
     profile = get_user_profile(str(user.id))
@@ -926,12 +926,15 @@ async def process_live_chunk(
         #    Each chunk is detected independently. no_speech_prob filtering
         #    handles silence hallucinations (no need for language pinning).
         try:
-            chunk_text, detected_language = await transcribe_audio(
-                file,
+            chunk_text, detected_language = await transcribe_live_chunk(
+                chunk_bytes,
                 prompt=whisper_prompt,
             )
-        except Exception:
-            raise HTTPException(status_code=500, detail="Transcription failed")
+        except Exception as _transcribe_err:
+            print(f"[chunk] Whisper error for lecture {lecture_id}: {_transcribe_err!r}")
+            # Return 200 with empty transcript — 500 would trigger 4 client retries,
+            # flooding OpenAI and causing a retry storm. The chunk is simply skipped.
+            return {"lecture_id": lecture_id, "chunk_transcript": "", "message": "Transcription error — chunk skipped"}
 
         chunk_text = chunk_text.strip()
 

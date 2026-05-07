@@ -137,6 +137,53 @@ async def transcribe_audio(file: UploadFile, prompt: str = None, language: str =
         raise HTTPException(status_code=500, detail="Transcription failed")
 
 
+async def transcribe_live_chunk(file_bytes: bytes, prompt: str = None) -> tuple[str, str]:
+    """
+    Transcribes a live 12-second audio chunk from raw bytes.
+    Uses the regular short-timeout client (30s) — appropriate for live chunks.
+    Applies no_speech_prob filtering and hallucination phrase blocklist.
+    Returns (transcript_text, language_code).
+    """
+    if not client:
+        raise Exception("OpenAI client not initialized")
+    if not file_bytes:
+        return "", "en"
+
+    file_obj = BytesIO(file_bytes)
+    file_obj.name = "chunk.webm"
+
+    create_kwargs = dict(
+        model="whisper-1",
+        file=file_obj,
+        response_format="verbose_json",
+        temperature=0,
+    )
+    if prompt:
+        create_kwargs["prompt"] = prompt
+
+    transcript_response = await asyncio.to_thread(
+        client.audio.transcriptions.create,
+        **create_kwargs
+    )
+
+    detected_language = getattr(transcript_response, "language", None) or "en"
+    segments = getattr(transcript_response, "segments", None) or []
+
+    if segments:
+        text = filter_segments_by_confidence(segments)
+    else:
+        text = transcript_response.text or ""
+
+    if _is_hallucinated(text):
+        print(f"[whisper] Hallucination discarded: {text!r}")
+        text = ""
+
+    audio_seconds = segments[-1].end if segments else 0.0
+    await log_cost_async("whisper_transcription", "whisper-1", audio_seconds=audio_seconds)
+
+    return text, detected_language
+
+
 async def transcribe_audio_bytes(file_bytes: bytes, filename: str) -> tuple[str, str]:
     """
     Transcribes raw audio bytes. Used for background processing of large files
