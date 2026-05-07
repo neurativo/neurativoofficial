@@ -476,10 +476,12 @@ User behavior: 4-hour lecture every day, 5 days/week, 4 weeks/month
 
   Pro ($19.99/month):
     Gets 30 credits + 4-hr session cap + 40-hr/month ceiling.
-    Heavy user buying 80 credits/month separately: 2 × 60cr power packs = $43.98.
-    With Pro plan: $19.99 plan gives 30 credits, then 1 Power Pack ($21.99) for 60 more.
-    Total: $41.98. Same or less than pure credit purchases, plus all premium features.
-    FAIR — customer pays same or less than pure credit purchases.
+    Heavy user buying 80 credits/month with no plan: 2 × 60cr Power Packs = $43.98.
+    With Pro plan: $19.99/month gets 30 free credits. Heavy user then buys 1 Power Pack
+    ($21.99) for 60 more = $41.98 total. $2 cheaper than pure packs AND unlocks all
+    premium features (diarization, API access, priority processing).
+    Pro plan pitch: "Get your first 30 credits free each month — saves $11 vs buying them."
+    FAIR — Pro user pays less than pure credit purchases while getting more.
 
   Credits (pay-per-lecture):
     No subscription, no commitment.
