@@ -1788,6 +1788,9 @@ def admin_adjust_credits(
         raise RuntimeError("Supabase not configured")
 
     row = db.table("profiles").select("credits").eq("id", user_id).execute()
+    if not row.data:
+        # No profile yet — create a minimal row so the update below has a target
+        db.table("profiles").insert({"id": user_id}).execute()
     current = ((row.data or [{}])[0].get("credits") or 0)
 
     if set_absolute:
@@ -1801,13 +1804,19 @@ def admin_adjust_credits(
     db.table("profiles").update({"credits": new_balance}).eq("id", user_id).execute()
 
     if delta != 0:
-        db.table("credit_transactions").insert({
-            "user_id":       user_id,
-            "amount":        delta,
-            "balance_after": new_balance,
-            "reason":        reason,
-            "product":       product or None,
-        }).execute()
+        try:
+            db.table("credit_transactions").insert({
+                "user_id":       user_id,
+                "amount":        delta,
+                "balance_after": new_balance,
+                "reason":        reason,
+                "product":       product or None,
+            }).execute()
+        except Exception as log_err:
+            # Transaction log is non-critical — don't fail the balance update.
+            # Root cause is usually credit_transactions.user_id being UUID type
+            # in production; fix with migrations/004_fix_text_columns.sql.
+            print(f"[admin_credits] transaction log failed (non-fatal): {log_err}")
 
     return {"credits": new_balance, "delta": delta}
 
@@ -1831,6 +1840,14 @@ def admin_set_credits_subscription(
     }
     if status != "none":
         payload["credits_sub_started"] = datetime.now(timezone.utc).isoformat()
+
+    # Ensure a profile row exists first (admin may manage users who haven't
+    # triggered profile creation via the app yet).
+    existing = db.table("profiles").select("id").eq("id", user_id).execute()
+    if not existing.data:
+        # Create a minimal profile row. profiles.id is TEXT (Clerk-compatible).
+        db.table("profiles").insert({"id": user_id}).execute()
+
     # Use update+eq to avoid sending Clerk user ID in JSON body (avoids UUID cast error)
     db.table("profiles").update(payload).eq("id", user_id).execute()
     return {"credits_sub_status": status, "credits_sub_expires": expires_at}
