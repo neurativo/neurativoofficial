@@ -313,6 +313,11 @@ const CSS = `
     border-top: 1px solid #f0ede8; padding-top: 20px;
   }
   .lp-about-founders span { color: #6b6b6b; }
+  .lp-about-founder-lnk {
+    color: #6b6b6b; text-decoration: none; border-bottom: 1px solid #d4d0ca;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .lp-about-founder-lnk:hover { color: #0a66c2; border-color: #0a66c2; }
   @media (max-width: 640px) {
     .lp-about-cols { grid-template-columns: 1fr; }
     .lp-about-quote-text { font-size: 22px; }
@@ -581,6 +586,8 @@ const CSS = `
   .dark .lp-about-col-text { color: var(--color-sec); }
   .dark .lp-about-founders { border-top-color: var(--color-border); color: var(--color-muted); }
   .dark .lp-about-founders span { color: var(--color-sec); }
+  .dark .lp-about-founder-lnk { color: var(--color-sec); border-bottom-color: var(--color-border-hov); }
+  .dark .lp-about-founder-lnk:hover { color: #70b5f9; border-color: #70b5f9; }
 
   .dark .lp-footer { border-top-color: var(--color-border); }
   .dark .lp-footer-name { color: var(--color-text); }
@@ -1310,7 +1317,11 @@ function About() {
                 </div>
             </div>
             <p className="lp-about-founders">
-                Founded by <span>Shazad Arshad</span> &amp; <span>Shariff Ahamed</span> · Sri Lanka
+                Founded by{' '}
+                <a href="https://linkedin.com/in/shazadarshad" target="_blank" rel="noopener noreferrer" className="lp-about-founder-lnk">Shazad Arshad</a>
+                {' '}&amp;{' '}
+                <a href="https://linkedin.com/in/shariffahamed" target="_blank" rel="noopener noreferrer" className="lp-about-founder-lnk">Shariff Ahamed</a>
+                {' '}· Sri Lanka
             </p>
         </section>
     );
