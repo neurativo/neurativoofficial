@@ -60,13 +60,13 @@ PLAN_LIMITS = {
         "priority_processing":         True,
     },
     "pro": {
-        # $39/month — target margin: ~45% at average usage
-        "live_lectures_per_month":     None,    # unlimited
-        "live_max_duration_seconds":   None,    # unlimited per lecture
+        # $19.99/month — target margin: ~58% at worst-case (credit-gated; time cap is safety net)
+        "live_lectures_per_month":     None,    # unlimited count
+        "live_max_duration_seconds":   14400,   # 4 hours per lecture
         "uploads_per_month":           None,    # unlimited
-        "upload_max_duration_seconds": None,    # unlimited per file
+        "upload_max_duration_seconds": 14400,   # 4 hours per file
         "upload_max_bytes":            None,    # unlimited
-        "total_minutes_per_month":     2400,    # 40 hrs hard ceiling — worst-case API cost: $16.08 vs $19.99 = 20% floor margin
+        "total_minutes_per_month":     2400,    # 40 hrs hard ceiling — worst-case API cost: $16.80 vs $19.99 = 16% floor margin (credits exhaust first)
         # Feature flags
         "max_summary_sections":        None,    # all sections
         "pdf_export":                  True,

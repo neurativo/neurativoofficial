@@ -1217,7 +1217,7 @@ function Pricing() {
                     <div>
                         <div style={{ fontSize: 14, fontWeight: 600, color: '#1a1a1a' }}>Pay-per-lecture credits</div>
                         <div style={{ fontSize: 12, color: '#888' }}>No subscription needed · credits scale with duration · never expire</div>
-                        <div style={{ fontSize: 11, color: '#b0aca6', marginTop: 3 }}>≤45 min = 1 credit · 45–90 min = 2 · 90–135 min = 3 · 135–180 min = 4 · 180+ min = 5</div>
+                        <div style={{ fontSize: 11, color: '#b0aca6', marginTop: 3 }}>1 credit per 30-min block (rounded up) · ≤30 min = 1 cr · 31–60 min = 2 cr · 61–90 min = 3 cr · 4-hr lecture = 8 cr</div>
                     </div>
                 </div>
                 <div className="lp-credits-grid">

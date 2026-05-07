@@ -167,7 +167,7 @@ export default function CreditsPage() {
 
             <div className="cr-body">
                 <h1 className="cr-title">Credits</h1>
-                <p className="cr-sub">Credits scale with lecture duration: ≤45 min = 1 cr · 45–90 min = 2 cr · 90–135 min = 3 cr · 135–180 min = 4 cr · 180+ min = 5 cr. Pack credits never expire.</p>
+                <p className="cr-sub">Credits scale with lecture duration: 1 credit per 30-min block, rounded up. So ≤30 min = 1 cr · 31–60 min = 2 cr · 61–90 min = 3 cr · 91–120 min = 4 cr · 4-hr lecture = 8 cr. Pack credits never expire.</p>
 
                 {error && <div className="cr-error">{error}</div>}
 

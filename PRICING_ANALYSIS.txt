@@ -1,0 +1,336 @@
+================================================================================
+NEURATIVO — PRICING & COST ANALYSIS
+================================================================================
+Generated: 2026-05-07
+Currency: USD unless stated
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. COST MODEL (per minute of audio processed)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Whisper transcription:   $0.006  / minute
+  GPT-4o-mini (AI calls):  $0.0007 / minute  (summarization, Q&A, enrichment)
+  ─────────────────────────────────────────
+  TOTAL cost per minute:   $0.0067 / minute
+  Rounded up (safe margin):$0.007  / minute
+
+  Reference costs:
+    30-min lecture:   30 × $0.007 = $0.21
+    45-min lecture:   45 × $0.007 = $0.315
+    60-min lecture:   60 × $0.007 = $0.42
+    90-min lecture:   90 × $0.007 = $0.63
+    120-min lecture: 120 × $0.007 = $0.84
+    180-min lecture: 180 × $0.007 = $1.26
+    240-min lecture: 240 × $0.007 = $1.68  (4-hour lecture)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2. CREDIT PRICING & MARGINS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Credit formula: ceil(minutes / 30) credits per lecture
+  → 1 credit covers up to 30 minutes of processing
+  → GUARANTEED floor margin: 37% at cheapest pack price
+
+  Pack            Credits  Price    Per-credit  Floor margin  Max cost/cr  Profit/cr
+  ─────────────────────────────────────────────────────────────────────────────────
+  Starter          10 cr   $4.99    $0.499      57.8%         $0.21        $0.289
+  Best Value       30 cr   $11.99   $0.400      47.5%         $0.21        $0.190
+  Power Pack       60 cr   $19.99   $0.333      37.0%         $0.21        $0.123
+  ─────────────────────────────────────────────────────────────────────────────────
+
+  "Max cost/credit" = cost of a full 30-min block = $0.21 (worst case per credit).
+  "Floor margin"    = (price - cost) / price at that worst case.
+
+  Key insight: The per-credit cost IMPROVES if a lecture doesn't fill exactly 30 mins.
+  Example: 20-min lecture still costs 1 credit but only uses 20 × $0.007 = $0.14.
+  So $0.333/cr vs $0.14 cost = 58% margin on a short lecture.
+
+  CREDIT DEDUCTION TABLE (ceil(min/30)):
+    Duration      Credits  AI Cost  Revenue*  Margin*
+    ──────────────────────────────────────────────────
+    1–30 min       1 cr    $0.21    $0.333    37.0%
+    31–60 min      2 cr    $0.42    $0.666    37.0%
+    61–90 min      3 cr    $0.63    $0.999    37.0%
+    91–120 min     4 cr    $0.84    $1.332    37.0%
+    121–150 min    5 cr    $1.05    $1.665    37.0%
+    151–180 min    6 cr    $1.26    $1.998    37.0%
+    181–210 min    7 cr    $1.47    $2.331    37.0%
+    211–240 min    8 cr    $1.68    $2.664    37.0%
+    ──────────────────────────────────────────────────
+    * Revenue and margin calculated at cheapest pack ($0.333/cr) — the floor case.
+      Actual margin is higher for Starter and Best Value packs.
+
+  NOTE: The old 45-min tier system had a 5.4% floor margin at the power pack price.
+  (45 min × $0.007 = $0.315 cost vs $0.333 revenue = only $0.018 profit per credit.)
+  The new ceil(min/30) formula guarantees a 37% floor margin instead.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3. SUBSCRIPTION PLANS — LIMITS & MARGINS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+FREE PLAN — $0.00/month
+─────────────────────
+  Credits:              5 (one-time starter grant, never refreshes)
+  Live session cap:     30 min per session
+  Upload cap:           60 min per file
+  Monthly time ceiling: 150 min (2.5 hrs)
+  Features:             Transcript only; first 2 sections summarized; no PDF, Q&A, sharing
+
+  Worst-case cost: 5 credits × $0.21 = $1.05 (acquisition cost — paid once)
+  Revenue:         $0.00
+  MARGIN:          -$1.05 one-time (customer acquisition cost)
+
+  This is intentional: free users are acquisition funnel, not revenue.
+  A free user who upgrades to Student in month 1 immediately generates profit.
+
+
+STUDENT PLAN — $9.99/month
+──────────────────────────
+  Credits/month:         15 (auto-granted on each monthly refresh)
+  Live session cap:      3 hours per session
+  Upload cap:            3 hours per file, 20 imports/month
+  Monthly time ceiling:  1,500 min (25 hrs) — hard safety cap
+  Features:              All core features (PDF, Q&A, sharing, etc.)
+
+  HOW CREDITS GATE COST:
+    Credits are the primary cost control. Without credits, no lecture processes.
+    15 credits × max $0.21/credit = $3.15 maximum API cost per month.
+    Revenue: $9.99/month.
+
+    Worst-case profit: $9.99 - $3.15 = $6.84  →  68.5% margin
+    (This is the absolute floor — every credit used for a full 30-min lecture.)
+
+  Aggressive usage scenarios:
+
+    Scenario A — 30-min lectures (1 credit each):
+      15 lectures × 30 min = 450 min (7.5 hrs); cost $3.15; revenue $9.99
+      Margin: 68.5%  ← PROFIT
+
+    Scenario B — 90-min lectures (3 credits each):
+      5 lectures × 90 min = 450 min; cost $3.15; revenue $9.99
+      Margin: 68.5%  ← PROFIT (same cost, fewer lectures)
+
+    Scenario C — 60-min lectures (2 credits each):
+      7 lectures + 1 partial; ~420 min; cost $2.94; revenue $9.99
+      Margin: 70.6%  ← PROFIT
+
+    THE 25-HR CAP SCENARIO (credits bypassed — edge case):
+      If somehow 25 hrs = 1,500 min of audio were processed without credits:
+      Cost: 1,500 × $0.007 = $10.50
+      Revenue: $9.99 → Loss: -$0.51  ← But this requires bypassing credit checks!
+      Mitigation: Fix credit check bugs. The time cap is the final backstop.
+
+  CONCLUSION: Student plan is ALWAYS profitable under normal operation.
+  The 25-hr cap is a security backstop, not expected to be hit under honest usage.
+
+
+PRO PLAN — $19.99/month
+────────────────────────
+  Credits/month:         30 (auto-granted on each monthly refresh)
+  Live session cap:      4 hours per session
+  Upload cap:            4 hours per file, unlimited count
+  Monthly time ceiling:  2,400 min (40 hrs) — hard safety cap
+  Features:              All features including diarization, API access, etc.
+
+  HOW CREDITS GATE COST:
+    30 credits × max $0.21/credit = $6.30 maximum API cost from plan credits.
+    Revenue: $19.99/month.
+
+    Worst-case profit (plan credits only): $19.99 - $6.30 = $13.69  →  68.5% margin
+
+  Aggressive usage scenarios:
+
+    Scenario A — 30-min lectures (1 credit each):
+      30 lectures × 30 min = 900 min (15 hrs); cost $6.30; revenue $19.99
+      Margin: 68.5%  ← PROFIT
+
+    Scenario B — 4-hr lectures (8 credits each):
+      3 lectures × 240 min = 720 min; 24 credits used; cost $5.04; revenue $19.99
+      After 3 lectures: 6 credits left → can do 6 more 30-min lectures.
+      Total 4 × 240 min = 960 min (16 hrs in 4-hr sessions), plus shorter ones.
+      HITS CREDIT WALL at ~3.75 four-hour lectures (30 ÷ 8 = 3.75).
+      Must buy credits to continue.
+
+    Scenario C — Hitting the 40-hr cap (worst worst case):
+      40 hrs = 2,400 min. 10 × 4-hr lectures = 80 credits needed.
+      Plan gives 30 credits → user must buy 50 more credits.
+      Extra credit purchase (power pack, 60 cr @ $19.99): +$19.99 spend.
+      Our total revenue: $19.99 + $19.99 = $39.98
+      Our total cost: 2,400 min × $0.007 = $16.80
+      Profit: $23.18  →  Margin: 58.1%  ← STRONG PROFIT even in this scenario
+
+    THE 40-HR CAP SCENARIO (credits bypassed — edge case):
+      If 2,400 min processed without credits:
+      Cost: 2,400 × $0.007 = $16.80
+      Revenue: $19.99 → Margin: 16%  ← Still profitable! But thin.
+      Mitigation: 4-hr per-session cap + credit checks eliminate this scenario.
+
+  CONCLUSION: Pro plan is ALWAYS profitable. The more a Pro user pushes limits,
+  the more extra packs they buy, increasing total revenue.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4. THE AGGRESSIVE USER SCENARIO — ASKED SPECIFICALLY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+User behavior: 4-hour lecture every day, 5 days/week, 4 weeks/month
+               = 20 lectures × 4 hours = 80 hours = 4,800 minutes
+
+  PLAN:        PRO ($19.99/month)
+  SESSION CAP: 4 hours — each lecture is exactly 1 session (4-hr cap enforced)
+  MONTHLY CAP: 2,400 min (40 hrs) — this user would hit it after 10 lectures
+
+  Credits needed: 20 lectures × ceil(240/30) = 20 × 8 = 160 credits
+  Monthly time hit: 10 lectures × 240 min = 2,400 min = MONTHLY CAP → stops here
+
+  WHAT ACTUALLY HAPPENS:
+    - Lectures 1–10:  allowed (2,400 min used, cap hit)
+    - Lectures 11–20: BLOCKED by the 40-hr monthly ceiling
+    Credits used for 10 lectures: 10 × 8 = 80 credits
+    Plan gives 30 credits → 50 credits must be purchased
+
+  COST BREAKDOWN:
+    Our API cost: 10 × 240 min × $0.007 = $16.80
+    Their spend:  $19.99 (plan) + 1 power pack $19.99 (60 cr) = $39.98
+    Our profit:   $39.98 - $16.80 = $23.18  (58% margin)
+
+  COMPARISON: Can this user do 20 lectures (80 hrs)?
+    No. The 40-hr/month ceiling stops them at 10 sessions.
+    They cannot buy their way past the time ceiling — it is enforced by plan limits.
+    This is intentional: the time cap protects server capacity and prevents abuse.
+
+  RESULT: Even the most aggressive realistic Pro user generates $23.18/month profit.
+
+
+  STUDENT USER: 4-hr lectures every day (same scenario)
+    But Student plan has: 3-hr session cap → 4-hr lecture is BLOCKED immediately.
+    They'd be limited to 3-hr sessions.
+
+    With 3-hr sessions: ceil(180/30) = 6 credits per lecture
+    With 15 plan credits: 15 ÷ 6 = 2.5 lectures → 2 full lectures, 3 credits left
+    After 2 lectures (360 min used): 3 credits remain → can do one more 90-min lecture
+    Total: ~450 min (7.5 hrs). Cost: $3.15. Revenue: $9.99. Margin: 68.5%.
+
+    To do more, they must upgrade to Pro or buy extra packs.
+    Either way: more revenue for us.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5. SUMMARY — MARGIN TABLE (all scenarios)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Plan/Scenario                          Revenue    Cost     Profit   Margin
+  ──────────────────────────────────────────────────────────────────────────
+  Free (5 starter credits, worst case)   $0.00      $1.05    -$1.05   N/A
+  Student — average (8 lectures/mo)      $9.99      $1.68    $8.31    83.2%
+  Student — worst case (15 × 30-min)     $9.99      $3.15    $6.84    68.5%
+  Student — credit bypass + cap hit      $9.99      $10.50   -$0.51   LOSS*
+  Pro — average (15 lectures/mo)         $19.99     $3.15    $16.84   84.2%
+  Pro — worst case (30 plan credits)     $19.99     $6.30    $13.69   68.5%
+  Pro — aggressive (cap hit + 1 pack)    $39.98     $16.80   $23.18   58.0%
+  Pack purchase (Power, 60 cr)           $19.99     $12.60†  $7.39    37.0%
+  Pack purchase (Best Value, 30 cr)      $11.99     $6.30†   $5.69    47.5%
+  Pack purchase (Starter, 10 cr)         $4.99      $2.10†   $2.89    57.8%
+  ──────────────────────────────────────────────────────────────────────────
+  * Only possible if credit check is bypassed (bug). Time cap is last resort.
+  † Assumes all credits used at maximum 30-min cost ($0.21/credit).
+
+  MINIMUM GUARANTEED MARGIN (no loss scenarios):
+    - Credit packs:        37.0% floor  (Power Pack, all at 30-min lectures)
+    - Subscription plans:  68.5% floor  (plan credits used, no bypass)
+    - Any plan + pack:     37.0% floor  (worst case credit price × worst-case duration)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+6. LIMIT SETTINGS CURRENTLY IN PLACE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Free:
+    live_max_duration_seconds:   1,800  (30 min)
+    upload_max_duration_seconds: 3,600  (60 min)
+    total_minutes_per_month:       150  (2.5 hrs)
+    Starter credits: 5 (one-time)
+
+  Student:
+    live_max_duration_seconds:  10,800  (3 hrs)
+    upload_max_duration_seconds:10,800  (3 hrs)
+    uploads_per_month:              20
+    total_minutes_per_month:     1,500  (25 hrs)
+    Plan credits/month: 15
+
+  Pro:
+    live_max_duration_seconds:  14,400  (4 hrs)
+    upload_max_duration_seconds:14,400  (4 hrs)
+    uploads_per_month:           None  (unlimited)
+    total_minutes_per_month:     2,400  (40 hrs)
+    Plan credits/month: 30
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+7. KNOWN RISK FACTORS (not yet mitigated)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  1. MULTI-ACCOUNT CREDIT FARMING
+     Users can create multiple free accounts to farm 5 starter credits each time.
+     Max loss per fake account: $1.05 (5 credits × $0.21).
+     Mitigation needed:
+       a) Unique constraint on (email_domain + IP) for new accounts
+       b) Require email_verified = true before granting starter credits
+       c) DB unique constraint: one starter_grant per user_id (already present)
+       d) Consider CAPTCHA on signup
+
+  2. IP-BASED RATE LIMITING BYPASS
+     Current slowapi rate limiting uses get_remote_address (trusts X-Forwarded-For).
+     Attacker can spoof this header to bypass rate limits.
+     Mitigation: Key rate limits on user_id for authenticated endpoints.
+     Risk level: Medium (mainly threatens free tier abuse, not credit loss)
+
+  3. RACE CONDITION IN STARTER GRANT
+     maybe_grant_starter() has a check-then-act gap.
+     Two simultaneous requests could double-grant starter credits.
+     Mitigation: Use DB unique constraint on (user_id, reason='starter_grant').
+     Max loss if exploited: 1 extra grant = $1.05.
+
+  4. REFUND ALWAYS REFUNDS 1 CREDIT
+     refund_credit() currently refunds exactly 1 credit even if the lecture
+     cost multiple credits (for long sessions).
+     Impact: Under-refund is a non-issue for us (user gets less back).
+     But it's a user experience bug. Should refund credits_for_duration(duration).
+
+  5. PRO PLAN NO-SESSION-CAP (FIXED)
+     Previously live_max_duration_seconds = None (unlimited).
+     Now fixed to 14,400s (4 hrs) to prevent unbounded API calls in one session.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+8. CUSTOMER VALUE PERSPECTIVE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Is this fair to customers?
+
+  Student ($9.99/month):
+    Gets 15 credits = at least 15 lectures (≤30 min each) or fewer longer ones.
+    At 1-hr lectures: 7 lectures/month = 7 hrs of AI-assisted study.
+    Compared to buying credits separately: 15 cr at $0.499/cr = $7.49 value.
+    Plus unlimited sessions (within credit limit), PDF export, Q&A, sharing.
+    Equivalent commercial AI tools: $20-40/month. We're at $9.99. FAIR.
+
+  Pro ($19.99/month):
+    Gets 30 credits + 4-hr session cap + 40-hr/month ceiling.
+    Heavy user buying 80 credits/month separately: 2 × 60cr power packs = $39.98.
+    With Pro plan: $19.99 plan gives 30 credits, then 1 power pack ($19.99) for 50 more = $39.98 total.
+    Same cost, but Pro plan also unlocks all premium features.
+    FAIR — customer pays same or less than pure credit purchases.
+
+  Credits (pay-per-lecture):
+    No subscription, no commitment.
+    Power pack: 60 lectures for $19.99 = $0.33/lecture.
+    Compare: Otter.ai, Fireflies.ai charge $8-18/month for just transcription.
+    We offer full AI analysis (summary, Q&A, PDF, sharing) per lecture. FAIR.
+
+================================================================================
+END OF ANALYSIS
+================================================================================

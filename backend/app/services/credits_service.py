@@ -104,26 +104,23 @@ def get_credit_balance(user_id: str) -> dict:
 def credits_for_duration(duration_seconds: int) -> int:
     """
     Returns how many credits a lecture costs based on its duration.
-    Keeps margins safe for long sessions (a 4-hr lecture costs ~8× a 30-min one).
+    Formula: ceil(minutes / 30) — one credit per 30-minute block (rounded up).
 
-    Tiers (each additional 45-min block = 1 more credit):
-        0 – 45 min  → 1 credit
-       45 – 90 min  → 2 credits
-       90 – 135 min → 3 credits
-      135 – 180 min → 4 credits
-      180+ min      → 5 credits  (hard cap — beyond 3 hrs is Pro territory anyway)
+    This guarantees a 37% floor margin at the cheapest pack price ($0.333/credit):
+      cost per 30-min block = 30 × $0.007 = $0.21; revenue = $0.333; margin = 37%.
+
+    Examples:
+        1 – 30 min  → 1 credit
+       31 – 60 min  → 2 credits
+       61 – 90 min  → 3 credits
+       91 – 120 min → 4 credits
+      121 – 150 min → 5 credits
+      151 – 180 min → 6 credits
+      211 – 240 min → 8 credits  (4-hr Pro lecture)
     """
+    import math
     minutes = max(1, duration_seconds // 60)
-    if minutes <= 45:
-        return 1
-    elif minutes <= 90:
-        return 2
-    elif minutes <= 135:
-        return 3
-    elif minutes <= 180:
-        return 4
-    else:
-        return 5
+    return math.ceil(minutes / 30)
 
 
 def check_credits(user_id: str, required: int = 1) -> None:
