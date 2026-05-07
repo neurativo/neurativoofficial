@@ -13,7 +13,7 @@ from app.core.config import settings
 from app.core.auth import get_current_user, get_active_user
 from app.core.plans import get_limits, is_unlimited
 from app.core.rate_limit import limiter
-from app.services.openai_service import transcribe_audio, transcribe_audio_bytes, transcribe_live_chunk, _bg_client, filter_segments_by_confidence
+from app.services.openai_service import transcribe_audio, transcribe_audio_bytes, transcribe_live_chunk, _bg_client, filter_segments_by_confidence, _HALLUCINATION_LANGS
 from app.services.explanation_service import generate_explanation
 from app.services.qa_service import answer_lecture_question
 from app.services.pdf_service import generate_lecture_pdf
@@ -907,9 +907,6 @@ async def process_live_chunk(
 
     # Fix 4: serialize per-lecture so two overlapping chunks never race through
     # transcription + transcript-append for the same lecture simultaneously.
-    # Languages Whisper hallucinates on silence — never use these to set lecture language
-    _HALLUCINATION_LANGS = {'ja', 'zh'}
-
     async with _get_lecture_lock(lecture_id):
         # Build Whisper context from last ~200 words of transcript to prevent
         # duplicate transcription at chunk boundaries.
@@ -941,10 +938,13 @@ async def process_live_chunk(
         if not chunk_text:
             return {"lecture_id": lecture_id, "chunk_transcript": "", "message": "Empty transcription"}
 
-        # 3. Persist language — each chunk's detection is stored independently.
-        # Ignore hallucination languages (ja/zh) which Whisper emits on silence.
+        # 3. Discard chunks detected in known hallucination languages (Odia ୧, etc.)
+        #    and don't update the lecture language from them either.
         stored_language = get_lecture_language(lecture_id)
-        if detected_language and detected_language not in _HALLUCINATION_LANGS:
+        if detected_language and detected_language in _HALLUCINATION_LANGS:
+            print(f"[chunk] Hallucination language '{detected_language}' discarded for lecture {lecture_id}")
+            return {"lecture_id": lecture_id, "chunk_transcript": "", "message": "Hallucination language discarded"}
+        if detected_language:
             update_lecture_language(lecture_id, detected_language)
             stored_language = detected_language
         language = stored_language or 'en'

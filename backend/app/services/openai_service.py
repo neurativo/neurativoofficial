@@ -52,11 +52,42 @@ _HALLUCINATION_PHRASES = {
     "bye bye",
 }
 
+# Languages Whisper commonly hallucinates on near-silent audio.
+# Transcripts detected in these languages are discarded entirely.
+# Odia (or) is the most common: Whisper emits rows of ୧ characters on silence.
+_HALLUCINATION_LANGS = {"ja", "zh", "or", "bo", "km", "lo", "my", "si", "ne", "am"}
+
 
 def _is_hallucinated(text: str) -> bool:
-    """Return True if text matches a known Whisper hallucination phrase."""
+    """
+    Return True if text is a known Whisper hallucination.
+    Catches both:
+      - Known filler phrases ("thank you for watching")
+      - Repetitive-character noise (Odia ୧୧୧..., Devanagari वदवयल repeating, etc.)
+    """
+    if not text or not text.strip():
+        return False
     normalised = text.strip().lower().rstrip("!.").strip()
-    return normalised in _HALLUCINATION_PHRASES
+    if normalised in _HALLUCINATION_PHRASES:
+        return True
+
+    # Repetition check: if unique characters make up ≤10% of the string
+    # (ignoring spaces/punctuation), the text is almost certainly a loop.
+    chars = [c for c in text if not c.isspace() and c not in ".,!?;:-"]
+    if len(chars) >= 20:
+        unique_ratio = len(set(chars)) / len(chars)
+        if unique_ratio <= 0.10:
+            return True
+
+    # Word repetition: if the most common word accounts for ≥60% of all words
+    words = text.split()
+    if len(words) >= 6:
+        from collections import Counter
+        top_word_count = Counter(words).most_common(1)[0][1]
+        if top_word_count / len(words) >= 0.60:
+            return True
+
+    return False
 
 
 def filter_segments_by_confidence(segments: list, threshold: float = 0.6) -> str:
