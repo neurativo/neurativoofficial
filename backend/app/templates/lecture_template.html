@@ -315,6 +315,130 @@
         .toc-dots { flex: 1; border-bottom: 0.4pt dotted var(--ink-5); margin: 0 4px 3px; }
         .toc-page-num { font-size: 7.5pt; color: var(--ink-4); font-family: var(--mono); white-space: nowrap; }
 
+        .preview-page { page-break-after: always; padding-top: 4mm; }
+        .preview-hero {
+            display: grid;
+            grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.95fr);
+            gap: 8mm;
+            align-items: start;
+            margin-bottom: 7mm;
+        }
+        .preview-kicker {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 7pt;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            color: var(--accent-text);
+            margin-bottom: 3mm;
+        }
+        .preview-kicker::before {
+            content: "";
+            width: 8px;
+            height: 8px;
+            background: var(--accent);
+            transform: rotate(45deg);
+            display: inline-block;
+        }
+        .preview-title {
+            font-family: var(--serif);
+            font-size: 24pt;
+            line-height: 1.15;
+            margin-bottom: 3mm;
+        }
+        .preview-copy {
+            font-size: 10pt;
+            line-height: 1.75;
+            color: var(--ink-2);
+            margin: 0;
+        }
+        .preview-upgrade-box {
+            border: 1px solid var(--accent-mid);
+            background: linear-gradient(180deg, var(--accent-lt), #ffffff 72%);
+            border-radius: 6px;
+            padding: 5mm;
+        }
+        .preview-upgrade-box .label {
+            font-size: 7pt;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            color: var(--accent-text);
+            margin-bottom: 2.5mm;
+        }
+        .preview-upgrade-box .value {
+            font-family: var(--serif);
+            font-size: 16pt;
+            color: var(--ink);
+            margin-bottom: 2mm;
+        }
+        .preview-upgrade-box .sub {
+            font-size: 8.75pt;
+            color: var(--ink-3);
+            line-height: 1.6;
+        }
+        .preview-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6mm;
+            margin-bottom: 7mm;
+        }
+        .preview-panel {
+            border: var(--hairline);
+            border-radius: 6px;
+            padding: 5mm;
+            background: #fff;
+        }
+        .preview-panel h3 {
+            font-family: var(--sans);
+            font-size: 9pt;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--ink-2);
+            margin-bottom: 3mm;
+        }
+        .preview-list {
+            margin: 0;
+            padding-left: 4mm;
+            color: var(--ink-2);
+        }
+        .preview-list li {
+            margin-bottom: 2.2mm;
+            line-height: 1.55;
+        }
+        .preview-section-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6mm;
+        }
+        .preview-section-card {
+            border-top: 2px solid var(--accent-rule);
+            padding-top: 3.5mm;
+        }
+        .preview-section-card .index {
+            font-size: 7pt;
+            font-weight: 700;
+            letter-spacing: 1.2px;
+            text-transform: uppercase;
+            color: var(--ink-4);
+            margin-bottom: 2mm;
+        }
+        .preview-section-card .title {
+            font-family: var(--serif);
+            font-size: 13pt;
+            color: var(--ink);
+            margin-bottom: 2mm;
+        }
+        .preview-section-card p {
+            font-size: 9.4pt;
+            line-height: 1.7;
+            color: var(--ink-2);
+            margin: 0;
+        }
+
         /* ─── 6. EXECUTIVE SUMMARY ──────────────────────────────── */
         .exec-card {
             background: var(--accent-lt);
@@ -993,7 +1117,7 @@
     <!-- ══════════════════════════════════════
          TABLE OF CONTENTS
     ══════════════════════════════════════ -->
-    {% if enriched_sections | length > 1 %}
+    {% if enriched_sections | length > 1 and not preview_upgrade %}
     <div class="toc-page">
         <div class="eyebrow-row" style="padding-top: 2mm;">
             <span class="eyebrow-label">Contents</span>
@@ -1046,11 +1170,76 @@
     </div>
     {% endif %}
 
+    {% if preview_upgrade %}
+    <div class="preview-page">
+        <div class="eyebrow-row" style="padding-top: 2mm;">
+            <span class="eyebrow-label">Free Preview</span>
+        </div>
+        <hr class="eyebrow-rule">
+
+        <div class="preview-hero">
+            <div>
+                <div class="preview-kicker">Preview PDF</div>
+                <div class="preview-title">A usable preview now, the full report after upgrade.</div>
+                <p class="preview-copy">
+                    This export includes the report shell and the first visible layer of the lecture.
+                    Upgrade when you want the full transcript, the complete section breakdown,
+                    and the rest of the study material generated from this session.
+                </p>
+            </div>
+            <div class="preview-upgrade-box">
+                <div class="label">Locked Behind Upgrade</div>
+                <div class="value">
+                    {% if preview_hidden_sections > 0 %}
+                    {{ preview_hidden_sections }} more section{% if preview_hidden_sections != 1 %}s{% endif %}
+                    {% else %}
+                    Full report access
+                    {% endif %}
+                </div>
+                <div class="sub">
+                    Student and Pro can regenerate this lecture as a complete PDF without the preview watermark.
+                </div>
+            </div>
+        </div>
+
+        <div class="preview-grid">
+            <div class="preview-panel">
+                <h3>Included In This Preview</h3>
+                <ul class="preview-list">
+                    {% for item in preview_now_features %}
+                    <li>{{ item }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            <div class="preview-panel">
+                <h3>Unlocked In The Full Report</h3>
+                <ul class="preview-list">
+                    {% for item in preview_upgrade_features %}
+                    <li>{{ item }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+
+        {% if preview_sections %}
+        <div class="preview-section-grid">
+            {% for sec in preview_sections %}
+            <div class="preview-section-card">
+                <div class="index">Preview {{ loop.index }}</div>
+                <div class="title">{{ sec.title }}</div>
+                <p>{{ sec.prose }}</p>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
 
     <!-- ══════════════════════════════════════
          EXECUTIVE SUMMARY
     ══════════════════════════════════════ -->
-    {% if executive_summary %}
+    {% if executive_summary and not preview_upgrade %}
     <div class="eyebrow-row pb-before">
         <span class="eyebrow-label">Executive Summary</span>
     </div>

@@ -39,6 +39,36 @@ def test_get_domain_color_none_returns_default():
     assert _get_domain_color(None) == "#2563EB"
 
 
+def test_build_lite_sections_falls_back_to_summary_when_no_sections():
+    from app.services.pdf_service import _build_lite_sections
+
+    sections = _build_lite_sections(
+        raw_sections=[],
+        summary="First paragraph.\n\nSecond paragraph.",
+        transcript="",
+        limit=2,
+    )
+
+    assert len(sections) == 2
+    assert sections[0]["title"] == "Lecture Preview"
+    assert "First paragraph." in sections[0]["prose"]
+
+
+def test_build_lite_sections_falls_back_to_transcript_when_summary_empty():
+    from app.services.pdf_service import _build_lite_sections
+
+    sections = _build_lite_sections(
+        raw_sections=[],
+        summary="",
+        transcript="alpha beta gamma delta " * 80,
+        limit=2,
+    )
+
+    assert len(sections) >= 1
+    assert sections[0]["title"] == "Lecture Snapshot"
+    assert sections[0]["prose"]
+
+
 # ── _call_enrich_section — anti-hallucination ──────────────────────────────────
 
 def test_enrich_section_accepts_empty_concepts_and_examples():

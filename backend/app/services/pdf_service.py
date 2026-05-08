@@ -128,6 +128,83 @@ def _extract_lead_sentence(prose: str) -> tuple[str, str]:
     return prose.strip(), ""
 
 
+def _truncate_words(text: str, limit: int) -> str:
+    words = str(text or "").split()
+    if len(words) <= limit:
+        return " ".join(words)
+    return " ".join(words[:limit]).rstrip(" .,;:") + "..."
+
+
+def _build_lite_sections(raw_sections: list[str], summary: str, transcript: str, limit: int) -> list[dict]:
+    sections_data: list[dict] = []
+    for i, sec in enumerate(raw_sections[:limit]):
+        lines = [ln.strip() for ln in sec.split("\n") if ln.strip()]
+        sec_title = lines[0][:80] if lines else f"Section {i + 1}"
+        prose = "\n".join(lines[1:]).strip() or sec.strip()
+        sections_data.append({
+            "title":         sec_title,
+            "lead_sentence": "",
+            "prose":         _truncate_words(prose, 130),
+            "bullets":       [],
+            "concepts":      [],
+            "examples":      [],
+            "analogy":       None,
+            "mistake":       None,
+            "remember":      None,
+        })
+
+    if sections_data:
+        return sections_data
+
+    summary_paras = [p.strip() for p in re.split(r"\n\s*\n", summary or "") if p.strip()]
+    for i, para in enumerate(summary_paras[:limit]):
+        sections_data.append({
+            "title":         "Lecture Preview" if i == 0 else f"Key Idea {i + 1}",
+            "lead_sentence": "",
+            "prose":         _truncate_words(para, 130),
+            "bullets":       [],
+            "concepts":      [],
+            "examples":      [],
+            "analogy":       None,
+            "mistake":       None,
+            "remember":      None,
+        })
+
+    if sections_data:
+        return sections_data
+
+    transcript_words = str(transcript or "").split()
+    if transcript_words:
+        midpoint = min(len(transcript_words), 120)
+        first_excerpt = " ".join(transcript_words[:midpoint])
+        second_excerpt = " ".join(transcript_words[midpoint:midpoint + 120])
+        sections_data.append({
+            "title":         "Lecture Snapshot",
+            "lead_sentence": "",
+            "prose":         _truncate_words(first_excerpt, 130),
+            "bullets":       [],
+            "concepts":      [],
+            "examples":      [],
+            "analogy":       None,
+            "mistake":       None,
+            "remember":      None,
+        })
+        if second_excerpt:
+            sections_data.append({
+                "title":         "More From The Session",
+                "lead_sentence": "",
+                "prose":         _truncate_words(second_excerpt, 130),
+                "bullets":       [],
+                "concepts":      [],
+                "examples":      [],
+                "analogy":       None,
+                "mistake":       None,
+                "remember":      None,
+            })
+
+    return sections_data
+
+
 # ── GPT worker functions (all sync — called via asyncio.to_thread) ────────────
 
 def _call_executive_summary(transcript: str, title: str, topic: str | None, strict: bool = False) -> str:
@@ -636,7 +713,10 @@ async def _generate_lite_pdf(
     word_count: int,
     topic: str | None,
     language: str,
+    transcript: str,
+    summary: str,
     raw_sections: list,
+    total_sections_actual: int,
     watermark: bool = False,
 ) -> bytes:
     """Generates a lite PDF with no GPT enrichment — summary text only.
@@ -645,24 +725,31 @@ async def _generate_lite_pdf(
     section_label, review_label, glossary_label = _get_domain_labels(topic)
     domain_color = _get_domain_color(topic)
 
-    sections_data = []
-    for i, sec in enumerate(raw_sections):
-        lines = sec.split("\n")
-        sec_title = lines[0].strip()[:80] if lines[0].strip() else f"Section {i + 1}"
-        prose = "\n".join(lines[1:]).strip()
-        sections_data.append({
-            "title":         sec_title,
-            "lead_sentence": "",
-            "prose":         prose or sec,
-            "bullets":       [],
-            "concepts":      [],
-            "examples":      [],
-            "analogy":       None,
-            "mistake":       None,
-            "remember":      None,
-        })
+    section_limit = 2 if watermark else 4
+    sections_data = _build_lite_sections(raw_sections, summary, transcript, section_limit)
 
     n_sections = len(sections_data)
+    hidden_sections = max(0, total_sections_actual - n_sections)
+    preview_upgrade = bool(watermark)
+    preview_now_features = [
+        f"{n_sections or 1} preview section{'s' if (n_sections or 1) != 1 else ''}",
+        "Watermarked PDF preview",
+        "Lecture metadata and duration stats",
+    ]
+    preview_upgrade_features = [
+        "Full transcript export",
+        "Complete section-by-section report",
+        "Glossary, self-test, and study roadmap",
+        "Clean PDF with no preview watermark",
+    ]
+    executive_summary = ""
+    if preview_upgrade:
+        executive_summary = (
+            f"This free preview shows the opening view of \"{title}\" and up to {n_sections or 1} "
+            f"section preview{'s' if (n_sections or 1) != 1 else ''}. "
+            f"Upgrade to unlock the full report"
+            f"{f', including {hidden_sections} more section' + ('s' if hidden_sections != 1 else '') if hidden_sections else ''}."
+        )
 
     # Render template with same context keys as standard path
     template_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "templates")
@@ -688,7 +775,7 @@ async def _generate_lite_pdf(
         "duration_formatted":   duration_formatted,
         "word_count":           f"{word_count:,}",
         "total_chunks":         0,
-        "total_sections":       n_sections,
+        "total_sections":       total_sections_actual or n_sections,
         "total_concepts":       0,
         "qa_pairs":             0,
         "language":             language.upper(),
@@ -697,7 +784,7 @@ async def _generate_lite_pdf(
         "section_label":        section_label,
         "review_label":         review_label,
         "glossary_label":       glossary_label,
-        "executive_summary":    "",
+        "executive_summary":    executive_summary,
         "enriched_sections":    sections_data,
         "glossary":             [],
         "takeaways":            [],
@@ -709,6 +796,11 @@ async def _generate_lite_pdf(
         "visual_frames":        [],
         "key_stats":            [],
         "accent_color":         domain_color,
+        "preview_upgrade":      preview_upgrade,
+        "preview_hidden_sections": hidden_sections,
+        "preview_now_features": preview_now_features,
+        "preview_upgrade_features": preview_upgrade_features,
+        "preview_sections":     sections_data[:2],
     }
 
     html_content = template.render(**context)
@@ -785,7 +877,10 @@ async def generate_lecture_pdf(
             word_count=word_count,
             topic=topic,
             language=language,
+            transcript=transcript,
+            summary=summary,
             raw_sections=raw_sections,
+            total_sections_actual=n_sections,
             watermark=IS_FREE,
         )
 
