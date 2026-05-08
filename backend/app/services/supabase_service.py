@@ -255,6 +255,18 @@ def update_lecture_analytics(lecture_id: str, chunk_duration: int = 12):
                 "total_duration_seconds": (current.get("total_duration_seconds") or 0) + chunk_duration,
             }).eq("id", lecture_id).execute()
 
+
+def set_lecture_duration(lecture_id: str, duration_seconds: int) -> None:
+    """Stores verified media duration without changing live chunk counters."""
+    if not supabase:
+        raise Exception("Supabase client is not initialized")
+    seconds = max(0, int(duration_seconds or 0))
+    supabase.table("lectures").update({
+        "duration_seconds": seconds,
+        "total_duration_seconds": seconds,
+    }).eq("id", lecture_id).execute()
+
+
 def end_live_session(lecture_id: str):
     """
     Marks the live session active for a lecture as inactive.
@@ -1029,6 +1041,36 @@ def increment_uploads_this_month(user_id: str, duration_minutes: int = 0) -> Non
             }).execute()
     except Exception as e:
         print(f"[usage] increment_uploads_this_month error (non-fatal): {e}")
+
+
+def add_monthly_usage_minutes(user_id: str, duration_minutes: int) -> None:
+    """Adds minutes to the current month's total without changing lecture/upload counts."""
+    if not supabase:
+        return
+    ym = _current_year_month()
+    minutes = max(0, duration_minutes or 0)
+    if minutes == 0:
+        return
+    try:
+        existing = (
+            supabase.table("monthly_usage")
+            .select("total_minutes_used")
+            .eq("user_id", user_id)
+            .eq("year_month", ym)
+            .execute()
+        )
+        if existing.data:
+            row = existing.data[0]
+            supabase.table("monthly_usage").update({
+                "total_minutes_used": (row.get("total_minutes_used") or 0) + minutes,
+            }).eq("user_id", user_id).eq("year_month", ym).execute()
+        else:
+            supabase.table("monthly_usage").insert({
+                "user_id": user_id, "year_month": ym,
+                "live_lectures": 0, "uploads": 0, "total_minutes_used": minutes,
+            }).execute()
+    except Exception as e:
+        print(f"[usage] add_monthly_usage_minutes error (non-fatal): {e}")
 
 
 def get_total_lecture_count(user_id: str) -> int:

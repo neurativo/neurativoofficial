@@ -19,7 +19,7 @@ _jwks_client: PyJWKClient | None = None
 class User:
     id: str
     email: str
-    email_verified: bool = True  # True by default; False only when Clerk explicitly sets it
+    email_verified: bool = False
 
 
 def _get_jwks_client() -> PyJWKClient:
@@ -56,6 +56,9 @@ async def get_current_user(authorization: str = Header(None)) -> User:
             "options": decode_opts,
         }
 
+        if settings.ENVIRONMENT == "production" and not settings.CLERK_JWT_ISSUER:
+            raise HTTPException(status_code=500, detail="Authentication issuer is not configured")
+
         # Issuer verification (if configured)
         if settings.CLERK_JWT_ISSUER:
             decode_kwargs["issuer"] = settings.CLERK_JWT_ISSUER
@@ -75,7 +78,7 @@ async def get_current_user(authorization: str = Header(None)) -> User:
         # Clerk includes email_verified when configured in JWT template.
         # Default True so social-login users (whose email is pre-verified) aren't
         # accidentally blocked — Clerk only sets it False for unverified email/pwd signups.
-        email_verified = payload.get("email_verified", True)
+        email_verified = payload.get("email_verified", False)
         return User(id=user_id, email=email, email_verified=bool(email_verified))
 
     except HTTPException:
@@ -102,7 +105,7 @@ async def get_active_user(authorization: str = Header(None)) -> User:
             detail="Account suspended. Contact support at support@neurativo.com.",
         )
     # Domain allowlist: auto-join org if email domain matches (non-blocking)
-    if user.email and "@" in user.email:
+    if user.email_verified and user.email and "@" in user.email:
         import asyncio
         from app.services.teams_service import maybe_auto_join_by_domain
         asyncio.get_running_loop().run_in_executor(

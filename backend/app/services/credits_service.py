@@ -120,7 +120,7 @@ def credits_for_duration(duration_seconds: int) -> int:
       211 – 240 min → 8 credits  (4-hr Pro lecture)
     """
     import math
-    minutes = max(1, duration_seconds // 60)
+    minutes = max(1, math.ceil((duration_seconds or 0) / 60))
     return math.ceil(minutes / 30)
 
 
@@ -142,13 +142,13 @@ def check_credits(user_id: str, required: int = 1) -> None:
         )
 
 
-def deduct_credit(user_id: str, lecture_id: str, duration_seconds: int = 0) -> int:
+def _deduct_amount(user_id: str, lecture_id: str, amount: int, reason: str = "lecture_processed") -> int:
     """
-    Deducts credits proportional to lecture duration (see credits_for_duration).
+    Deducts an exact credit amount.
     Uses a guarded UPDATE to handle race conditions.
     Returns new balance, or raises 402 if insufficient.
     """
-    cost = credits_for_duration(duration_seconds)
+    cost = max(1, int(amount or 0))
     db = _fresh_db()
 
     # Fetch current balance
@@ -179,10 +179,88 @@ def deduct_credit(user_id: str, lecture_id: str, duration_seconds: int = 0) -> i
         user_id=user_id,
         amount=-cost,
         balance_after=new_balance,
-        reason="lecture_processed",
+        reason=reason,
         lecture_id=lecture_id,
     )
     return new_balance
+
+
+def deduct_credit(user_id: str, lecture_id: str, duration_seconds: int = 0) -> int:
+    """
+    Deducts credits proportional to lecture duration (see credits_for_duration).
+    """
+    return _deduct_amount(
+        user_id=user_id,
+        lecture_id=lecture_id,
+        amount=credits_for_duration(duration_seconds),
+        reason="lecture_processed",
+    )
+
+
+def reserve_credits(user_id: str, lecture_id: str, required: int) -> int:
+    """
+    Reserves credits before expensive processing starts.
+    Reserved credits are final unless explicitly refunded.
+    """
+    return _deduct_amount(
+        user_id=user_id,
+        lecture_id=lecture_id,
+        amount=required,
+        reason="credit_reserved",
+    )
+
+
+def get_reserved_credits(user_id: str, lecture_id: str) -> int:
+    """Returns the currently reserved/deducted credit amount for a lecture."""
+    db = _fresh_db()
+    return _reserved_amount(db, user_id, lecture_id)
+
+
+def _reserved_amount(db, user_id: str, lecture_id: str) -> int:
+    resp = db.table("credit_transactions").select("amount,reason").eq(
+        "user_id", user_id
+    ).eq("lecture_id", lecture_id).execute()
+    outstanding = 0
+    for row in resp.data or []:
+        amount = int(row.get("amount") or 0)
+        reason = row.get("reason")
+        if amount < 0 and reason in ("credit_reserved", "lecture_processed"):
+            outstanding += abs(amount)
+        elif amount > 0 and reason == "refund":
+            outstanding -= amount
+    return max(0, outstanding)
+
+
+def finalize_reserved_credits(user_id: str, lecture_id: str, actual_duration_seconds: int) -> None:
+    """
+    Adjusts a reservation to the final duration cost.
+    If the reserved amount is higher than actual cost, refunds the difference.
+    If actual cost is higher, deducts the shortfall.
+    """
+    db = _fresh_db()
+    reserved = _reserved_amount(db, user_id, lecture_id)
+    actual = credits_for_duration(actual_duration_seconds)
+    if reserved <= 0:
+        deduct_credit(user_id, lecture_id, duration_seconds=actual_duration_seconds)
+        mark_credit_deducted(lecture_id)
+        return
+    if reserved > actual:
+        bal_resp = db.table("profiles").select("credits").eq("id", user_id).execute()
+        if bal_resp.data:
+            refund_amount = reserved - actual
+            new_balance = int(bal_resp.data[0]["credits"]) + refund_amount
+            db.table("profiles").update({"credits": new_balance}).eq("id", user_id).execute()
+            _log_transaction(
+                db,
+                user_id=user_id,
+                amount=refund_amount,
+                balance_after=new_balance,
+                reason="refund",
+                lecture_id=lecture_id,
+            )
+    elif actual > reserved:
+        _deduct_amount(user_id, lecture_id, actual - reserved, reason="lecture_processed")
+    mark_credit_deducted(lecture_id)
 
 
 def refund_credit(user_id: str, lecture_id: str) -> None:
@@ -198,9 +276,10 @@ def refund_credit(user_id: str, lecture_id: str) -> None:
     if not lec_resp.data or not lec_resp.data[0].get("credit_deducted"):
         return
 
-    # Calculate original deduction amount based on recorded duration
-    duration_seconds = lec_resp.data[0].get("total_duration_seconds") or 0
-    refund_amount = credits_for_duration(duration_seconds)
+    refund_amount = _reserved_amount(db, user_id, lecture_id)
+    if refund_amount <= 0:
+        duration_seconds = lec_resp.data[0].get("total_duration_seconds") or 0
+        refund_amount = credits_for_duration(duration_seconds)
 
     bal_resp = db.table("profiles").select("credits").eq("id", user_id).execute()
     if not bal_resp.data:
@@ -254,7 +333,7 @@ def add_credits(
     return new_balance
 
 
-def maybe_grant_starter(user_id: str, email: str = "", email_verified: bool = True) -> bool:
+def maybe_grant_starter(user_id: str, email: str = "", email_verified: bool = False) -> bool:
     """
     Grants 5 starter credits exactly once per user.
     Returns True if credits were granted, False if already granted or ineligible.
@@ -276,10 +355,24 @@ def maybe_grant_starter(user_id: str, email: str = "", email_verified: bool = Tr
     if existing.data:
         return False
 
-    # Race-safe: attempt the transaction INSERT first (unique index prevents duplicate).
-    # If two requests slip past the check above simultaneously, the DB rejects the second.
+    # Race-safe: insert the unique transaction before mutating the balance.
+    # If two requests slip past the check above simultaneously, the DB rejects the second
+    # before credits can be incremented.
     try:
-        add_credits(user_id, STARTER_CREDITS, reason="starter_grant")
+        profile = db.table("profiles").select("credits").eq("id", user_id).execute()
+        if not profile.data:
+            db.table("profiles").insert({"id": user_id, "credits": 0}).execute()
+            current = 0
+        else:
+            current = int(profile.data[0].get("credits") or 0)
+        new_balance = current + STARTER_CREDITS
+        db.table("credit_transactions").insert({
+            "user_id": user_id,
+            "amount": STARTER_CREDITS,
+            "balance_after": new_balance,
+            "reason": "starter_grant",
+        }).execute()
+        db.table("profiles").update({"credits": new_balance}).eq("id", user_id).execute()
         return True
     except Exception as e:
         err_str = str(e).lower()

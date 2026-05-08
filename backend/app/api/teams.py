@@ -183,6 +183,8 @@ def revoke_invite(slug: str, invite_id: str, user: User = Depends(get_active_use
 def join_org(body: RedeemInviteBody, background: BackgroundTasks,
              user: User = Depends(get_active_user)):
     """Redeem an invite token. Any authenticated user can call this."""
+    if not user.email_verified:
+        raise HTTPException(status_code=403, detail="Verify your email before joining an organization")
     try:
         result = ts.redeem_invite(body.token, user.id, user.email)
     except ValueError as e:

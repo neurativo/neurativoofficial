@@ -1003,15 +1003,28 @@ function App({ user }) {
                 isRecordingRef.current = false;
                 stopAudioMonitoring();
                 setSessionStatus('ended');
-                const limitSecs = res.data.limit_seconds || 0;
-                setLimitModal({
-                    show: true,
-                    reason: 'duration',
-                    plan: res.data.plan || planTier,
-                    limit: limitSecs,
-                    limitLabel: formatTime(limitSecs),
-                    resetsAt: '',
-                });
+                if (res.data.reason === 'no_credits') {
+                    setLimitModal({
+                        show: true,
+                        reason: 'no_credits',
+                        plan: res.data.plan || planTier,
+                        limit: 0,
+                        limitLabel: '',
+                        resetsAt: '',
+                        credits: res.data.credits ?? 0,
+                        required: res.data.required ?? 1,
+                    });
+                } else {
+                    const limitSecs = res.data.limit_seconds || 0;
+                    setLimitModal({
+                        show: true,
+                        reason: 'duration',
+                        plan: res.data.plan || planTier,
+                        limit: limitSecs,
+                        limitLabel: formatTime(limitSecs),
+                        resetsAt: '',
+                    });
+                }
                 return;
             }
             // Duration warning

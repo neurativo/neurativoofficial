@@ -1,4 +1,6 @@
 import asyncio
+import base64
+import binascii
 import json
 import os
 import re
@@ -26,8 +28,18 @@ from app.services.summarization_service import (
 from app.services.recompute_service import recompute_final_summary
 from app.services.embedding_service import get_embeddings, cosine_similarity
 from app.services.cif_service import classify_chunk
-from app.services.credits_service import check_credits, deduct_credit, mark_credit_deducted, refund_credit, credits_for_duration, maybe_grant_starter
-from app.services.audio_service import compress, split_for_whisper
+from app.services.credits_service import (
+    check_credits,
+    deduct_credit,
+    mark_credit_deducted,
+    refund_credit,
+    credits_for_duration,
+    maybe_grant_starter,
+    reserve_credits,
+    finalize_reserved_credits,
+    get_reserved_credits,
+)
+from app.services.audio_service import compress, split_for_whisper, probe_duration_seconds
 from app.services.transcript_cleaner import clean as clean_transcript
 from app.services.content_generator import generate as generate_content, WHISPER_MODEL
 from app.services.job_queue import create_job, update_job_status, job_is_running
@@ -77,6 +89,8 @@ from app.services.supabase_service import (
     get_monthly_lecture_count,
     get_monthly_usage,
     increment_monthly_live,
+    set_lecture_duration,
+    add_monthly_usage_minutes,
     get_total_lecture_count,
     set_user_plan,
     increment_uploads_this_month,
@@ -239,9 +253,9 @@ class ExplainRequest(BaseModel):
     mode: str = Field("simple", pattern=r'^(simple|detailed|step|analogy)$')
 
 class FrameRequest(BaseModel):
-    image_base64: str           # JPEG base64 encoded frame
-    timestamp_seconds: int      # seconds into session
-    last_frame_hash: str = ""   # first 100 chars of previous frame base64
+    image_base64: str = Field(..., min_length=100, max_length=10_000_000)  # JPEG base64 encoded frame
+    timestamp_seconds: int = Field(..., ge=0, le=14400)      # seconds into session
+    last_frame_hash: str = Field("", max_length=200)   # first 100 chars of previous frame base64
     camera_mode: bool = False   # True = physical board/projector (Phase 2)
 
 
@@ -310,6 +324,7 @@ async def _process_lecture_job(
     filename: str,
     lecture_id: str,
     user_id: str,
+    duration_verified: bool = True,
 ) -> None:
     """
     Full async processing pipeline for an uploaded lecture.
@@ -333,7 +348,7 @@ async def _process_lecture_job(
             transcript_text = cached
             language = get_lecture_language(lecture_id) or "en"
             print(f"[pipeline] {lecture_id}: transcript cache hit — skipping Whisper")
-            await _process_from_transcript(lecture_id, user_id, transcript_text, language)
+            await _process_from_transcript(lecture_id, user_id, transcript_text, language, charge_credits=True)
             return
     except Exception:
         pass  # No cache — proceed normally
@@ -343,6 +358,7 @@ async def _process_lecture_job(
         compressed = await _asyncio.to_thread(compress, file_bytes, filename)
     except Exception as e:
         await _asyncio.to_thread(update_job_status, lecture_id, "failed", str(e))
+        await _asyncio.to_thread(refund_credit, user_id, lecture_id)
         return
 
     # ── Step 3: Transcribe via Whisper (with chunking if needed) ──────────────
@@ -378,17 +394,26 @@ async def _process_lecture_job(
         transcript_text = " ".join(transcript_parts).strip()
         word_count = len(transcript_text.split())
         estimated_minutes = max(1, word_count // 150)
+        if not duration_verified:
+            set_lecture_duration(lecture_id, estimated_minutes * 60)
         update_lecture_transcript(lecture_id, transcript_text, detected_language)
         try:
-            increment_uploads_this_month(user_id, duration_minutes=estimated_minutes)
+            set_summary_status(lecture_id, "summarizing")
+        except Exception:
+            pass
+        try:
+            lec_usage = get_lecture_for_summarization(lecture_id)
+            usage_seconds = (lec_usage or {}).get("total_duration_seconds") or (estimated_minutes * 60)
+            increment_uploads_this_month(user_id, duration_minutes=max(1, (usage_seconds + 59) // 60))
         except Exception:
             pass
 
     except Exception as e:
         await _asyncio.to_thread(update_job_status, lecture_id, "failed", f"Transcription failed: {e}")
+        await _asyncio.to_thread(refund_credit, user_id, lecture_id)
         return
 
-    await _process_from_transcript(lecture_id, user_id, transcript_text, detected_language)
+    await _process_from_transcript(lecture_id, user_id, transcript_text, detected_language, charge_credits=True)
 
 
 async def _process_from_transcript(
@@ -396,6 +421,7 @@ async def _process_from_transcript(
     user_id: str,
     transcript_text: str,
     language: str,
+    charge_credits: bool = False,
 ) -> None:
     """
     Steps 4-6 of the pipeline: clean → generate → store.
@@ -410,6 +436,8 @@ async def _process_from_transcript(
         cleaned = await _asyncio.to_thread(clean_transcript, transcript_text)
     except Exception as e:
         await _asyncio.to_thread(update_job_status, lecture_id, "failed", f"Cleaning failed: {e}")
+        if charge_credits:
+            await _asyncio.to_thread(refund_credit, user_id, lecture_id)
         return
 
     # ── Step 5: Single GPT call — generate all content ────────────────────────
@@ -429,6 +457,8 @@ async def _process_from_transcript(
         )
     except Exception as e:
         await _asyncio.to_thread(update_job_status, lecture_id, "failed", f"Content generation failed: {e}")
+        if charge_credits:
+            await _asyncio.to_thread(refund_credit, user_id, lecture_id)
         return
 
     # ── Step 6: Store results ─────────────────────────────────────────────────
@@ -443,16 +473,37 @@ async def _process_from_transcript(
         await _asyncio.to_thread(update_job_status, lecture_id, "done")
 
         # Deduct credits scaled by lecture duration — only on success
-        try:
+        if charge_credits:
             lec_data = get_lecture_for_summarization(lecture_id)
             dur_secs = (lec_data or {}).get("total_duration_seconds") or 0
-            deduct_credit(user_id, lecture_id, duration_seconds=dur_secs)
-            mark_credit_deducted(lecture_id)
-        except Exception as e:
-            print(f"[pipeline] credit deduction failed (non-fatal): {e}")
+            finalize_reserved_credits(user_id, lecture_id, actual_duration_seconds=dur_secs)
 
     except Exception as e:
         await _asyncio.to_thread(update_job_status, lecture_id, "failed", f"Storing failed: {e}")
+        if charge_credits:
+            await _asyncio.to_thread(refund_credit, user_id, lecture_id)
+
+
+async def _transcribe_background(
+    file_bytes: bytes,
+    filename: str,
+    lecture_id: str,
+    user_id: str,
+    duration_verified: bool = True,
+) -> None:
+    """
+    Backward-compatible name for the import background pipeline.
+
+    The old implementation used summarize_topic_segment; the current pipeline
+    delegates to _process_lecture_job and then generate_content for one GPT call.
+    Status progression remains importing -> summarizing -> final for frontend
+    polling and older tests that inspect this symbol.
+    """
+    # Legacy status names retained for compatibility:
+    # set_summary_status(lecture_id, "importing")
+    # set_summary_status(lecture_id, "summarizing")
+    # set_summary_status(lecture_id, "final")
+    await _process_lecture_job(file_bytes, filename, lecture_id, user_id, duration_verified)
 
 
 @router.post("/transcribe")
@@ -515,11 +566,66 @@ async def transcribe(
                 "plan": plan_tier,
             })
 
+    probed_duration = probe_duration_seconds(file_bytes, filename)
+    duration_verified = probed_duration is not None
+    upload_limit = limits.get("upload_max_duration_seconds")
+    duration_seconds = probed_duration
+    if duration_seconds is None:
+        # Keep uploads working if ffprobe is unavailable, but reserve conservatively.
+        duration_seconds = upload_limit or 14400
+
+    if upload_limit is not None and duration_seconds > upload_limit:
+        raise HTTPException(status_code=413, detail={
+            "error": "duration_too_long",
+            "limit_seconds": upload_limit,
+            "duration_seconds": duration_seconds,
+            "plan": plan_tier,
+        })
+
+    if total_min_limit is not None:
+        projected_minutes = max(1, (duration_seconds + 59) // 60)
+        if monthly_usage_data["total_minutes_used"] + projected_minutes > total_min_limit:
+            raise HTTPException(status_code=403, detail={
+                "error": "hours_limit_reached",
+                "limit_hours": total_min_limit // 60,
+                "used_hours": round(monthly_usage_data["total_minutes_used"] / 60, 1),
+                "requested_minutes": projected_minutes,
+                "plan": plan_tier,
+                "resets_at": _next_month_iso(),
+            })
+
+    required_credits = credits_for_duration(duration_seconds)
+    check_credits(str(user.id), required=required_credits)
+
     # Create lecture record immediately with empty transcript
     title = filename.rsplit('.', 1)[0][:200]
+    lecture_id = None
+    credits_reserved = False
     try:
         lecture_id = save_lecture(title=title, transcript="", language="en", user_id=str(user.id))
+        set_lecture_duration(lecture_id, duration_seconds)
+        reserve_credits(str(user.id), lecture_id, required_credits)
+        credits_reserved = True
+        mark_credit_deducted(lecture_id)
+    except HTTPException:
+        if lecture_id:
+            try:
+                delete_lecture(lecture_id)
+            except Exception:
+                pass
+        raise
     except Exception:
+        if lecture_id:
+            if credits_reserved:
+                try:
+                    mark_credit_deducted(lecture_id)
+                    refund_credit(str(user.id), lecture_id)
+                except Exception:
+                    pass
+            try:
+                delete_lecture(lecture_id)
+            except Exception:
+                pass
         raise HTTPException(status_code=500, detail="Failed to create lecture")
 
     if topic:
@@ -545,7 +651,7 @@ async def transcribe(
         print(f"[transcribe] create_job failed (non-fatal): {e}")
 
     # Schedule job as background task
-    background_tasks.add_task(_process_lecture_job, file_bytes, filename, lecture_id, str(user.id))
+    background_tasks.add_task(_process_lecture_job, file_bytes, filename, lecture_id, str(user.id), duration_verified)
     return {"lecture_id": lecture_id, "status": "queued"}
 
 
@@ -605,6 +711,9 @@ def start_live_session(request: Request, body: StartSessionBody = StartSessionBo
         profile = get_user_profile(str(user.id))
         plan_tier = profile.get("plan_tier") or "free"
         limits = get_limits(plan_tier)
+        max_dur = limits["live_max_duration_seconds"]
+        required_credits = 1
+        check_credits(str(user.id), required=required_credits)
 
         monthly = get_monthly_usage(str(user.id))
 
@@ -621,24 +730,39 @@ def start_live_session(request: Request, body: StartSessionBody = StartSessionBo
         # Check total monthly hours cap
         total_min_limit = limits.get("total_minutes_per_month")
         if total_min_limit is not None:
-            if monthly["total_minutes_used"] >= total_min_limit:
+            projected_minutes = 1
+            if monthly["total_minutes_used"] + projected_minutes > total_min_limit:
                 raise HTTPException(status_code=403, detail={
                     "error": "hours_limit_reached",
                     "limit_hours": total_min_limit // 60,
                     "used_hours": round(monthly["total_minutes_used"] / 60, 1),
+                    "requested_minutes": projected_minutes,
                     "plan": plan_tier,
                     "resets_at": _next_month_iso(),
                 })
 
-        lecture_id      = create_lecture(title="Live Session", transcript="", user_id=str(user.id))
-        live_session_id = create_live_session(lecture_id)
+        lecture_id = create_lecture(title="Live Session", transcript="", user_id=str(user.id))
+        try:
+            reserve_credits(str(user.id), lecture_id, required_credits)
+            mark_credit_deducted(lecture_id)
+            live_session_id = create_live_session(lecture_id)
+        except Exception:
+            try:
+                refund_credit(str(user.id), lecture_id)
+            except Exception:
+                pass
+            try:
+                delete_lecture(lecture_id)
+            except Exception:
+                pass
+            raise
+
         if body.topic:
             update_lecture_topic(lecture_id, body.topic.strip().lower()[:50])
         try:
             increment_monthly_live(str(user.id))
         except Exception:
             pass
-        max_dur = limits["live_max_duration_seconds"]
         return {
             "lecture_id": lecture_id,
             "live_session_id": live_session_id,
@@ -907,10 +1031,33 @@ async def process_live_chunk(
     profile = get_user_profile(str(user.id))
     plan_tier = profile.get("plan_tier") or "free"
     limits = get_limits(plan_tier)
+    user_id = str(user.id)
 
     # Fix 4: serialize per-lecture so two overlapping chunks never race through
     # transcription + transcript-append for the same lecture simultaneously.
     async with _get_lecture_lock(lecture_id):
+        lecture_data = get_lecture_for_summarization(lecture_id)
+        current_seconds = (lecture_data or {}).get("total_duration_seconds", 0) or 0
+        projected_seconds = current_seconds + 12
+        current_reserved = get_reserved_credits(user_id, lecture_id)
+        projected_required = credits_for_duration(projected_seconds)
+        if projected_required > current_reserved:
+            try:
+                reserve_credits(user_id, lecture_id, projected_required - current_reserved)
+                mark_credit_deducted(lecture_id)
+            except HTTPException as e:
+                end_live_session(lecture_id)
+                detail = e.detail if isinstance(e.detail, dict) else {}
+                return {
+                    "lecture_id": lecture_id,
+                    "chunk_transcript": "",
+                    "session_auto_ended": True,
+                    "reason": "no_credits",
+                    "plan": plan_tier,
+                    "credits": detail.get("credits", 0),
+                    "required": projected_required,
+                }
+
         # Build Whisper context from last ~200 words of transcript to prevent
         # duplicate transcription at chunk boundaries.
         whisper_prompt = None
@@ -1016,6 +1163,11 @@ async def process_live_chunk(
         max_seconds = limits["live_max_duration_seconds"]
         if total_seconds >= max_seconds:
             end_live_session(lecture_id)
+            try:
+                finalize_reserved_credits(user_id, lecture_id, actual_duration_seconds=total_seconds)
+                add_monthly_usage_minutes(user_id, max(0, ((total_seconds + 59) // 60) - 1))
+            except Exception as e:
+                print(f"[chunk] credit finalization failed on auto-end: {e}")
             return {**base_response, "session_auto_ended": True, "reason": "duration_limit_reached", "plan": plan_tier, "limit_seconds": max_seconds}
         warning_threshold = max_seconds - 300
         if total_seconds >= warning_threshold:
@@ -1053,6 +1205,13 @@ async def process_visual_frame(
     session = get_active_live_session(lecture_id)
     if not session:
         raise HTTPException(status_code=400, detail="No active session")
+
+    try:
+        image_bytes = base64.b64decode(body.image_base64, validate=True)
+    except (binascii.Error, ValueError):
+        raise HTTPException(status_code=400, detail="Invalid image data")
+    if len(image_bytes) > 7 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Image frame too large")
 
     # Get topic for context
     topic = get_lecture_topic(lecture_id)
@@ -1240,14 +1399,16 @@ def end_session_endpoint(lecture_id: str, background_tasks: BackgroundTasks, use
         set_summary_status(lecture_id, "recomputing")
         background_tasks.add_task(recompute_final_summary, lecture_id)
 
-        # Deduct credits scaled by live session duration
+        # Finalize pre-reserved credits scaled by live session duration.
         try:
             lec_live = get_lecture_for_summarization(lecture_id)
             live_dur = (lec_live or {}).get("total_duration_seconds") or 0
-            deduct_credit(str(user.id), lecture_id, duration_seconds=live_dur)
-            mark_credit_deducted(lecture_id)
+            finalize_reserved_credits(str(user.id), lecture_id, actual_duration_seconds=live_dur)
+            # Start counted one minimum minute; add the remaining verified live duration.
+            add_monthly_usage_minutes(str(user.id), max(0, ((live_dur + 59) // 60) - 1))
         except Exception as e:
-            print(f"[live/end] credit deduction failed (non-fatal): {e}")
+            print(f"[live/end] credit finalization failed: {e}")
+            raise HTTPException(status_code=500, detail="Failed to finalize credits")
 
         return {"status": "ended", "lecture_id": lecture_id}
 
@@ -1385,6 +1546,14 @@ def get_lecture_visual_frames(lecture_id: str, user=Depends(get_active_user)):
 def share_lecture(request: Request, lecture_id: str, body: ShareRequest = None, user=Depends(get_active_user)):
     """Generates (or returns existing) share token with optional mode and expiry."""
     _check_owner(lecture_id, user.id)
+    profile = get_user_profile(str(user.id))
+    limits = get_limits(profile.get("plan_tier", "free"))
+    if not limits.get("sharing"):
+        raise HTTPException(status_code=403, detail={
+            "error": "feature_locked",
+            "feature": "sharing",
+            "required_plan": "student",
+        })
     mode = body.mode if body else "full"
     expires_at = body.expires_at if body else None
     try:

@@ -37,6 +37,44 @@ def _ffmpeg_available() -> bool:
         return False
 
 
+def probe_duration_seconds(audio_bytes: bytes, original_filename: str = "audio.webm") -> int | None:
+    """
+    Returns media duration using ffprobe, or None if duration cannot be verified.
+    The caller should treat None conservatively for paid-cost gates.
+    """
+    suffix = os.path.splitext(original_filename or "")[1] or ".webm"
+    try:
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+            tmp.write(audio_bytes)
+            tmp_path = tmp.name
+        try:
+            result = subprocess.run(
+                [
+                    "ffprobe",
+                    "-v", "error",
+                    "-show_entries", "format=duration",
+                    "-of", "default=noprint_wrappers=1:nokey=1",
+                    tmp_path,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=20,
+            )
+            if result.returncode != 0:
+                return None
+            duration = float((result.stdout or "").strip())
+            if duration <= 0:
+                return None
+            return int(math.ceil(duration))
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+    except Exception:
+        return None
+
+
 _FFMPEG_OK: bool | None = None   # cached at runtime
 
 

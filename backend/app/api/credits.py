@@ -35,7 +35,7 @@ def get_balance(user=Depends(get_active_user)):
     maybe_grant_starter(
         user_id,
         email=getattr(user, "email", "") or "",
-        email_verified=getattr(user, "email_verified", True),
+        email_verified=getattr(user, "email_verified", False),
     )
     balance = get_credit_balance(user_id)
     return {

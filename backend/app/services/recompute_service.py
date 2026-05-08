@@ -8,10 +8,12 @@ Saves summary, flashcards, quiz, and glossary in one shot.
 """
 from app.services.content_generator import generate as generate_content
 from app.services.transcript_cleaner import clean as clean_transcript
+from app.services.summarization_service import segment_transcript, summarize_topic_segment
 from app.services.supabase_service import (
     get_all_chunk_transcripts,
     set_summary_status,
     save_generated_content,
+    update_lecture_summary_only,
     get_lecture_language,
     get_lecture_topic,
     get_lecture_full,
@@ -32,7 +34,11 @@ def recompute_final_summary(lecture_id: str) -> None:
     try:
         language = get_lecture_language(lecture_id) or "en"
         topic    = get_lecture_topic(lecture_id)
-        lecture  = get_lecture_full(lecture_id)
+        try:
+            lecture = get_lecture_full(lecture_id)
+        except Exception as e:
+            print(f"[recompute] {lecture_id}: could not load lecture metadata: {e}")
+            lecture = {}
         title    = (lecture or {}).get("title", "Live Session")
 
         transcripts = get_all_chunk_transcripts(lecture_id)
@@ -65,7 +71,25 @@ def recompute_final_summary(lecture_id: str) -> None:
             save_generated_content(lecture_id, content)
             print(f"[recompute] {lecture_id}: content saved.")
         else:
-            print(f"[recompute] {lecture_id}: GPT call returned empty result.")
+            segments = segment_transcript(cleaned, topic)
+            section_summaries = []
+            for seg in segments:
+                start = max(0, int(seg.get("start") or 0))
+                end = max(start, int(seg.get("end") or len(cleaned)))
+                summary = summarize_topic_segment(
+                    cleaned[start:end],
+                    title=seg.get("title") or "Section",
+                    topic=topic,
+                    language=language,
+                )
+                if summary:
+                    section_summaries.append(summary)
+
+            if section_summaries:
+                update_lecture_summary_only(lecture_id, "\n\n".join(section_summaries))
+                print(f"[recompute] {lecture_id}: fallback summary saved.")
+            else:
+                print(f"[recompute] {lecture_id}: GPT call returned empty result.")
 
     except Exception as e:
         print(f"[recompute] {lecture_id}: error (non-fatal): {e}")

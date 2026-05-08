@@ -102,12 +102,12 @@ def _is_hallucinated(text: str) -> bool:
     return False
 
 
-def filter_segments_by_confidence(segments: list, threshold: float = 0.5) -> str:
+def filter_segments_by_confidence(segments: list, threshold: float = 0.6) -> str:
     """
     Returns joined text from segments whose no_speech_prob is at or below threshold.
     Segments above threshold are Whisper's own signal that the audio is non-speech.
-    Threshold 0.5 (down from 0.6) catches more marginal hallucinations while still
-    keeping genuine low-energy speech (measured empirically).
+    Threshold 0.6 keeps borderline low-energy speech while dropping high-confidence
+    non-speech segments.
     Returns empty string when all segments are discarded or input is empty.
     """
     kept = [
