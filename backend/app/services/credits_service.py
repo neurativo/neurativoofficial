@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from fastapi import HTTPException
 
-from app.services.supabase_service import _fresh_db
+from app.services.supabase_service import _fresh_db, ensure_user_profile
 
 
 # ── Pricing catalogue ──────────────────────────────────────────────────────────
@@ -359,9 +359,15 @@ def maybe_grant_starter(user_id: str, email: str = "", email_verified: bool = Fa
     # If two requests slip past the check above simultaneously, the DB rejects the second
     # before credits can be incremented.
     try:
+        ensure_user_profile(user_id, email)
         profile = db.table("profiles").select("credits").eq("id", user_id).execute()
         if not profile.data:
-            db.table("profiles").insert({"id": user_id, "credits": 0}).execute()
+            db.table("profiles").upsert(
+                {"id": user_id, "email": email or None, "credits": 0},
+                on_conflict="id",
+            ).execute()
+            profile = db.table("profiles").select("credits").eq("id", user_id).execute()
+        if not profile.data:
             current = 0
         else:
             current = int(profile.data[0].get("credits") or 0)
