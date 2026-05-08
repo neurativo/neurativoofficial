@@ -21,6 +21,7 @@ const KNOWN_TOPICS_LIST = [
 ];
 
 const MAX_BUFFERED_CHUNKS = 5;
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://neurativoofficial-production.up.railway.app';
 
 // ── Timestamp formatter ────────────────────────────────────────────────────
 function fmtTs(seconds) {
@@ -214,6 +215,8 @@ function App({ user }) {
     // Fix 5 + 10: stable refs for async callbacks (beforeunload, SSE reconnect)
     const lectureIdRef        = useRef(null);
     const sessionStatusRef    = useRef('idle');
+    const authTokenRef        = useRef(null);
+    const closeBeaconSentRef  = useRef(false);
     // Resilience refs
     const chunkBufferRef      = useRef([]);           // offline chunk queue
     const uploadQueueRef      = useRef(Promise.resolve()); // serializes uploads
@@ -292,19 +295,41 @@ function App({ user }) {
     // Fix 5 + 10: keep stable refs in sync with state for use in async callbacks
     useEffect(() => { lectureIdRef.current     = lectureId;     }, [lectureId]);
     useEffect(() => { sessionStatusRef.current = sessionStatus; }, [sessionStatus]);
+    useEffect(() => {
+        if (lectureId && (sessionStatus === 'recording' || sessionStatus === 'paused')) {
+            closeBeaconSentRef.current = false;
+        }
+    }, [lectureId, sessionStatus]);
 
     // Resilience 8 / Fix 10: graceful session end + wake lock release on tab close
     useEffect(() => {
-        const onUnload = () => {
+        const sendSessionEndBeacon = () => {
             const id = lectureIdRef.current;
             const st = sessionStatusRef.current;
-            if (id && (st === 'recording' || st === 'paused')) {
-                navigator.sendBeacon(`/api/v1/live/${id}/end`);
+            const token = authTokenRef.current;
+            if (!id || !token || closeBeaconSentRef.current) return;
+            if (st === 'recording' || st === 'paused') {
+                const url = `${API_BASE_URL}/api/v1/live/${id}/end-beacon?token=${encodeURIComponent(token)}`;
+                closeBeaconSentRef.current = true;
+                try {
+                    navigator.sendBeacon(url, new Blob([], { type: 'text/plain' }));
+                } catch {}
             }
+        };
+        const onUnload = () => {
+            sendSessionEndBeacon();
+            releaseWakeLock();
+        };
+        const onPageHide = () => {
+            sendSessionEndBeacon();
             releaseWakeLock();
         };
         window.addEventListener('beforeunload', onUnload);
-        return () => window.removeEventListener('beforeunload', onUnload);
+        window.addEventListener('pagehide', onPageHide);
+        return () => {
+            window.removeEventListener('beforeunload', onUnload);
+            window.removeEventListener('pagehide', onPageHide);
+        };
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Fix 10 / Resilience: complete cleanup on component unmount
@@ -560,10 +585,10 @@ function App({ user }) {
             if (attempt > 0) await new Promise(r => setTimeout(r, 500 * attempt));
             token = await window.Clerk?.session?.getToken().catch(() => null);
         }
+        if (token) authTokenRef.current = token;
         if (!token) { console.warn('[SSE] No auth token — SSE skipped, polling will cover updates'); return; }
         const qs = `?token=${encodeURIComponent(token)}`;
-        const BASE_URL = import.meta.env.VITE_API_URL || 'https://neurativoofficial-production.up.railway.app';
-        const es = new EventSource(`${BASE_URL}/api/v1/live/${id}/stream${qs}`);
+        const es = new EventSource(`${API_BASE_URL}/api/v1/live/${id}/stream${qs}`);
 
         es.onmessage = (e) => {
             // Resilience 10: reset reconnect counter on any successful message

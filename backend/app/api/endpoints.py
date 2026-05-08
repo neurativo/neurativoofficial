@@ -115,6 +115,59 @@ def _next_month_iso() -> str:
     return resets.isoformat()
 
 
+def _complete_live_session_end(lecture_id: str, user_id: str, background_tasks: BackgroundTasks) -> dict:
+    session_closed = end_live_session_if_active(lecture_id)
+    if not session_closed:
+        end_live_session(lecture_id)
+
+    try:
+        lecture_data = get_lecture_for_summarization(lecture_id)
+        language     = get_lecture_language(lecture_id) or "en"
+        topic        = get_lecture_topic(lecture_id)
+
+        if lecture_data:
+            last_sec_end   = get_latest_section_end_index(lecture_id)
+            pending_chunks = get_unsummarized_chunks(lecture_id, last_sec_end)
+
+            if pending_chunks:
+                micro_list         = [c['micro_summary'] for c in pending_chunks if c.get('micro_summary')]
+                current_total_secs = lecture_data.get("total_sections") or 0
+                start_idx          = pending_chunks[0]['chunk_index']
+                last_idx           = pending_chunks[-1]['chunk_index']
+                if micro_list:
+                    final_section = generate_section_summary(micro_list, language=language, topic=topic)
+                    create_lecture_section(
+                        lecture_id, final_section, start_idx, last_idx, current_total_secs
+                    )
+
+            all_sections = get_section_summaries(lecture_id)
+            if all_sections:
+                master = generate_master_summary(all_sections, language=language, topic=topic)
+                update_lecture_summary_only(lecture_id, master)
+
+    except Exception as e:
+        print(f"Final summary on end (non-fatal): {e}")
+
+    if lecture_id in _lecture_locks:
+        del _lecture_locks[lecture_id]
+
+    background_tasks.add_task(cleanup_old_chunks, 30)
+    set_summary_status(lecture_id, "recomputing")
+    background_tasks.add_task(recompute_final_summary, lecture_id)
+
+    if session_closed:
+        try:
+            lec_live = get_lecture_for_summarization(lecture_id)
+            live_dur = (lec_live or {}).get("total_duration_seconds") or 0
+            finalize_reserved_credits(user_id, lecture_id, actual_duration_seconds=live_dur)
+            add_monthly_usage_minutes(user_id, max(0, ((live_dur + 59) // 60) - 1))
+        except Exception as e:
+            print(f"[live/end] credit finalization failed: {e}")
+            raise HTTPException(status_code=500, detail="Failed to finalize credits")
+
+    return {"status": "ended", "lecture_id": lecture_id}
+
+
 _UUID_RE = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.I)
 
 
@@ -1365,65 +1418,24 @@ def end_session_endpoint(lecture_id: str, background_tasks: BackgroundTasks, use
     """
     _check_owner(lecture_id, user.id)
     try:
-        session_closed = end_live_session_if_active(lecture_id)
-        if not session_closed:
-            end_live_session(lecture_id)
+        return _complete_live_session_end(lecture_id, str(user.id), background_tasks)
 
-        try:
-            lecture_data = get_lecture_for_summarization(lecture_id)
-            language     = get_lecture_language(lecture_id) or "en"
-            topic        = get_lecture_topic(lecture_id)
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to end session")
 
-            if lecture_data:
-                last_sec_end   = get_latest_section_end_index(lecture_id)
-                pending_chunks = get_unsummarized_chunks(lecture_id, last_sec_end)
 
-                # Force a final section from any remaining unsummarized chunks
-                if pending_chunks:
-                    micro_list         = [c['micro_summary'] for c in pending_chunks if c.get('micro_summary')]
-                    current_total_secs = lecture_data.get("total_sections") or 0
-                    start_idx          = pending_chunks[0]['chunk_index']
-                    last_idx           = pending_chunks[-1]['chunk_index']
-                    if micro_list:
-                        final_section = generate_section_summary(micro_list, language=language, topic=topic)
-                        create_lecture_section(
-                            lecture_id, final_section, start_idx, last_idx, current_total_secs
-                        )
-
-                # Rebuild master from all sections
-                all_sections = get_section_summaries(lecture_id)
-                if all_sections:
-                    master = generate_master_summary(all_sections, language=language, topic=topic)
-                    update_lecture_summary_only(lecture_id, master)
-
-        except Exception as e:
-            print(f"Final summary on end (non-fatal): {e}")
-
-        # Release per-lecture lock so memory doesn't grow unbounded
-        if lecture_id in _lecture_locks:
-            del _lecture_locks[lecture_id]
-
-        # Purge chunks older than 30 days (completed lectures only) in background
-        background_tasks.add_task(cleanup_old_chunks, 30)
-
-        # Kick off definitive recompute from raw transcript
-        set_summary_status(lecture_id, "recomputing")
-        background_tasks.add_task(recompute_final_summary, lecture_id)
-
-        # Finalize pre-reserved credits scaled by live session duration.
-        if session_closed:
-            try:
-                lec_live = get_lecture_for_summarization(lecture_id)
-                live_dur = (lec_live or {}).get("total_duration_seconds") or 0
-                finalize_reserved_credits(str(user.id), lecture_id, actual_duration_seconds=live_dur)
-                # Start counted one minimum minute; add the remaining verified live duration.
-                add_monthly_usage_minutes(str(user.id), max(0, ((live_dur + 59) // 60) - 1))
-            except Exception as e:
-                print(f"[live/end] credit finalization failed: {e}")
-            raise HTTPException(status_code=500, detail="Failed to finalize credits")
-
-        return {"status": "ended", "lecture_id": lecture_id}
-
+@router.post("/live/{lecture_id}/end-beacon")
+async def end_session_beacon(lecture_id: str, token: str = Query(None), background_tasks: BackgroundTasks = None):
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    user = await get_current_user(f"Bearer {token}")
+    _check_owner(lecture_id, user.id)
+    if background_tasks is None:
+        background_tasks = BackgroundTasks()
+    try:
+        return _complete_live_session_end(lecture_id, str(user.id), background_tasks)
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(status_code=500, detail="Failed to end session")
 
