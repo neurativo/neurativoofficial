@@ -20,6 +20,8 @@ const KNOWN_TOPICS_LIST = [
     'art','music','architecture',
 ];
 
+const MAX_BUFFERED_CHUNKS = 5;
+
 // ── Timestamp formatter ────────────────────────────────────────────────────
 function fmtTs(seconds) {
     const s = Math.floor(seconds);
@@ -461,6 +463,45 @@ function App({ user }) {
     const showError = (msg, duration = 4000) => {
         setErrorMessage(msg);
         if (duration) setTimeout(() => setErrorMessage(null), duration);
+    };
+
+    const pauseForBufferedOfflineLimit = () => {
+        isRecordingRef.current = false;
+        if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop();
+        stopAudioMonitoring();
+        silentChunksRef.current = 0;
+        setIsCalibrating(false);
+        if (timerWorkerRef.current) {
+            timerWorkerRef.current.postMessage('stop');
+            timerWorkerRef.current.terminate();
+            timerWorkerRef.current = null;
+        }
+        releaseWakeLock();
+        stopScreenShare();
+        setSessionStatus('paused');
+        setConnQuality('offline');
+        showError('Connection was lost for too long. Recording paused before audio could be dropped. Reconnect, then press Resume.', 0);
+    };
+
+    const endForMissingServerSession = () => {
+        isRecordingRef.current = false;
+        if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop();
+        stopAudioMonitoring();
+        silentChunksRef.current = 0;
+        setIsCalibrating(false);
+        if (timerWorkerRef.current) {
+            timerWorkerRef.current.postMessage('stop');
+            timerWorkerRef.current.terminate();
+            timerWorkerRef.current = null;
+        }
+        releaseWakeLock();
+        releaseTabAudio();
+        disconnectSSE();
+        stopSummaryPoll();
+        sessionStorage.removeItem('neurativo_session');
+        setSessionStatus('ended');
+        setEndModal(true);
+        showError('The live session ended on the server. Your saved transcript is still available to review and export.', 0);
     };
 
     // Resilience 5: Screen Wake Lock — prevents device sleep during lecture recording
@@ -1033,13 +1074,21 @@ function App({ user }) {
                 showError(`${mins} minute${mins !== 1 ? 's' : ''} remaining on your ${res.data.plan || planTier} plan`, 0);
             }
         } catch (err) {
+            const detail = err?.response?.data?.detail;
+            if (err?.response?.status === 400 && detail === 'Active live session not found') {
+                endForMissingServerSession();
+                return;
+            }
             if (attempt < 4 && navigator.onLine) {
                 await new Promise(r => setTimeout(r, Math.min((attempt + 1) * 3000, 12000)));
                 return uploadChunkWithRetry(blob, targetId, attempt + 1);
             }
             if (!navigator.onLine) {
                 // Re-buffer on failure when offline (will drain on next 'online' event)
-                if (chunkBufferRef.current.length >= 5) chunkBufferRef.current.shift();
+                if (chunkBufferRef.current.length >= MAX_BUFFERED_CHUNKS) {
+                    pauseForBufferedOfflineLimit();
+                    return;
+                }
                 chunkBufferRef.current.push({ blob, targetId });
                 setChunkBufferCount(chunkBufferRef.current.length);
             } else {
@@ -1051,8 +1100,11 @@ function App({ user }) {
     // Resilience 1: buffer offline chunks; Resilience 2: serialize uploads via queue
     const uploadChunk = (blob, targetId) => {
         if (!navigator.onLine) {
-            // Buffer up to 5 chunks while offline; drop oldest beyond that
-            if (chunkBufferRef.current.length >= 5) chunkBufferRef.current.shift();
+            // Buffer a short offline window; pause before any audio is silently dropped.
+            if (chunkBufferRef.current.length >= MAX_BUFFERED_CHUNKS) {
+                pauseForBufferedOfflineLimit();
+                return;
+            }
             chunkBufferRef.current.push({ blob, targetId });
             setChunkBufferCount(chunkBufferRef.current.length);
             return;

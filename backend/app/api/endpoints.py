@@ -43,6 +43,7 @@ from app.services.audio_service import compress, split_for_whisper, probe_durati
 from app.services.transcript_cleaner import clean as clean_transcript
 from app.services.content_generator import generate as generate_content, WHISPER_MODEL
 from app.services.job_queue import create_job, update_job_status, job_is_running
+from app.services.live_cleanup_service import cleanup_stale_live_sessions
 from app.services.supabase_service import (
     save_generated_content,
     ensure_user_profile,
@@ -62,6 +63,7 @@ from app.services.supabase_service import (
     get_latest_section_count,
     get_unsummarized_chunks,
     end_live_session,
+    end_live_session_if_active,
     cleanup_old_chunks,
     update_lecture_analytics,
     update_lecture_language,
@@ -703,6 +705,10 @@ def summarize(lecture_id: str, user=Depends(get_active_user)):
 @router.post("/live/start")
 @limiter.limit("10/minute")
 def start_live_session(request: Request, body: StartSessionBody = StartSessionBody(), user=Depends(get_active_user)):
+    try:
+        cleanup_stale_live_sessions()
+    except Exception as e:
+        print(f"[live/start] stale cleanup failed: {e}")
     # Grant starter credits on first session (idempotent — no-op if already granted)
     maybe_grant_starter(str(user.id), email=user.email, email_verified=user.email_verified)
     # Credit check — must have at least 1 credit before starting a session
@@ -1162,10 +1168,13 @@ async def process_live_chunk(
         total_seconds = (lecture_data or {}).get("total_duration_seconds", 0) or 0
         max_seconds = limits["live_max_duration_seconds"]
         if total_seconds >= max_seconds:
-            end_live_session(lecture_id)
             try:
-                finalize_reserved_credits(user_id, lecture_id, actual_duration_seconds=total_seconds)
-                add_monthly_usage_minutes(user_id, max(0, ((total_seconds + 59) // 60) - 1))
+                closed = end_live_session_if_active(lecture_id)
+                if closed:
+                    finalize_reserved_credits(user_id, lecture_id, actual_duration_seconds=total_seconds)
+                    add_monthly_usage_minutes(user_id, max(0, ((total_seconds + 59) // 60) - 1))
+                else:
+                    end_live_session(lecture_id)
             except Exception as e:
                 print(f"[chunk] credit finalization failed on auto-end: {e}")
             return {**base_response, "session_auto_ended": True, "reason": "duration_limit_reached", "plan": plan_tier, "limit_seconds": max_seconds}
@@ -1356,7 +1365,9 @@ def end_session_endpoint(lecture_id: str, background_tasks: BackgroundTasks, use
     """
     _check_owner(lecture_id, user.id)
     try:
-        end_live_session(lecture_id)
+        session_closed = end_live_session_if_active(lecture_id)
+        if not session_closed:
+            end_live_session(lecture_id)
 
         try:
             lecture_data = get_lecture_for_summarization(lecture_id)
@@ -1400,14 +1411,15 @@ def end_session_endpoint(lecture_id: str, background_tasks: BackgroundTasks, use
         background_tasks.add_task(recompute_final_summary, lecture_id)
 
         # Finalize pre-reserved credits scaled by live session duration.
-        try:
-            lec_live = get_lecture_for_summarization(lecture_id)
-            live_dur = (lec_live or {}).get("total_duration_seconds") or 0
-            finalize_reserved_credits(str(user.id), lecture_id, actual_duration_seconds=live_dur)
-            # Start counted one minimum minute; add the remaining verified live duration.
-            add_monthly_usage_minutes(str(user.id), max(0, ((live_dur + 59) // 60) - 1))
-        except Exception as e:
-            print(f"[live/end] credit finalization failed: {e}")
+        if session_closed:
+            try:
+                lec_live = get_lecture_for_summarization(lecture_id)
+                live_dur = (lec_live or {}).get("total_duration_seconds") or 0
+                finalize_reserved_credits(str(user.id), lecture_id, actual_duration_seconds=live_dur)
+                # Start counted one minimum minute; add the remaining verified live duration.
+                add_monthly_usage_minutes(str(user.id), max(0, ((live_dur + 59) // 60) - 1))
+            except Exception as e:
+                print(f"[live/end] credit finalization failed: {e}")
             raise HTTPException(status_code=500, detail="Failed to finalize credits")
 
         return {"status": "ended", "lecture_id": lecture_id}

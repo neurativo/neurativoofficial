@@ -194,6 +194,25 @@ def get_active_live_session(lecture_id: str):
         return response.data[0]
     return None
 
+
+def list_active_live_sessions(limit: int = 100) -> list[dict]:
+    """Returns active live sessions ordered oldest-first for maintenance sweeps."""
+    if not supabase:
+        return []
+    try:
+        response = (
+            supabase.table("live_sessions")
+            .select("id, lecture_id, is_active, last_chunk_at, created_at")
+            .eq("is_active", True)
+            .order("created_at")
+            .limit(max(1, min(int(limit or 100), 500)))
+            .execute()
+        )
+        return response.data or []
+    except Exception as e:
+        print(f"[live] list_active_live_sessions error: {e}")
+        return []
+
 def append_lecture_transcript(lecture_id: str, chunk_text: str) -> int:
     """
     Appends text to a lecture's transcript.
@@ -275,6 +294,23 @@ def end_live_session(lecture_id: str):
         raise Exception("Supabase client is not initialized")
         
     supabase.table("live_sessions").update({"is_active": False}).eq("lecture_id", lecture_id).execute()
+
+
+def end_live_session_if_active(lecture_id: str, session_id: str | None = None) -> bool:
+    """
+    Marks an active live session inactive exactly once.
+    Returns True only when an active row was actually transitioned.
+    """
+    if not supabase:
+        raise Exception("Supabase client is not initialized")
+
+    query = supabase.table("live_sessions").update({"is_active": False})
+    if session_id:
+        query = query.eq("id", session_id)
+    else:
+        query = query.eq("lecture_id", lecture_id)
+    response = query.eq("is_active", True).execute()
+    return bool(getattr(response, "data", None))
 
 
 def get_lecture_for_summarization(lecture_id: str):

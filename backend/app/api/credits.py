@@ -12,6 +12,7 @@ from app.services.credits_service import (
     maybe_grant_starter,
     PRODUCTS,
 )
+from app.services.live_cleanup_service import cleanup_stale_live_sessions
 
 router = APIRouter(prefix="/credits", tags=["credits"])
 
@@ -29,8 +30,11 @@ def get_balance(user=Depends(get_active_user)):
     """
     Returns current credit balance and subscription status.
     Also grants starter credits on first call (idempotent).
-    Starter credits are only granted to users with a verified email address.
     """
+    try:
+        cleanup_stale_live_sessions()
+    except Exception as e:
+        print(f"[credits] stale live cleanup failed: {e}")
     user_id = str(user.id)
     maybe_grant_starter(
         user_id,
