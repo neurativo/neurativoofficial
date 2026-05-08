@@ -19,7 +19,7 @@ _jwks_client: PyJWKClient | None = None
 class User:
     id: str
     email: str
-    email_verified: bool = False
+    email_verified: bool = True
 
 
 def _get_jwks_client() -> PyJWKClient:
@@ -75,10 +75,12 @@ async def get_current_user(authorization: str = Header(None)) -> User:
             raise HTTPException(status_code=401, detail="Invalid token")
 
         email = payload.get("email", "")
-        # Clerk includes email_verified when configured in JWT template.
-        # Default True so social-login users (whose email is pre-verified) aren't
-        # accidentally blocked — Clerk only sets it False for unverified email/pwd signups.
-        email_verified = payload.get("email_verified", False)
+        # Clerk may omit email_verified depending on the session token template.
+        # Treat a missing claim as verified when an email is present so normal
+        # first-run users still receive starter credits and can access gated flows.
+        email_verified = payload.get("email_verified")
+        if email_verified is None:
+            email_verified = bool(email)
         return User(id=user_id, email=email, email_verified=bool(email_verified))
 
     except HTTPException:
