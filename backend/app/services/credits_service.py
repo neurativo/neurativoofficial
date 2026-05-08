@@ -349,15 +349,31 @@ def maybe_grant_starter(user_id: str, email: str = "", email_verified: bool = Fa
         return False
 
     db = _fresh_db()
+    try:
+        resp = db.rpc(
+            "grant_starter_credits",
+            {
+                "p_user_id": user_id,
+                "p_email": email,
+                "p_starter_credits": STARTER_CREDITS,
+            },
+        ).execute()
+        if isinstance(resp.data, bool):
+            return resp.data
+        if isinstance(resp.data, list) and resp.data:
+            return bool(resp.data[0])
+        return bool(resp.data)
+    except Exception as e:
+        # Compatibility fallback while older environments catch up with the SQL migration.
+        print(f"[credits] grant_starter_credits RPC unavailable, falling back: {e}")
+        return _maybe_grant_starter_legacy(db, user_id, email)
 
-    # Fast path: check if already granted (avoids unnecessary INSERT attempt)
+
+def _maybe_grant_starter_legacy(db, user_id: str, email: str) -> bool:
     existing = db.table("credit_transactions").select("id").eq("user_id", user_id).eq("reason", "starter_grant").limit(1).execute()
     if existing.data:
         return False
 
-    # Race-safe: insert the unique transaction before mutating the balance.
-    # If two requests slip past the check above simultaneously, the DB rejects the second
-    # before credits can be incremented.
     try:
         ensure_user_profile(user_id, email)
         profile = db.table("profiles").select("credits").eq("id", user_id).execute()
@@ -383,7 +399,6 @@ def maybe_grant_starter(user_id: str, email: str = "", email_verified: bool = Fa
     except Exception as e:
         err_str = str(e).lower()
         if "unique" in err_str or "duplicate" in err_str or "23505" in err_str:
-            # Another request already granted — not an error
             return False
         raise
 
