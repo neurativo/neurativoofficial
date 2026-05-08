@@ -22,6 +22,8 @@ const KNOWN_TOPICS_LIST = [
 
 const MAX_BUFFERED_CHUNKS = 5;
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://neurativoofficial-production.up.railway.app';
+const RECOVERY_STORAGE_KEY = 'neurativo_session';
+const RECOVERY_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 
 // ── Timestamp formatter ────────────────────────────────────────────────────
 function fmtTs(seconds) {
@@ -215,8 +217,6 @@ function App({ user }) {
     // Fix 5 + 10: stable refs for async callbacks (beforeunload, SSE reconnect)
     const lectureIdRef        = useRef(null);
     const sessionStatusRef    = useRef('idle');
-    const authTokenRef        = useRef(null);
-    const closeBeaconSentRef  = useRef(false);
     // Resilience refs
     const chunkBufferRef      = useRef([]);           // offline chunk queue
     const uploadQueueRef      = useRef(Promise.resolve()); // serializes uploads
@@ -292,36 +292,38 @@ function App({ user }) {
         return () => window.removeEventListener('keydown', onKey);
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+    const clearSavedRecovery = () => {
+        try { localStorage.removeItem(RECOVERY_STORAGE_KEY); } catch {}
+    };
+
+    const persistRecoveryState = () => {
+        const id = lectureIdRef.current;
+        const st = sessionStatusRef.current;
+        if (!id || (st !== 'recording' && st !== 'paused')) return;
+        try {
+            localStorage.setItem(RECOVERY_STORAGE_KEY, JSON.stringify({
+                lectureId: id,
+                sessionStatus: 'paused',
+                recordingSeconds,
+                detectedLanguage,
+                detectedTopic,
+                savedAt: Date.now(),
+            }));
+        } catch {}
+    };
+
     // Fix 5 + 10: keep stable refs in sync with state for use in async callbacks
     useEffect(() => { lectureIdRef.current     = lectureId;     }, [lectureId]);
     useEffect(() => { sessionStatusRef.current = sessionStatus; }, [sessionStatus]);
-    useEffect(() => {
-        if (lectureId && (sessionStatus === 'recording' || sessionStatus === 'paused')) {
-            closeBeaconSentRef.current = false;
-        }
-    }, [lectureId, sessionStatus]);
 
-    // Resilience 8 / Fix 10: graceful session end + wake lock release on tab close
+    // Resilience 8 / Fix 10: preserve interrupted sessions on tab close/reload
     useEffect(() => {
-        const sendSessionEndBeacon = () => {
-            const id = lectureIdRef.current;
-            const st = sessionStatusRef.current;
-            const token = authTokenRef.current;
-            if (!id || !token || closeBeaconSentRef.current) return;
-            if (st === 'recording' || st === 'paused') {
-                const url = `${API_BASE_URL}/api/v1/live/${id}/end-beacon?token=${encodeURIComponent(token)}`;
-                closeBeaconSentRef.current = true;
-                try {
-                    navigator.sendBeacon(url, new Blob([], { type: 'text/plain' }));
-                } catch {}
-            }
-        };
         const onUnload = () => {
-            sendSessionEndBeacon();
+            persistRecoveryState();
             releaseWakeLock();
         };
         const onPageHide = () => {
-            sendSessionEndBeacon();
+            persistRecoveryState();
             releaseWakeLock();
         };
         window.addEventListener('beforeunload', onUnload);
@@ -330,7 +332,7 @@ function App({ user }) {
             window.removeEventListener('beforeunload', onUnload);
             window.removeEventListener('pagehide', onPageHide);
         };
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [recordingSeconds, detectedLanguage, detectedTopic]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Fix 10 / Resilience: complete cleanup on component unmount
     useEffect(() => {
@@ -425,13 +427,15 @@ function App({ user }) {
     // Resilience 6: check for interrupted session on app load
     useEffect(() => {
         try {
-            const saved = sessionStorage.getItem('neurativo_session');
+            const saved = localStorage.getItem(RECOVERY_STORAGE_KEY);
             if (saved) {
                 const parsed = JSON.parse(saved);
-                if (parsed.lectureId && (parsed.sessionStatus === 'recording' || parsed.sessionStatus === 'paused')) {
+                const savedAt = Number(parsed.savedAt || 0);
+                const isFresh = savedAt > 0 && (Date.now() - savedAt) < RECOVERY_MAX_AGE_MS;
+                if (parsed.lectureId && isFresh && (parsed.sessionStatus === 'recording' || parsed.sessionStatus === 'paused')) {
                     setRecoverySession(parsed);
                 } else {
-                    sessionStorage.removeItem('neurativo_session');
+                    clearSavedRecovery();
                 }
             }
         } catch {}
@@ -454,17 +458,22 @@ function App({ user }) {
             .catch(() => {});
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Resilience 6: persist session state to sessionStorage on every relevant change
+    // Resilience 6: persist session state to localStorage so accidental close/reload can recover it
     useEffect(() => {
         if (lectureId && sessionStatus !== 'idle') {
             try {
-                sessionStorage.setItem('neurativo_session', JSON.stringify({
-                    lectureId, sessionStatus, recordingSeconds, detectedLanguage, detectedTopic,
+                localStorage.setItem(RECOVERY_STORAGE_KEY, JSON.stringify({
+                    lectureId,
+                    sessionStatus,
+                    recordingSeconds,
+                    detectedLanguage,
+                    detectedTopic,
+                    savedAt: Date.now(),
                 }));
             } catch {}
         }
-        if (sessionStatus === 'idle') {
-            sessionStorage.removeItem('neurativo_session');
+        if (sessionStatus === 'idle' || sessionStatus === 'ended') {
+            clearSavedRecovery();
         }
     }, [lectureId, sessionStatus, recordingSeconds, detectedLanguage, detectedTopic]);
 
@@ -523,7 +532,7 @@ function App({ user }) {
         releaseTabAudio();
         disconnectSSE();
         stopSummaryPoll();
-        sessionStorage.removeItem('neurativo_session');
+        clearSavedRecovery();
         setSessionStatus('ended');
         setEndModal(true);
         showError('The live session ended on the server. Your saved transcript is still available to review and export.', 0);
@@ -585,7 +594,6 @@ function App({ user }) {
             if (attempt > 0) await new Promise(r => setTimeout(r, 500 * attempt));
             token = await window.Clerk?.session?.getToken().catch(() => null);
         }
-        if (token) authTokenRef.current = token;
         if (!token) { console.warn('[SSE] No auth token — SSE skipped, polling will cover updates'); return; }
         const qs = `?token=${encodeURIComponent(token)}`;
         const es = new EventSource(`${API_BASE_URL}/api/v1/live/${id}/stream${qs}`);
@@ -1165,7 +1173,7 @@ function App({ user }) {
         disconnectSSE();
         stopSummaryPoll();
         sseReconnectRef.current = 0;
-        sessionStorage.removeItem('neurativo_session');
+        clearSavedRecovery();
         setSessionStatus('ended');
         setEndModal(true);
         try { await api.post(`/api/v1/live/${lectureId}/end`); } catch {}
@@ -1394,6 +1402,24 @@ function App({ user }) {
     const handleResumeSession = async () => {
         const { lectureId: savedId, detectedLanguage: savedLang, detectedTopic: savedTopic } = recoverySession;
         setRecoverySession(null);
+        try {
+            const statusRes = await api.get(`/api/v1/live/${savedId}/status`);
+            if (!statusRes.data?.active) {
+                clearSavedRecovery();
+                try {
+                    const endedRes = await api.get(`/api/v1/lectures/${savedId}`);
+                    setLectureId(savedId);
+                    if (endedRes.data.transcript) setTranscript([{ id: Date.now(), text: endedRes.data.transcript }]);
+                    const endedSummary = endedRes.data.master_summary || endedRes.data.summary;
+                    if (endedSummary) setSummary(endedSummary);
+                    if (endedRes.data.language) setDetectedLanguage(endedRes.data.language);
+                    if (endedRes.data.topic) setDetectedTopic(endedRes.data.topic);
+                } catch {}
+                setSessionStatus('ended');
+                showError('That session has already expired on the server. The saved lecture is still available to review and export.', 0);
+                return;
+            }
+        } catch {}
         setLectureId(savedId);
         setRecordingSeconds(recoverySession.recordingSeconds || 0);
         if (savedLang) setDetectedLanguage(savedLang);
@@ -1436,7 +1462,7 @@ function App({ user }) {
                                     Resume Session
                                 </button>
                                 <button
-                                    onClick={() => { setRecoverySession(null); sessionStorage.removeItem('neurativo_session'); }}
+                                    onClick={() => { setRecoverySession(null); clearSavedRecovery(); }}
                                     className="flex-1 py-2.5 bg-[#f0ede8] hover:bg-[#e8e4de] text-[#1a1a1a] text-[13px] font-semibold rounded-xl transition-colors">
                                     Start New
                                 </button>

@@ -1440,6 +1440,21 @@ async def end_session_beacon(lecture_id: str, token: str = Query(None), backgrou
         raise HTTPException(status_code=500, detail="Failed to end session")
 
 
+@router.get("/live/{lecture_id}/status")
+def get_live_session_status(lecture_id: str, user=Depends(get_active_user)):
+    _check_owner(lecture_id, user.id)
+    try:
+        session = get_active_live_session(lecture_id)
+        return {
+            "lecture_id": lecture_id,
+            "active": bool(session),
+            "last_chunk_at": session.get("last_chunk_at") if session else None,
+            "created_at": session.get("created_at") if session else None,
+        }
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to fetch live session status")
+
+
 @router.get("/lectures/{lecture_id}/analytics")
 def get_analytics(lecture_id: str, user=Depends(get_active_user)):
     _check_owner(lecture_id, user.id)
