@@ -339,13 +339,12 @@ def maybe_grant_starter(user_id: str, email: str = "", email_verified: bool = Fa
     Returns True if credits were granted, False if already granted or ineligible.
 
     Guards:
-    1. Email must be non-empty — blocks anonymous/OAuth users with no email.
-    2. email_verified must be True — blocks unverified disposable-email signups.
-    3. The credit_transactions table has a partial unique index on
+    1. User ID must be non-empty — the authenticated Clerk subject is the trust boundary.
+    2. The credit_transactions table has a partial unique index on
        (user_id) WHERE reason = 'starter_grant', so even if two requests
        race past the check simultaneously, only one INSERT succeeds.
     """
-    if not email or not email_verified:
+    if not user_id:
         return False
 
     db = _fresh_db()

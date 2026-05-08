@@ -17,7 +17,7 @@ DECLARE
     v_tx_id uuid;
     v_balance integer;
 BEGIN
-    IF COALESCE(TRIM(p_user_id), '') = '' OR COALESCE(TRIM(p_email), '') = '' THEN
+    IF COALESCE(TRIM(p_user_id), '') = '' THEN
         RETURN FALSE;
     END IF;
 
