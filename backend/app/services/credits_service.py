@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from fastapi import HTTPException
 
-from app.services.supabase_service import _fresh_db, ensure_user_profile
+from app.services.supabase_service import _fresh_db
 
 
 # ── Pricing catalogue ──────────────────────────────────────────────────────────
@@ -363,43 +363,7 @@ def maybe_grant_starter(user_id: str, email: str = "", email_verified: bool = Fa
             return bool(resp.data[0])
         return bool(resp.data)
     except Exception as e:
-        # Compatibility fallback while older environments catch up with the SQL migration.
-        print(f"[credits] grant_starter_credits RPC unavailable, falling back: {e}")
-        return _maybe_grant_starter_legacy(db, user_id, email)
-
-
-def _maybe_grant_starter_legacy(db, user_id: str, email: str) -> bool:
-    existing = db.table("credit_transactions").select("id").eq("user_id", user_id).eq("reason", "starter_grant").limit(1).execute()
-    if existing.data:
-        return False
-
-    try:
-        ensure_user_profile(user_id, email)
-        profile = db.table("profiles").select("credits").eq("id", user_id).execute()
-        if not profile.data:
-            db.table("profiles").upsert(
-                {"id": user_id, "email": email or None, "credits": 0},
-                on_conflict="id",
-            ).execute()
-            profile = db.table("profiles").select("credits").eq("id", user_id).execute()
-        if not profile.data:
-            current = 0
-        else:
-            current = int(profile.data[0].get("credits") or 0)
-        new_balance = current + STARTER_CREDITS
-        db.table("credit_transactions").insert({
-            "user_id": user_id,
-            "amount": STARTER_CREDITS,
-            "balance_after": new_balance,
-            "reason": "starter_grant",
-        }).execute()
-        db.table("profiles").update({"credits": new_balance}).eq("id", user_id).execute()
-        return True
-    except Exception as e:
-        err_str = str(e).lower()
-        if "unique" in err_str or "duplicate" in err_str or "23505" in err_str:
-            return False
-        raise
+        raise Exception(f"Starter credit RPC failed: {e}")
 
 
 def mark_credit_deducted(lecture_id: str) -> None:
