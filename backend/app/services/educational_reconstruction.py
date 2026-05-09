@@ -214,20 +214,36 @@ def merge_educational_models(segment_models: list[dict], topic: str | None = Non
         for obj in segment_model.get("learning_objectives") or []:
             all_objectives.append(obj)
 
-    # Step 4: Attach examples and analogies to parent concepts
+    # Step 4: Attach examples, analogies, and exam_traps to parent concepts
     for key, concept in list(registry.items()):
-        if concept["role"] in ("example", "analogy"):
+        if concept["role"] in ("example", "analogy", "exam_trap"):
             parent_raw = (concept.get("parent_concept") or "").strip()
             parent_key = _canonical_concept_key(parent_raw)
             if parent_key and parent_key in registry:
                 parent = registry[parent_key]
-                example_name = concept["concept"]
-                if example_name not in parent["examples"]:
-                    parent["examples"].append(example_name)
+                if concept["role"] in ("example", "analogy"):
+                    example_name = concept["concept"]
+                    if example_name not in parent["examples"]:
+                        parent["examples"].append(example_name)
+                elif concept["role"] == "exam_trap":
+                    trap_text = (
+                        concept.get("definition")
+                        or concept.get("transcript_evidence")
+                        or concept["concept"]
+                    )
+                    if trap_text not in parent["misconceptions"]:
+                        parent["misconceptions"].append(trap_text)
                 concept["attached"] = True
             else:
-                # Orphaned — keep as low_relevance, do not discard
-                concept["role"] = "low_relevance"
+                # Orphaned: examples are truly secondary — discard.
+                # Analogies and exam_traps have educational value — demote to
+                # supporting so their content surfaces in the output summary.
+                if concept["role"] == "example":
+                    concept["role"] = "low_relevance"
+                else:
+                    concept["role"] = "supporting"
+                    if not concept.get("educational_importance"):
+                        concept["educational_importance"] = "medium"
 
     # Step 5: Compute educational_confidence
     for concept in registry.values():
@@ -422,14 +438,13 @@ def derive_master_summary_from_model(model: dict, topic: str | None = None) -> s
         lines.append("---")
         sections.append("\n".join(lines))
 
-    # Supporting concepts (medium+ importance, above threshold, non-admin)
+    # Supporting concepts (all above threshold, non-admin — include regardless of importance
+    # so that concepts the lecturer actually discussed are never silently dropped)
     for concept in model.get("supporting_concepts") or []:
         if concept.get("role") in ("admin", "chatter", "low_relevance"):
             continue
         if concept.get("educational_confidence", 0.0) < _CONFIDENCE_THRESHOLD:
             continue
-        if _IMPORTANCE_ORDER.get(concept.get("educational_importance", "low"), 2) > 1:
-            continue  # skip low importance supporting
         sections.append(_render_concept_section(concept))
 
     return "\n\n".join(sections)
@@ -552,7 +567,7 @@ def classify_educational_segment(
                     {"role": "user", "content": user_content},
                 ],
                 temperature=0.0,
-                max_tokens=900,
+                max_tokens=2500,
                 response_format={"type": "json_object"},
             )
             log_cost(
