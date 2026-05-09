@@ -34,6 +34,7 @@ _ROLE_PRIORITY = {
 
 _IMPORTANCE_ORDER = {"high": 0, "medium": 1, "low": 2}
 _CONFIDENCE_THRESHOLD = 0.25   # suppress from output if below this
+_LIFECYCLE_DISTINCTION_MARKERS = (" vs ", " versus ", " whereas ", " unlike ", " contrast ")
 
 
 def _canonical_concept_key(name: str) -> str:
@@ -55,7 +56,7 @@ def _validate_segment_model(model: dict) -> bool:
             return False
         if c.get("role") not in VALID_ROLES:
             return False
-        if not c.get("transcript_evidence"):
+        if not (c.get("transcript_evidence") or "").strip():
             return False
     return True
 
@@ -91,7 +92,7 @@ def _compute_educational_confidence(concept: dict) -> float:
         score += 0.10
     elif role in ("supporting", "procedural"):
         score += 0.05
-    elif role not in ("foundational", "supporting", "procedural"):
+    elif role in ("admin", "chatter", "low_relevance"):
         score *= 0.3
 
     return round(min(1.0, max(0.0, score)), 3)
@@ -106,7 +107,6 @@ def _detect_lifecycle_phase(existing: dict, incoming: dict) -> str:
     has_incoming_def = bool(incoming.get("definition"))
     has_example = bool(incoming.get("examples"))
 
-    _DISTINCTION_MARKERS = (" vs ", " versus ", " whereas ", " unlike ", " contrast ")
     incoming_text = " ".join([
         incoming.get("definition") or "",
         " ".join(incoming.get("distinctions") or []),
@@ -119,7 +119,7 @@ def _detect_lifecycle_phase(existing: dict, incoming: dict) -> str:
         return "expanded"
     if has_example:
         return "exemplified"
-    if any(m in incoming_text for m in _DISTINCTION_MARKERS):
+    if any(m in incoming_text for m in _LIFECYCLE_DISTINCTION_MARKERS):
         return "contrasted"
     if "appli" in incoming_text or "use this" in incoming_text or "problem" in incoming_text:
         return "applied"
@@ -347,7 +347,9 @@ def derive_master_summary_from_model(model: dict, topic: str | None = None) -> s
         c for c in model.get("foundational_concepts") or []
         if c.get("educational_confidence", 0.0) >= _CONFIDENCE_THRESHOLD
     ]
-    # Re-sort by importance then confidence
+    # Re-sort defensively: caller may pass a model with unsorted foundational_concepts.
+    # merge_educational_models() sorts on output, but derive_master_summary_from_model()
+    # enforces the ordering invariant independently so it holds even when called directly.
     foundational.sort(key=lambda c: (
         _IMPORTANCE_ORDER.get(c.get("educational_importance", "low"), 2),
         -c.get("educational_confidence", 0.0),
@@ -613,7 +615,7 @@ def reconstruct_lecture_model(
             return None
 
         unified = merge_educational_models(segment_models, topic)
-        if not unified or unified.get("fallback_recommended"):
+        if not unified or unified.get("reconstruction_quality") == "insufficient":
             print(f"[reconstruction] merge recommended fallback (quality={unified.get('reconstruction_quality')})")
             return None
 

@@ -458,6 +458,15 @@ def test_classify_returns_none_on_json_error():
     assert result is None
 
 
+def test_merge_empty_segment_list_returns_fallback():
+    from app.services.educational_reconstruction import merge_educational_models
+
+    model = merge_educational_models([], topic="economics")
+    assert model["reconstruction_quality"] == "insufficient"
+    assert model["fallback_recommended"] is True
+    assert model["foundational_concepts"] == []
+
+
 def test_classify_returns_none_when_client_unavailable():
     from app.services.educational_reconstruction import classify_educational_segment
 
