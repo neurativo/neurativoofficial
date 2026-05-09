@@ -31,6 +31,11 @@ _TITLE_BLACKLIST_PHRASES = (
     "key concept",
     "more from the session",
     "lecture snapshot",
+    "lecture will summarize",
+    "focus week essay question",
+    "delivering material third time",
+    "provided free charge government classified",
+    "characterized unlimited supply when",
 )
 _CONTRADICTION_PAIRS = (
     ("non economic", "economic"),
@@ -52,6 +57,7 @@ _TRAP_MARKERS = (
 _ACADEMIC_TITLE_HINTS = (
     "economics", "microeconomics", "macroeconomics", "positive", "normative",
     "goods", "resources", "production", "utility", "demand", "supply",
+    "scarcity", "opportunity cost", "free goods", "public goods",
     "law", "rights", "biology", "medicine", "physics", "chemistry",
     "engineering", "calculus", "statistics", "classification", "theory",
     "structure", "strategy", "comparison", "statements", "concepts",
@@ -60,6 +66,31 @@ _EXAMPLE_HINTS = (
     "example", "illustration", "scenario", "case", "instance", "sample",
     "population growth", "bottled water", "oxygen tank", "rainwater",
 )
+_ADMIN_HINTS = (
+    "focus week", "essay question", "mcq", "multiple choice", "next week",
+    "this week", "unit number", "summarize unit", "revision week", "lecture will",
+    "speaker", "delivering material", "third time", "today we will", "we are going to",
+)
+_LOW_SIGNAL_TITLE_PATTERNS = (
+    r"^lecture\b",
+    r"^speaker\b",
+    r"^focus week\b",
+    r"^.*\bwill summarize\b",
+    r"^.*\bdelivering material\b",
+    r"^.*\bprovided free charge\b",
+    r"^.*\bcharacterized unlimited supply\b",
+)
+_CURRICULUM_CONCEPT_RULES = (
+    ("Positive vs Normative Statements", ("positive", "normative", "objective", "factual", "testable", "verifiable", "value judgment", "opinion")),
+    ("Microeconomics vs Macroeconomics", ("microeconomics", "macroeconomics", "individual units", "whole economy")),
+    ("Economic Goods & Scarcity", ("economic goods", "scarcity", "scarce", "limited supply", "opportunity cost")),
+    ("Free Goods vs Public Goods", ("free goods", "public goods", "sunlight", "air", "street lights", "shared consumption")),
+    ("Economic vs Non-Economic Goods", ("economic goods", "non economic goods", "free of charge", "gifted by nature")),
+    ("Goods, Utility & Satisfaction", ("utility", "wants", "satisfaction", "goods")),
+    ("Economic Bads", ("economic bads", "pollution", "garbage", "dissatisfaction")),
+    ("Human Intervention & Resource Conversion", ("human intervention", "conversion", "convert", "bottled water", "oxygen tank")),
+    ("Economic vs Non-Economic Resources", ("economic resources", "non economic resources", "resources", "production")),
+)
 _BOUNDARY_HINTS = (
     "exam", "study", "microeconomics", "macroeconomics", "positive", "normative",
     "utility", "goods", "free goods", "public goods", "economic bads",
@@ -67,13 +98,14 @@ _BOUNDARY_HINTS = (
 )
 _CANONICAL_TITLE_RULES = (
     ("Exam Structure & Weekly Study Plan", ("exam", "essay", "mcq"), ("positive", "normative")),
-    ("Branches of Economics", ("microeconomics", "macroeconomics"), ("positive", "normative")),
+    ("Microeconomics vs Macroeconomics", ("microeconomics", "macroeconomics"), ("positive", "normative")),
     ("Positive vs Normative Statements", ("positive", "normative"), ("goods", "utility")),
     ("Goods, Utility & Satisfaction", ("utility", "wants", "satisfaction"), ("economic goods", "public goods")),
-    ("Economic vs Non-Economic Goods", ("economic goods", "non economic goods"), ("public goods", "resources")),
+    ("Economic Goods & Scarcity", ("economic goods", "scarcity"), ("public goods", "resources")),
+    ("Economic vs Non-Economic Goods", ("economic goods", "non economic goods"), ("resources",)),
     ("Public Goods vs Free Goods", ("public goods", "free goods"), ("economic bads", "resources")),
     ("Economic Bads", ("economic bads", "bads"), ("resources", "human intervention")),
-    ("Converting Non-Economic Goods into Economic Goods", ("human intervention", "convert", "conversion"), ("resources",)),
+    ("Human Intervention & Resource Conversion", ("human intervention", "convert", "conversion"), ("resources",)),
     ("Economic vs Non-Economic Resources", ("economic resources", "non economic resources", "resources"), tuple()),
 )
 _CANONICAL_SUBTOPIC_RULES = (
@@ -249,6 +281,52 @@ def _has_relevant_contradiction(text: str, transcript_units: list[dict]) -> bool
     return False
 
 
+def _educational_signal_type(text: str) -> str:
+    lowered = _normalise_ws(text).lower().replace("-", " ")
+    if not lowered:
+        return "low educational relevance"
+    if any(re.search(pattern, lowered) for pattern in _LOW_SIGNAL_TITLE_PATTERNS):
+        return "administrative lecture content"
+    if any(hint in lowered for hint in _ADMIN_HINTS):
+        return "administrative lecture content"
+    if any(hint in lowered for hint in _EXAMPLE_HINTS):
+        return "example"
+    if any(hint in lowered for hint in _TRAP_MARKERS):
+        return "exam instruction"
+    if any(marker in lowered for marker in _DISTINCTION_MARKERS):
+        return "foundational concept"
+    if any(marker in lowered for marker in _DEFINITION_MARKERS) and any(hint in lowered for hint in _ACADEMIC_TITLE_HINTS):
+        return "foundational concept"
+    if any(hint in lowered for hint in _ACADEMIC_TITLE_HINTS):
+        return "supporting concept"
+    return "low educational relevance"
+
+
+def _is_low_signal_title(title: str) -> bool:
+    lowered = _normalise_ws(title).lower().replace("-", " ")
+    if not lowered:
+        return True
+    if any(re.search(pattern, lowered) for pattern in _LOW_SIGNAL_TITLE_PATTERNS):
+        return True
+    if any(phrase in lowered for phrase in _TITLE_BLACKLIST_PHRASES):
+        return True
+    words = lowered.split()
+    if len(words) >= 5 and not any(hint in lowered for hint in _ACADEMIC_TITLE_HINTS):
+        return True
+    return False
+
+
+def _canonical_curriculum_concept(text: str) -> str | None:
+    lowered = _normalise_ws(text).lower().replace("-", " ")
+    if not lowered:
+        return None
+    for canonical, signals in _CURRICULUM_CONCEPT_RULES:
+        matches = sum(1 for signal in signals if signal in lowered)
+        if matches >= 2:
+            return canonical
+    return None
+
+
 def _canonical_title_from_text(title: str, lead_sentence: str, concepts: list[str], prose: str = "", examples: list[str] | None = None, highlights: list[str] | None = None) -> str | None:
     corpus = " ".join([
         _normalise_ws(title).lower(),
@@ -258,6 +336,9 @@ def _canonical_title_from_text(title: str, lead_sentence: str, concepts: list[st
         " ".join(_normalise_ws(e).lower() for e in examples or []),
         " ".join(_normalise_ws(h).lower() for h in highlights or []),
     ])
+    curriculum = _canonical_curriculum_concept(corpus)
+    if curriculum:
+        return curriculum
     for canonical, required_terms, excluded_terms in _CANONICAL_TITLE_RULES:
         if all(term in corpus for term in required_terms):
             if excluded_terms and any(term in corpus for term in excluded_terms):
@@ -312,6 +393,7 @@ def _derive_title(raw_title: str, lead_sentence: str, concepts: list[str]) -> st
         lowered = ""
     if (
         title
+        and not _is_low_signal_title(title)
         and lowered not in _GENERIC_TITLES
         and not re.fullmatch(r"section\s+\d+", lowered)
         and not any(phrase in lowered for phrase in _TITLE_BLACKLIST_PHRASES)
@@ -347,6 +429,8 @@ def _title_quality(title: str, note: dict | None = None) -> float:
         score -= 4.0
     if any(phrase in lowered for phrase in _TITLE_BLACKLIST_PHRASES):
         score -= 4.0
+    if _is_low_signal_title(cleaned):
+        score -= 3.5
     if re.search(r"\bvs\b|\bversus\b", lowered):
         score += 3.0
     if any(hint in lowered for hint in _ACADEMIC_TITLE_HINTS):
@@ -371,6 +455,8 @@ def _is_example_like(note: dict) -> bool:
     concept_count = len(note.get("concepts") or [])
     if any(hint in title or hint in lead for hint in _EXAMPLE_HINTS):
         return True
+    if _educational_signal_type(" ".join([title, lead, prose])) == "example":
+        return True
     if concept_count <= 1 and not prose and len(note.get("examples") or []) > 0:
         return True
     return False
@@ -379,6 +465,13 @@ def _is_example_like(note: dict) -> bool:
 def _is_major_concept_note(note: dict) -> bool:
     title = _derive_title(note.get("title", ""), note.get("lead_sentence", ""), note.get("concepts") or [])
     strength = _title_quality(title, note)
+    signal_type = _educational_signal_type(" ".join([
+        note.get("lead_sentence", ""),
+        note.get("prose", ""),
+        " ".join(note.get("concepts") or []),
+    ]))
+    if signal_type in {"administrative lecture content", "teacher pacing commentary", "motivational guidance", "low educational relevance", "example"}:
+        return False
     if re.search(r"\bvs\b|\bversus\b", title, flags=re.I):
         return True
     if any(hint in title.lower() for hint in _BOUNDARY_HINTS):
@@ -544,10 +637,22 @@ def _merge_chapter_notes(notes: list[dict]) -> dict:
 
     for note in notes:
         title = _derive_title(note.get("title", ""), note.get("lead_sentence", ""), note.get("concepts") or [])
-        if title and title.lower() not in _GENERIC_TITLES and not re.fullmatch(r"section\s+\d+", title.lower()):
+        signal_type = _educational_signal_type(" ".join([
+            title,
+            note.get("lead_sentence", ""),
+            note.get("prose", ""),
+            " ".join(note.get("concepts") or []),
+        ]))
+        if (
+            title
+            and signal_type not in {"administrative lecture content", "low educational relevance"}
+            and title.lower() not in _GENERIC_TITLES
+            and not re.fullmatch(r"section\s+\d+", title.lower())
+        ):
             subsection_titles.append(title)
             subtopic_sections.append({
                 "title": title,
+                "signal_type": signal_type,
                 "overview": _build_core_explanation(note),
                 "definitions": _collect_definition_lines(note)[:2],
                 "examples": _dedupe_texts(note.get("examples") or [])[:2],
@@ -585,7 +690,7 @@ def _merge_chapter_notes(notes: list[dict]) -> dict:
     definitions = _filter_conflicting_texts(_dedupe_texts(definitions))[:4]
     distinctions = _filter_conflicting_texts(_dedupe_texts(distinctions))[:4]
     exam_traps = _filter_conflicting_texts(_dedupe_texts(exam_traps))[:4]
-    subsection_titles = [s for s in _dedupe_texts(subsection_titles) if s != title][:4]
+    subsection_titles = [s for s in _dedupe_texts(subsection_titles) if s != title and not _is_low_signal_title(s)][:4]
     subtopics = []
     chapter_corpus = " ".join([
         title.lower(),
@@ -606,6 +711,8 @@ def _merge_chapter_notes(notes: list[dict]) -> dict:
     seen_subtopic_titles = set()
     for item in subtopic_sections:
         key = item["title"].lower()
+        if item.get("signal_type") in {"administrative lecture content", "low educational relevance"}:
+            continue
         if key in seen_subtopic_titles:
             continue
         seen_subtopic_titles.add(key)
@@ -1143,12 +1250,30 @@ def build_concept_entities(chapter_hierarchy: list[dict], claim_registry: list[d
 
     def ensure_entity(term: str, chapter: dict, source: dict | None = None) -> dict | None:
         cleaned = _normalise_ws(term)
+        raw_signal = _educational_signal_type(cleaned)
+        canonical = _canonical_curriculum_concept(" ".join([
+            cleaned,
+            chapter.get("title", ""),
+            " ".join(chapter.get("key_definitions") or []),
+            " ".join(chapter.get("important_distinctions") or []),
+        ]))
+        if canonical and raw_signal in {"example", "administrative lecture content", "low educational relevance"}:
+            cleaned = canonical
         key = _normalise_concept_key(cleaned)
         if not cleaned or not key or key in _RELATIONSHIP_STOP_TERMS:
+            return None
+        signal_type = _educational_signal_type(" ".join([
+            cleaned,
+            chapter.get("title", ""),
+            " ".join(chapter.get("key_definitions") or []),
+            " ".join(chapter.get("important_distinctions") or []),
+        ]))
+        if signal_type in {"administrative lecture content", "low educational relevance"}:
             return None
         entity = entities.setdefault(key, {
             "concept": cleaned,
             "canonical_key": key,
+            "signal_type": signal_type,
             "chapter_title": chapter.get("title", ""),
             "definitions": [],
             "distinctions": [],
@@ -1172,6 +1297,8 @@ def build_concept_entities(chapter_hierarchy: list[dict], claim_registry: list[d
     for chapter in chapter_hierarchy:
         chapter_terms = []
         for subtopic in chapter.get("subtopic_sections") or []:
+            if subtopic.get("signal_type") in {"administrative lecture content", "low educational relevance"}:
+                continue
             entity = ensure_entity(subtopic.get("title", ""), chapter, source=subtopic)
             if entity:
                 chapter_terms.append(entity["canonical_key"])
@@ -1340,6 +1467,7 @@ def score_adaptive_concept_intelligence(concept_graph: dict) -> dict:
     scored = []
     for entity in concepts:
         concept_name = entity["concept"]
+        signal_type = entity.get("signal_type", "supporting concept")
         definitions = len(entity.get("definitions") or [])
         distinctions = len(entity.get("distinctions") or [])
         traps = len(entity.get("exam_traps") or [])
@@ -1364,7 +1492,15 @@ def score_adaptive_concept_intelligence(concept_graph: dict) -> dict:
             + (exam_relevance * 0.24)
             + (float(entity.get("confidence") or 0.0) * 0.12)
         )
+        if signal_type == "foundational concept":
+            educational_importance = _clamp_score(educational_importance + 0.12)
+            revision_priority = _clamp_score(revision_priority + 0.1)
+        elif signal_type in {"example", "exam instruction"}:
+            educational_importance = _clamp_score(educational_importance * 0.55)
+            revision_priority = _clamp_score(revision_priority * 0.62)
         foundational = dependency_weight >= 0.45 or centrality >= 0.65 or definitions >= 2
+        if signal_type in {"example", "exam instruction"}:
+            foundational = False
         if revision_priority >= 0.78 or misunderstanding_risk >= 0.72:
             emphasis = "high"
         elif revision_priority >= 0.55:

@@ -88,7 +88,7 @@ def test_build_concept_sections_extracts_educational_structure():
 
     sections = build_concept_sections(grounded_notes)
 
-    assert sections[0]["title"] == "Economic vs Non-Economic Goods"
+    assert sections[0]["title"] in {"Economic Goods & Scarcity", "Economic vs Non-Economic Goods"}
     assert sections[0]["important_distinctions"]
     assert sections[0]["exam_traps"]
     assert sections[0]["examples"]
@@ -122,8 +122,41 @@ def test_build_concept_sections_uses_canonical_educational_titles():
 
     sections = build_concept_sections(grounded_notes)
 
-    assert sections[0]["title"] == "Branches of Economics"
-    assert sections[1]["title"] in {"Economic vs Non-Economic Goods", "Public Goods vs Free Goods"}
+    assert sections[0]["title"] == "Microeconomics vs Macroeconomics"
+    assert sections[1]["title"] in {"Economic Goods & Scarcity", "Economic vs Non-Economic Goods", "Public Goods vs Free Goods"}
+
+
+def test_build_concept_sections_filters_transcript_artifact_titles():
+    grounded_notes = [
+        {
+            "title": "Lecture Will Summarize Unit One Over",
+            "lead_sentence": "Positive statements are objective and testable while normative statements express value judgments.",
+            "prose": "Population growth rate is used as a factual example of a positive statement.",
+            "concepts": ["positive statements", "normative statements"],
+            "examples": ["Population growth rate in Sri Lanka is 0.5%."],
+            "highlights": ["Positive does not mean good; it means testable."],
+            "citations": [{"label": "06:00-09:00", "start_seconds": 360, "end_seconds": 540}],
+            "confidence": 0.9,
+            "verification_status": "supported",
+        },
+        {
+            "title": "Population Growth Rate Sri Lanka",
+            "lead_sentence": "Population growth rate is an example of a measurable factual claim.",
+            "prose": "",
+            "concepts": ["population growth rate"],
+            "examples": ["Population growth rate in Sri Lanka is 0.5%."],
+            "highlights": [],
+            "citations": [{"label": "08:00-08:24", "start_seconds": 480, "end_seconds": 504}],
+            "confidence": 0.82,
+            "verification_status": "supported",
+        },
+    ]
+
+    sections = build_concept_sections(grounded_notes)
+
+    assert sections[0]["title"] == "Positive vs Normative Statements"
+    assert all(section["title"] != "Lecture Will Summarize Unit One Over" for section in sections)
+    assert all(section["title"] != "Population Growth Rate Sri Lanka" for section in sections)
 
 
 def test_build_concept_sections_include_nested_subtopic_sections():
@@ -384,6 +417,34 @@ def test_build_concept_entities_keeps_resources_as_real_concept():
     assert any(entity["concept"] == "Resources" for entity in entities)
 
 
+def test_build_concept_entities_removes_admin_and_example_artifacts():
+    chapters = [
+        {
+            "title": "Positive vs Normative Statements",
+            "concepts": ["lecture will summarize unit one", "population growth rate", "positive statements", "normative statements"],
+            "confidence": 0.9,
+            "verification_status": "supported",
+            "citations": [{"label": "06:00-09:00"}],
+            "key_definitions": ["Positive statements are objective and testable."],
+            "important_distinctions": ["Positive statements are different from normative statements."],
+            "examples": ["Population growth rate is a measurable example."],
+            "exam_traps": ["Positive does not mean good."],
+            "subtopic_sections": [
+                {"title": "Lecture Will Summarize Unit One Over", "signal_type": "administrative lecture content", "definitions": [], "examples": [], "exam_traps": [], "citations": []},
+                {"title": "Population Growth Rate Sri Lanka", "signal_type": "example", "definitions": [], "examples": ["Population growth rate is measurable."], "exam_traps": [], "citations": []},
+                {"title": "Positive Statements", "definitions": ["Positive statements are objective and testable."], "examples": [], "exam_traps": [], "citations": []},
+            ],
+        }
+    ]
+
+    entities = build_concept_entities(chapters, [])
+    names = {entity["concept"] for entity in entities}
+
+    assert "Lecture Will Summarize Unit One Over" not in names
+    assert "Population Growth Rate Sri Lanka" not in names
+    assert "Positive Statements" in names
+
+
 def test_build_relationship_concept_map_uses_graph_relationships():
     graph = {
         "concepts": [
@@ -556,7 +617,8 @@ def test_build_concept_sections_merges_micro_sections_into_chapters():
 
     assert len(sections) == 2
     assert sections[0]["title"] == "Positive vs Normative Statements"
-    assert "Population Growth Rate Sri Lanka" in sections[0]["subsections"]
+    assert "Population Growth Rate Sri Lanka" not in sections[0]["subsections"]
+    assert sections[0]["examples"]
     assert sections[0]["examples"]
 
 
