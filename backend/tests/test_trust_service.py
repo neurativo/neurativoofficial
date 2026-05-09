@@ -159,6 +159,88 @@ def test_build_concept_sections_filters_transcript_artifact_titles():
     assert all(section["title"] != "Population Growth Rate Sri Lanka" for section in sections)
 
 
+def test_domain_general_canonical_titles_are_stable_across_phrasings():
+    cases = [
+        (
+            "Biology pathway explanation",
+            "The lecture explains how enzymes regulate a cellular metabolic pathway and reaction mechanism.",
+            ["enzyme", "cellular pathway"],
+            "Cellular Pathways & Mechanisms",
+        ),
+        (
+            "Case law discussion",
+            "A precedent creates a legal test that courts apply under this doctrine.",
+            ["precedent", "legal test"],
+            "Legal Tests & Precedent",
+        ),
+        (
+            "Formula section",
+            "The theorem proof leads into a derivation of the equation and formula.",
+            ["theorem", "proof", "derivation"],
+            "Theorems, Proofs & Derivations",
+        ),
+        (
+            "Engineering process",
+            "The system design has constraints and optimization tradeoffs in the process flow.",
+            ["system", "constraints", "optimization"],
+            "Engineering Systems & Constraints",
+        ),
+        (
+            "Clinical warning",
+            "Diagnosis depends on symptoms and contraindications before treatment.",
+            ["diagnosis", "contraindication", "treatment"],
+            "Clinical Reasoning & Contraindications",
+        ),
+    ]
+
+    for title, lead, concepts, expected in cases:
+        sections = build_concept_sections([{
+            "title": title,
+            "lead_sentence": lead,
+            "prose": "",
+            "concepts": concepts,
+            "examples": [],
+            "highlights": [],
+            "citations": [{"label": "00:00-01:00", "start_seconds": 0, "end_seconds": 60}],
+            "confidence": 0.88,
+            "verification_status": "supported",
+        }])
+
+        assert sections[0]["title"] == expected
+
+
+def test_noisy_admin_and_qna_content_does_not_become_chapter_title():
+    grounded_notes = [
+        {
+            "title": "Can You Hear Me Recording Started",
+            "lead_sentence": "Can you hear me, open your books and upload slides after class.",
+            "prose": "Attendance will be checked before break.",
+            "concepts": ["attendance", "recording started"],
+            "examples": [],
+            "highlights": [],
+            "citations": [{"label": "00:00-01:00", "start_seconds": 0, "end_seconds": 60}],
+            "confidence": 0.7,
+            "verification_status": "supported",
+        },
+        {
+            "title": "Economic Goods",
+            "lead_sentence": "Economic goods are scarce resources with opportunity cost.",
+            "prose": "",
+            "concepts": ["economic goods", "scarcity", "opportunity cost"],
+            "examples": [],
+            "highlights": [],
+            "citations": [{"label": "01:00-02:00", "start_seconds": 60, "end_seconds": 120}],
+            "confidence": 0.9,
+            "verification_status": "supported",
+        },
+    ]
+
+    sections = build_concept_sections(grounded_notes)
+
+    assert all("Can You Hear Me" not in section["title"] for section in sections)
+    assert any(section["title"] == "Economic Goods & Scarcity" for section in sections)
+
+
 def test_build_concept_sections_include_nested_subtopic_sections():
     grounded_notes = [{
         "title": "Economic vs Non-Economic Goods",
@@ -394,6 +476,40 @@ def test_build_concept_relationship_graph_extracts_prerequisite_and_causal_links
     economic_goods = next(entity for entity in graph["concepts"] if entity["concept"] == "Economic Goods")
     assert "Scarcity" in economic_goods["prerequisite_concepts"]
     assert any(edge["type"] == "causal" for edge in graph["edges"])
+
+
+def test_build_concept_relationship_graph_suppresses_weak_claim_edges():
+    chapters = [{
+        "title": "Economic Goods & Scarcity",
+        "concepts": ["economic goods", "scarcity"],
+        "confidence": 0.9,
+        "verification_status": "supported",
+        "citations": [{"label": "14:00-17:30"}],
+        "key_definitions": ["Economic goods are scarce resources."],
+        "important_distinctions": [],
+        "examples": [],
+        "exam_traps": [],
+        "subtopic_sections": [
+            {"title": "Economic Goods", "definitions": ["Economic goods are scarce resources."], "examples": [], "exam_traps": [], "citations": []},
+            {"title": "Scarcity", "definitions": ["Scarcity means limited supply."], "examples": [], "exam_traps": [], "citations": []},
+        ],
+    }]
+    claims = [{
+        "type": "claim",
+        "text": "Economic goods require scarcity.",
+        "chapter_title": "Economic Goods & Scarcity",
+        "verification_status": "supported",
+        "confidence": 0.5,
+        "support_score": 0.5,
+        "contradiction_score": 0.0,
+        "timestamps": [],
+        "source_chunk_ids": [],
+    }]
+
+    entities = build_concept_entities(chapters, claims)
+    graph = build_concept_relationship_graph(entities, claims)
+
+    assert not any(edge["type"] == "prerequisite" for edge in graph["edges"])
 
 
 def test_build_concept_entities_keeps_resources_as_real_concept():

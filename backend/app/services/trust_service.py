@@ -61,6 +61,9 @@ _ACADEMIC_TITLE_HINTS = (
     "law", "rights", "biology", "medicine", "physics", "chemistry",
     "engineering", "calculus", "statistics", "classification", "theory",
     "structure", "strategy", "comparison", "statements", "concepts",
+    "pathway", "mechanism", "enzyme", "cellular", "precedent", "legal test",
+    "statutory", "theorem", "proof", "derivation", "formula", "system",
+    "constraint", "process", "anatomy", "diagnosis", "contraindication",
 )
 _EXAMPLE_HINTS = (
     "example", "illustration", "scenario", "case", "instance", "sample",
@@ -70,6 +73,9 @@ _ADMIN_HINTS = (
     "focus week", "essay question", "mcq", "multiple choice", "next week",
     "this week", "unit number", "summarize unit", "revision week", "lecture will",
     "speaker", "delivering material", "third time", "today we will", "we are going to",
+    "can you hear me", "repeat after me", "open your books", "attendance",
+    "before break", "after break", "assignment deadline", "upload slides",
+    "recording started", "microphone", "noise in the class",
 )
 _LOW_SIGNAL_TITLE_PATTERNS = (
     r"^lecture\b",
@@ -90,6 +96,14 @@ _CURRICULUM_CONCEPT_RULES = (
     ("Economic Bads", ("economic bads", "pollution", "garbage", "dissatisfaction")),
     ("Human Intervention & Resource Conversion", ("human intervention", "conversion", "convert", "bottled water", "oxygen tank")),
     ("Economic vs Non-Economic Resources", ("economic resources", "non economic resources", "resources", "production")),
+    ("Cellular Pathways & Mechanisms", ("pathway", "enzyme", "cellular", "mechanism", "metabolic", "reaction")),
+    ("Anatomy & Physiological Mechanisms", ("anatomy", "physiology", "organ", "tissue", "mechanism")),
+    ("Clinical Reasoning & Contraindications", ("diagnosis", "symptom", "contraindication", "treatment", "clinical")),
+    ("Legal Tests & Precedent", ("precedent", "legal test", "case law", "holding", "doctrine")),
+    ("Statutory Interpretation", ("statutory", "interpretation", "section", "legislation", "meaning")),
+    ("Theorems, Proofs & Derivations", ("theorem", "proof", "derive", "derivation", "lemma")),
+    ("Formula Systems & Problem Solving", ("formula", "equation", "variable", "solve", "calculation")),
+    ("Engineering Systems & Constraints", ("system", "constraint", "optimization", "process", "design tradeoff")),
 )
 _BOUNDARY_HINTS = (
     "exam", "study", "microeconomics", "macroeconomics", "positive", "normative",
@@ -1342,6 +1356,8 @@ def build_concept_relationship_graph(concept_entities: list[dict], claim_registr
     seen_edges = set()
 
     def add_edge(source_key: str, target_name: str, rel_type: str, confidence: float):
+        if confidence < 0.55:
+            return
         if source_key not in entities_by_key:
             return
         target_key = _normalise_concept_key(target_name)
@@ -1366,8 +1382,12 @@ def build_concept_relationship_graph(concept_entities: list[dict], claim_registr
         keys = [key for key in _dedupe_texts(keys) if key in entities_by_key]
         for idx, source_key in enumerate(keys):
             for target_key in keys[idx + 1:]:
-                add_edge(source_key, entities_by_key[target_key]["concept"], "related", 0.72)
-                add_edge(target_key, entities_by_key[source_key]["concept"], "related", 0.72)
+                source_signal = entities_by_key[source_key].get("signal_type")
+                target_signal = entities_by_key[target_key].get("signal_type")
+                if source_signal in {"example", "exam instruction"} or target_signal in {"example", "exam instruction"}:
+                    continue
+                add_edge(source_key, entities_by_key[target_key]["concept"], "related", 0.68)
+                add_edge(target_key, entities_by_key[source_key]["concept"], "related", 0.68)
         if " vs " in chapter_title.lower():
             for idx, source_key in enumerate(keys):
                 for target_key in keys[idx + 1:]:
@@ -1375,7 +1395,10 @@ def build_concept_relationship_graph(concept_entities: list[dict], claim_registr
                     add_edge(target_key, entities_by_key[source_key]["concept"], "contrast", 0.84)
 
     for claim in claim_registry:
+        support_score = float(claim.get("support_score") or 0.0)
         if claim.get("verification_status") != "supported" or float(claim.get("contradiction_score") or 0.0) >= 0.25:
+            continue
+        if support_score < 0.6:
             continue
         text = _normalise_ws(claim.get("text", ""))
         lowered = text.lower()
@@ -1393,11 +1416,11 @@ def build_concept_relationship_graph(concept_entities: list[dict], claim_registr
         source = matched[0]
         for target in matched[1:]:
             if any(marker in lowered for marker in ("depends on", "requires", "require")):
-                add_edge(source["canonical_key"], target["concept"], "prerequisite", float(claim.get("support_score") or 0.65))
+                add_edge(source["canonical_key"], target["concept"], "prerequisite", support_score)
             if any(marker in lowered for marker in ("because", "causes", "leads to", "results in", "therefore", "create", "creates")):
-                add_edge(source["canonical_key"], target["concept"], "causal", float(claim.get("support_score") or 0.65))
+                add_edge(source["canonical_key"], target["concept"], "causal", support_score)
             if " not " in lowered or "different from" in lowered or "contrast" in lowered:
-                add_edge(source["canonical_key"], target["concept"], "contrast", float(claim.get("support_score") or 0.65))
+                add_edge(source["canonical_key"], target["concept"], "contrast", support_score)
 
     for entity in concept_entities:
         key = entity["canonical_key"]
