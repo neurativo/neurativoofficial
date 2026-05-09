@@ -738,6 +738,97 @@ def test_build_concept_sections_merges_micro_sections_into_chapters():
     assert sections[0]["examples"]
 
 
+def test_build_concept_sections_reconstructs_curriculum_transitions():
+    grounded_notes = [
+        {
+            "title": "Can You Hear Me Recording Started",
+            "lead_sentence": "Can you hear me, open your books and we will upload slides after class.",
+            "prose": "Attendance will be checked before break.",
+            "concepts": ["attendance"],
+            "examples": [],
+            "highlights": [],
+            "citations": [{"label": "00:00-01:00", "start_seconds": 0, "end_seconds": 60}],
+            "confidence": 0.72,
+            "verification_status": "supported",
+        },
+        {
+            "title": "Speaker Delivering Material Third Time Will",
+            "lead_sentence": "Microeconomics studies individual units while macroeconomics studies the whole economy.",
+            "prose": "The lecturer compares individual markets with whole-economy analysis.",
+            "concepts": ["microeconomics", "macroeconomics"],
+            "examples": ["A single firm is microeconomics while national inflation is macroeconomics."],
+            "highlights": [],
+            "citations": [{"label": "03:00-05:00", "start_seconds": 180, "end_seconds": 300}],
+            "confidence": 0.88,
+            "verification_status": "supported",
+        },
+        {
+            "title": "Lecture Will Summarize Unit One Over",
+            "lead_sentence": "Positive statements are objective and testable while normative statements express value judgments.",
+            "prose": "A factual statement can be verified, but a value judgment cannot be tested in the same way.",
+            "concepts": ["positive statements", "normative statements"],
+            "examples": ["Population growth rate is used as a factual example."],
+            "highlights": ["Positive does not mean good; it means testable."],
+            "citations": [{"label": "06:00-09:00", "start_seconds": 360, "end_seconds": 540}],
+            "confidence": 0.9,
+            "verification_status": "supported",
+        },
+        {
+            "title": "Economic Goods Defined Goods Scarce Supply",
+            "lead_sentence": "Economic goods are scarce goods with opportunity cost.",
+            "prose": "Goods provided free of charge can still be economic goods when supply is limited.",
+            "concepts": ["economic goods", "scarcity", "opportunity cost"],
+            "examples": ["Government textbooks are still economic goods because supply is limited."],
+            "highlights": ["Free of charge does not mean free good."],
+            "citations": [{"label": "14:00-16:00", "start_seconds": 840, "end_seconds": 960}],
+            "confidence": 0.9,
+            "verification_status": "supported",
+        },
+    ]
+
+    sections = build_concept_sections(grounded_notes)
+    titles = [section["title"] for section in sections]
+
+    assert "Microeconomics vs Macroeconomics" in titles
+    assert "Positive vs Normative Statements" in titles
+    assert "Economic Goods & Scarcity" in titles
+    assert all("Can You Hear Me" not in title for title in titles)
+    assert all("Lecture Will Summarize" not in title for title in titles)
+
+
+def test_build_concept_sections_keeps_persistent_concept_examples_inside_chapter():
+    grounded_notes = [
+        {
+            "title": "Microeconomics and Macroeconomics",
+            "lead_sentence": "Microeconomics studies individual units while macroeconomics studies the whole economy.",
+            "prose": "",
+            "concepts": ["microeconomics", "macroeconomics"],
+            "examples": [],
+            "highlights": [],
+            "citations": [{"label": "03:00-04:00", "start_seconds": 180, "end_seconds": 240}],
+            "confidence": 0.88,
+            "verification_status": "supported",
+        },
+        {
+            "title": "Single Firm And National Inflation",
+            "lead_sentence": "A single firm is an example of microeconomics and national inflation is an example of macroeconomics.",
+            "prose": "",
+            "concepts": ["single firm", "national inflation"],
+            "examples": ["A single firm is microeconomics.", "National inflation is macroeconomics."],
+            "highlights": [],
+            "citations": [{"label": "04:00-04:36", "start_seconds": 240, "end_seconds": 276}],
+            "confidence": 0.82,
+            "verification_status": "supported",
+        },
+    ]
+
+    sections = build_concept_sections(grounded_notes)
+
+    assert len(sections) == 1
+    assert sections[0]["title"] == "Microeconomics vs Macroeconomics"
+    assert sections[0]["examples"]
+
+
 def test_sanitize_generated_content_bundle_drops_contradicted_items():
     transcript = (
         "Textbooks provided free by the government are still economic goods because they are limited in supply.\n"

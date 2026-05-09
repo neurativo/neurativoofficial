@@ -341,6 +341,16 @@ def _canonical_curriculum_concept(text: str) -> str | None:
     return None
 
 
+def _curriculum_signal_count(canonical: str | None, text: str) -> int:
+    if not canonical:
+        return 0
+    lowered = _normalise_ws(text).lower().replace("-", " ")
+    for rule_title, signals in _CURRICULUM_CONCEPT_RULES:
+        if rule_title == canonical:
+            return sum(1 for signal in signals if signal in lowered)
+    return 0
+
+
 def _canonical_title_from_text(title: str, lead_sentence: str, concepts: list[str], prose: str = "", examples: list[str] | None = None, highlights: list[str] | None = None) -> str | None:
     corpus = " ".join([
         _normalise_ws(title).lower(),
@@ -359,6 +369,50 @@ def _canonical_title_from_text(title: str, lead_sentence: str, concepts: list[st
                 continue
             return canonical
     return None
+
+
+def _note_curriculum_signature(note: dict) -> dict:
+    raw_title = _normalise_ws(note.get("title", ""))
+    safe_title = "" if _is_low_signal_title(raw_title) else raw_title
+    concepts = note.get("concepts") or []
+    examples = note.get("examples") or []
+    highlights = note.get("highlights") or []
+    lead = note.get("lead_sentence", "")
+    prose = note.get("prose", "")
+    signal_corpus = " ".join([lead, prose, " ".join(concepts), " ".join(highlights)])
+    full_corpus = " ".join([safe_title, lead, prose, " ".join(concepts), " ".join(examples), " ".join(highlights)])
+    canonical = _canonical_title_from_text(safe_title, lead, concepts, prose=prose, examples=examples, highlights=highlights)
+    signal_type = _educational_signal_type(signal_corpus)
+    canonical_signal_count = _curriculum_signal_count(canonical, full_corpus)
+
+    if canonical and canonical_signal_count >= 2:
+        if " vs " in canonical.lower() or any(marker in signal_corpus.lower() for marker in _DISTINCTION_MARKERS):
+            signal_type = "foundational concept"
+        elif signal_type in {"administrative lecture content", "low educational relevance", "example"}:
+            signal_type = "supporting concept"
+
+    title = canonical or _derive_title(raw_title, lead, concepts)
+    strength = _title_quality(title, note) + min(2.0, canonical_signal_count * 0.4)
+    is_admin_only = signal_type in {"administrative lecture content", "low educational relevance"} and not canonical
+    is_example_only = signal_type == "example" and not canonical
+    is_driver = bool(canonical) and signal_type not in {
+        "administrative lecture content",
+        "teacher pacing commentary",
+        "motivational guidance",
+        "low educational relevance",
+        "example",
+    }
+
+    return {
+        "title": title,
+        "canonical": canonical,
+        "signal_type": signal_type,
+        "signal_count": canonical_signal_count,
+        "strength": strength,
+        "is_admin_only": is_admin_only,
+        "is_example_only": is_example_only,
+        "is_driver": is_driver,
+    }
 
 
 def _status_from_score(score: float, contradicted: bool) -> str:
@@ -590,6 +644,68 @@ def _pick_chapter_title(notes: list[dict]) -> str:
     return _derive_title("", lead, [])
 
 
+def _chapter_curriculum_signature(notes: list[dict]) -> dict:
+    ranked: dict[str, dict] = {}
+    best_note_signature: dict | None = None
+    for note in notes:
+        signature = _note_curriculum_signature(note)
+        if best_note_signature is None or signature["strength"] > best_note_signature["strength"]:
+            best_note_signature = signature
+        canonical = signature.get("canonical")
+        if not canonical:
+            continue
+        score = signature["signal_count"] + (2.0 if signature["is_driver"] else 0.0) + max(0.0, signature["strength"]) * 0.25
+        current = ranked.setdefault(canonical, {"canonical": canonical, "score": 0.0, "count": 0})
+        current["score"] += score
+        current["count"] += 1
+
+    if ranked:
+        dominant = max(ranked.values(), key=lambda item: (item["score"], item["count"]))
+        return {
+            "canonical": dominant["canonical"],
+            "score": dominant["score"],
+            "count": dominant["count"],
+            "fallback": best_note_signature,
+        }
+    return {
+        "canonical": None,
+        "score": 0.0,
+        "count": 0,
+        "fallback": best_note_signature,
+    }
+
+
+def _is_curriculum_transition(current: list[dict], candidate: dict) -> bool:
+    current_signature = _chapter_curriculum_signature(current)
+    candidate_signature = _note_curriculum_signature(candidate)
+    current_canonical = current_signature.get("canonical")
+    candidate_canonical = candidate_signature.get("canonical")
+
+    if candidate_signature["is_admin_only"] or candidate_signature["is_example_only"]:
+        return False
+    if not candidate_canonical or not candidate_signature["is_driver"]:
+        return False
+    if not current_canonical:
+        return False
+    if candidate_canonical == current_canonical:
+        return False
+
+    overlap = max((_note_overlap(existing, candidate) for existing in current), default=0.0)
+    if overlap >= 0.55 and _supports_current_examples(current, candidate) >= 0.35:
+        return False
+    return True
+
+
+def _groups_share_curriculum(current: list[dict], candidate: list[dict]) -> bool:
+    current_canonical = _chapter_curriculum_signature(current).get("canonical")
+    candidate_canonical = _chapter_curriculum_signature(candidate).get("canonical")
+    if not current_canonical or not candidate_canonical:
+        return True
+    if current_canonical == candidate_canonical:
+        return True
+    return False
+
+
 def _same_major_family(current: list[dict], candidate: dict) -> bool:
     overlap = max((_note_overlap(existing, candidate) for existing in current), default=0.0)
     example_support = _supports_current_examples(current, candidate)
@@ -612,10 +728,19 @@ def _should_merge_into_current(current: list[dict], candidate: dict, desired_sec
     if not current:
         return False
 
+    candidate_signature = _note_curriculum_signature(candidate)
+    current_signature = _chapter_curriculum_signature(current)
+    if candidate_signature["is_admin_only"]:
+        return True
+    if _is_curriculum_transition(current, candidate):
+        return False
+    if candidate_signature["canonical"] and candidate_signature["canonical"] == current_signature.get("canonical"):
+        return True
+
     current_words = sum(_note_density(note) for note in current)
     candidate_words = _note_density(candidate)
-    candidate_title = _derive_title(candidate.get("title", ""), candidate.get("lead_sentence", ""), candidate.get("concepts") or [])
-    candidate_strength = _title_quality(candidate_title, candidate)
+    candidate_title = candidate_signature["title"]
+    candidate_strength = candidate_signature["strength"]
     weak_candidate = candidate_strength < 1.5 or (candidate_words < 35 and candidate_strength < 2.5)
     example_support = _supports_current_examples(current, candidate)
     citation_gap = _citation_gap_seconds(current, candidate)
@@ -977,6 +1102,9 @@ def build_concept_sections(grounded_notes: list[dict]) -> list[dict]:
     chapters: list[list[dict]] = []
     current: list[dict] = []
     for note in grounded_notes:
+        signature = _note_curriculum_signature(note)
+        if signature["is_admin_only"] and not current:
+            continue
         if not current:
             current = [note]
             continue
@@ -989,10 +1117,14 @@ def build_concept_sections(grounded_notes: list[dict]) -> list[dict]:
         chapters.append(current)
 
     while len(chapters) > desired_sections and len(chapters) > 1:
+        merge_candidates = [idx for idx in range(1, len(chapters)) if _groups_share_curriculum(chapters[idx - 1], chapters[idx])]
+        if not merge_candidates:
+            break
         merge_index = min(
-            range(1, len(chapters)),
+            merge_candidates,
             key=lambda idx: (
                 len(chapters[idx - 1]) + len(chapters[idx]),
+                _chapter_curriculum_signature(chapters[idx])["score"],
                 _title_quality(chapters[idx][0].get("title", ""), chapters[idx][0]),
             ),
         )
