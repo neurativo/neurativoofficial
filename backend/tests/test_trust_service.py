@@ -74,3 +74,48 @@ def test_build_concept_sections_extracts_educational_structure():
     assert sections[0]["important_distinctions"]
     assert sections[0]["exam_traps"]
     assert sections[0]["examples"]
+
+
+def test_build_concept_sections_merges_micro_sections_into_chapters():
+    grounded_notes = [
+        {
+            "title": "Positive vs Normative Statements",
+            "lead_sentence": "Positive statements can be tested while normative statements express value judgments.",
+            "prose": "The lecture compares factual claims with opinion-based claims used in policy discussion.",
+            "concepts": ["positive statements", "normative statements"],
+            "examples": ["Population growth rate in Sri Lanka is 0.5% is presented as a positive statement."],
+            "highlights": ["Do not confuse testable statements with value judgments."],
+            "citations": [{"label": "06:00-08:00", "start_seconds": 360, "end_seconds": 480}],
+            "confidence": 0.86,
+            "verification_status": "supported",
+        },
+        {
+            "title": "Population Growth Rate Sri Lanka",
+            "lead_sentence": "Population growth rate in Sri Lanka is used as a factual illustration.",
+            "prose": "",
+            "concepts": ["population growth rate"],
+            "examples": ["Population growth rate in Sri Lanka is 0.5%."],
+            "highlights": [],
+            "citations": [{"label": "08:00-08:24", "start_seconds": 480, "end_seconds": 504}],
+            "confidence": 0.8,
+            "verification_status": "supported",
+        },
+        {
+            "title": "Economic vs Non-Economic Goods",
+            "lead_sentence": "Economic goods are scarce while non-economic goods are abundant.",
+            "prose": "A good being free of charge does not make it a free good.",
+            "concepts": ["economic goods", "non-economic goods"],
+            "examples": ["Air is a non-economic good."],
+            "highlights": ["Government textbooks are still economic goods because supply is limited."],
+            "citations": [{"label": "14:00-17:30", "start_seconds": 840, "end_seconds": 1050}],
+            "confidence": 0.9,
+            "verification_status": "supported",
+        },
+    ]
+
+    sections = build_concept_sections(grounded_notes)
+
+    assert len(sections) == 2
+    assert sections[0]["title"] == "Positive vs Normative Statements"
+    assert "Population Growth Rate Sri Lanka" in sections[0]["subsections"]
+    assert sections[0]["examples"]

@@ -494,12 +494,12 @@
         /* ─── 7. SECTION CARD ───────────────────────────────────── */
         .section {
             position: relative;
-            padding: 10mm 0 8mm;
+            padding: 7mm 0 5mm;
             border-top: var(--rule-2);
             page-break-inside: avoid;
             break-inside: avoid;
         }
-        .section + .section { padding-top: 9mm; }
+        .section + .section { padding-top: 6mm; }
 
         /* 3-column header: §N | title+sub | watermark space */
         .section-head {
@@ -507,7 +507,7 @@
             grid-template-columns: 12mm 1fr 22mm;
             gap: 0 6mm;
             align-items: baseline;
-            margin-bottom: 6mm;
+            margin-bottom: 3.5mm;
         }
         .section-spacer { grid-column: 3; }
         .section-num {
@@ -554,16 +554,16 @@
             font-variant-numeric: tabular-nums;
         }
         .section-body { position: relative; z-index: 1; }
-
-        /* Drop cap on first paragraph of each section */
-        .section-body > p:first-of-type::first-letter {
-            font-family: var(--serif);
-            font-size: 2.6em;
-            float: left;
-            line-height: 0.9;
-            padding: 4pt 6pt 0 0;
-            color: var(--ink);
-            font-weight: 500;
+        .subtopics-row { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 3mm; }
+        .subtopic-chip {
+            display: inline-flex;
+            align-items: center;
+            padding: 2px 8px;
+            border-radius: 999px;
+            background: #f3f0ea;
+            color: var(--ink-3);
+            font-size: 7.5pt;
+            border: 0.5px solid #e7dfd2;
         }
 
         /* Lead sentence (when no analogy) */
@@ -572,12 +572,12 @@
             font-size: 11.5pt;
             font-weight: 500;
             color: var(--ink);
-            margin: 0 0 3.5mm;
-            line-height: 1.6;
+            margin: 0 0 2.2mm;
+            line-height: 1.45;
         }
 
         /* Section prose */
-        .section-body p { font-size: 9.5pt; color: var(--ink-3); margin: 0 0 2.5mm; line-height: 1.7; }
+        .section-body p { font-size: 9.2pt; color: var(--ink-3); margin: 0 0 1.8mm; line-height: 1.58; }
 
         /* Bullet list */
         .section-bullets { list-style: none; padding: 0; margin: 3mm 0 0; }
@@ -599,14 +599,14 @@
         }
 
         /* Concept pills */
-        .concepts-wrap { margin: 3.5mm 0 4mm; }
+        .concepts-wrap { margin: 2.2mm 0 2.8mm; }
         .concepts-label {
             font-size: 7pt;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 1.2px;
             color: var(--ink-4);
-            margin-bottom: 2mm;
+            margin-bottom: 1.2mm;
         }
         .concepts-pills { display: flex; flex-wrap: wrap; gap: 4px; }
         .concept-pill {
@@ -614,16 +614,16 @@
             color: var(--accent-text);
             border: 0.5px solid var(--accent-mid);
             border-radius: 20px;
-            padding: 2px 10px;
-            font-size: 8.5pt;
+            padding: 1.5px 8px;
+            font-size: 8.1pt;
             font-weight: 500;
         }
 
         /* Examples */
         .examples-wrap {
             border-left: 2px solid #5dcaa5;
-            padding-left: 8px;
-            margin-bottom: 4mm;
+            padding-left: 7px;
+            margin-bottom: 0;
         }
         .examples-label {
             font-size: 7pt;
@@ -631,9 +631,9 @@
             text-transform: uppercase;
             letter-spacing: 1.2px;
             color: var(--ink-4);
-            margin-bottom: 2mm;
+            margin-bottom: 1.2mm;
         }
-        .example-row { font-size: 9pt; color: #334155; margin-bottom: 1.5mm; }
+        .example-row { font-size: 8.7pt; color: #334155; margin-bottom: 1.1mm; line-height: 1.45; }
         .example-arrow { color: #1d9e75; font-weight: 600; margin-right: 4px; }
 
         /* Analogy two-column box */
@@ -684,9 +684,9 @@
         .mr-remember .mr-text { color: #134e4a; }
 
         /* Notes lines at bottom of each section */
-        .section-notes { margin-top: 4mm; padding-top: 3mm; border-top: var(--hairline); }
+        .section-notes { margin-top: 2.5mm; padding-top: 2mm; border-top: var(--hairline); }
         .section-source {
-            margin-top: 3mm;
+            margin-top: 2.5mm;
             font-size: 7.4pt;
             color: var(--ink-4);
             letter-spacing: 0.04em;
@@ -699,28 +699,36 @@
             letter-spacing: 0;
         }
         .edu-box {
-            margin-top: 4mm;
-            padding: 3.5mm 4mm;
+            margin-top: 0;
+            padding: 2.7mm 3mm;
             border: var(--hairline);
             border-radius: 6px;
             background: var(--paper-2);
+            display: inline-block;
+            width: calc(50% - 2mm);
+            margin-right: 2mm;
+            margin-bottom: 2mm;
+            vertical-align: top;
         }
-        .edu-box + .edu-box { margin-top: 3mm; }
         .edu-box-label {
             font-size: 6.8pt;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 1px;
             color: var(--ink-4);
-            margin-bottom: 2mm;
+            margin-bottom: 1.3mm;
         }
         .edu-box-list { margin: 0; padding-left: 4mm; }
-        .edu-box-list li { margin-bottom: 1.5mm; font-size: 8.9pt; color: var(--ink-2); line-height: 1.55; }
+        .edu-box-list li { margin-bottom: 1.1mm; font-size: 8.5pt; color: var(--ink-2); line-height: 1.45; }
+        .edu-box.definition { background: #f9f7f2; }
+        .edu-box.distinction { background: #f8fafc; }
+        .edu-box.exam-trap { background: #fff9e7; border-color: #f2d48b; }
+        .mr-box { width: 100%; }
         .trust-note {
             font-size: 8.5pt;
             color: var(--ink-3);
             line-height: 1.55;
-            margin: 0 0 5mm;
+            margin: 0 0 3mm;
         }
         .notes-label {
             font-size: 6.5pt;
@@ -731,12 +739,17 @@
             margin-bottom: 2mm;
         }
         .notes-lines {
-            height: 12mm;
+            height: 7mm;
             background-image: repeating-linear-gradient(
                 to bottom,
-                transparent, transparent 5.5mm,
-                var(--ink-6) 5.5mm, var(--ink-6) 6mm
+                transparent, transparent 3.5mm,
+                var(--ink-6) 3.5mm, var(--ink-6) 4mm
             );
+        }
+        @media print {
+            .edu-box {
+                width: calc(50% - 2mm);
+            }
         }
 
         /* ─── 8. EQUATION BLOCK ─────────────────────────────────── */
@@ -1335,6 +1348,13 @@
         </header>
 
         <div class="section-body">
+            {% if sec.subsections %}
+            <div class="subtopics-row">
+                {% for sub in sec.subsections %}
+                <span class="subtopic-chip">{{ sub }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
 
             {% if sec.analogy %}
             <div class="analogy-box">
@@ -1447,11 +1467,6 @@
                 {% endif %}
             </div>
             {% endif %}
-
-            <div class="section-notes">
-                <div class="notes-label">My Notes</div>
-                <div class="notes-lines"></div>
-            </div>
 
         </div>
     </article>

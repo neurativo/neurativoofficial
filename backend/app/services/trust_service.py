@@ -24,6 +24,14 @@ _STOPWORDS = {
 _TOKEN_RE = re.compile(r"[a-zA-Z][a-zA-Z0-9'-]{1,}")
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
 _GENERIC_TITLES = {"summary", "section", "part 1", "part 2", "part 3", "lecture preview", "key idea"}
+_TITLE_BLACKLIST_PHRASES = (
+    "designing personalized solutions",
+    "unique needs",
+    "speaker delivering material",
+    "key concept",
+    "more from the session",
+    "lecture snapshot",
+)
 _CONTRADICTION_PAIRS = (
     ("non economic", "economic"),
     ("positive statement", "normative statement"),
@@ -41,6 +49,13 @@ _TRAP_MARKERS = (
     "do not confuse", "does not mean", "still", "not the same", "common mistake",
     "trap", "important clarification", "not simply", "not equal", "not equal to",
 )
+_ACADEMIC_TITLE_HINTS = (
+    "economics", "microeconomics", "macroeconomics", "positive", "normative",
+    "goods", "resources", "production", "utility", "demand", "supply",
+    "law", "rights", "biology", "medicine", "physics", "chemistry",
+    "engineering", "calculus", "statistics", "classification", "theory",
+    "structure", "strategy", "comparison", "statements", "concepts",
+)
 
 
 def _tokenise(text: str) -> set[str]:
@@ -50,6 +65,10 @@ def _tokenise(text: str) -> set[str]:
 
 def _normalise_ws(text: str) -> str:
     return " ".join((text or "").split()).strip()
+
+
+def _word_count(text: str) -> int:
+    return len(_TOKEN_RE.findall(text or ""))
 
 
 def _split_sentences(text: str) -> list[str]:
@@ -207,7 +226,12 @@ def _chunk_range_to_citation(start_idx: int | None, end_idx: int | None) -> dict
 def _derive_title(raw_title: str, lead_sentence: str, concepts: list[str]) -> str:
     title = _normalise_ws(raw_title).strip(":#- ")
     lowered = title.lower()
-    if title and lowered not in _GENERIC_TITLES and not re.fullmatch(r"section\s+\d+", lowered):
+    if (
+        title
+        and lowered not in _GENERIC_TITLES
+        and not re.fullmatch(r"section\s+\d+", lowered)
+        and not any(phrase in lowered for phrase in _TITLE_BLACKLIST_PHRASES)
+    ):
         return title[:120]
 
     lead = _normalise_ws(lead_sentence)
@@ -225,6 +249,219 @@ def _derive_title(raw_title: str, lead_sentence: str, concepts: list[str]) -> st
     if not words:
         return "Key Concept"
     return " ".join(words[:6]).title()[:120]
+
+
+def _title_quality(title: str, note: dict | None = None) -> float:
+    cleaned = _normalise_ws(title)
+    lowered = cleaned.lower()
+    if not cleaned:
+        return -5.0
+
+    score = 0.0
+    words = cleaned.split()
+    if lowered in _GENERIC_TITLES or re.fullmatch(r"section\s+\d+", lowered):
+        score -= 4.0
+    if any(phrase in lowered for phrase in _TITLE_BLACKLIST_PHRASES):
+        score -= 4.0
+    if re.search(r"\bvs\b|\bversus\b", lowered):
+        score += 3.0
+    if any(hint in lowered for hint in _ACADEMIC_TITLE_HINTS):
+        score += 2.0
+    if 2 <= len(words) <= 7:
+        score += 1.5
+    elif len(words) > 10:
+        score -= 1.5
+    if note:
+        score += min(2.0, len(note.get("concepts") or []) * 0.5)
+        if _collect_distinctions(note):
+            score += 1.0
+        if _collect_definition_lines(note):
+            score += 0.5
+    return score
+
+
+def _note_density(note: dict) -> int:
+    return _word_count(
+        " ".join(
+            [
+                note.get("lead_sentence", ""),
+                note.get("prose", ""),
+                " ".join(note.get("examples") or []),
+                " ".join(note.get("highlights") or []),
+            ]
+        )
+    )
+
+
+def _note_overlap(left: dict, right: dict) -> float:
+    left_tokens = _tokenise(" ".join([left.get("title", ""), left.get("lead_sentence", ""), " ".join(left.get("concepts") or [])]))
+    right_tokens = _tokenise(" ".join([right.get("title", ""), right.get("lead_sentence", ""), " ".join(right.get("concepts") or [])]))
+    if not left_tokens or not right_tokens:
+        return 0.0
+    return len(left_tokens & right_tokens) / max(1, min(len(left_tokens), len(right_tokens)))
+
+
+def _supports_current_examples(current: list[dict], candidate: dict) -> float:
+    current_tokens = _tokenise(
+        " ".join(
+            " ".join(
+                [
+                    note.get("prose", ""),
+                    " ".join(note.get("examples") or []),
+                    " ".join(note.get("highlights") or []),
+                ]
+            )
+            for note in current
+        )
+    )
+    candidate_tokens = _tokenise(
+        " ".join([candidate.get("title", ""), candidate.get("lead_sentence", ""), " ".join(candidate.get("concepts") or [])])
+    )
+    if not current_tokens or not candidate_tokens:
+        return 0.0
+    return len(current_tokens & candidate_tokens) / max(1, len(candidate_tokens))
+
+
+def _citation_gap_seconds(current: list[dict], candidate: dict) -> int | None:
+    current_citations = current[-1].get("citations") or []
+    candidate_citations = candidate.get("citations") or []
+    if not current_citations or not candidate_citations:
+        return None
+    current_end = current_citations[-1].get("end_seconds")
+    candidate_start = candidate_citations[0].get("start_seconds")
+    if current_end is None or candidate_start is None:
+        return None
+    return int(candidate_start) - int(current_end)
+
+
+def _pick_chapter_title(notes: list[dict]) -> str:
+    ranked = sorted(
+        notes,
+        key=lambda note: (
+            _title_quality(note.get("title", ""), note),
+            len(note.get("concepts") or []),
+            _note_density(note),
+        ),
+        reverse=True,
+    )
+    for note in ranked:
+        candidate = _derive_title(note.get("title", ""), note.get("lead_sentence", ""), note.get("concepts") or [])
+        if _title_quality(candidate, note) >= 0.5:
+            return candidate
+
+    concepts = []
+    for note in notes:
+        concepts.extend(note.get("concepts") or [])
+    concepts = _dedupe_texts(concepts)
+    if len(concepts) >= 2:
+        return f"{concepts[0]} and {concepts[1]}"[:120]
+    if concepts:
+        return concepts[0][:120]
+    lead = next((n.get("lead_sentence", "") for n in notes if n.get("lead_sentence")), "")
+    return _derive_title("", lead, [])
+
+
+def _should_merge_into_current(current: list[dict], candidate: dict, desired_sections: int, total_notes: int) -> bool:
+    if not current:
+        return False
+
+    current_words = sum(_note_density(note) for note in current)
+    candidate_words = _note_density(candidate)
+    target_notes_per_section = max(1, round(total_notes / max(1, desired_sections)))
+    overlap = max((_note_overlap(existing, candidate) for existing in current), default=0.0)
+    candidate_strength = _title_quality(candidate.get("title", ""), candidate)
+    weak_candidate = candidate_strength < 1.5 or (candidate_words < 35 and candidate_strength < 2.5)
+    example_support = _supports_current_examples(current, candidate)
+    citation_gap = _citation_gap_seconds(current, candidate)
+
+    if len(current) < target_notes_per_section:
+        return True
+    if weak_candidate:
+        return True
+    if example_support >= 0.25:
+        return True
+    if citation_gap is not None and citation_gap >= 180 and candidate_strength >= 1.5 and example_support < 0.25:
+        return False
+    if total_notes <= 4 and candidate_strength >= 2.0 and overlap < 0.12:
+        return False
+    if overlap >= 0.2:
+        return True
+    if current_words < 130:
+        return True
+    return False
+
+
+def _merge_chapter_notes(notes: list[dict]) -> dict:
+    citations = []
+    seen_citations = set()
+    concepts = []
+    examples = []
+    definitions = []
+    distinctions = []
+    exam_traps = []
+    core_parts = []
+    subsection_titles = []
+    confidences = []
+    statuses = []
+
+    for note in notes:
+        title = _derive_title(note.get("title", ""), note.get("lead_sentence", ""), note.get("concepts") or [])
+        if title and title.lower() not in _GENERIC_TITLES and not re.fullmatch(r"section\s+\d+", title.lower()):
+            subsection_titles.append(title)
+
+        if note.get("lead_sentence"):
+            core_parts.append(note["lead_sentence"])
+        if note.get("prose"):
+            core_parts.append(note["prose"])
+
+        concepts.extend(note.get("concepts") or [])
+        examples.extend(note.get("examples") or [])
+        definitions.extend(_collect_definition_lines(note))
+        distinctions.extend(_collect_distinctions(note))
+        exam_traps.extend(_collect_exam_traps(note))
+        confidences.append(note.get("confidence", 0.0))
+        statuses.append(note.get("verification_status", "weak"))
+
+        for citation in note.get("citations") or []:
+            key = (citation.get("start_seconds"), citation.get("end_seconds"), citation.get("label"))
+            if key in seen_citations:
+                continue
+            seen_citations.add(key)
+            citations.append(citation)
+
+    title = _pick_chapter_title(notes)
+    core_sentences = _filter_conflicting_texts(_dedupe_texts(_split_sentences(" ".join(core_parts))))
+    if len(core_sentences) > 4:
+        core_sentences = core_sentences[:4]
+
+    concepts = _dedupe_texts(concepts)[:8]
+    examples = _filter_conflicting_texts(_dedupe_texts(examples))[:5]
+    definitions = _filter_conflicting_texts(_dedupe_texts(definitions))[:4]
+    distinctions = _filter_conflicting_texts(_dedupe_texts(distinctions))[:4]
+    exam_traps = _filter_conflicting_texts(_dedupe_texts(exam_traps))[:4]
+    subsection_titles = [s for s in _dedupe_texts(subsection_titles) if s != title][:4]
+
+    start_seconds = citations[0]["start_seconds"] if citations else None
+    end_seconds = citations[-1]["end_seconds"] if citations else None
+    confidence = round(mean([c for c in confidences if c]), 2) if any(confidences) else 0.0
+    verification_status = "supported" if "supported" in statuses else "weak"
+
+    return {
+        "title": title or "Lecture Concept",
+        "core_explanation": " ".join(core_sentences).strip(),
+        "key_definitions": definitions,
+        "important_distinctions": distinctions,
+        "exam_traps": exam_traps,
+        "examples": examples,
+        "concepts": concepts,
+        "citations": citations,
+        "confidence": confidence,
+        "verification_status": verification_status,
+        "start_seconds": start_seconds,
+        "end_seconds": end_seconds,
+        "source_references": [c["label"] for c in citations],
+        "subsections": subsection_titles,
+    }
 
 
 def _build_units(section: dict, transcript_units: list[dict]) -> tuple[list[dict], str, float, list[dict], dict]:
@@ -374,6 +611,21 @@ def _dedupe_texts(items: list[str]) -> list[str]:
     return out
 
 
+def _filter_conflicting_texts(items: list[str]) -> list[str]:
+    kept: list[str] = []
+    for item in items:
+        replaced = False
+        for idx, existing in enumerate(kept):
+            if _is_contradicted(item, existing) or _is_contradicted(existing, item):
+                if _word_count(item) > _word_count(existing):
+                    kept[idx] = item
+                replaced = True
+                break
+        if not replaced:
+            kept.append(item)
+    return kept
+
+
 def _collect_definition_lines(note: dict) -> list[str]:
     candidates = []
     for text in [note.get("lead_sentence", ""), note.get("prose", "")] + (note.get("highlights") or []):
@@ -419,27 +671,40 @@ def _build_core_explanation(note: dict) -> str:
 
 
 def build_concept_sections(grounded_notes: list[dict]) -> list[dict]:
-    concept_sections = []
+    if not grounded_notes:
+        return []
+
+    total_notes = len(grounded_notes)
+    desired_sections = total_notes
+    if total_notes > 7:
+        desired_sections = min(7, max(5, round(total_notes / 2)))
+
+    chapters: list[list[dict]] = []
+    current: list[dict] = []
     for note in grounded_notes:
-        citations = note.get("citations") or []
-        start_seconds = citations[0]["start_seconds"] if citations else None
-        end_seconds = citations[-1]["end_seconds"] if citations else None
-        concept_sections.append({
-            "title": note.get("title") or "Key Concept",
-            "core_explanation": _build_core_explanation(note),
-            "key_definitions": _collect_definition_lines(note),
-            "important_distinctions": _collect_distinctions(note),
-            "exam_traps": _collect_exam_traps(note),
-            "examples": _dedupe_texts(note.get("examples") or []),
-            "concepts": _dedupe_texts(note.get("concepts") or []),
-            "citations": citations,
-            "confidence": note.get("confidence", 0.0),
-            "verification_status": note.get("verification_status", "weak"),
-            "start_seconds": start_seconds,
-            "end_seconds": end_seconds,
-            "source_references": [c["label"] for c in citations],
-        })
-    return concept_sections
+        if not current:
+            current = [note]
+            continue
+        if _should_merge_into_current(current, note, desired_sections, total_notes):
+            current.append(note)
+        else:
+            chapters.append(current)
+            current = [note]
+    if current:
+        chapters.append(current)
+
+    while len(chapters) > desired_sections and len(chapters) > 1:
+        merge_index = min(
+            range(1, len(chapters)),
+            key=lambda idx: (
+                len(chapters[idx - 1]) + len(chapters[idx]),
+                _title_quality(chapters[idx][0].get("title", ""), chapters[idx][0]),
+            ),
+        )
+        chapters[merge_index - 1].extend(chapters[merge_index])
+        del chapters[merge_index]
+
+    return [_merge_chapter_notes(group) for group in chapters if group]
 
 
 def build_ai_study_aids(lecture_data: dict) -> dict:

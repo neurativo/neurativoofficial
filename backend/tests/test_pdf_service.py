@@ -81,6 +81,19 @@ def test_fallback_title_replaces_ungrounded_title():
     assert fixed == "Economics Unit One Review"
 
 
+def test_resolve_document_title_prefers_grounded_concept_section():
+    from app.services.pdf_service import _resolve_document_title
+
+    title = _resolve_document_title(
+        "Designing Personalized Solutions for Unique Needs",
+        "This economics lecture compares positive and normative statements and then explains economic goods.",
+        "economics",
+        [{"title": "Positive vs Normative Statements"}],
+    )
+
+    assert title == "Economics Lecture Review: Positive vs Normative Statements"
+
+
 def test_extract_summary_sections_loose_parses_plain_blocks():
     from app.services.pdf_service import _extract_summary_sections_loose
 

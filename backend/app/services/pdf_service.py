@@ -146,6 +146,12 @@ _PDF_STOPWORDS = {
     "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "in", "into",
     "is", "it", "of", "on", "or", "that", "the", "this", "to", "was", "were", "with",
 }
+_TITLE_BANNED_PHRASES = (
+    "designing personalized solutions",
+    "unique needs",
+    "speaker delivering material",
+    "key concept",
+)
 
 
 def _keyword_set(text: str) -> set[str]:
@@ -158,7 +164,8 @@ def _has_grounded_overlap(candidate: str, source: str, minimum: int = 2) -> bool
 
 
 def _fallback_title(title: str, transcript: str, topic: str | None) -> str:
-    if _has_grounded_overlap(title, transcript, minimum=1):
+    lowered = (title or "").lower()
+    if title and not any(phrase in lowered for phrase in _TITLE_BANNED_PHRASES) and _has_grounded_overlap(title, transcript, minimum=2):
         return title
     lower = (transcript or "").lower()
     if topic == "economics" and "unit number one" in lower:
@@ -166,6 +173,25 @@ def _fallback_title(title: str, transcript: str, topic: str | None) -> str:
     if topic and topic != "general":
         return f"{topic.title()} Lecture Summary"[:60]
     return "Lecture Summary"
+
+
+def _resolve_document_title(title: str, transcript: str, topic: str | None, concept_sections: list[dict]) -> str:
+    base = _fallback_title(title, transcript, topic)
+    generic_topic_title = f"{topic.title()} Lecture Summary"[:60] if topic and topic != "general" else None
+    if base != "Lecture Summary" and base != generic_topic_title:
+        return base
+
+    strong_titles = [
+        sec.get("title", "").strip()
+        for sec in concept_sections
+        if sec.get("title") and _has_grounded_overlap(sec.get("title", ""), transcript, minimum=1)
+    ]
+    if strong_titles:
+        lead = strong_titles[0]
+        if topic and topic != "general":
+            return f"{topic.title()} Lecture Review: {lead}"[:90]
+        return f"Lecture Review: {lead}"[:90]
+    return base
 
 
 def _extract_summary_sections_loose(summary: str) -> list[str]:
@@ -922,13 +948,14 @@ async def generate_lecture_pdf(
     cleaned_transcript = clean_transcript(transcript)
     summary       = data.get("master_summary") or data.get("summary") or ""
     topic         = data.get("topic") or None
-    title         = _fallback_title(data.get("title") or "Lecture Notes", transcript, topic)
+    title         = data.get("title") or "Lecture Notes"
     created_at    = str(data.get("created_at") or datetime.now().date())[:10]
     total_chunks  = data.get("total_chunks") or 0
     language      = data.get("language") or "en"
     section_rows  = await asyncio.to_thread(get_lecture_sections, lecture_id)
     grounded_notes = build_grounded_notes(transcript, summary, section_rows=section_rows)
     concept_sections = build_concept_sections(grounded_notes)
+    title = _resolve_document_title(title, transcript, topic, concept_sections)
     grounded_summary = "\n\n".join(
         " ".join(
             part for part in [
@@ -1057,6 +1084,7 @@ async def generate_lecture_pdf(
                 "definitions":   note.get("key_definitions") or [],
                 "distinctions":  note.get("important_distinctions") or [],
                 "exam_traps":    note.get("exam_traps") or [],
+                "subsections":   note.get("subsections") or [],
                 "raw_section":   "",
                 "analogy":       None,
                 "mistake":       None,
@@ -1077,6 +1105,7 @@ async def generate_lecture_pdf(
                 "definitions":   [],
                 "distinctions":  [],
                 "exam_traps":    [],
+                "subsections":   [],
                 "raw_section":   "",
                 "analogy":       None,
                 "mistake":       None,
@@ -1098,6 +1127,7 @@ async def generate_lecture_pdf(
                 "definitions":   [],
                 "distinctions":  [],
                 "exam_traps":    [],
+                "subsections":   [],
                 "raw_section":   raw_sections[i],
                 "analogy":       None,
                 "mistake":       None,
