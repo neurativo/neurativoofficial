@@ -100,9 +100,11 @@ _LOW_SIGNAL_TITLE_PATTERNS = (
 # (functions referencing them will return None, which is correct behavior).
 _CURRICULUM_CONCEPT_RULES: tuple = ()
 _BOUNDARY_HINTS = (
-    "exam", "study", "microeconomics", "macroeconomics", "positive", "normative",
-    "utility", "goods", "free goods", "public goods", "economic bads",
-    "resources", "production", "human intervention",
+    # Pedagogical / admin signals (domain-general)
+    "exam", "study", "overview", "introduction", "summary", "review",
+    # Structural academic signals matching _ACADEMIC_TITLE_HINTS
+    "theory", "model", "principle", "law", "theorem", "framework",
+    "algorithm", "mechanism", "pathway", "hypothesis",
 )
 _CANONICAL_TITLE_RULES: tuple = ()
 _CANONICAL_SUBTOPIC_RULES: tuple = ()
