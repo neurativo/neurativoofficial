@@ -1240,6 +1240,11 @@ async def generate_lecture_pdf(
     # Key stats — extracted from transcript for exec summary callout
     tasks.append(asyncio.to_thread(_call_key_stats, transcript, topic))
 
+    # Per-section enrichment: analogy box, common mistake, remember callout, prose, bullets.
+    # One GPT call per concept section, all run in parallel with the document-level calls above.
+    for i, raw_sec in enumerate(raw_sections):
+        tasks.append(asyncio.to_thread(_call_enrich_section, raw_sec, i, n_sections, topic, language))
+
     # 4. Run all calls in parallel
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -1350,6 +1355,34 @@ async def generate_lecture_pdf(
 
     r = results[ri]; ri += 1
     key_stats: list[dict] = r if not isinstance(r, Exception) else []
+
+    # Per-section enrichment results (analogy, mistake, remember, prose, bullets)
+    section_enrichments: list[dict] = []
+    for _ in raw_sections:
+        r = results[ri]; ri += 1
+        section_enrichments.append(r if not isinstance(r, Exception) else {})
+
+    # Merge per-section enrichment into the already-built enriched_sections.
+    # Fills analogy two-column box, common mistake amber box, remember green box,
+    # flowing prose, and bullet list — all template-ready, none previously populated.
+    for i, section in enumerate(enriched_sections):
+        if i >= len(section_enrichments):
+            break
+        enr = section_enrichments[i]
+        if not isinstance(enr, dict):
+            continue
+        if enr.get("analogy") and not section.get("analogy"):
+            section["analogy"] = enr["analogy"]
+        if enr.get("mistake") and not section.get("mistake"):
+            section["mistake"] = enr["mistake"]
+        if enr.get("remember") and not section.get("remember"):
+            section["remember"] = enr["remember"]
+        # Only fill prose/bullets when section is content-thin (grounded_notes path)
+        if not section.get("prose") and enr.get("prose"):
+            section["prose"] = enr["prose"]
+            section.update(_section_render_profile(section))
+        if not section.get("bullets") and enr.get("bullets"):
+            section["bullets"] = enr["bullets"]
 
     # 5b. Validate exec_summary content aligns with the transcript.
     # Extracts the top 5 meaningful terms from the transcript and checks that
