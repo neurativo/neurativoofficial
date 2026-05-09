@@ -105,7 +105,7 @@ from app.services.supabase_service import (
     set_summary_status,
     get_announcements,
 )
-from app.services.trust_service import enrich_lecture_payload
+from app.services.trust_service import enrich_lecture_payload, sanitize_generated_content_bundle
 
 
 def _next_month_iso() -> str:
@@ -532,7 +532,13 @@ async def _process_from_transcript(
             if concept_summary:
                 await _asyncio.to_thread(update_lecture_summary_only, lecture_id, concept_summary)
         elif content and summary_has_required_structure(content.get("summary", ""), cleaned):
-            await _asyncio.to_thread(save_generated_content, lecture_id, content)
+            sanitized = await _asyncio.to_thread(
+                sanitize_generated_content_bundle,
+                cleaned,
+                content,
+                concept_summary or content.get("summary", ""),
+            )
+            await _asyncio.to_thread(save_generated_content, lecture_id, sanitized)
             if concept_summary:
                 await _asyncio.to_thread(update_lecture_summary_only, lecture_id, concept_summary)
         else:

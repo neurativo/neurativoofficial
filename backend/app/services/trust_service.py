@@ -56,6 +56,15 @@ _ACADEMIC_TITLE_HINTS = (
     "engineering", "calculus", "statistics", "classification", "theory",
     "structure", "strategy", "comparison", "statements", "concepts",
 )
+_EXAMPLE_HINTS = (
+    "example", "illustration", "scenario", "case", "instance", "sample",
+    "population growth", "bottled water", "oxygen tank", "rainwater",
+)
+_BOUNDARY_HINTS = (
+    "exam", "study", "microeconomics", "macroeconomics", "positive", "normative",
+    "utility", "goods", "free goods", "public goods", "economic bads",
+    "resources", "production", "human intervention",
+)
 
 
 def _tokenise(text: str) -> set[str]:
@@ -226,6 +235,12 @@ def _chunk_range_to_citation(start_idx: int | None, end_idx: int | None) -> dict
 def _derive_title(raw_title: str, lead_sentence: str, concepts: list[str]) -> str:
     title = _normalise_ws(raw_title).strip(":#- ")
     lowered = title.lower()
+    if lowered.startswith("lecture distinguishes between") or lowered.startswith("lecture discusses distinction between"):
+        title = ""
+        lowered = ""
+    if lowered.startswith("lecture ") or lowered.startswith("speaker "):
+        title = ""
+        lowered = ""
     if (
         title
         and lowered not in _GENERIC_TITLES
@@ -278,6 +293,34 @@ def _title_quality(title: str, note: dict | None = None) -> float:
         if _collect_definition_lines(note):
             score += 0.5
     return score
+
+
+def _is_example_like(note: dict) -> bool:
+    title = _normalise_ws(note.get("title", "")).lower()
+    lead = _normalise_ws(note.get("lead_sentence", "")).lower()
+    prose = _normalise_ws(note.get("prose", "")).lower()
+    concept_count = len(note.get("concepts") or [])
+    if any(hint in title or hint in lead for hint in _EXAMPLE_HINTS):
+        return True
+    if concept_count <= 1 and not prose and len(note.get("examples") or []) > 0:
+        return True
+    return False
+
+
+def _is_major_concept_note(note: dict) -> bool:
+    title = _derive_title(note.get("title", ""), note.get("lead_sentence", ""), note.get("concepts") or [])
+    strength = _title_quality(title, note)
+    if re.search(r"\bvs\b|\bversus\b", title, flags=re.I):
+        return True
+    if any(hint in title.lower() for hint in _BOUNDARY_HINTS):
+        return True
+    if len(note.get("concepts") or []) >= 2 and strength >= 2.0:
+        return True
+    if _collect_definition_lines(note) and _collect_distinctions(note):
+        return True
+    if _note_density(note) >= 45 and strength >= 2.0 and not _is_example_like(note):
+        return True
+    return False
 
 
 def _note_density(note: dict) -> int:
@@ -361,31 +404,46 @@ def _pick_chapter_title(notes: list[dict]) -> str:
     return _derive_title("", lead, [])
 
 
+def _same_major_family(current: list[dict], candidate: dict) -> bool:
+    overlap = max((_note_overlap(existing, candidate) for existing in current), default=0.0)
+    example_support = _supports_current_examples(current, candidate)
+    citation_gap = _citation_gap_seconds(current, candidate)
+    title = _derive_title(candidate.get("title", ""), candidate.get("lead_sentence", ""), candidate.get("concepts") or [])
+    lowered = title.lower()
+    current_title = _pick_chapter_title(current).lower()
+    if overlap >= 0.35 or example_support >= 0.35:
+        return True
+    if citation_gap is not None and citation_gap <= 24 and overlap >= 0.18:
+        return True
+    if "goods" in lowered and "goods" in current_title:
+        return True
+    if "resources" in lowered and "resources" in current_title:
+        return True
+    return False
+
+
 def _should_merge_into_current(current: list[dict], candidate: dict, desired_sections: int, total_notes: int) -> bool:
     if not current:
         return False
 
     current_words = sum(_note_density(note) for note in current)
     candidate_words = _note_density(candidate)
-    target_notes_per_section = max(1, round(total_notes / max(1, desired_sections)))
-    overlap = max((_note_overlap(existing, candidate) for existing in current), default=0.0)
-    candidate_strength = _title_quality(candidate.get("title", ""), candidate)
+    candidate_title = _derive_title(candidate.get("title", ""), candidate.get("lead_sentence", ""), candidate.get("concepts") or [])
+    candidate_strength = _title_quality(candidate_title, candidate)
     weak_candidate = candidate_strength < 1.5 or (candidate_words < 35 and candidate_strength < 2.5)
     example_support = _supports_current_examples(current, candidate)
     citation_gap = _citation_gap_seconds(current, candidate)
 
-    if len(current) < target_notes_per_section:
+    if _is_example_like(candidate) and (example_support >= 0.18 or citation_gap is None or citation_gap <= 60):
         return True
-    if weak_candidate:
+    if weak_candidate and not _is_major_concept_note(candidate):
         return True
-    if example_support >= 0.25:
+    if _same_major_family(current, candidate):
         return True
-    if citation_gap is not None and citation_gap >= 180 and candidate_strength >= 1.5 and example_support < 0.25:
+    if citation_gap is not None and citation_gap >= 120 and _is_major_concept_note(candidate):
         return False
-    if total_notes <= 4 and candidate_strength >= 2.0 and overlap < 0.12:
+    if _is_major_concept_note(candidate):
         return False
-    if overlap >= 0.2:
-        return True
     if current_words < 130:
         return True
     return False
@@ -705,6 +763,156 @@ def build_concept_sections(grounded_notes: list[dict]) -> list[dict]:
         del chapters[merge_index]
 
     return [_merge_chapter_notes(group) for group in chapters if group]
+
+
+def _verify_generated_text(text: str, transcript_units: list[dict], minimum_score: float = 0.42) -> tuple[str, float]:
+    cleaned = _normalise_ws(text)
+    if not cleaned:
+        return "unsupported", 0.0
+    evidence, score = _find_best_evidence(cleaned, transcript_units)
+    contradicted = _is_contradicted(cleaned, evidence["text"] if evidence else "")
+    status = _status_from_score(score, contradicted)
+    if score < minimum_score and status != "contradicted":
+        status = "unsupported"
+    return status, round(score, 2)
+
+
+def _registry_terms(grounded_notes: list[dict]) -> set[str]:
+    terms = set()
+    for note in grounded_notes:
+        for concept in note.get("concepts") or []:
+            terms.add(_normalise_ws(concept).lower())
+        terms.add(_normalise_ws(note.get("title", "")).lower())
+    return {t for t in terms if t}
+
+
+def sanitize_generated_content_bundle(transcript: str, content: dict, summary: str = "", section_rows: list[dict] | None = None) -> dict:
+    """
+    Drop contradicted or weakly grounded flashcards / quiz items / glossary
+    entries before they are persisted or reused by other outputs.
+    """
+    transcript_units = _split_transcript_units(transcript)
+    grounded_notes = build_grounded_notes(transcript, summary or content.get("summary", ""), section_rows=section_rows)
+    allowed_terms = _registry_terms(grounded_notes)
+
+    glossary_out = []
+    for item in content.get("glossary") or []:
+        term = _normalise_ws(item.get("term", ""))
+        definition = _normalise_ws(item.get("definition", ""))
+        if not term or not definition:
+            continue
+        if term.lower() not in allowed_terms and term.lower() not in _tokenise(transcript):
+            continue
+        status, _ = _verify_generated_text(f"{term}. {definition}", transcript_units, minimum_score=0.3)
+        if status in {"supported", "weak"}:
+            glossary_out.append({"term": term, "definition": definition})
+
+    flashcards_out = []
+    for card in content.get("flashcards") or []:
+        front = _normalise_ws(card.get("front", ""))
+        back = _normalise_ws(card.get("back", ""))
+        if not front or not back:
+            continue
+        status_back, _ = _verify_generated_text(back, transcript_units, minimum_score=0.3)
+        status_pair, _ = _verify_generated_text(f"{front}. {back}", transcript_units, minimum_score=0.22)
+        if status_back == "contradicted" or status_pair == "contradicted":
+            continue
+        if status_back in {"supported", "weak"} or status_pair in {"supported", "weak"}:
+            flashcards_out.append({"front": front, "back": back})
+
+    quiz_out = []
+    for item in content.get("quiz") or []:
+        question = _normalise_ws(item.get("question", ""))
+        answer = _normalise_ws(item.get("answer", ""))
+        explanation = _normalise_ws(item.get("explanation", ""))
+        options = item.get("options") or []
+        if not question or not answer:
+            continue
+        combo = ". ".join(x for x in [question, explanation] if x)
+        status, _ = _verify_generated_text(combo or question, transcript_units, minimum_score=0.22)
+        if status == "contradicted":
+            continue
+        answer_option = None
+        if answer and options:
+            answer_key = answer.split(":", 1)[0].strip().upper()
+            for option in options:
+                if str(option).strip().upper().startswith(f"{answer_key}:"):
+                    answer_option = _normalise_ws(str(option).split(":", 1)[1] if ":" in str(option) else str(option))
+                    break
+        if answer_option:
+            answer_status, _ = _verify_generated_text(answer_option, transcript_units, minimum_score=0.22)
+            if answer_status == "contradicted":
+                continue
+        if status in {"supported", "weak"}:
+            quiz_out.append({
+                "question": question,
+                "options": options,
+                "answer": answer,
+                "explanation": explanation,
+            })
+
+    return {
+        **content,
+        "flashcards": flashcards_out,
+        "quiz": quiz_out,
+        "glossary": glossary_out,
+    }
+
+
+def sanitize_pdf_artifacts(
+    transcript: str,
+    grounded_notes: list[dict],
+    glossary: list[dict] | None = None,
+    quick_review: list[dict] | None = None,
+    takeaways: list[str] | None = None,
+    study_roadmap: dict | None = None,
+) -> dict:
+    transcript_units = _split_transcript_units(transcript)
+    glossary_out = []
+    for item in glossary or []:
+        term = _normalise_ws(item.get("term", ""))
+        definition = _normalise_ws(item.get("definition", ""))
+        status, _ = _verify_generated_text(f"{term}. {definition}", transcript_units, minimum_score=0.3)
+        if term and definition and status in {"supported", "weak"}:
+            glossary_out.append(item)
+
+    quick_review_out = []
+    for item in quick_review or []:
+        question = _normalise_ws(item.get("question", ""))
+        answer = _normalise_ws(item.get("answer", ""))
+        status, _ = _verify_generated_text(f"{question}. {answer}", transcript_units, minimum_score=0.22)
+        if question and answer and status in {"supported", "weak"}:
+            quick_review_out.append(item)
+
+    takeaways_out = []
+    for takeaway in takeaways or []:
+        status, _ = _verify_generated_text(takeaway, transcript_units, minimum_score=0.22)
+        if status in {"supported", "weak"}:
+            takeaways_out.append(takeaway)
+
+    roadmap = study_roadmap or {"next_topics": [], "prerequisites": []}
+    next_topics_out = []
+    for item in roadmap.get("next_topics", []) or []:
+        text = _normalise_ws(f"{item.get('topic', '')}. {item.get('reason', '')}")
+        status, _ = _verify_generated_text(text, transcript_units, minimum_score=0.18)
+        if item.get("topic") and status in {"supported", "weak"}:
+            next_topics_out.append(item)
+    prerequisites_out = []
+    for item in roadmap.get("prerequisites", []) or []:
+        text = _normalise_ws(f"{item.get('concept', '')}. {item.get('reason', '')}")
+        status, _ = _verify_generated_text(text, transcript_units, minimum_score=0.18)
+        if item.get("concept") and status in {"supported", "weak"}:
+            prerequisites_out.append(item)
+
+    return {
+        "glossary": glossary_out,
+        "quick_review": quick_review_out,
+        "takeaways": takeaways_out,
+        "study_roadmap": {
+            "next_topics": next_topics_out,
+            "prerequisites": prerequisites_out,
+        },
+    }
 
 
 def build_ai_study_aids(lecture_data: dict) -> dict:

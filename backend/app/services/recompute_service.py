@@ -12,6 +12,7 @@ from app.services.content_generator import (
 )
 from app.services.transcript_cleaner import clean as clean_transcript
 from app.services.summarization_service import generate_concept_master_summary
+from app.services.trust_service import sanitize_generated_content_bundle
 from app.services.supabase_service import (
     get_all_chunk_transcripts,
     set_summary_status,
@@ -77,6 +78,7 @@ def recompute_final_summary(lecture_id: str) -> None:
                 update_lecture_summary_only(lecture_id, concept_summary)
                 print(f"[recompute] {lecture_id}: concept summary refreshed.")
         elif content and summary_has_required_structure(content.get("summary", ""), cleaned):
+            content = sanitize_generated_content_bundle(cleaned, content, summary=concept_summary or content.get("summary", ""))
             save_generated_content(lecture_id, content)
             if concept_summary:
                 update_lecture_summary_only(lecture_id, concept_summary)

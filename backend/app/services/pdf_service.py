@@ -19,7 +19,12 @@ from app.services.supabase_service import (
 )
 from app.services.cost_tracker import log_cost
 from app.services.transcript_cleaner import clean as clean_transcript
-from app.services.trust_service import build_concept_sections, build_grounded_notes, lecture_summary_confidence
+from app.services.trust_service import (
+    build_concept_sections,
+    build_grounded_notes,
+    lecture_summary_confidence,
+    sanitize_pdf_artifacts,
+)
 
 # ── OpenAI client ─────────────────────────────────────────────────────────────
 _client = OpenAI(api_key=settings.OPENAI_API_KEY) if settings.OPENAI_API_KEY else None
@@ -1190,6 +1195,19 @@ async def generate_lecture_pdf(
         takeaways = _fallback_takeaways(grounded_summary or summary, enriched_sections)
     elif not takeaways:
         takeaways = _fallback_takeaways(grounded_summary or summary, enriched_sections)
+
+    sanitized_artifacts = sanitize_pdf_artifacts(
+        transcript,
+        grounded_notes,
+        glossary=glossary,
+        quick_review=quick_review,
+        takeaways=takeaways,
+        study_roadmap=study_roadmap,
+    )
+    glossary = sanitized_artifacts["glossary"]
+    quick_review = sanitized_artifacts["quick_review"]
+    takeaways = sanitized_artifacts["takeaways"] or _fallback_takeaways(grounded_summary or summary, enriched_sections)
+    study_roadmap = sanitized_artifacts["study_roadmap"]
 
     # 6. Estimate reading time (total enriched words ÷ 238 wpm)
     doc_word_count = (

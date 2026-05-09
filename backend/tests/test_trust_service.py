@@ -1,5 +1,10 @@
 from app.services.transcript_cleaner import clean
-from app.services.trust_service import build_concept_sections, build_grounded_notes, enrich_lecture_payload
+from app.services.trust_service import (
+    build_concept_sections,
+    build_grounded_notes,
+    enrich_lecture_payload,
+    sanitize_generated_content_bundle,
+)
 
 
 def test_semantic_dedupe_collapses_near_duplicate_sentences():
@@ -119,3 +124,53 @@ def test_build_concept_sections_merges_micro_sections_into_chapters():
     assert sections[0]["title"] == "Positive vs Normative Statements"
     assert "Population Growth Rate Sri Lanka" in sections[0]["subsections"]
     assert sections[0]["examples"]
+
+
+def test_sanitize_generated_content_bundle_drops_contradicted_items():
+    transcript = (
+        "Textbooks provided free by the government are still economic goods because they are limited in supply.\n"
+        "Positive statements can be tested while normative statements express value judgments."
+    )
+    content = {
+        "summary": (
+            "## Positive vs Normative Statements\n"
+            "Positive statements can be tested while normative statements express value judgments.\n"
+            "Key concepts: `positive statements`, `normative statements`\n"
+            "Examples:\n→ Population growth rate can be measured.\n\n"
+            "## Economic vs Non-Economic Goods\n"
+            "Textbooks provided free by the government are economic goods because supply is limited.\n"
+            "Key concepts: `economic goods`, `non-economic goods`\n"
+            "Examples:\n→ Government textbooks are still economic goods.\n"
+        ),
+        "flashcards": [
+            {"front": "Government textbooks", "back": "They are non-economic goods because they are free of charge."},
+            {"front": "Positive statements", "back": "They can be tested against facts."},
+        ],
+        "quiz": [
+            {
+                "question": "Are government textbooks non-economic goods?",
+                "options": ["A: Yes", "B: No"],
+                "answer": "A",
+                "explanation": "They are free of charge, so they are non-economic goods.",
+            },
+            {
+                "question": "Which statements can be tested against facts?",
+                "options": ["A: Positive statements", "B: Normative statements"],
+                "answer": "A",
+                "explanation": "Positive statements can be checked against evidence.",
+            },
+        ],
+        "glossary": [
+            {"term": "Economic goods", "definition": "Textbooks given free by government are non-economic goods."},
+            {"term": "Positive statements", "definition": "Statements that can be tested against facts."},
+        ],
+    }
+
+    sanitized = sanitize_generated_content_bundle(transcript, content, summary=content["summary"])
+
+    assert len(sanitized["flashcards"]) == 1
+    assert sanitized["flashcards"][0]["front"] == "Positive statements"
+    assert len(sanitized["quiz"]) == 1
+    assert "Which statements can be tested against facts?" == sanitized["quiz"][0]["question"]
+    assert len(sanitized["glossary"]) == 1
+    assert sanitized["glossary"][0]["term"] == "Positive statements"
