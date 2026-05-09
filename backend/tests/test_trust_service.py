@@ -561,6 +561,94 @@ def test_build_concept_entities_removes_admin_and_example_artifacts():
     assert "Positive Statements" in names
 
 
+def test_concept_role_gate_blocks_examples_from_revision_and_graph_entities():
+    chapters = [{
+        "title": "Positive vs Normative Statements",
+        "concepts": ["positive statements", "normative statements", "population growth rate"],
+        "confidence": 0.9,
+        "verification_status": "supported",
+        "citations": [{"label": "06:00-09:00"}],
+        "key_definitions": ["Positive statements are objective and testable."],
+        "important_distinctions": ["Positive statements contrast with normative statements."],
+        "examples": ["Population growth rate in Sri Lanka is a measurable example."],
+        "exam_traps": ["Positive does not mean good."],
+        "subtopic_sections": [
+            {
+                "title": "Population Growth Rate Sri Lanka",
+                "signal_type": "example",
+                "concept_role": "example",
+                "definitions": [],
+                "examples": ["Population growth rate in Sri Lanka is a measurable example."],
+                "exam_traps": [],
+                "citations": [{"label": "08:00-08:24"}],
+            },
+            {
+                "title": "Positive Statements",
+                "signal_type": "supporting concept",
+                "concept_role": "supporting concept",
+                "definitions": ["Positive statements are objective and testable."],
+                "examples": [],
+                "exam_traps": [],
+                "citations": [{"label": "06:00-06:30"}],
+            },
+            {
+                "title": "Normative Statements",
+                "signal_type": "supporting concept",
+                "concept_role": "supporting concept",
+                "definitions": ["Normative statements express value judgments."],
+                "examples": [],
+                "exam_traps": [],
+                "citations": [{"label": "06:30-07:00"}],
+            },
+        ],
+    }]
+
+    entities = build_concept_entities(chapters, [])
+    graph = build_concept_relationship_graph(entities, [])
+    cheat_sheet = build_verified_cheat_sheet(chapters, [])
+
+    entity_names = {entity["concept"] for entity in entities}
+    cheat_terms = {row["term"] for section in cheat_sheet for row in section["rows"]}
+
+    assert "Population Growth Rate Sri Lanka" not in entity_names
+    assert "Population Growth Rate Sri Lanka" not in cheat_terms
+    assert all("Population Growth Rate Sri Lanka" not in {edge["source"], edge["target"]} for edge in graph["edges"])
+    assert {"Positive Statements", "Normative Statements"}.issubset(entity_names)
+
+
+def test_domain_general_examples_remain_attached_not_promoted():
+    grounded_notes = [
+        {
+            "title": "Enzyme Pathway Mechanisms",
+            "lead_sentence": "Enzymes regulate cellular pathways through reaction mechanisms.",
+            "prose": "The lecture explains how a metabolic pathway depends on enzyme activity.",
+            "concepts": ["enzyme", "cellular pathway", "reaction mechanism"],
+            "examples": [],
+            "highlights": [],
+            "citations": [{"label": "10:00-12:00", "start_seconds": 600, "end_seconds": 720}],
+            "confidence": 0.9,
+            "verification_status": "supported",
+        },
+        {
+            "title": "Lactase In Milk Digestion",
+            "lead_sentence": "Lactase digestion is used as an example of enzyme activity in a pathway.",
+            "prose": "",
+            "concepts": ["lactase digestion"],
+            "examples": ["Lactase digestion is an example of enzyme activity."],
+            "highlights": [],
+            "citations": [{"label": "12:00-12:30", "start_seconds": 720, "end_seconds": 750}],
+            "confidence": 0.82,
+            "verification_status": "supported",
+        },
+    ]
+
+    sections = build_concept_sections(grounded_notes)
+
+    assert len(sections) == 1
+    assert sections[0]["title"] == "Cellular Pathways & Mechanisms"
+    assert "Lactase In Milk Digestion" not in sections[0]["subsections"]
+
+
 def test_build_relationship_concept_map_uses_graph_relationships():
     graph = {
         "concepts": [

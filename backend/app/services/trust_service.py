@@ -140,6 +140,7 @@ _CANONICAL_SUBTOPIC_RULES = (
 )
 _RELATIONSHIP_STOP_TERMS = {"common exam traps", "concepts"}
 _CAUSAL_MARKERS = ("because", "therefore", "leads to", "results in", "causes", "requires", "require", "depends on", "create", "creates")
+_STRUCTURAL_CONCEPT_ROLES = {"foundational concept", "supporting concept"}
 
 
 def _tokenise(text: str) -> set[str]:
@@ -341,6 +342,47 @@ def _canonical_curriculum_concept(text: str) -> str | None:
     return None
 
 
+def _classify_concept_role(text: str, context: str = "") -> str:
+    cleaned = _normalise_ws(text)
+    lowered = cleaned.lower().replace("-", " ")
+    context_lower = _normalise_ws(context).lower().replace("-", " ")
+    if not lowered:
+        return "low educational relevance"
+    if any(re.search(pattern, lowered) for pattern in _LOW_SIGNAL_TITLE_PATTERNS):
+        return "admin / logistics"
+    if any(hint in lowered for hint in _ADMIN_HINTS):
+        return "admin / logistics"
+    if "motivational" in lowered or "remember to" in lowered or "you should study" in lowered:
+        return "motivational / chatter"
+    if any(marker in lowered for marker in _TRAP_MARKERS):
+        return "exam trap"
+    has_example_hint = any(hint in lowered or hint in context_lower for hint in _EXAMPLE_HINTS)
+    has_academic_term = any(hint in lowered for hint in _ACADEMIC_TITLE_HINTS)
+    if has_example_hint and not has_academic_term:
+        return "example"
+    if "like " in lowered or "similar to" in lowered or "imagine" in lowered:
+        return "analogy"
+
+    signal_type = _educational_signal_type(" ".join([cleaned, context]))
+    canonical = _canonical_curriculum_concept(" ".join([cleaned, context]))
+    signal_count = _curriculum_signal_count(canonical, " ".join([cleaned, context])) if canonical else 0
+    has_definition = any(marker in context_lower or marker in lowered for marker in _DEFINITION_MARKERS)
+    has_distinction = any(marker in context_lower or marker in lowered for marker in _DISTINCTION_MARKERS)
+    if canonical and (signal_count >= 2 or has_definition or has_distinction):
+        return "foundational concept"
+    if signal_type == "foundational concept":
+        return "foundational concept"
+    if signal_type == "supporting concept":
+        return "supporting concept"
+    if signal_type == "exam instruction":
+        return "exam trap"
+    if signal_type == "example":
+        return "example"
+    if signal_type == "administrative lecture content":
+        return "admin / logistics"
+    return "low educational relevance"
+
+
 def _curriculum_signal_count(canonical: str | None, text: str) -> int:
     if not canonical:
         return 0
@@ -383,30 +425,29 @@ def _note_curriculum_signature(note: dict) -> dict:
     full_corpus = " ".join([safe_title, lead, prose, " ".join(concepts), " ".join(examples), " ".join(highlights)])
     canonical = _canonical_title_from_text(safe_title, lead, concepts, prose=prose, examples=examples, highlights=highlights)
     signal_type = _educational_signal_type(signal_corpus)
+    concept_role = _classify_concept_role(" ".join([safe_title, " ".join(concepts)]), signal_corpus)
     canonical_signal_count = _curriculum_signal_count(canonical, full_corpus)
 
     if canonical and canonical_signal_count >= 2:
         if " vs " in canonical.lower() or any(marker in signal_corpus.lower() for marker in _DISTINCTION_MARKERS):
             signal_type = "foundational concept"
+            concept_role = "foundational concept"
         elif signal_type in {"administrative lecture content", "low educational relevance", "example"}:
             signal_type = "supporting concept"
+            if concept_role not in {"example", "admin / logistics", "motivational / chatter", "low educational relevance"}:
+                concept_role = "supporting concept"
 
     title = canonical or _derive_title(raw_title, lead, concepts)
     strength = _title_quality(title, note) + min(2.0, canonical_signal_count * 0.4)
-    is_admin_only = signal_type in {"administrative lecture content", "low educational relevance"} and not canonical
-    is_example_only = signal_type == "example" and not canonical
-    is_driver = bool(canonical) and signal_type not in {
-        "administrative lecture content",
-        "teacher pacing commentary",
-        "motivational guidance",
-        "low educational relevance",
-        "example",
-    }
+    is_admin_only = concept_role in {"admin / logistics", "motivational / chatter", "low educational relevance"} and not canonical
+    is_example_only = concept_role in {"example", "analogy"} and not canonical
+    is_driver = bool(canonical) and concept_role in _STRUCTURAL_CONCEPT_ROLES
 
     return {
         "title": title,
         "canonical": canonical,
         "signal_type": signal_type,
+        "concept_role": concept_role,
         "signal_count": canonical_signal_count,
         "strength": strength,
         "is_admin_only": is_admin_only,
@@ -775,6 +816,7 @@ def _merge_chapter_notes(notes: list[dict]) -> dict:
     subtopic_sections = []
 
     for note in notes:
+        signature = _note_curriculum_signature(note)
         title = _derive_title(note.get("title", ""), note.get("lead_sentence", ""), note.get("concepts") or [])
         signal_type = _educational_signal_type(" ".join([
             title,
@@ -782,9 +824,10 @@ def _merge_chapter_notes(notes: list[dict]) -> dict:
             note.get("prose", ""),
             " ".join(note.get("concepts") or []),
         ]))
+        concept_role = signature.get("concept_role", _classify_concept_role(title, _build_core_explanation(note)))
         if (
             title
-            and signal_type not in {"administrative lecture content", "low educational relevance"}
+            and concept_role in _STRUCTURAL_CONCEPT_ROLES
             and title.lower() not in _GENERIC_TITLES
             and not re.fullmatch(r"section\s+\d+", title.lower())
         ):
@@ -792,6 +835,7 @@ def _merge_chapter_notes(notes: list[dict]) -> dict:
             subtopic_sections.append({
                 "title": title,
                 "signal_type": signal_type,
+                "concept_role": concept_role,
                 "overview": _build_core_explanation(note),
                 "definitions": _collect_definition_lines(note)[:2],
                 "examples": _dedupe_texts(note.get("examples") or [])[:2],
@@ -850,7 +894,7 @@ def _merge_chapter_notes(notes: list[dict]) -> dict:
     seen_subtopic_titles = set()
     for item in subtopic_sections:
         key = item["title"].lower()
-        if item.get("signal_type") in {"administrative lecture content", "low educational relevance"}:
+        if item.get("concept_role") not in _STRUCTURAL_CONCEPT_ROLES:
             continue
         if key in seen_subtopic_titles:
             continue
@@ -1278,6 +1322,8 @@ def build_verified_cheat_sheet(
         seen_terms = set()
 
         for subtopic in chapter.get("subtopic_sections") or []:
+            if subtopic.get("concept_role", "supporting concept") not in _STRUCTURAL_CONCEPT_ROLES:
+                continue
             term = _normalise_ws(subtopic.get("title", ""))
             if not term:
                 continue
@@ -1396,14 +1442,17 @@ def build_concept_entities(chapter_hierarchy: list[dict], claim_registry: list[d
 
     def ensure_entity(term: str, chapter: dict, source: dict | None = None) -> dict | None:
         cleaned = _normalise_ws(term)
-        raw_signal = _educational_signal_type(cleaned)
-        canonical = _canonical_curriculum_concept(" ".join([
+        context = " ".join([
             cleaned,
             chapter.get("title", ""),
             " ".join(chapter.get("key_definitions") or []),
             " ".join(chapter.get("important_distinctions") or []),
-        ]))
-        if canonical and raw_signal in {"example", "administrative lecture content", "low educational relevance"}:
+        ])
+        concept_role = _classify_concept_role(cleaned, context)
+        canonical = _canonical_curriculum_concept(context)
+        if concept_role not in _STRUCTURAL_CONCEPT_ROLES:
+            return None
+        if canonical and _is_low_signal_title(cleaned):
             cleaned = canonical
         key = _normalise_concept_key(cleaned)
         if not cleaned or not key or key in _RELATIONSHIP_STOP_TERMS:
@@ -1420,6 +1469,7 @@ def build_concept_entities(chapter_hierarchy: list[dict], claim_registry: list[d
             "concept": cleaned,
             "canonical_key": key,
             "signal_type": signal_type,
+            "concept_role": concept_role,
             "chapter_title": chapter.get("title", ""),
             "definitions": [],
             "distinctions": [],
@@ -1443,7 +1493,7 @@ def build_concept_entities(chapter_hierarchy: list[dict], claim_registry: list[d
     for chapter in chapter_hierarchy:
         chapter_terms = []
         for subtopic in chapter.get("subtopic_sections") or []:
-            if subtopic.get("signal_type") in {"administrative lecture content", "low educational relevance"}:
+            if subtopic.get("concept_role", "supporting concept") not in _STRUCTURAL_CONCEPT_ROLES:
                 continue
             entity = ensure_entity(subtopic.get("title", ""), chapter, source=subtopic)
             if entity:
@@ -1494,6 +1544,10 @@ def build_concept_relationship_graph(concept_entities: list[dict], claim_registr
             return
         target_key = _normalise_concept_key(target_name)
         if target_key not in entities_by_key or target_key == source_key:
+            return
+        if entities_by_key[source_key].get("concept_role") not in _STRUCTURAL_CONCEPT_ROLES:
+            return
+        if entities_by_key[target_key].get("concept_role") not in _STRUCTURAL_CONCEPT_ROLES:
             return
         key = (source_key, target_key, rel_type)
         if key in seen_edges:
@@ -1623,6 +1677,7 @@ def score_adaptive_concept_intelligence(concept_graph: dict) -> dict:
     for entity in concepts:
         concept_name = entity["concept"]
         signal_type = entity.get("signal_type", "supporting concept")
+        concept_role = entity.get("concept_role", signal_type)
         definitions = len(entity.get("definitions") or [])
         distinctions = len(entity.get("distinctions") or [])
         traps = len(entity.get("exam_traps") or [])
@@ -1650,11 +1705,11 @@ def score_adaptive_concept_intelligence(concept_graph: dict) -> dict:
         if signal_type == "foundational concept":
             educational_importance = _clamp_score(educational_importance + 0.12)
             revision_priority = _clamp_score(revision_priority + 0.1)
-        elif signal_type in {"example", "exam instruction"}:
+        elif concept_role not in _STRUCTURAL_CONCEPT_ROLES or signal_type in {"example", "exam instruction"}:
             educational_importance = _clamp_score(educational_importance * 0.55)
             revision_priority = _clamp_score(revision_priority * 0.62)
         foundational = dependency_weight >= 0.45 or centrality >= 0.65 or definitions >= 2
-        if signal_type in {"example", "exam instruction"}:
+        if concept_role not in _STRUCTURAL_CONCEPT_ROLES or signal_type in {"example", "exam instruction"}:
             foundational = False
         if revision_priority >= 0.78 or misunderstanding_risk >= 0.72:
             emphasis = "high"
