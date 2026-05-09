@@ -507,7 +507,7 @@
             grid-template-columns: 12mm 1fr 22mm;
             gap: 0 6mm;
             align-items: baseline;
-            margin-bottom: 3.5mm;
+            margin-bottom: 2.2mm;
         }
         .section-spacer { grid-column: 3; }
         .section-num {
@@ -523,11 +523,19 @@
         }
         .section-title {
             font-family: var(--serif);
-            font-size: 16pt;
+            font-size: 17pt;
             font-weight: 600;
             color: var(--ink);
             letter-spacing: -0.015em;
             line-height: 1.2;
+        }
+        .chapter-kicker {
+            font-family: var(--sans);
+            font-size: 6.8pt;
+            text-transform: uppercase;
+            letter-spacing: 0.16em;
+            color: var(--ink-4);
+            margin-bottom: 1mm;
         }
         .section-sub {
             grid-column: 2;
@@ -554,13 +562,21 @@
             font-variant-numeric: tabular-nums;
         }
         .section-body { position: relative; z-index: 1; }
-        .subtopics-row { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 3mm; }
+        .subtopics-label {
+            font-size: 6.8pt;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.14em;
+            color: var(--ink-4);
+            margin: 0 0 1.1mm;
+        }
+        .subtopics-row { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 2.2mm; }
         .subtopic-chip {
             display: inline-flex;
             align-items: center;
             padding: 2px 8px;
             border-radius: 999px;
-            background: #f3f0ea;
+            background: #f5f1e8;
             color: var(--ink-3);
             font-size: 7.5pt;
             border: 0.5px solid #e7dfd2;
@@ -599,7 +615,7 @@
         }
 
         /* Concept pills */
-        .concepts-wrap { margin: 2.2mm 0 2.8mm; }
+        .concepts-wrap { margin: 1.8mm 0 2.2mm; }
         .concepts-label {
             font-size: 7pt;
             font-weight: 700;
@@ -728,7 +744,7 @@
             font-size: 8.5pt;
             color: var(--ink-3);
             line-height: 1.55;
-            margin: 0 0 3mm;
+            margin: 0 0 2mm;
         }
         .notes-label {
             font-size: 6.5pt;
@@ -1339,6 +1355,7 @@
         <header class="section-head">
             <div class="section-num">§&thinsp;{{ loop.index }}</div>
             <div>
+                <div class="chapter-kicker">Chapter {{ loop.index }}</div>
                 <h2 class="section-title">{{ sec.title }}</h2>
                 {% if sec.lead_sentence and sec.analogy %}
                 <div class="section-sub">{{ sec.lead_sentence }}</div>
@@ -1349,6 +1366,7 @@
 
         <div class="section-body">
             {% if sec.subsections %}
+            <div class="subtopics-label">Subtopics</div>
             <div class="subtopics-row">
                 {% for sub in sec.subsections %}
                 <span class="subtopic-chip">{{ sub }}</span>

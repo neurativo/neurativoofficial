@@ -65,6 +65,33 @@ _BOUNDARY_HINTS = (
     "utility", "goods", "free goods", "public goods", "economic bads",
     "resources", "production", "human intervention",
 )
+_CANONICAL_TITLE_RULES = (
+    ("Exam Structure & Weekly Study Plan", ("exam", "essay", "mcq"), ("positive", "normative")),
+    ("Branches of Economics", ("microeconomics", "macroeconomics"), ("positive", "normative")),
+    ("Positive vs Normative Statements", ("positive", "normative"), ("goods", "utility")),
+    ("Goods, Utility & Satisfaction", ("utility", "wants", "satisfaction"), ("economic goods", "public goods")),
+    ("Economic vs Non-Economic Goods", ("economic goods", "non economic goods"), ("public goods", "resources")),
+    ("Public Goods vs Free Goods", ("public goods", "free goods"), ("economic bads", "resources")),
+    ("Economic Bads", ("economic bads", "bads"), ("resources", "human intervention")),
+    ("Converting Non-Economic Goods into Economic Goods", ("human intervention", "convert", "conversion"), ("resources",)),
+    ("Economic vs Non-Economic Resources", ("economic resources", "non economic resources", "resources"), tuple()),
+)
+_CANONICAL_SUBTOPIC_RULES = (
+    ("Economic Goods", ("economic goods", "scarce", "opportunity cost")),
+    ("Free Goods", ("free goods", "non economic goods", "gifted by nature")),
+    ("Public Goods", ("public goods", "government", "public utility")),
+    ("Human Intervention", ("human intervention", "convert", "conversion")),
+    ("Government Textbooks", ("textbooks", "government textbooks")),
+    ("Scarcity", ("scarcity", "limited in supply")),
+    ("Microeconomics", ("microeconomics",)),
+    ("Macroeconomics", ("macroeconomics",)),
+    ("Positive Statements", ("positive statements", "testable")),
+    ("Normative Statements", ("normative statements", "value judgment")),
+    ("Utility", ("utility", "satisfaction")),
+    ("Economic Bads", ("economic bads", "bads")),
+    ("Resources", ("resources", "production")),
+    ("Common Exam Traps", ("do not confuse", "important clarification", "trap", "not equal")),
+)
 
 
 def _tokenise(text: str) -> set[str]:
@@ -182,6 +209,19 @@ def _find_best_evidence(text: str, transcript_units: list[dict]) -> tuple[dict |
     return best_unit, best_score
 
 
+def _candidate_evidence_units(text: str, transcript_units: list[dict]) -> list[dict]:
+    text_tokens = _tokenise(text)
+    if not text_tokens:
+        return []
+    candidates = []
+    for unit in transcript_units:
+        overlap = len(text_tokens & unit["tokens"])
+        if overlap > 0:
+            candidates.append((overlap / max(1, len(text_tokens)), unit))
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    return [unit for _, unit in candidates[:6]]
+
+
 def _is_contradicted(text: str, evidence: str) -> bool:
     claim = _normalise_ws(text).lower().replace("-", " ")
     source = _normalise_ws(evidence).lower().replace("-", " ")
@@ -198,6 +238,30 @@ def _is_contradicted(text: str, evidence: str) -> bool:
         if claim_has_right and source_has_left and not source_has_right:
             return True
     return False
+
+
+def _has_relevant_contradiction(text: str, transcript_units: list[dict]) -> bool:
+    for unit in _candidate_evidence_units(text, transcript_units):
+        if _is_contradicted(text, unit["text"]):
+            return True
+    return False
+
+
+def _canonical_title_from_text(title: str, lead_sentence: str, concepts: list[str], prose: str = "", examples: list[str] | None = None, highlights: list[str] | None = None) -> str | None:
+    corpus = " ".join([
+        _normalise_ws(title).lower(),
+        _normalise_ws(lead_sentence).lower(),
+        _normalise_ws(prose).lower(),
+        " ".join(_normalise_ws(c).lower() for c in concepts or []),
+        " ".join(_normalise_ws(e).lower() for e in examples or []),
+        " ".join(_normalise_ws(h).lower() for h in highlights or []),
+    ])
+    for canonical, required_terms, excluded_terms in _CANONICAL_TITLE_RULES:
+        if all(term in corpus for term in required_terms):
+            if excluded_terms and any(term in corpus for term in excluded_terms):
+                continue
+            return canonical
+    return None
 
 
 def _status_from_score(score: float, contradicted: bool) -> str:
@@ -233,6 +297,9 @@ def _chunk_range_to_citation(start_idx: int | None, end_idx: int | None) -> dict
 
 
 def _derive_title(raw_title: str, lead_sentence: str, concepts: list[str]) -> str:
+    canonical = _canonical_title_from_text(raw_title, lead_sentence, concepts)
+    if canonical:
+        return canonical
     title = _normalise_ws(raw_title).strip(":#- ")
     lowered = title.lower()
     if lowered.startswith("lecture distinguishes between") or lowered.startswith("lecture discusses distinction between"):
@@ -378,6 +445,16 @@ def _citation_gap_seconds(current: list[dict], candidate: dict) -> int | None:
 
 
 def _pick_chapter_title(notes: list[dict]) -> str:
+    canonical = _canonical_title_from_text(
+        " ".join(note.get("title", "") for note in notes),
+        " ".join(note.get("lead_sentence", "") for note in notes),
+        [concept for note in notes for concept in (note.get("concepts") or [])],
+        prose=" ".join(note.get("prose", "") for note in notes),
+        examples=[example for note in notes for example in (note.get("examples") or [])],
+        highlights=[highlight for note in notes for highlight in (note.get("highlights") or [])],
+    )
+    if canonical:
+        return canonical
     ranked = sorted(
         notes,
         key=lambda note: (
@@ -498,6 +575,22 @@ def _merge_chapter_notes(notes: list[dict]) -> dict:
     distinctions = _filter_conflicting_texts(_dedupe_texts(distinctions))[:4]
     exam_traps = _filter_conflicting_texts(_dedupe_texts(exam_traps))[:4]
     subsection_titles = [s for s in _dedupe_texts(subsection_titles) if s != title][:4]
+    subtopics = []
+    chapter_corpus = " ".join([
+        title.lower(),
+        " ".join(c.lower() for c in concepts),
+        " ".join(e.lower() for e in examples),
+        " ".join(d.lower() for d in definitions),
+        " ".join(x.lower() for x in distinctions),
+        " ".join(t.lower() for t in exam_traps),
+    ])
+    for label, terms in _CANONICAL_SUBTOPIC_RULES:
+        if any(term in chapter_corpus for term in terms):
+            subtopics.append(label)
+    for label in subsection_titles:
+        if label not in subtopics:
+            subtopics.append(label)
+    subtopics = _dedupe_texts(subtopics)[:6]
 
     start_seconds = citations[0]["start_seconds"] if citations else None
     end_seconds = citations[-1]["end_seconds"] if citations else None
@@ -518,7 +611,7 @@ def _merge_chapter_notes(notes: list[dict]) -> dict:
         "start_seconds": start_seconds,
         "end_seconds": end_seconds,
         "source_references": [c["label"] for c in citations],
-        "subsections": subsection_titles,
+        "subsections": subtopics,
     }
 
 
@@ -533,7 +626,7 @@ def _build_units(section: dict, transcript_units: list[dict]) -> tuple[list[dict
         if not cleaned:
             return None
         evidence, score = _find_best_evidence(cleaned, transcript_units)
-        contradicted = _is_contradicted(cleaned, evidence["text"] if evidence else "")
+        contradicted = _has_relevant_contradiction(cleaned, transcript_units) or _is_contradicted(cleaned, evidence["text"] if evidence else "")
         status = _status_from_score(score, contradicted)
         if status in {"unsupported", "contradicted"}:
             return None
@@ -770,7 +863,7 @@ def _verify_generated_text(text: str, transcript_units: list[dict], minimum_scor
     if not cleaned:
         return "unsupported", 0.0
     evidence, score = _find_best_evidence(cleaned, transcript_units)
-    contradicted = _is_contradicted(cleaned, evidence["text"] if evidence else "")
+    contradicted = _has_relevant_contradiction(cleaned, transcript_units) or _is_contradicted(cleaned, evidence["text"] if evidence else "")
     status = _status_from_score(score, contradicted)
     if score < minimum_score and status != "contradicted":
         status = "unsupported"

@@ -81,6 +81,38 @@ def test_build_concept_sections_extracts_educational_structure():
     assert sections[0]["examples"]
 
 
+def test_build_concept_sections_uses_canonical_educational_titles():
+    grounded_notes = [
+        {
+            "title": "Speaker Delivering Material Third Time Will",
+            "lead_sentence": "Microeconomics studies individual units while macroeconomics studies the whole economy.",
+            "prose": "These are the two main branches of economics discussed in the lecture.",
+            "concepts": ["microeconomics", "macroeconomics"],
+            "examples": [],
+            "highlights": [],
+            "citations": [{"label": "03:00-05:00", "start_seconds": 180, "end_seconds": 300}],
+            "confidence": 0.88,
+            "verification_status": "supported",
+        },
+        {
+            "title": "Textbooks Provided Free Charge Government Classified",
+            "lead_sentence": "Economic goods are scarce while non-economic goods are abundant.",
+            "prose": "Public goods are different from free goods. Government textbooks are still economic goods because supply is limited.",
+            "concepts": ["economic goods", "non-economic goods", "public goods", "free goods"],
+            "examples": ["Government textbooks are still economic goods."],
+            "highlights": ["Do not confuse free goods with goods given free of charge."],
+            "citations": [{"label": "14:00-17:30", "start_seconds": 840, "end_seconds": 1050}],
+            "confidence": 0.9,
+            "verification_status": "supported",
+        },
+    ]
+
+    sections = build_concept_sections(grounded_notes)
+
+    assert sections[0]["title"] == "Branches of Economics"
+    assert sections[1]["title"] in {"Economic vs Non-Economic Goods", "Public Goods vs Free Goods"}
+
+
 def test_build_concept_sections_merges_micro_sections_into_chapters():
     grounded_notes = [
         {
