@@ -55,19 +55,28 @@ _TRAP_MARKERS = (
     "trap", "important clarification", "not simply", "not equal", "not equal to",
 )
 _ACADEMIC_TITLE_HINTS = (
-    "economics", "microeconomics", "macroeconomics", "positive", "normative",
-    "goods", "resources", "production", "utility", "demand", "supply",
-    "scarcity", "opportunity cost", "free goods", "public goods",
-    "law", "rights", "biology", "medicine", "physics", "chemistry",
-    "engineering", "calculus", "statistics", "classification", "theory",
-    "structure", "strategy", "comparison", "statements", "concepts",
-    "pathway", "mechanism", "enzyme", "cellular", "precedent", "legal test",
-    "statutory", "theorem", "proof", "derivation", "formula", "system",
-    "constraint", "process", "anatomy", "diagnosis", "contraindication",
+    # Universal curriculum structure
+    "theory", "classification", "taxonomy", "hierarchy", "framework",
+    "model", "principle", "law", "rule", "hypothesis",
+    # Universal educational content
+    "definition", "concept", "distinction", "comparison",
+    # Universal STEM
+    "theorem", "proof", "derivation", "formula", "equation",
+    "mechanism", "pathway", "process", "system", "algorithm",
+    "structure", "method", "procedure", "function",
+    # Universal academic disciplines (generic)
+    "analysis", "synthesis", "interpretation", "evaluation",
+    "diagnosis", "precedent", "constraint", "optimization",
+    # Academic signal words (domain-neutral)
+    "statements", "classification", "strategy", "comparison",
+    "anatomy", "contraindication", "statutory", "engineering",
+    "cellular", "legal test", "legal", "biology", "medicine",
+    "physics", "chemistry", "calculus", "statistics",
 )
 _EXAMPLE_HINTS = (
     "example", "illustration", "scenario", "case", "instance", "sample",
-    "population growth", "bottled water", "oxygen tank", "rainwater",
+    "for example", "for instance", "such as", "consider", "take the case",
+    "e.g.", "e.g,", "namely", "specifically", "to illustrate",
 )
 _ADMIN_HINTS = (
     "focus week", "essay question", "mcq", "multiple choice", "next week",
@@ -86,58 +95,17 @@ _LOW_SIGNAL_TITLE_PATTERNS = (
     r"^.*\bprovided free charge\b",
     r"^.*\bcharacterized unlimited supply\b",
 )
-_CURRICULUM_CONCEPT_RULES = (
-    ("Positive vs Normative Statements", ("positive", "normative", "objective", "factual", "testable", "verifiable", "value judgment", "opinion")),
-    ("Microeconomics vs Macroeconomics", ("microeconomics", "macroeconomics", "individual units", "whole economy")),
-    ("Economic Goods & Scarcity", ("economic goods", "scarcity", "scarce", "limited supply", "opportunity cost")),
-    ("Free Goods vs Public Goods", ("free goods", "public goods", "sunlight", "air", "street lights", "shared consumption")),
-    ("Economic vs Non-Economic Goods", ("economic goods", "non economic goods", "free of charge", "gifted by nature")),
-    ("Goods, Utility & Satisfaction", ("utility", "wants", "satisfaction", "goods")),
-    ("Economic Bads", ("economic bads", "pollution", "garbage", "dissatisfaction")),
-    ("Human Intervention & Resource Conversion", ("human intervention", "conversion", "convert", "bottled water", "oxygen tank")),
-    ("Economic vs Non-Economic Resources", ("economic resources", "non economic resources", "resources", "production")),
-    ("Cellular Pathways & Mechanisms", ("pathway", "enzyme", "cellular", "mechanism", "metabolic", "reaction")),
-    ("Anatomy & Physiological Mechanisms", ("anatomy", "physiology", "organ", "tissue", "mechanism")),
-    ("Clinical Reasoning & Contraindications", ("diagnosis", "symptom", "contraindication", "treatment", "clinical")),
-    ("Legal Tests & Precedent", ("precedent", "legal test", "case law", "holding", "doctrine")),
-    ("Statutory Interpretation", ("statutory", "interpretation", "section", "legislation", "meaning")),
-    ("Theorems, Proofs & Derivations", ("theorem", "proof", "derive", "derivation", "lemma")),
-    ("Formula Systems & Problem Solving", ("formula", "equation", "variable", "solve", "calculation")),
-    ("Engineering Systems & Constraints", ("system", "constraint", "optimization", "process", "design tradeoff")),
-)
+# Domain-locked economics rule tables removed — GPT reconstruction handles canonical
+# concept classification. These are kept as empty tuples for backward compatibility
+# (functions referencing them will return None, which is correct behavior).
+_CURRICULUM_CONCEPT_RULES: tuple = ()
 _BOUNDARY_HINTS = (
     "exam", "study", "microeconomics", "macroeconomics", "positive", "normative",
     "utility", "goods", "free goods", "public goods", "economic bads",
     "resources", "production", "human intervention",
 )
-_CANONICAL_TITLE_RULES = (
-    ("Exam Structure & Weekly Study Plan", ("exam", "essay", "mcq"), ("positive", "normative")),
-    ("Microeconomics vs Macroeconomics", ("microeconomics", "macroeconomics"), ("positive", "normative")),
-    ("Positive vs Normative Statements", ("positive", "normative"), ("goods", "utility")),
-    ("Goods, Utility & Satisfaction", ("utility", "wants", "satisfaction"), ("economic goods", "public goods")),
-    ("Economic Goods & Scarcity", ("economic goods", "scarcity"), ("public goods", "resources")),
-    ("Economic vs Non-Economic Goods", ("economic goods", "non economic goods"), ("resources",)),
-    ("Public Goods vs Free Goods", ("public goods", "free goods"), ("economic bads", "resources")),
-    ("Economic Bads", ("economic bads", "bads"), ("resources", "human intervention")),
-    ("Human Intervention & Resource Conversion", ("human intervention", "convert", "conversion"), ("resources",)),
-    ("Economic vs Non-Economic Resources", ("economic resources", "non economic resources", "resources"), tuple()),
-)
-_CANONICAL_SUBTOPIC_RULES = (
-    ("Economic Goods", ("economic goods", "scarce", "opportunity cost")),
-    ("Free Goods", ("free goods", "non economic goods", "gifted by nature")),
-    ("Public Goods", ("public goods", "government", "public utility")),
-    ("Human Intervention", ("human intervention", "convert", "conversion")),
-    ("Government Textbooks", ("textbooks", "government textbooks")),
-    ("Scarcity", ("scarcity", "limited in supply")),
-    ("Microeconomics", ("microeconomics",)),
-    ("Macroeconomics", ("macroeconomics",)),
-    ("Positive Statements", ("positive statements", "testable")),
-    ("Normative Statements", ("normative statements", "value judgment")),
-    ("Utility", ("utility", "satisfaction")),
-    ("Economic Bads", ("economic bads", "bads")),
-    ("Resources", ("resources", "production")),
-    ("Common Exam Traps", ("do not confuse", "important clarification", "trap", "not equal")),
-)
+_CANONICAL_TITLE_RULES: tuple = ()
+_CANONICAL_SUBTOPIC_RULES: tuple = ()
 _RELATIONSHIP_STOP_TERMS = {"common exam traps", "concepts"}
 _CAUSAL_MARKERS = ("because", "therefore", "leads to", "results in", "causes", "requires", "require", "depends on", "create", "creates")
 _STRUCTURAL_CONCEPT_ROLES = {"foundational concept", "supporting concept"}
@@ -306,12 +274,17 @@ def _educational_signal_type(text: str) -> str:
         return "administrative lecture content"
     if any(hint in lowered for hint in _EXAMPLE_HINTS):
         return "example"
-    if any(hint in lowered for hint in _TRAP_MARKERS):
+    if any(marker in lowered for marker in _TRAP_MARKERS):
         return "exam instruction"
+    # Domain-general: any distinction marker = foundational
     if any(marker in lowered for marker in _DISTINCTION_MARKERS):
         return "foundational concept"
-    if any(marker in lowered for marker in _DEFINITION_MARKERS) and any(hint in lowered for hint in _ACADEMIC_TITLE_HINTS):
-        return "foundational concept"
+    # Domain-general: definition marker + any academic term = foundational
+    if any(marker in lowered for marker in _DEFINITION_MARKERS):
+        if any(hint in lowered for hint in _ACADEMIC_TITLE_HINTS):
+            return "foundational concept"
+        # Even without academic title hint, a definition signal is supporting
+        return "supporting concept"
     if any(hint in lowered for hint in _ACADEMIC_TITLE_HINTS):
         return "supporting concept"
     return "low educational relevance"
@@ -769,35 +742,56 @@ def _should_merge_into_current(current: list[dict], candidate: dict, desired_sec
     if not current:
         return False
 
-    candidate_signature = _note_curriculum_signature(candidate)
-    current_signature = _chapter_curriculum_signature(current)
-    if candidate_signature["is_admin_only"]:
+    candidate_sig = _note_curriculum_signature(candidate)
+    current_sig   = _chapter_curriculum_signature(current)
+
+    # PRIMARY GATES — curriculum identity (time gap is NOT a factor here)
+
+    # Admin always absorbed — never creates chapters
+    if candidate_sig["is_admin_only"]:
         return True
+
+    # Same canonical curriculum concept → always merge regardless of time gap
+    if (candidate_sig["canonical"]
+            and candidate_sig["canonical"] == current_sig.get("canonical")):
+        return True
+
+    # Examples: attach if they support current chapter content
+    if candidate_sig["is_example_only"]:
+        if _supports_current_examples(current, candidate) >= 0.12:
+            return True
+        citation_gap = _citation_gap_seconds(current, candidate)
+        if citation_gap is None or citation_gap <= 90:
+            return True  # close-by example → attach
+        return False  # distant, unrelated example → let it float
+
+    # Genuine curriculum transition → always split
     if _is_curriculum_transition(current, candidate):
         return False
-    if candidate_signature["canonical"] and candidate_signature["canonical"] == current_signature.get("canonical"):
-        return True
 
-    current_words = sum(_note_density(note) for note in current)
-    candidate_words = _note_density(candidate)
-    candidate_title = candidate_signature["title"]
-    candidate_strength = candidate_signature["strength"]
-    weak_candidate = candidate_strength < 1.5 or (candidate_words < 35 and candidate_strength < 2.5)
-    example_support = _supports_current_examples(current, candidate)
-    citation_gap = _citation_gap_seconds(current, candidate)
-
-    if _is_example_like(candidate) and (example_support >= 0.18 or citation_gap is None or citation_gap <= 60):
-        return True
-    if weak_candidate and not _is_major_concept_note(candidate):
-        return True
+    # SECONDARY — concept strength and family membership
     if _same_major_family(current, candidate):
         return True
-    if citation_gap is not None and citation_gap >= 120 and _is_major_concept_note(candidate):
-        return False
+
+    candidate_strength = candidate_sig["strength"]
+    candidate_words    = _note_density(candidate)
+    weak_candidate     = candidate_strength < 1.5 or (candidate_words < 35 and candidate_strength < 2.5)
+
+    if weak_candidate and not _is_major_concept_note(candidate):
+        return True
+
+    # TIEBREAKER ONLY — transcript time gap (threshold raised 120s → 300s)
+    citation_gap = _citation_gap_seconds(current, candidate)
+    if citation_gap is not None and citation_gap >= 300 and _is_major_concept_note(candidate):
+        return False  # very long gap + major concept → likely new chapter
+
     if _is_major_concept_note(candidate):
         return False
+
+    current_words = sum(_note_density(n) for n in current)
     if current_words < 130:
         return True
+
     return False
 
 
