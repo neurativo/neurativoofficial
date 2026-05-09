@@ -404,6 +404,61 @@ function SummaryCard({ section, accent, index, total, topic }) {
     );
 }
 
+function ConceptNoteCard({ card, accent, index, total, topic }) {
+    const a = accent || ACCENTS_LIGHT[0];
+    const sourceLabel = card?.source?.label || '';
+    return (
+        <div className="lv-sum-card summary-card-enter" style={{ borderLeft: `3px solid ${a.border}` }}>
+            <div className="lv-sum-meta">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                    <div className="lv-sum-title" style={{ color: a.title, margin: 0 }}>{card.concept_name}</div>
+                    {card.verification_status === 'supported' && (
+                        <span className="lv-sum-badge">Transcript-grounded</span>
+                    )}
+                </div>
+                {total > 1 && (
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: 'var(--color-muted)', flexShrink: 0, paddingLeft: 8 }}>
+                        {index + 1}/{total}
+                    </span>
+                )}
+            </div>
+
+            {card.definition && (
+                <div className="lv-sum-group">
+                    <div className="lv-sum-group-label">Definition</div>
+                    <div className="lv-sum-group-item">{renderDomainContent(card.definition, topic) || card.definition}</div>
+                </div>
+            )}
+
+            {card.key_distinction && (
+                <div className="lv-sum-group">
+                    <div className="lv-sum-group-label">Key Distinction</div>
+                    <div className="lv-sum-group-item">{renderDomainContent(card.key_distinction, topic) || card.key_distinction}</div>
+                </div>
+            )}
+
+            {card.exam_trap && (
+                <div className="lv-sum-highlight" style={{ background: '#fef3c7', borderLeftColor: '#f59e0b', color: '#78350f' }}>
+                    <strong>Exam Trap: </strong>{renderDomainContent(card.exam_trap, topic) || card.exam_trap}
+                </div>
+            )}
+
+            {card.professor_example && (
+                <div className="lv-sum-group">
+                    <div className="lv-sum-group-label">Professor's Example</div>
+                    <div className="lv-sum-group-item">{renderDomainContent(card.professor_example, topic) || card.professor_example}</div>
+                </div>
+            )}
+
+            {sourceLabel && (
+                <div className="lv-sum-citations">
+                    <span className="lv-sum-citation">Source {sourceLabel}</span>
+                </div>
+            )}
+        </div>
+    );
+}
+
 const LANG_NAMES = { en: 'English', ar: 'Arabic', zh: 'Chinese', fr: 'French', de: 'German', hi: 'Hindi', es: 'Spanish', it: 'Italian', ja: 'Japanese', ko: 'Korean', pt: 'Portuguese', ru: 'Russian' };
 
 function fmtDur(s) {
@@ -752,11 +807,12 @@ export default function LectureView() {
 
     const wordCount = lecture?.transcript_word_count || segments.reduce((n, s) => n + s.split(/\s+/).filter(Boolean).length, 0);
     const summaryText = lecture?.master_summary || lecture?.summary || '';
+    const conceptNoteCards = Array.isArray(lecture?.concept_note_cards) ? lecture.concept_note_cards : [];
     const conceptSections = Array.isArray(lecture?.concept_sections) ? lecture.concept_sections : [];
     const groundedSections = Array.isArray(lecture?.grounded_notes) ? lecture.grounded_notes : [];
     const summarySections = conceptSections.length > 0 ? conceptSections : (groundedSections.length > 0 ? groundedSections : parseSummary(summaryText));
     const aiStudyAids = lecture?.ai_study_aids?.items || [];
-    const topicCount = summarySections.reduce((n, s) => n + s.concepts.length, 0);
+    const topicCount = conceptNoteCards.length || summarySections.reduce((n, s) => n + (s.concepts || []).length, 0);
     const titleDisplay = lecture?.title
         ? (lecture.title.length > 40 ? lecture.title.slice(0, 40) + '…' : lecture.title)
         : 'Lecture';
@@ -927,12 +983,12 @@ export default function LectureView() {
                         {/* Summary */}
                         {activeTab === 'summary' && (
                             <div className="lv-tab-body">
-                                {(conceptSections.length > 0 || groundedSections.length > 0) && (
+                                {(conceptNoteCards.length > 0 || conceptSections.length > 0 || groundedSections.length > 0) && (
                                     <p className="lv-trust-note">
-                                        Concept-organized lecture notes grounded in the transcript. Definitions, distinctions, exam traps, examples, and source timestamps are separated from AI study tools.
+                                        Concept notes are rebuilt from subject-matter content only. Lecture logistics and examples are filtered out as card titles, while AI study tools remain separate.
                                     </p>
                                 )}
-                                {summarySections.length === 0
+                                {(conceptNoteCards.length === 0 && summarySections.length === 0)
                                     ? <div style={{ fontSize: 13, color: C.muted, textAlign: 'center', paddingTop: 40 }}>
                                         {isProcessing || summaryStatus === 'recomputing'
                                             ? 'Summary is still being prepared'
@@ -940,10 +996,15 @@ export default function LectureView() {
                                     </div>
                                     : (
                                         <>
-                                            {summarySections.map((s, i) => {
-                                                const palette = isDark ? ACCENTS_DARK : ACCENTS_LIGHT;
-                                                return <SummaryCard key={i} section={s} accent={palette[i % palette.length]} index={i} total={summarySections.length} topic={lecture?.topic} />;
-                                            })}
+                                            {conceptNoteCards.length > 0
+                                                ? conceptNoteCards.map((card, i) => {
+                                                    const palette = isDark ? ACCENTS_DARK : ACCENTS_LIGHT;
+                                                    return <ConceptNoteCard key={i} card={card} accent={palette[i % palette.length]} index={i} total={conceptNoteCards.length} topic={lecture?.topic} />;
+                                                })
+                                                : summarySections.map((s, i) => {
+                                                    const palette = isDark ? ACCENTS_DARK : ACCENTS_LIGHT;
+                                                    return <SummaryCard key={i} section={s} accent={palette[i % palette.length]} index={i} total={summarySections.length} topic={lecture?.topic} />;
+                                                })}
                                             {aiStudyAids.length > 0 && (
                                                 <div className="lv-aid-panel">
                                                     <div className="lv-aid-title">AI Study Aids</div>

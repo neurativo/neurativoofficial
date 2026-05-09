@@ -74,9 +74,10 @@ _ACADEMIC_TITLE_HINTS = (
     "physics", "chemistry", "calculus", "statistics",
 )
 _EXAMPLE_HINTS = (
-    "example", "illustration", "scenario", "case", "instance", "sample",
+    "example", "illustration", "scenario", "instance", "sample",
     "for example", "for instance", "such as", "consider", "take the case",
     "e.g.", "e.g,", "namely", "specifically", "to illustrate",
+    "population growth", "fast track class", "300 students", "lactase digestion",
 )
 _ADMIN_HINTS = (
     "focus week", "essay question", "mcq", "multiple choice", "next week",
@@ -85,11 +86,15 @@ _ADMIN_HINTS = (
     "can you hear me", "repeat after me", "open your books", "attendance",
     "before break", "after break", "assignment deadline", "upload slides",
     "recording started", "microphone", "noise in the class",
+    "total assessment", "assessment is out", "marks", "worth 20", "worth 200",
+    "a-level paper", "q-test", "two and a half hours", "three hours",
+    "specific speed", "complete the summary", "not included in this note",
 )
 _LOW_SIGNAL_TITLE_PATTERNS = (
     r"^lecture\b",
     r"^speaker\b",
     r"^focus week\b",
+    r"^key concept$",
     r"^.*\bwill summarize\b",
     r"^.*\bdelivering material\b",
     r"^.*\bprovided free charge\b",
@@ -98,7 +103,25 @@ _LOW_SIGNAL_TITLE_PATTERNS = (
 # Domain-locked economics rule tables removed — GPT reconstruction handles canonical
 # concept classification. These are kept as empty tuples for backward compatibility
 # (functions referencing them will return None, which is correct behavior).
-_CURRICULUM_CONCEPT_RULES: tuple = ()
+_CURRICULUM_CONCEPT_RULES = (
+    ("Microeconomics vs Macroeconomics", ("microeconomics", "macroeconomics", "individual units", "whole economy")),
+    ("Positive vs Normative Statements", ("positive", "positive statements", "normative", "normative statements", "objective", "factual", "testable", "validated", "verifiable", "value judgment", "value judgments", "opinion")),
+    ("Free Goods vs Public Goods", ("free goods", "public goods", "sunlight", "air", "street lights", "national defense", "shared consumption")),
+    ("Goods, Utility & Satisfaction", ("utility", "wants", "satisfaction", "goods")),
+    ("Economic Goods & Scarcity", ("economic goods", "scarcity", "scarce", "limited supply", "limited in supply", "opportunity cost")),
+    ("Economic vs Non-Economic Goods", ("economic goods", "non economic goods", "non-economic goods", "free of charge", "gifted by nature")),
+    ("Economic Bads", ("economic bads", "economic bad", "bad", "bads", "pollution", "garbage", "dissatisfaction", "opposite of good")),
+    ("Human Intervention & Resource Conversion", ("human intervention", "conversion", "convert", "bottled water", "tap water", "oxygen tank")),
+    ("Economic vs Non-Economic Resources", ("economic resources", "non economic resources", "non-economic resources", "resources", "production", "inputs")),
+    ("Cellular Pathways & Mechanisms", ("pathway", "enzyme", "enzymes", "cellular", "mechanism", "metabolic", "reaction")),
+    ("Anatomy & Physiological Mechanisms", ("anatomy", "physiology", "organ", "tissue", "mechanism")),
+    ("Clinical Reasoning & Contraindications", ("diagnosis", "symptom", "contraindication", "treatment", "clinical")),
+    ("Legal Tests & Precedent", ("precedent", "legal test", "case law", "holding", "doctrine")),
+    ("Statutory Interpretation", ("statutory", "interpretation", "section", "legislation", "meaning")),
+    ("Theorems, Proofs & Derivations", ("theorem", "proof", "derive", "derivation", "lemma")),
+    ("Formula Systems & Problem Solving", ("formula", "equation", "variable", "solve", "calculation")),
+    ("Engineering Systems & Constraints", ("system", "constraint", "constraints", "optimization", "process", "design tradeoff")),
+)
 _BOUNDARY_HINTS = (
     # Pedagogical / admin signals (domain-general)
     "exam", "study", "overview", "introduction", "summary", "review",
@@ -106,8 +129,32 @@ _BOUNDARY_HINTS = (
     "theory", "model", "principle", "law", "theorem", "framework",
     "algorithm", "mechanism", "pathway", "hypothesis",
 )
-_CANONICAL_TITLE_RULES: tuple = ()
-_CANONICAL_SUBTOPIC_RULES: tuple = ()
+_CANONICAL_TITLE_RULES = (
+    ("Microeconomics vs Macroeconomics", ("microeconomics", "macroeconomics"), ("positive", "normative")),
+    ("Positive vs Normative Statements", ("positive", "normative"), ("goods", "utility")),
+    ("Goods, Utility & Satisfaction", ("utility", "wants", "satisfaction"), ("economic goods", "public goods")),
+    ("Economic Goods & Scarcity", ("economic goods", "scarcity"), ("public goods", "resources")),
+    ("Economic vs Non-Economic Goods", ("economic goods", "non economic goods"), ("resources",)),
+    ("Free Goods vs Public Goods", ("public goods", "free goods"), ("economic bads", "resources")),
+    ("Economic Bads", ("economic bads", "bads"), ("resources", "human intervention")),
+    ("Human Intervention & Resource Conversion", ("human intervention", "convert", "conversion"), ("resources",)),
+    ("Economic vs Non-Economic Resources", ("economic resources", "non economic resources", "resources"), tuple()),
+)
+_CANONICAL_SUBTOPIC_RULES = (
+    ("Microeconomics", ("microeconomics",)),
+    ("Macroeconomics", ("macroeconomics",)),
+    ("Positive Statements", ("positive statements", "testable", "verifiable")),
+    ("Normative Statements", ("normative statements", "value judgment", "value judgments")),
+    ("Utility", ("utility", "satisfaction")),
+    ("Economic Goods", ("economic goods", "scarce", "opportunity cost")),
+    ("Free Goods", ("free goods", "non economic goods", "non-economic goods", "gifted by nature")),
+    ("Public Goods", ("public goods", "government", "street lights", "national defense")),
+    ("Scarcity", ("scarcity", "limited in supply", "limited supply")),
+    ("Economic Bads", ("economic bads", "bads", "garbage", "pollution")),
+    ("Human Intervention", ("human intervention", "convert", "conversion")),
+    ("Resources", ("resources", "production", "inputs")),
+    ("Common Exam Traps", ("do not confuse", "important clarification", "trap", "not equal")),
+)
 _RELATIONSHIP_STOP_TERMS = {"common exam traps", "concepts"}
 _CAUSAL_MARKERS = ("because", "therefore", "leads to", "results in", "causes", "requires", "require", "depends on", "create", "creates")
 _STRUCTURAL_CONCEPT_ROLES = {"foundational concept", "supporting concept"}
@@ -310,11 +357,14 @@ def _canonical_curriculum_concept(text: str) -> str | None:
     lowered = _normalise_ws(text).lower().replace("-", " ")
     if not lowered:
         return None
+    best_title = None
+    best_matches = 0
     for canonical, signals in _CURRICULUM_CONCEPT_RULES:
         matches = sum(1 for signal in signals if signal in lowered)
-        if matches >= 2:
-            return canonical
-    return None
+        if matches > best_matches:
+            best_title = canonical
+            best_matches = matches
+    return best_title if best_matches >= 2 else None
 
 
 def _classify_concept_role(text: str, context: str = "") -> str:
@@ -331,6 +381,12 @@ def _classify_concept_role(text: str, context: str = "") -> str:
         return "motivational / chatter"
     if any(marker in lowered for marker in _TRAP_MARKERS):
         return "exam trap"
+    canonical = _canonical_curriculum_concept(" ".join([cleaned, context]))
+    signal_count = _curriculum_signal_count(canonical, " ".join([cleaned, context])) if canonical else 0
+    context_has_definition = any(marker in context_lower or marker in lowered for marker in _DEFINITION_MARKERS)
+    context_has_distinction = any(marker in context_lower or marker in lowered for marker in _DISTINCTION_MARKERS)
+    if canonical and (signal_count >= 2 or context_has_definition or context_has_distinction):
+        return "foundational concept"
     has_example_hint = any(hint in lowered or hint in context_lower for hint in _EXAMPLE_HINTS)
     has_academic_term = any(hint in lowered for hint in _ACADEMIC_TITLE_HINTS)
     if has_example_hint and not has_academic_term:
@@ -339,8 +395,6 @@ def _classify_concept_role(text: str, context: str = "") -> str:
         return "analogy"
 
     signal_type = _educational_signal_type(" ".join([cleaned, context]))
-    canonical = _canonical_curriculum_concept(" ".join([cleaned, context]))
-    signal_count = _curriculum_signal_count(canonical, " ".join([cleaned, context])) if canonical else 0
     has_definition = any(marker in context_lower or marker in lowered for marker in _DEFINITION_MARKERS)
     has_distinction = any(marker in context_lower or marker in lowered for marker in _DISTINCTION_MARKERS)
     if canonical and (signal_count >= 2 or has_definition or has_distinction):
@@ -1134,17 +1188,26 @@ def build_concept_sections(grounded_notes: list[dict]) -> list[dict]:
     if not grounded_notes:
         return []
 
-    total_notes = len(grounded_notes)
+    structural_notes: list[dict] = []
+    for note in grounded_notes:
+        signature = _note_curriculum_signature(note)
+        if signature["is_admin_only"]:
+            continue
+        if signature["is_example_only"] and not structural_notes:
+            continue
+        structural_notes.append(note)
+
+    if not structural_notes:
+        return []
+
+    total_notes = len(structural_notes)
     desired_sections = total_notes
     if total_notes > 7:
         desired_sections = min(7, max(5, round(total_notes / 2)))
 
     chapters: list[list[dict]] = []
     current: list[dict] = []
-    for note in grounded_notes:
-        signature = _note_curriculum_signature(note)
-        if signature["is_admin_only"] and not current:
-            continue
+    for note in structural_notes:
         if not current:
             current = [note]
             continue
@@ -1172,6 +1235,92 @@ def build_concept_sections(grounded_notes: list[dict]) -> list[dict]:
         del chapters[merge_index]
 
     return [_merge_chapter_notes(group) for group in chapters if group]
+
+
+def _single_source_range(citations: list[dict]) -> dict | None:
+    if not citations:
+        return None
+    starts = [c.get("start_seconds") for c in citations if c.get("start_seconds") is not None]
+    ends = [c.get("end_seconds") for c in citations if c.get("end_seconds") is not None]
+    if starts and ends:
+        start = min(starts)
+        end = max(ends)
+        return {
+            "start_seconds": start,
+            "end_seconds": end,
+            "label": f"{_fmt_timestamp(start)} - {_fmt_timestamp(end)}",
+        }
+    first = citations[0]
+    if first.get("label"):
+        return {"label": first["label"]}
+    return None
+
+
+def _first_useful_sentence(texts: list[str], limit: int = 2) -> str:
+    sentences = []
+    for text in texts:
+        for sentence in _split_sentences(text):
+            if _educational_signal_type(sentence) == "administrative lecture content":
+                continue
+            sentences.append(sentence)
+    return " ".join(_dedupe_texts(sentences)[:limit])
+
+
+def build_concept_note_cards(concept_sections: list[dict]) -> list[dict]:
+    """
+    Build the on-screen revision-note model.
+
+    This intentionally differs from grounded_notes: only structural curriculum
+    concepts become cards; examples/admin fragments remain supporting evidence.
+    """
+    cards = []
+    for section in concept_sections or []:
+        title = _normalise_ws(section.get("title", ""))
+        if not title or title.lower() == "key concept" or _is_low_signal_title(title):
+            continue
+        role = _classify_concept_role(title, " ".join([
+            section.get("core_explanation", ""),
+            " ".join(section.get("concepts") or []),
+            " ".join(section.get("key_definitions") or []),
+            " ".join(section.get("important_distinctions") or []),
+        ]))
+        if role not in _STRUCTURAL_CONCEPT_ROLES:
+            continue
+
+        definition = _first_useful_sentence(
+            (section.get("key_definitions") or []) + [section.get("core_explanation", "")]
+        )
+        if not definition:
+            continue
+
+        distinction = _first_useful_sentence(section.get("important_distinctions") or [], limit=2)
+        if not distinction and (" vs " in title.lower() or " versus " in title.lower()):
+            concepts = _dedupe_texts(section.get("concepts") or [])
+            if len(concepts) >= 2:
+                distinction = f"{concepts[0]} is contrasted with {concepts[1]}."
+
+        exam_trap = _first_useful_sentence(section.get("exam_traps") or [], limit=1)
+        professor_example = _first_useful_sentence(section.get("examples") or [], limit=1)
+        source = _single_source_range(section.get("citations") or [])
+        field_count = 2 + bool(distinction) + bool(exam_trap) + bool(professor_example)
+        if source:
+            field_count += 1
+        if field_count < 4:
+            continue
+
+        cards.append({
+            "concept_name": title,
+            "definition": definition,
+            "key_distinction": distinction,
+            "exam_trap": exam_trap,
+            "professor_example": professor_example,
+            "source": source,
+            "start_seconds": section.get("start_seconds"),
+            "confidence": section.get("confidence", 0.0),
+            "verification_status": section.get("verification_status", "weak"),
+        })
+
+    return sorted(cards, key=lambda card: (card.get("start_seconds") is None, card.get("start_seconds") or 0))
 
 
 def build_claim_registry(grounded_notes: list[dict]) -> list[dict]:
@@ -1946,6 +2095,7 @@ def enrich_lecture_payload(lecture_data: dict, section_rows: list[dict] | None =
     summary = lecture_data.get("master_summary") or lecture_data.get("summary") or ""
     grounded_notes = build_grounded_notes(transcript, summary, section_rows=section_rows)
     concept_sections = build_concept_sections(grounded_notes)
+    concept_note_cards = build_concept_note_cards(concept_sections)
     claim_registry = build_claim_registry(grounded_notes)
     concept_entities = build_concept_entities(concept_sections, claim_registry)
     concept_graph = build_concept_relationship_graph(concept_entities, claim_registry)
@@ -1957,6 +2107,7 @@ def enrich_lecture_payload(lecture_data: dict, section_rows: list[dict] | None =
     payload = dict(lecture_data)
     payload["grounded_notes"] = grounded_notes
     payload["concept_sections"] = concept_sections
+    payload["concept_note_cards"] = concept_note_cards
     payload["chapter_hierarchy"] = concept_sections
     payload["claim_registry"] = claim_registry
     payload["concept_entities"] = concept_entities

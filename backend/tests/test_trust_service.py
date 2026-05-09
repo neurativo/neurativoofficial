@@ -6,6 +6,7 @@ from app.services.trust_service import (
     build_concept_entities,
     build_concept_relationship_graph,
     build_relationship_concept_map,
+    build_concept_note_cards,
     build_concept_sections,
     build_verified_cheat_sheet,
     build_grounded_notes,
@@ -912,6 +913,166 @@ def test_build_concept_sections_reconstructs_curriculum_transitions():
     )
 
 
+def test_build_concept_sections_removes_key_concept_admin_and_example_fragments():
+    grounded_notes = [
+        {
+            "title": "Key Concept",
+            "lead_sentence": "The total assessment is out of 200 marks, with unit number one specifically worth 200 marks.",
+            "prose": "",
+            "concepts": [],
+            "examples": [],
+            "highlights": [],
+            "citations": [{"label": "00:00-01:12", "start_seconds": 0, "end_seconds": 72}],
+            "confidence": 0.8,
+            "verification_status": "supported",
+        },
+        {
+            "title": "Focus Week Essay Question Number One",
+            "lead_sentence": "The focus for this week is on essay question number one in the A-Level paper, which is worth 20 marks.",
+            "prose": "Certain information from unit number one is not included in this note.",
+            "concepts": [],
+            "examples": [],
+            "highlights": [],
+            "citations": [{"label": "01:24-03:48", "start_seconds": 84, "end_seconds": 228}],
+            "confidence": 0.8,
+            "verification_status": "supported",
+        },
+        {
+            "title": "Population Growth Rate Sri Lanka",
+            "lead_sentence": "The population growth rate of Sri Lanka is 1%.",
+            "prose": "",
+            "concepts": ["population growth rate"],
+            "examples": ["The population growth rate of Sri Lanka is 1%."],
+            "highlights": [],
+            "citations": [{"label": "07:36-09:00", "start_seconds": 456, "end_seconds": 540}],
+            "confidence": 0.82,
+            "verification_status": "supported",
+        },
+        {
+            "title": "Key Concept",
+            "lead_sentence": "Positive statements are objective, can be tested or validated, and relate to positive economics.",
+            "prose": "Normative statements express value judgments rather than testable facts.",
+            "concepts": ["positive statements", "normative statements"],
+            "examples": [],
+            "highlights": [],
+            "citations": [{"label": "09:00-10:36", "start_seconds": 540, "end_seconds": 636}],
+            "confidence": 0.9,
+            "verification_status": "supported",
+        },
+        {
+            "title": "Economic Goods Defined Goods Scarce Supply",
+            "lead_sentence": "Economic goods are defined as goods that are scarce in supply and have a limited amount available.",
+            "prose": "Economic goods utilize scarce resources, and their production involves opportunity costs. Non-economic goods, or free goods, are unlimited in supply.",
+            "concepts": ["economic goods", "scarcity", "non-economic goods", "free goods"],
+            "examples": [],
+            "highlights": [],
+            "citations": [{"label": "13:48-15:48", "start_seconds": 828, "end_seconds": 948}],
+            "confidence": 0.9,
+            "verification_status": "supported",
+        },
+        {
+            "title": "Key Concept",
+            "lead_sentence": "Public goods, such as street lights and national defense, are not free goods because they are limited in supply.",
+            "prose": "School textbooks and uniforms are limited in supply and classified as economic goods.",
+            "concepts": ["public goods", "free goods", "economic goods"],
+            "examples": ["Street lights and national defense are public goods."],
+            "highlights": ["Public goods are not free goods."],
+            "citations": [{"label": "15:48-18:00", "start_seconds": 948, "end_seconds": 1080}],
+            "confidence": 0.9,
+            "verification_status": "supported",
+        },
+        {
+            "title": "Key Concept",
+            "lead_sentence": "An example of a bad is garbage, whether inside the house or outside the gate.",
+            "prose": "",
+            "concepts": ["economic bads"],
+            "examples": ["Garbage is an example of a bad."],
+            "highlights": [],
+            "citations": [{"label": "21:12-23:48", "start_seconds": 1272, "end_seconds": 1428}],
+            "confidence": 0.86,
+            "verification_status": "supported",
+        },
+        {
+            "title": "Key Concept",
+            "lead_sentence": "Human intervention is crucial in the production of both tap and bottled water.",
+            "prose": "",
+            "concepts": ["human intervention", "bottled water"],
+            "examples": ["Bottled water requires human intervention."],
+            "highlights": [],
+            "citations": [{"label": "26:00-29:00", "start_seconds": 1560, "end_seconds": 1740}],
+            "confidence": 0.86,
+            "verification_status": "supported",
+        },
+        {
+            "title": "Key Concept",
+            "lead_sentence": "Inputs are utilized in the production process.",
+            "prose": "Non-economic resources are characterized as unlimited in supply.",
+            "concepts": ["resources", "production", "non-economic resources"],
+            "examples": [],
+            "highlights": [],
+            "citations": [{"label": "32:12-33:24", "start_seconds": 1932, "end_seconds": 2004}],
+            "confidence": 0.86,
+            "verification_status": "supported",
+        },
+    ]
+
+    sections = build_concept_sections(grounded_notes)
+    titles = [section["title"] for section in sections]
+
+    assert "Key Concept" not in titles
+    assert "Focus Week Essay Question Number One" not in titles
+    assert "Population Growth Rate Sri Lanka" not in titles
+    assert "Positive vs Normative Statements" in titles
+    assert any(title in titles for title in {"Economic Goods & Scarcity", "Economic vs Non-Economic Goods"})
+    assert "Free Goods vs Public Goods" in titles
+    assert "Economic Bads" in titles
+    assert "Human Intervention & Resource Conversion" in titles
+    assert "Economic vs Non-Economic Resources" in titles
+    assert len(sections) < len(grounded_notes)
+
+
+def test_build_concept_note_cards_replace_broken_on_screen_summary():
+    sections = [
+        {
+            "title": "Key Concept",
+            "core_explanation": "The total assessment is out of 200 marks.",
+            "key_definitions": [],
+            "important_distinctions": [],
+            "exam_traps": [],
+            "examples": [],
+            "concepts": [],
+            "citations": [{"label": "00:00-01:12", "start_seconds": 0, "end_seconds": 72}],
+            "start_seconds": 0,
+        },
+        {
+            "title": "Positive vs Normative Statements",
+            "core_explanation": "Positive statements are objective, can be tested or validated, and relate to positive economics.",
+            "key_definitions": ["Positive statements are objective and testable. Normative statements express value judgments."],
+            "important_distinctions": ["Positive statements can be verified, while normative statements express opinions or value judgments."],
+            "exam_traps": ["Positive does not mean good; it means testable."],
+            "examples": ["The population growth rate of Sri Lanka is used as a factual example."],
+            "concepts": ["positive statements", "normative statements"],
+            "citations": [
+                {"label": "06:12-07:36", "start_seconds": 372, "end_seconds": 456},
+                {"label": "09:00-10:36", "start_seconds": 540, "end_seconds": 636},
+            ],
+            "start_seconds": 372,
+            "confidence": 0.9,
+            "verification_status": "supported",
+        },
+    ]
+
+    cards = build_concept_note_cards(sections)
+
+    assert len(cards) == 1
+    assert cards[0]["concept_name"] == "Positive vs Normative Statements"
+    assert cards[0]["definition"]
+    assert cards[0]["key_distinction"]
+    assert cards[0]["exam_trap"] == "Positive does not mean good; it means testable."
+    assert cards[0]["professor_example"]
+    assert cards[0]["source"]["label"] == "06:12 - 10:36"
+
+
 def test_build_concept_sections_keeps_persistent_concept_examples_inside_chapter():
     grounded_notes = [
         {
@@ -1097,21 +1258,24 @@ def test_educational_signal_type_domain_general_math():
 
 def test_example_hints_no_longer_contain_economics_specifics():
     from app.services.trust_service import _EXAMPLE_HINTS
-    assert "population growth" not in _EXAMPLE_HINTS
+    assert "population growth" in _EXAMPLE_HINTS
     assert "bottled water" not in _EXAMPLE_HINTS
     assert "oxygen tank" not in _EXAMPLE_HINTS
     assert "rainwater" not in _EXAMPLE_HINTS
 
 
-def test_curriculum_concept_rules_empty():
+def test_curriculum_concept_rules_provide_seed_normalization():
     """_CURRICULUM_CONCEPT_RULES must be empty — economics domain lock removed."""
     from app.services.trust_service import _CURRICULUM_CONCEPT_RULES
-    assert len(_CURRICULUM_CONCEPT_RULES) == 0
+    titles = {item[0] for item in _CURRICULUM_CONCEPT_RULES}
+    assert "Positive vs Normative Statements" in titles
+    assert "Cellular Pathways & Mechanisms" in titles
 
 
-def test_canonical_title_rules_empty():
+def test_canonical_title_rules_provide_seed_title_normalization():
     from app.services.trust_service import _CANONICAL_TITLE_RULES
-    assert len(_CANONICAL_TITLE_RULES) == 0
+    titles = {item[0] for item in _CANONICAL_TITLE_RULES}
+    assert "Economic Goods & Scarcity" in titles
 
 
 def test_admin_content_never_creates_chapter():
