@@ -513,8 +513,12 @@ def _call_executive_summary(transcript: str, title: str, topic: str | None, stri
             {
                 "role": "user",
                 "content": (
-                    f"TRANSCRIPT:\n{transcript[:6000]}\n\n"
-                    f"Write a 3-paragraph executive summary of the lecture titled \"{title}\".{hint} "
+                    # Sample beginning + end so the exec summary covers the full lecture arc,
+                    # not just the first ~15 minutes. Beginning establishes what is being taught;
+                    # end captures conclusions, takeaways, and forward references.
+                    f"TRANSCRIPT (beginning):\n{transcript[:5000]}\n\n"
+                    + (f"TRANSCRIPT (conclusion):\n{transcript[-3000:]}\n\n" if len(transcript) > 8000 else "")
+                    + f"Write a 3-paragraph executive summary of the lecture titled \"{title}\".{hint} "
                     "Each paragraph is 3-4 sentences. Separate paragraphs with a blank line. "
                     f"Return only the summary text, no preamble.{strict_rule}"
                 ),
@@ -621,7 +625,8 @@ def _call_glossary(transcript: str, topic: str | None, n_terms: int = 8) -> list
                 "role": "user",
                 "content": (
                     "Note: The transcript may contain mixed languages. Extract meaning from all languages present. Respond in English.\n\n"
-                    f"TRANSCRIPT:\n{transcript[:5000]}\n\n"
+                    # transcript arg is the grounded_summary (full-lecture coverage) — use all of it
+                    f"LECTURE CONTENT:\n{transcript[:9000]}\n\n"
                     f"Extract {n_terms} key academic or technical terms from this lecture.{hint} "
                     "For each term provide a clear 1-sentence definition a student can memorise. "
                     'Return JSON: {"terms": [{"term": "...", "definition": "..."}]}'
@@ -691,7 +696,7 @@ def _call_quick_review(
                 "role": "user",
                 "content": (
                     "Note: The transcript may contain mixed languages. Extract meaning from all languages present. Respond in English.\n\n"
-                    f"TRANSCRIPT:\n{transcript[:4000]}\nSUMMARY:\n{summary[:2000]}\n\n"
+                    f"TRANSCRIPT:\n{transcript[:5000]}\nSUMMARY:\n{summary[:4000]}\n\n"
                     f"Generate {n_questions} exam-style questions.{hint}\n"
                     f"Difficulty assignments (Bloom's taxonomy):\n{diff_list}\n\n"
                     "Recall = factual. Understanding = conceptual explanation. Application = applying to scenario.\n"
@@ -1206,11 +1211,12 @@ async def generate_lecture_pdf(
     # 3. Build parallel task list
     tasks: list = []
 
-    # Executive summary
-    tasks.append(asyncio.to_thread(_call_executive_summary, transcript, title, topic))
+    # Executive summary — use cleaned transcript (no filler) for richer content per token
+    tasks.append(asyncio.to_thread(_call_executive_summary, cleaned_transcript, title, topic))
 
-    # Glossary
-    tasks.append(asyncio.to_thread(_call_glossary, transcript, topic, 8 if n_sections >= 3 else 5))
+    # Glossary — use grounded_summary (derived from full master_summary) so terms from ALL
+    # segments of the lecture are covered, not just the first chunk of raw transcript
+    tasks.append(asyncio.to_thread(_call_glossary, grounded_summary or cleaned_transcript, topic, 8 if n_sections >= 3 else 5))
 
     # Takeaways
     tasks.append(asyncio.to_thread(_call_takeaways, transcript, grounded_summary or summary, topic))
