@@ -126,6 +126,78 @@ def test_fallback_takeaways_prefers_section_content():
     assert "Focus on one unit" in takeaways[0]
 
 
+def test_section_render_profile_uses_compact_inline_mode_for_short_sections():
+    from app.services.pdf_service import _section_render_profile
+
+    profile = _section_render_profile({
+        "title": "Positive vs Normative Statements",
+        "lead_sentence": "Positive statements are testable while normative statements express value judgments.",
+        "prose": "",
+        "definitions": ["Positive statements can be tested against facts."],
+        "distinctions": ["Positive statements are not the same as normative statements."],
+        "examples": ["Population growth can be measured."],
+        "exam_traps": ["Positive does not mean good."],
+        "subtopic_sections": [],
+        "concepts": ["positive statements", "normative statements"],
+    })
+
+    assert profile["render_mode"] == "compact"
+    assert profile["inline_mode"] is True
+    assert profile["show_definition_box"] is False
+    assert profile["inline_items"]
+
+
+def test_compose_toc_entries_adds_nested_subsections():
+    from app.services.pdf_service import _compose_toc_entries
+
+    entries = _compose_toc_entries(
+        [{
+            "title": "Economic Goods & Scarcity",
+            "toc_title": "Economic Goods & Scarcity",
+            "subsections": ["Economic Goods", "Scarcity", "Opportunity Cost"],
+            "estimated_pages": 1.4,
+        }],
+        include_exec=True,
+        include_map=False,
+        include_quick_review=True,
+        include_cheat_sheet=True,
+    )
+
+    assert entries[0]["title"] == "Executive Summary"
+    assert any(entry["depth"] == 1 and entry["title"] == "Economic Goods" for entry in entries)
+    assert any(entry["title"] == "Self-Test" for entry in entries)
+    assert entries[-1]["title"] == "Cheat Sheet"
+
+
+def test_prioritize_revision_outputs_promotes_high_priority_concepts():
+    from app.services.pdf_service import _prioritize_revision_outputs
+
+    adaptive = {
+        "concepts": [
+            {"concept": "Scarcity", "revision_priority": 0.91},
+            {"concept": "Public Goods", "revision_priority": 0.62},
+        ]
+    }
+    glossary = [
+        {"term": "Public Goods", "definition": "Shared but still scarce goods."},
+        {"term": "Scarcity", "definition": "Limited supply of resources."},
+    ]
+    takeaways = [
+        "Public goods are different from free goods.",
+        "Scarcity explains why opportunity cost exists.",
+    ]
+    quick_review = [
+        {"question": "What are public goods?", "answer": "Shared but scarce goods.", "explanation": ""},
+        {"question": "Why does scarcity matter?", "answer": "It creates opportunity cost.", "explanation": ""},
+    ]
+
+    glossary, takeaways, quick_review = _prioritize_revision_outputs(glossary, takeaways, quick_review, adaptive)
+
+    assert glossary[0]["term"] == "Scarcity"
+    assert takeaways[0].startswith("Scarcity")
+    assert quick_review[0]["question"].startswith("Why does scarcity")
+
+
 # ── _call_enrich_section — anti-hallucination ──────────────────────────────────
 
 def test_enrich_section_accepts_empty_concepts_and_examples():

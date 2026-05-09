@@ -309,9 +309,12 @@
         /* ─── 5. TABLE OF CONTENTS ──────────────────────────────── */
         .toc-page { page-break-after: always; padding-top: 4mm; }
         .toc-h { font-family: var(--serif); font-size: 22pt; font-weight: 600; color: var(--ink); margin: 0 0 6mm; }
-        .toc-row { display: flex; align-items: baseline; gap: 4px; margin-bottom: 3.5mm; page-break-inside: avoid; }
+        .toc-row { display: flex; align-items: baseline; gap: 4px; margin-bottom: 2.4mm; page-break-inside: avoid; }
+        .toc-row.depth-1 { margin-left: 10mm; margin-bottom: 1.6mm; }
         .toc-num { font-family: var(--serif); font-style: italic; font-size: 8pt; font-weight: 500; color: var(--accent-text); min-width: 26px; }
+        .toc-row.depth-1 .toc-num { min-width: 32px; font-size: 7.2pt; color: var(--ink-4); }
         .toc-sec-title { font-family: var(--serif); font-size: 10.5pt; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 420px; }
+        .toc-row.depth-1 .toc-sec-title { font-family: var(--sans); font-size: 8.6pt; color: var(--ink-2); }
         .toc-dots { flex: 1; border-bottom: 0.4pt dotted var(--ink-5); margin: 0 4px 3px; }
         .toc-page-num { font-size: 7.5pt; color: var(--ink-4); font-family: var(--mono); white-space: nowrap; }
 
@@ -490,6 +493,37 @@
         .stat-row .stat .num small { font-size: 10pt; color: var(--ink-3); margin-left: 2px; font-weight: 400; }
         .stat-row .stat .lbl { font-family: var(--sans); font-size: 8.25pt; color: var(--ink-3); line-height: 1.35; }
         .stat-row .stat .lbl b { display: block; color: var(--ink-2); font-weight: 600; font-size: 9pt; margin-bottom: 1pt; }
+        .revision-focus-strip {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 3mm;
+            margin: 0 0 7mm;
+        }
+        .revision-focus-card {
+            border-top: 1.4pt solid var(--accent-rule);
+            background: linear-gradient(180deg, var(--accent-lt), #fff 78%);
+            padding: 3.2mm 3.5mm;
+            border-radius: 5px;
+        }
+        .revision-focus-card .label {
+            font-size: 6.8pt;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.14em;
+            color: var(--accent-text);
+            margin-bottom: 1mm;
+        }
+        .revision-focus-card .concept {
+            font-family: var(--serif);
+            font-size: 10.5pt;
+            color: var(--ink);
+            margin-bottom: 0.8mm;
+        }
+        .revision-focus-card .reason {
+            font-size: 8.35pt;
+            color: var(--ink-3);
+            line-height: 1.45;
+        }
 
         /* ─── 7. SECTION CARD ───────────────────────────────────── */
         .section {
@@ -562,6 +596,9 @@
             font-variant-numeric: tabular-nums;
         }
         .section-body { position: relative; z-index: 1; }
+        .section.compact .section-body { font-size: 9.25pt; }
+        .section.compact p { margin-bottom: 0.45em; }
+        .section.dense .section-body { line-height: 1.48; }
         .subtopics-label {
             font-size: 6.8pt;
             font-weight: 700;
@@ -784,6 +821,32 @@
         .edu-box.definition { background: #f9f7f2; }
         .edu-box.distinction { background: #f8fafc; }
         .edu-box.exam-trap { background: #fff9e7; border-color: #f2d48b; }
+        .study-inline-grid {
+            display: grid;
+            grid-template-columns: 0.78fr 1.8fr;
+            gap: 1.6mm 3mm;
+            margin: 2.6mm 0 2mm;
+            padding: 3mm 3.2mm;
+            border-top: var(--hairline);
+            border-bottom: var(--hairline);
+            background: linear-gradient(180deg, #fff, var(--paper-2));
+        }
+        .study-inline-grid .label {
+            font-size: 7pt;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.13em;
+            color: var(--ink-4);
+        }
+        .study-inline-grid .value {
+            font-size: 8.65pt;
+            color: var(--ink-2);
+            line-height: 1.42;
+        }
+        .study-inline-grid .value.trap {
+            color: var(--accent-dark);
+            font-weight: 600;
+        }
         .mr-box { width: 100%; }
         .trust-note {
             font-size: 8.5pt;
@@ -1093,50 +1156,78 @@
         }
         .cheat-head h2 { font-size: 22pt; }
         .cheat-head .meta { font-family: var(--sans); font-size: 7.5pt; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-3); }
-        /* 4-column grid: Term | Concept | Formula/Rule | Takeaway */
         .cheat-grid {
             display: grid;
-            grid-template-columns: 1.1fr 1.4fr 1.1fr 1.4fr;
+            grid-template-columns: 1.05fr 1.7fr 1.35fr 0.9fr;
             gap: 0;
             border-top: var(--hairline);
             border-left: var(--hairline);
+            background: #fff;
         }
         .cheat-grid .col-head {
             font-family: var(--sans);
-            font-size: 7pt;
+            font-size: 6.75pt;
             font-weight: 700;
-            letter-spacing: 0.22em;
+            letter-spacing: 0.2em;
             text-transform: uppercase;
             color: var(--ink-3);
-            padding: 3mm 4mm;
+            padding: 2.5mm 3.2mm;
             background: var(--ink-7);
             border-right: var(--hairline);
             border-bottom: var(--rule);
         }
-        .cheat-grid .cell {
-            padding: 3.5mm 4mm;
+        .cheat-grid .chapter-band {
+            grid-column: 1 / -1;
+            padding: 2.2mm 3.2mm 2mm;
             border-right: var(--hairline);
             border-bottom: var(--hairline);
-            font-size: 9pt;
-            line-height: 1.45;
-            display: flex;
-            flex-direction: column;
-            gap: 1.5mm;
+            background: linear-gradient(90deg, var(--accent-lt), #fff 72%);
         }
-        .cheat-grid .cell .term {
-            display: block;
+        .cheat-grid .chapter-band .chapter-label {
+            font-size: 6.6pt;
+            font-weight: 700;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: var(--accent-text);
+            margin-bottom: 0.8mm;
+        }
+        .cheat-grid .chapter-band .chapter-title {
             font-family: var(--serif);
-            font-weight: 600;
-            font-size: 10pt;
+            font-size: 10.25pt;
             color: var(--ink);
-            letter-spacing: -0.005em;
-            padding-bottom: 1.5mm;
-            border-bottom: var(--hairline);
+            line-height: 1.2;
         }
-        .cheat-grid .cell .desc    { display: block; color: var(--ink-2); font-size: 8.5pt; }
-        .cheat-grid .cell .formula { font-family: var(--mono); font-size: 8.75pt; color: var(--ink); background: var(--ink-7); padding: 1pt 4pt; border-radius: 2px; }
-        .cheat-grid .cell .takeaway{ font-style: italic; color: var(--ink-2); font-size: 8.5pt; }
-        .cheat-grid .cell.is-accent { background: var(--accent-lt); }
+        .cheat-grid .cell {
+            padding: 2.7mm 3.2mm;
+            border-right: var(--hairline);
+            border-bottom: var(--hairline);
+            font-size: 8.35pt;
+            line-height: 1.35;
+            color: var(--ink-2);
+        }
+        .cheat-grid .cell.term-cell {
+            font-family: var(--serif);
+            font-size: 9.4pt;
+            font-weight: 600;
+            color: var(--ink);
+            letter-spacing: -0.004em;
+        }
+        .cheat-grid .cell.trap-cell {
+            color: var(--accent-dark);
+            background: color-mix(in oklab, var(--accent) 7%, white 93%);
+        }
+        .cheat-grid .cell.recall-cell {
+            font-weight: 600;
+            color: var(--ink);
+            font-size: 8pt;
+        }
+        .cheat-grid .cell .cite {
+            display: block;
+            margin-top: 1mm;
+            font-family: var(--mono);
+            font-size: 6.85pt;
+            color: var(--ink-4);
+        }
 
         /* ─── 20. LEARNING PATH ─────────────────────────────────── */
         .roadmap-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; }
@@ -1236,48 +1327,14 @@
         <hr class="eyebrow-rule">
         <h2 class="toc-h">Table of Contents</h2>
 
-        {% if executive_summary %}
-        <div class="toc-row">
-            <span class="toc-num">—</span>
-            <span class="toc-sec-title">Executive Summary</span>
+        {% for entry in toc_entries %}
+        <div class="toc-row depth-{{ entry.depth }}">
+            <span class="toc-num">{{ entry.number }}</span>
+            <span class="toc-sec-title">{{ entry.title }}</span>
             <span class="toc-dots"></span>
-            <span class="toc-page-num">p. 2</span>
-        </div>
-        {% endif %}
-
-        {% for sec in enriched_sections %}
-        <div class="toc-row">
-            <span class="toc-num">§{{ loop.index }}</span>
-            <span class="toc-sec-title">{{ sec.title }}</span>
-            <span class="toc-dots"></span>
-            <span class="toc-page-num">p. ~{{ (3 + loop.index * 1.5) | int }}</span>
+            <span class="toc-page-num">{{ entry.page }}</span>
         </div>
         {% endfor %}
-
-        {% if conceptual_map %}
-        <div class="toc-row">
-            <span class="toc-num">—</span>
-            <span class="toc-sec-title">Conceptual Map</span>
-            <span class="toc-dots"></span>
-            <span class="toc-page-num">p. ~{{ (3 + enriched_sections|length * 1.5 + 1) | int }}</span>
-        </div>
-        {% endif %}
-
-        {% if quick_review %}
-        <div class="toc-row">
-            <span class="toc-num">—</span>
-            <span class="toc-sec-title">Self-Test ({{ quick_review|length }} Questions)</span>
-            <span class="toc-dots"></span>
-            <span class="toc-page-num">p. ~{{ (3 + enriched_sections|length * 1.5 + 3) | int }}</span>
-        </div>
-        {% endif %}
-
-        <div class="toc-row">
-            <span class="toc-num">—</span>
-            <span class="toc-sec-title">Cheat Sheet</span>
-            <span class="toc-dots"></span>
-            <span class="toc-page-num">last</span>
-        </div>
     </div>
     {% endif %}
 
@@ -1378,6 +1435,18 @@
         {% endfor %}
     </div>
     {% endif %}
+
+    {% if revision_focus %}
+    <div class="revision-focus-strip">
+        {% for item in revision_focus %}
+        <div class="revision-focus-card">
+            <div class="label">{{ item.emphasis_level | upper }} PRIORITY</div>
+            <div class="concept">{{ item.concept }}</div>
+            <div class="reason">{{ item.reason }}</div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
     {% endif %}
 
 
@@ -1394,7 +1463,7 @@
     </p>
 
     {% for sec in enriched_sections %}
-    <article class="section">
+    <article class="section {{ sec.render_mode }} {% if sec.chapter_density == 'dense' %}dense{% elif sec.chapter_density == 'compact' %}compact{% endif %}">
         <div class="section-watermark">{{ "%02d"|format(loop.index) }}</div>
 
         <header class="section-head">
@@ -1415,6 +1484,15 @@
             <div class="subtopics-row">
                 {% for sub in sec.subsections %}
                 <span class="subtopic-chip">{{ sub }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {% if sec.inline_mode and sec.inline_items %}
+            <div class="study-inline-grid">
+                {% for item in sec.inline_items %}
+                <div class="label">{{ item.label }}</div>
+                <div class="value{% if item.kind == 'exam-trap' %} trap{% endif %}">{{ item.text }}</div>
                 {% endfor %}
             </div>
             {% endif %}
@@ -1459,7 +1537,7 @@
             </div>
             {% endif %}
 
-            {% if sec.definitions %}
+            {% if sec.show_definition_box %}
             <div class="edu-box">
                 <div class="edu-box-label">Key Definitions</div>
                 <ul class="edu-box-list">
@@ -1470,7 +1548,7 @@
             </div>
             {% endif %}
 
-            {% if sec.distinctions %}
+            {% if sec.show_distinction_box %}
             <div class="edu-box">
                 <div class="edu-box-label">Important Distinctions</div>
                 <ul class="edu-box-list">
@@ -1481,7 +1559,7 @@
             </div>
             {% endif %}
 
-            {% if sec.examples %}
+            {% if sec.show_examples_block %}
             <div class="examples-wrap">
                 <div class="examples-label">Examples</div>
                 {% for e in sec.examples %}
@@ -1490,7 +1568,7 @@
             </div>
             {% endif %}
 
-            {% if sec.subtopic_sections %}
+            {% if sec.show_subtopic_stack and sec.subtopic_sections %}
             <div class="subtopic-stack">
                 {% for item in sec.subtopic_sections %}
                 <div class="subtopic-item">
@@ -1523,7 +1601,7 @@
             </div>
             {% endif %}
 
-            {% if sec.exam_traps %}
+            {% if sec.show_exam_trap_box %}
             <div class="edu-box">
                 <div class="edu-box-label">Exam Traps</div>
                 <ul class="edu-box-list">
@@ -1718,39 +1796,36 @@
     <!-- ══════════════════════════════════════
          CHEAT SHEET (4-col: Term · Concept · Rule · Takeaway)
     ══════════════════════════════════════ -->
-    {% if glossary or takeaways %}
+    {% if verified_cheat_sheet %}
     <div class="cheat-page">
         <div class="cheat-head">
             <h2>Cheat Sheet</h2>
-            <div class="meta">Quick Reference{% if glossary %} · {{ glossary|length }} entries{% endif %} · Print &amp; keep</div>
+            <div class="meta">Verified Revision Grid · {{ verified_cheat_sheet|length }} chapters · Print &amp; keep</div>
         </div>
 
         <div class="cheat-grid">
             <div class="col-head">Term</div>
-            <div class="col-head">Definition</div>
-            <div class="col-head">Rule / Mnemonic</div>
-            <div class="col-head">Takeaway</div>
+            <div class="col-head">Core Idea</div>
+            <div class="col-head">Exam Trap</div>
+            <div class="col-head">Quick Recall</div>
 
-            {% for item in glossary %}
-            <div class="cell{% if loop.index % 3 == 0 %} is-accent{% endif %}">
-                <span class="term">{{ item.term }}</span>
-                <span class="desc">{{ item.definition | truncate_words(8) }}</span>
+            {% for section in verified_cheat_sheet %}
+            <div class="chapter-band">
+                <div class="chapter-label">Chapter {{ loop.index }}</div>
+                <div class="chapter-title">{{ section.chapter_title }}</div>
             </div>
-            <div class="cell{% if loop.index % 3 == 0 %} is-accent{% endif %}">
-                <span class="desc">{{ item.definition }}</span>
-            </div>
-            <div class="cell{% if loop.index % 3 == 0 %} is-accent{% endif %}">
-                {% if item.mnemonic %}
-                <span class="formula">{{ item.mnemonic }}</span>
-                {% else %}
-                <span class="desc">—</span>
+
+            {% for row in section.rows %}
+            <div class="cell term-cell">
+                {{ row.term }}
+                {% if row.citations %}
+                <span class="cite">{{ row.citations[0].label }}</span>
                 {% endif %}
             </div>
-            <div class="cell{% if loop.index % 3 == 0 %} is-accent{% endif %}">
-                {% if takeaways and loop.index0 < takeaways|length %}
-                <span class="takeaway">{{ takeaways[loop.index0] | truncate_words(14) }}</span>
-                {% endif %}
-            </div>
+            <div class="cell">{{ row.core_idea }}</div>
+            <div class="cell trap-cell">{{ row.exam_trap or "—" }}</div>
+            <div class="cell recall-cell">{{ row.quick_recall or "—" }}</div>
+            {% endfor %}
             {% endfor %}
         </div>
     </div>

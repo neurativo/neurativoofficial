@@ -20,7 +20,14 @@ from app.services.supabase_service import (
 from app.services.cost_tracker import log_cost
 from app.services.transcript_cleaner import clean as clean_transcript
 from app.services.trust_service import (
+    build_claim_registry,
+    build_adaptive_study_weighting,
+    build_concept_entities,
+    build_concept_relationship_graph,
+    build_relationship_concept_map,
     build_concept_sections,
+    score_adaptive_concept_intelligence,
+    build_verified_cheat_sheet,
     build_grounded_notes,
     lecture_summary_confidence,
     sanitize_pdf_artifacts,
@@ -145,6 +152,165 @@ def _truncate_words(text: str, limit: int) -> str:
     if len(words) <= limit:
         return " ".join(words)
     return " ".join(words[:limit]).rstrip(" .,;:") + "..."
+
+
+def _content_word_count(section: dict) -> int:
+    return len(
+        (
+            (section.get("lead_sentence", "") or "")
+            + " "
+            + (section.get("prose", "") or "")
+            + " "
+            + " ".join(section.get("definitions") or [])
+            + " "
+            + " ".join(section.get("distinctions") or [])
+            + " "
+            + " ".join(section.get("examples") or [])
+            + " "
+            + " ".join(section.get("exam_traps") or [])
+        ).split()
+    )
+
+
+def _compact_inline_items(section: dict) -> list[dict]:
+    items = []
+    if section.get("definitions"):
+        items.append({"label": "Definition", "text": _truncate_words(section["definitions"][0], 18), "kind": "definition"})
+    if section.get("distinctions"):
+        items.append({"label": "Distinction", "text": _truncate_words(section["distinctions"][0], 18), "kind": "distinction"})
+    if section.get("examples"):
+        items.append({"label": "Example", "text": _truncate_words(section["examples"][0], 16), "kind": "example"})
+    if section.get("exam_traps"):
+        items.append({"label": "Exam Trap", "text": _truncate_words(section["exam_traps"][0], 16), "kind": "exam-trap"})
+    return items[:4]
+
+
+def _section_render_profile(section: dict) -> dict:
+    word_count = _content_word_count(section)
+    subtopic_count = len(section.get("subtopic_sections") or [])
+    concept_count = len(section.get("concepts") or [])
+    has_traps = bool(section.get("exam_traps"))
+    compact_mode = word_count <= 95 and subtopic_count <= 2
+    expanded_mode = word_count >= 210 or subtopic_count >= 4
+    render_mode = "compact" if compact_mode else "expanded" if expanded_mode else "standard"
+    inline_items = _compact_inline_items(section)
+    inline_mode = render_mode == "compact" or (render_mode == "standard" and len(inline_items) >= 3 and subtopic_count <= 2)
+    show_subtopic_stack = subtopic_count > 0
+    if inline_mode and subtopic_count <= 2 and word_count < 135:
+        show_subtopic_stack = False
+
+    estimated_pages = max(1.0, round((word_count / 155) + (subtopic_count * 0.18) + (0.18 if has_traps else 0.0), 1))
+    toc_title = section.get("title", "")
+    if len(toc_title.split()) > 7:
+        toc_title = _truncate_words(toc_title, 7)
+
+    return {
+        "render_mode": render_mode,
+        "inline_mode": inline_mode,
+        "inline_items": inline_items,
+        "show_subtopic_stack": show_subtopic_stack,
+        "show_definition_box": bool(section.get("definitions")) and not inline_mode,
+        "show_distinction_box": bool(section.get("distinctions")) and not inline_mode,
+        "show_examples_block": bool(section.get("examples")) and not inline_mode,
+        "show_exam_trap_box": bool(section.get("exam_traps")) and not inline_mode,
+        "chapter_density": "dense" if word_count >= 170 else "compact" if compact_mode else "balanced",
+        "toc_title": toc_title,
+        "estimated_pages": estimated_pages,
+        "concept_count": concept_count,
+        "subtopic_count": subtopic_count,
+    }
+
+
+def _adaptive_priority_for_text(text: str, adaptive_intelligence: dict) -> float:
+    lowered = (text or "").lower()
+    best = 0.0
+    for concept in adaptive_intelligence.get("concepts", []) or []:
+        concept_name = str(concept.get("concept", "")).lower()
+        if concept_name and concept_name in lowered:
+            best = max(best, float(concept.get("revision_priority") or 0.0))
+    return round(best, 2)
+
+
+def _prioritize_revision_outputs(
+    glossary: list[dict],
+    takeaways: list[str],
+    quick_review: list[dict],
+    adaptive_intelligence: dict,
+) -> tuple[list[dict], list[str], list[dict]]:
+    glossary_sorted = sorted(
+        glossary,
+        key=lambda item: (
+            -_adaptive_priority_for_text(f"{item.get('term', '')}. {item.get('definition', '')}", adaptive_intelligence),
+            item.get("term", ""),
+        ),
+    )
+    takeaways_sorted = sorted(
+        takeaways,
+        key=lambda item: -_adaptive_priority_for_text(item, adaptive_intelligence),
+    )
+    quick_review_sorted = sorted(
+        quick_review,
+        key=lambda item: -_adaptive_priority_for_text(
+            f"{item.get('question', '')}. {item.get('answer', '')}. {item.get('explanation', '')}",
+            adaptive_intelligence,
+        ),
+    )
+    return glossary_sorted, takeaways_sorted, quick_review_sorted
+
+
+def _build_revision_focus_summary(adaptive_intelligence: dict) -> list[dict]:
+    return [
+        {
+            "concept": item["concept"],
+            "reason": item["reason"],
+            "emphasis_level": item["emphasis_level"],
+        }
+        for item in (adaptive_intelligence.get("revision_focus") or [])[:4]
+    ]
+
+
+def _compose_toc_entries(
+    enriched_sections: list[dict],
+    *,
+    include_exec: bool,
+    include_map: bool,
+    include_quick_review: bool,
+    include_cheat_sheet: bool,
+) -> list[dict]:
+    entries = []
+    page_cursor = 2.0
+    if include_exec:
+        entries.append({"kind": "static", "number": "—", "title": "Executive Summary", "depth": 0, "page": "p. 2"})
+        page_cursor += 1.0
+
+    for idx, sec in enumerate(enriched_sections, start=1):
+        pages = float(sec.get("estimated_pages") or 1.0)
+        entries.append({
+            "kind": "chapter",
+            "number": f"{idx}.",
+            "title": sec.get("toc_title") or sec.get("title") or f"Chapter {idx}",
+            "depth": 0,
+            "page": f"p. ~{int(page_cursor)}",
+        })
+        for sub_idx, sub in enumerate((sec.get("subsections") or [])[:3], start=1):
+            entries.append({
+                "kind": "subsection",
+                "number": f"{idx}.{sub_idx}",
+                "title": sub,
+                "depth": 1,
+                "page": "",
+            })
+        page_cursor += max(0.8, pages)
+
+    if include_map:
+        entries.append({"kind": "static", "number": "—", "title": "Conceptual Map", "depth": 0, "page": f"p. ~{int(page_cursor)}"})
+        page_cursor += 1.0
+    if include_quick_review:
+        entries.append({"kind": "static", "number": "—", "title": "Self-Test", "depth": 0, "page": f"p. ~{int(page_cursor)}"})
+        page_cursor += 1.0
+    if include_cheat_sheet:
+        entries.append({"kind": "static", "number": "—", "title": "Cheat Sheet", "depth": 0, "page": "last"})
+    return entries
 
 
 _PDF_STOPWORDS = {
@@ -960,6 +1126,7 @@ async def generate_lecture_pdf(
     section_rows  = await asyncio.to_thread(get_lecture_sections, lecture_id)
     grounded_notes = build_grounded_notes(transcript, summary, section_rows=section_rows)
     concept_sections = build_concept_sections(grounded_notes)
+    claim_registry = build_claim_registry(grounded_notes)
     title = _resolve_document_title(title, transcript, topic, concept_sections)
     grounded_summary = "\n\n".join(
         " ".join(
@@ -1051,8 +1218,14 @@ async def generate_lecture_pdf(
     # Quick review
     tasks.append(asyncio.to_thread(_call_quick_review, transcript, grounded_summary or summary, topic, n_questions))
 
-    # Conceptual map — only for 3+ sections (GPT-4o, synthesis quality matters)
-    has_map = n_sections >= 3
+    concept_entities = build_concept_entities(concept_sections, claim_registry)
+    concept_graph = build_concept_relationship_graph(concept_entities, claim_registry)
+    adaptive_intelligence = score_adaptive_concept_intelligence(concept_graph)
+    adaptive_study_weighting = build_adaptive_study_weighting(adaptive_intelligence)
+    deterministic_conceptual_map = build_relationship_concept_map(concept_graph)
+
+    # Conceptual map — only call GPT fallback when the grounded graph is too thin.
+    has_map = n_sections >= 3 and not deterministic_conceptual_map
     if has_map:
         tasks.append(asyncio.to_thread(_call_conceptual_map, raw_sections))
 
@@ -1079,7 +1252,7 @@ async def generate_lecture_pdf(
     enriched_sections: list[dict] = []
     if concept_sections:
         for note in concept_sections:
-            enriched_sections.append({
+            section = {
                 "title":         note.get("title") or "Summary",
                 "lead_sentence": note.get("core_explanation") or "",
                 "prose":         "",
@@ -1098,10 +1271,12 @@ async def generate_lecture_pdf(
                 "citations":     note.get("citations") or [],
                 "confidence":    note.get("confidence") or 0.0,
                 "verification_status": note.get("verification_status") or "supported",
-            })
+            }
+            section.update(_section_render_profile(section))
+            enriched_sections.append(section)
     elif grounded_notes:
         for note in grounded_notes:
-            enriched_sections.append({
+            section = {
                 "title":         note.get("title") or "Summary",
                 "lead_sentence": note.get("lead_sentence") or "",
                 "prose":         note.get("prose") or "",
@@ -1120,11 +1295,13 @@ async def generate_lecture_pdf(
                 "citations":     note.get("citations") or [],
                 "confidence":    note.get("confidence") or 0.0,
                 "verification_status": note.get("verification_status") or "supported",
-            })
+            }
+            section.update(_section_render_profile(section))
+            enriched_sections.append(section)
     else:
         for i in range(n_sections):
             lead, rest = _extract_lead_sentence(raw_sections[i][:300])
-            enriched_sections.append({
+            section = {
                 "title":         f"Section {i + 1}",
                 "lead_sentence": lead,
                 "prose":         rest,
@@ -1143,7 +1320,9 @@ async def generate_lecture_pdf(
                 "citations":     [],
                 "confidence":    0.0,
                 "verification_status": "weak",
-            })
+            }
+            section.update(_section_render_profile(section))
+            enriched_sections.append(section)
 
     glossary: list[dict] = results[ri] if not isinstance(results[ri], Exception) else []
     ri += 1
@@ -1161,7 +1340,7 @@ async def generate_lecture_pdf(
     quick_review: list[dict] = results[ri] if not isinstance(results[ri], Exception) else []
     ri += 1
 
-    conceptual_map: list[dict] = []
+    conceptual_map: list[dict] = deterministic_conceptual_map
     if has_map:
         r = results[ri]; ri += 1
         conceptual_map = r if not isinstance(r, Exception) else []
@@ -1211,6 +1390,25 @@ async def generate_lecture_pdf(
     quick_review = sanitized_artifacts["quick_review"]
     takeaways = sanitized_artifacts["takeaways"] or _fallback_takeaways(grounded_summary or summary, enriched_sections)
     study_roadmap = sanitized_artifacts["study_roadmap"]
+    glossary, takeaways, quick_review = _prioritize_revision_outputs(
+        glossary,
+        takeaways,
+        quick_review,
+        adaptive_intelligence,
+    )
+    verified_cheat_sheet = build_verified_cheat_sheet(
+        concept_sections,
+        claim_registry,
+        adaptive_intelligence=adaptive_intelligence,
+    )
+    revision_focus = _build_revision_focus_summary(adaptive_intelligence)
+    toc_entries = _compose_toc_entries(
+        enriched_sections,
+        include_exec=bool(exec_summary),
+        include_map=bool(conceptual_map),
+        include_quick_review=bool(quick_review),
+        include_cheat_sheet=bool(verified_cheat_sheet),
+    )
 
     # 6. Estimate reading time (total enriched words ÷ 238 wpm)
     doc_word_count = (
@@ -1226,6 +1424,21 @@ async def generate_lecture_pdf(
         + sum(len(c.get("paragraph", "").split()) for c in conceptual_map)
         + sum(len((t.get("topic", "") + " " + t.get("reason", "")).split()) for t in study_roadmap.get("next_topics", []))
         + sum(len((p.get("concept", "") + " " + p.get("reason", "")).split()) for p in study_roadmap.get("prerequisites", []))
+        + sum(
+            len(
+                (
+                    row.get("term", "")
+                    + " "
+                    + row.get("core_idea", "")
+                    + " "
+                    + row.get("exam_trap", "")
+                    + " "
+                    + row.get("quick_recall", "")
+                ).split()
+            )
+            for section in verified_cheat_sheet
+            for row in section.get("rows", [])
+        )
     )
     reading_time_minutes = max(1, math.ceil(doc_word_count / 238))
 
@@ -1279,7 +1492,13 @@ async def generate_lecture_pdf(
         "takeaways":            takeaways,
         "quick_review":         quick_review,
         "conceptual_map":       conceptual_map,
+        "concept_graph":        concept_graph,
+        "adaptive_intelligence": adaptive_intelligence,
+        "adaptive_study_weighting": adaptive_study_weighting,
+        "revision_focus":       revision_focus,
         "study_roadmap":        study_roadmap,
+        "verified_cheat_sheet": verified_cheat_sheet,
+        "toc_entries":          toc_entries,
         # Legacy variable (kept for backwards compatibility)
         "summary_html":         clean_markdown_to_html(grounded_summary or summary),
         "compression_ratio":    0.0,

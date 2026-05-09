@@ -92,6 +92,8 @@ _CANONICAL_SUBTOPIC_RULES = (
     ("Resources", ("resources", "production")),
     ("Common Exam Traps", ("do not confuse", "important clarification", "trap", "not equal")),
 )
+_RELATIONSHIP_STOP_TERMS = {"common exam traps", "concepts"}
+_CAUSAL_MARKERS = ("because", "therefore", "leads to", "results in", "causes", "requires", "require", "depends on", "create", "creates")
 
 
 def _tokenise(text: str) -> set[str]:
@@ -907,6 +909,524 @@ def build_claim_registry(grounded_notes: list[dict]) -> list[dict]:
     return claims
 
 
+def _claim_allows_cheat_sheet_entry(claim: dict) -> bool:
+    status = claim.get("verification_status", "unsupported")
+    confidence = float(claim.get("confidence") or 0.0)
+    support_score = float(claim.get("support_score") or 0.0)
+    contradiction_score = float(claim.get("contradiction_score") or 0.0)
+    if status == "contradicted":
+        return False
+    if contradiction_score >= 0.25:
+        return False
+    if status != "supported":
+        return False
+    return confidence >= 0.55 and support_score >= 0.55
+
+
+def _compress_core_idea(text: str, limit: int = 8) -> str:
+    cleaned = _normalise_ws(text)
+    if not cleaned:
+        return ""
+    first_sentence = _split_sentences(cleaned)[0] if _split_sentences(cleaned) else cleaned
+    words = first_sentence.split()
+    if len(words) <= limit:
+        return first_sentence.rstrip(".")
+    return " ".join(words[:limit]).rstrip(" .,;:") + "..."
+
+
+def _quick_recall_cue(text: str) -> str:
+    lowered = _normalise_ws(text).lower()
+    if not lowered:
+        return ""
+    if "testable" in lowered or "tested against facts" in lowered or "verifiable" in lowered:
+        return "Fact-based"
+    if "value judgment" in lowered or "opinion" in lowered or "normative" in lowered:
+        return "Opinion-based"
+    if "scarce" in lowered or "limited in supply" in lowered or "opportunity cost" in lowered:
+        return "Limited supply"
+    if "unlimited in supply" in lowered or "gifted by nature" in lowered or "abundant" in lowered:
+        return "Naturally abundant"
+    if "public good" in lowered or "shared" in lowered:
+        return "Shared access"
+    if "dissatisfaction" in lowered or "harm" in lowered or "pollution" in lowered or "garbage" in lowered:
+        return "Negative utility"
+    if "human intervention" in lowered or "convert" in lowered or "conversion" in lowered:
+        return "Needs intervention"
+    tokens = [word for word in _TOKEN_RE.findall(text) if word.lower() not in _STOPWORDS]
+    if not tokens:
+        return ""
+    return " ".join(tokens[:3]).title()
+
+
+def _pick_term_citation(item: dict, fallback_citations: list[dict]) -> list[dict]:
+    item_citations = item.get("citations") or []
+    if item_citations:
+        return item_citations[:1]
+    return (fallback_citations or [])[:1]
+
+
+def _claim_mentions_term(claim: dict, term: str, chapter_title: str) -> bool:
+    text = _normalise_ws(claim.get("text", "")).lower()
+    if not text:
+        return False
+    term_lower = _normalise_ws(term).lower()
+    chapter_lower = _normalise_ws(chapter_title).lower()
+    if term_lower and term_lower in text:
+        return True
+    return bool(chapter_lower and chapter_lower in text)
+
+
+def build_verified_cheat_sheet(
+    chapter_hierarchy: list[dict],
+    claim_registry: list[dict],
+    adaptive_intelligence: dict | None = None,
+) -> list[dict]:
+    """
+    Build a deterministic revision sheet from verified lecture chapters.
+
+    Output shape:
+    [
+        {
+            "chapter_title": "...",
+            "rows": [
+                {
+                    "term": "...",
+                    "core_idea": "...",
+                    "exam_trap": "...",
+                    "quick_recall": "...",
+                    "citations": [...],
+                    "confidence": 0.91,
+                }
+            ]
+        }
+    ]
+    """
+    if not chapter_hierarchy:
+        return []
+
+    allowed_claims = [
+        claim for claim in claim_registry
+        if _claim_allows_cheat_sheet_entry(claim)
+    ]
+
+    priority_lookup = {
+        _normalise_concept_key(item["concept"]): item
+        for item in (adaptive_intelligence or {}).get("concepts", [])
+    }
+    sections = []
+    for chapter in chapter_hierarchy:
+        chapter_title = _normalise_ws(chapter.get("title", ""))
+        chapter_citations = chapter.get("citations") or []
+        chapter_claims = [
+            claim for claim in allowed_claims
+            if _normalise_ws(claim.get("chapter_title", "")).lower() == chapter_title.lower()
+        ]
+        rows = []
+        seen_terms = set()
+
+        for subtopic in chapter.get("subtopic_sections") or []:
+            term = _normalise_ws(subtopic.get("title", ""))
+            if not term:
+                continue
+            key = term.lower()
+            if key in seen_terms:
+                continue
+            related_claims = [claim for claim in chapter_claims if _claim_mentions_term(claim, term, chapter_title)]
+            best_claim = max(
+                related_claims,
+                key=lambda claim: (claim.get("support_score", 0.0), claim.get("confidence", 0.0)),
+                default=None,
+            )
+            definition = (subtopic.get("definitions") or [""])[0]
+            overview = subtopic.get("overview", "")
+            core_source = definition or (best_claim.get("text", "") if best_claim else overview)
+            core_idea = _compress_core_idea(core_source or overview, limit=10)
+            exam_trap = _compress_core_idea((subtopic.get("exam_traps") or [""])[0], limit=10)
+            quick_recall = _quick_recall_cue(" ".join(filter(None, [core_idea, exam_trap])))
+            confidence = max(
+                float(best_claim.get("confidence", 0.0)) if best_claim else 0.0,
+                float(chapter.get("confidence") or 0.0),
+            )
+            if not core_idea:
+                continue
+            rows.append({
+                "term": term,
+                "core_idea": core_idea,
+                "exam_trap": exam_trap,
+                "quick_recall": quick_recall,
+                "citations": _pick_term_citation(subtopic, chapter_citations),
+                "confidence": round(confidence, 2),
+                "revision_priority": float(priority_lookup.get(_normalise_concept_key(term), {}).get("revision_priority", confidence)),
+                "emphasis_level": priority_lookup.get(_normalise_concept_key(term), {}).get("emphasis_level", "medium"),
+            })
+            seen_terms.add(key)
+
+        if not rows:
+            chapter_claim = max(
+                chapter_claims,
+                key=lambda claim: (claim.get("support_score", 0.0), claim.get("confidence", 0.0)),
+                default=None,
+            )
+            overview_source = (
+                (chapter.get("key_definitions") or [""])[0]
+                or (chapter_claim.get("text", "") if chapter_claim else chapter.get("core_explanation", ""))
+            )
+            overview = _compress_core_idea(overview_source, limit=11)
+            exam_trap = _compress_core_idea((chapter.get("exam_traps") or [""])[0], limit=10)
+            if overview:
+                rows.append({
+                    "term": chapter_title or "Key Concept",
+                    "core_idea": overview,
+                    "exam_trap": exam_trap,
+                    "quick_recall": _quick_recall_cue(" ".join(filter(None, [overview, exam_trap]))),
+                    "citations": chapter_citations[:1],
+                    "confidence": round(float(chapter.get("confidence") or 0.0), 2),
+                    "revision_priority": float(priority_lookup.get(_normalise_concept_key(chapter_title), {}).get("revision_priority", chapter.get("confidence") or 0.0)),
+                    "emphasis_level": priority_lookup.get(_normalise_concept_key(chapter_title), {}).get("emphasis_level", "medium"),
+                })
+
+        if not rows:
+            continue
+
+        rows = sorted(rows, key=lambda row: (-row.get("revision_priority", 0.0), -row["confidence"], len(row["term"])))
+        sections.append({
+            "chapter_title": chapter_title or "Key Concept",
+            "rows": rows[:6],
+        })
+
+    if sections:
+        return sections
+
+    fallback_rows = []
+    for chapter in chapter_hierarchy[:6]:
+        overview = _compress_core_idea(chapter.get("core_explanation", ""), limit=11)
+        if not overview:
+            continue
+        fallback_rows.append({
+            "chapter_title": _normalise_ws(chapter.get("title", "")) or "Key Concept",
+            "rows": [{
+                "term": _normalise_ws(chapter.get("title", "")) or "Key Concept",
+                "core_idea": overview,
+                "exam_trap": _compress_core_idea((chapter.get("exam_traps") or [""])[0], limit=10),
+                "quick_recall": _quick_recall_cue(overview),
+                "citations": (chapter.get("citations") or [])[:1],
+                "confidence": round(float(chapter.get("confidence") or 0.0), 2),
+                "revision_priority": float(priority_lookup.get(_normalise_concept_key(chapter.get("title", "")), {}).get("revision_priority", chapter.get("confidence") or 0.0)),
+                "emphasis_level": priority_lookup.get(_normalise_concept_key(chapter.get("title", "")), {}).get("emphasis_level", "medium"),
+            }],
+        })
+    return fallback_rows
+
+
+def _normalise_concept_key(text: str) -> str:
+    return _normalise_ws(text).strip(" .,:;").lower()
+
+
+def _dedupe_dicts_by(items: list[dict], key_name: str) -> list[dict]:
+    seen = set()
+    out = []
+    for item in items:
+        key = item.get(key_name)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        out.append(item)
+    return out
+
+
+def build_concept_entities(chapter_hierarchy: list[dict], claim_registry: list[dict]) -> list[dict]:
+    entities: dict[str, dict] = {}
+    supported_claims = [
+        claim for claim in claim_registry
+        if claim.get("verification_status") == "supported" and float(claim.get("contradiction_score") or 0.0) < 0.25
+    ]
+
+    def ensure_entity(term: str, chapter: dict, source: dict | None = None) -> dict | None:
+        cleaned = _normalise_ws(term)
+        key = _normalise_concept_key(cleaned)
+        if not cleaned or not key or key in _RELATIONSHIP_STOP_TERMS:
+            return None
+        entity = entities.setdefault(key, {
+            "concept": cleaned,
+            "canonical_key": key,
+            "chapter_title": chapter.get("title", ""),
+            "definitions": [],
+            "distinctions": [],
+            "examples": [],
+            "exam_traps": [],
+            "citations": [],
+            "related_concepts": [],
+            "contrast_concepts": [],
+            "prerequisite_concepts": [],
+            "causal_concepts": [],
+            "confidence": float(chapter.get("confidence") or 0.0),
+            "verification_status": chapter.get("verification_status", "weak"),
+        })
+        if source:
+            entity["definitions"].extend(source.get("definitions") or [])
+            entity["examples"].extend(source.get("examples") or [])
+            entity["exam_traps"].extend(source.get("exam_traps") or [])
+            entity["citations"].extend(source.get("citations") or [])
+        return entity
+
+    for chapter in chapter_hierarchy:
+        chapter_terms = []
+        for subtopic in chapter.get("subtopic_sections") or []:
+            entity = ensure_entity(subtopic.get("title", ""), chapter, source=subtopic)
+            if entity:
+                chapter_terms.append(entity["canonical_key"])
+        for concept in chapter.get("concepts") or []:
+            entity = ensure_entity(concept, chapter)
+            if entity:
+                chapter_terms.append(entity["canonical_key"])
+                entity["definitions"].extend(chapter.get("key_definitions") or [])
+                entity["distinctions"].extend(chapter.get("important_distinctions") or [])
+                entity["examples"].extend(chapter.get("examples") or [])
+                entity["exam_traps"].extend(chapter.get("exam_traps") or [])
+                entity["citations"].extend(chapter.get("citations") or [])
+
+        chapter_terms = [term for term in _dedupe_texts(chapter_terms) if term in entities]
+        for term in chapter_terms:
+            entity = entities[term]
+            entity["related_concepts"].extend(
+                entities[other]["concept"] for other in chapter_terms if other != term
+            )
+
+    for entity in entities.values():
+        concept = entity["concept"]
+        related_claims = [claim for claim in supported_claims if _claim_mentions_term(claim, concept, entity["chapter_title"])]
+        if related_claims:
+            best = max(related_claims, key=lambda claim: (claim.get("support_score", 0.0), claim.get("confidence", 0.0)))
+            entity["confidence"] = round(max(float(entity["confidence"] or 0.0), float(best.get("confidence") or 0.0)), 2)
+            entity["citations"].extend({"label": ts["label"]} for ts in best.get("timestamps") or [] if ts.get("label"))
+        entity["definitions"] = _filter_conflicting_texts(_dedupe_texts(entity["definitions"]))[:3]
+        entity["distinctions"] = _filter_conflicting_texts(_dedupe_texts(entity["distinctions"]))[:3]
+        entity["examples"] = _filter_conflicting_texts(_dedupe_texts(entity["examples"]))[:3]
+        entity["exam_traps"] = _filter_conflicting_texts(_dedupe_texts(entity["exam_traps"]))[:3]
+        entity["citations"] = _dedupe_dicts_by(entity["citations"], "label")[:3]
+        entity["related_concepts"] = _dedupe_texts(entity["related_concepts"])[:5]
+
+    return sorted(entities.values(), key=lambda item: (item["chapter_title"], item["concept"]))
+
+
+def build_concept_relationship_graph(concept_entities: list[dict], claim_registry: list[dict]) -> dict:
+    entities_by_key = {entity["canonical_key"]: entity for entity in concept_entities}
+    edges = []
+    seen_edges = set()
+
+    def add_edge(source_key: str, target_name: str, rel_type: str, confidence: float):
+        if source_key not in entities_by_key:
+            return
+        target_key = _normalise_concept_key(target_name)
+        if target_key not in entities_by_key or target_key == source_key:
+            return
+        key = (source_key, target_key, rel_type)
+        if key in seen_edges:
+            return
+        seen_edges.add(key)
+        edges.append({
+            "source": entities_by_key[source_key]["concept"],
+            "target": entities_by_key[target_key]["concept"],
+            "type": rel_type,
+            "confidence": round(confidence, 2),
+        })
+
+    chapter_groups: dict[str, list[str]] = {}
+    for entity in concept_entities:
+        chapter_groups.setdefault(entity.get("chapter_title", ""), []).append(entity["canonical_key"])
+
+    for chapter_title, keys in chapter_groups.items():
+        keys = [key for key in _dedupe_texts(keys) if key in entities_by_key]
+        for idx, source_key in enumerate(keys):
+            for target_key in keys[idx + 1:]:
+                add_edge(source_key, entities_by_key[target_key]["concept"], "related", 0.72)
+                add_edge(target_key, entities_by_key[source_key]["concept"], "related", 0.72)
+        if " vs " in chapter_title.lower():
+            for idx, source_key in enumerate(keys):
+                for target_key in keys[idx + 1:]:
+                    add_edge(source_key, entities_by_key[target_key]["concept"], "contrast", 0.84)
+                    add_edge(target_key, entities_by_key[source_key]["concept"], "contrast", 0.84)
+
+    for claim in claim_registry:
+        if claim.get("verification_status") != "supported" or float(claim.get("contradiction_score") or 0.0) >= 0.25:
+            continue
+        text = _normalise_ws(claim.get("text", ""))
+        lowered = text.lower()
+        matched = sorted(
+            [
+                (lowered.find(entity["concept"].lower()), entity)
+                for entity in concept_entities
+                if entity["concept"].lower() in lowered
+            ],
+            key=lambda item: item[0],
+        )
+        matched = [entity for pos, entity in matched if pos >= 0]
+        if len(matched) < 2:
+            continue
+        source = matched[0]
+        for target in matched[1:]:
+            if any(marker in lowered for marker in ("depends on", "requires", "require")):
+                add_edge(source["canonical_key"], target["concept"], "prerequisite", float(claim.get("support_score") or 0.65))
+            if any(marker in lowered for marker in ("because", "causes", "leads to", "results in", "therefore", "create", "creates")):
+                add_edge(source["canonical_key"], target["concept"], "causal", float(claim.get("support_score") or 0.65))
+            if " not " in lowered or "different from" in lowered or "contrast" in lowered:
+                add_edge(source["canonical_key"], target["concept"], "contrast", float(claim.get("support_score") or 0.65))
+
+    for entity in concept_entities:
+        key = entity["canonical_key"]
+        entity["related_concepts"] = sorted({
+            edge["target"] for edge in edges
+            if edge["source"] == entity["concept"] and edge["type"] == "related"
+        })[:5]
+        entity["contrast_concepts"] = sorted({
+            edge["target"] for edge in edges
+            if edge["source"] == entity["concept"] and edge["type"] == "contrast"
+        })[:4]
+        entity["prerequisite_concepts"] = sorted({
+            edge["target"] for edge in edges
+            if edge["source"] == entity["concept"] and edge["type"] == "prerequisite"
+        })[:4]
+        entity["causal_concepts"] = sorted({
+            edge["target"] for edge in edges
+            if edge["source"] == entity["concept"] and edge["type"] == "causal"
+        })[:4]
+
+    return {"concepts": concept_entities, "edges": edges}
+
+
+def build_relationship_concept_map(concept_graph: dict) -> list[dict]:
+    map_blocks = []
+    for entity in concept_graph.get("concepts", [])[:8]:
+        fragments = []
+        if entity.get("related_concepts"):
+            fragments.append("connects to " + ", ".join(entity["related_concepts"][:3]))
+        if entity.get("contrast_concepts"):
+            fragments.append("contrasts with " + ", ".join(entity["contrast_concepts"][:2]))
+        if entity.get("prerequisite_concepts"):
+            fragments.append("depends on " + ", ".join(entity["prerequisite_concepts"][:2]))
+        if entity.get("causal_concepts"):
+            fragments.append("helps explain " + ", ".join(entity["causal_concepts"][:2]))
+        if not fragments:
+            continue
+        map_blocks.append({
+            "heading": entity["concept"],
+            "paragraph": f"{entity['concept']} " + "; ".join(fragments) + ".",
+            "related": entity.get("related_concepts", [])[:3],
+            "contrasts": entity.get("contrast_concepts", [])[:2],
+            "prerequisites": entity.get("prerequisite_concepts", [])[:2],
+            "confidence": entity.get("confidence", 0.0),
+        })
+    return map_blocks
+
+
+def _clamp_score(value: float) -> float:
+    return round(max(0.0, min(1.0, value)), 2)
+
+
+def score_adaptive_concept_intelligence(concept_graph: dict) -> dict:
+    concepts = concept_graph.get("concepts", []) or []
+    if not concepts:
+        return {"concepts": [], "high_priority": [], "high_risk": [], "foundational": [], "revision_focus": []}
+
+    degree_counts = {}
+    incoming_prereq = {}
+    for edge in concept_graph.get("edges", []) or []:
+        degree_counts[edge["source"]] = degree_counts.get(edge["source"], 0) + 1
+        degree_counts[edge["target"]] = degree_counts.get(edge["target"], 0) + 1
+        if edge["type"] == "prerequisite":
+            incoming_prereq[edge["target"]] = incoming_prereq.get(edge["target"], 0) + 1
+
+    max_degree = max(degree_counts.values(), default=1)
+    scored = []
+    for entity in concepts:
+        concept_name = entity["concept"]
+        definitions = len(entity.get("definitions") or [])
+        distinctions = len(entity.get("distinctions") or [])
+        traps = len(entity.get("exam_traps") or [])
+        contrasts = len(entity.get("contrast_concepts") or [])
+        prerequisites = len(entity.get("prerequisite_concepts") or [])
+        causal = len(entity.get("causal_concepts") or [])
+        related = len(entity.get("related_concepts") or [])
+        centrality = _clamp_score(degree_counts.get(concept_name, 0) / max_degree)
+        dependency_weight = _clamp_score((prerequisites + incoming_prereq.get(concept_name, 0) + causal * 0.5) / 4)
+        misunderstanding_risk = _clamp_score((traps * 0.45) + (distinctions * 0.2) + (contrasts * 0.18))
+        exam_relevance = _clamp_score((traps * 0.35) + (distinctions * 0.2) + (definitions * 0.12) + (0.18 if centrality >= 0.6 else 0.0))
+        educational_importance = _clamp_score(
+            (centrality * 0.34)
+            + (dependency_weight * 0.26)
+            + min(0.2, definitions * 0.08)
+            + min(0.12, related * 0.03)
+            + (0.08 if entity.get("verification_status") == "supported" else 0.0)
+        )
+        revision_priority = _clamp_score(
+            (educational_importance * 0.36)
+            + (misunderstanding_risk * 0.28)
+            + (exam_relevance * 0.24)
+            + (float(entity.get("confidence") or 0.0) * 0.12)
+        )
+        foundational = dependency_weight >= 0.45 or centrality >= 0.65 or definitions >= 2
+        if revision_priority >= 0.78 or misunderstanding_risk >= 0.72:
+            emphasis = "high"
+        elif revision_priority >= 0.55:
+            emphasis = "medium"
+        else:
+            emphasis = "low"
+
+        enriched = {
+            **entity,
+            "centrality": centrality,
+            "dependency_weight": dependency_weight,
+            "misunderstanding_risk": misunderstanding_risk,
+            "exam_relevance": exam_relevance,
+            "educational_importance": educational_importance,
+            "revision_priority": revision_priority,
+            "foundational": foundational,
+            "emphasis_level": emphasis,
+        }
+        scored.append(enriched)
+
+    scored.sort(key=lambda item: (-item["revision_priority"], -item["educational_importance"], item["concept"]))
+    high_priority = [item["concept"] for item in scored if item["revision_priority"] >= 0.68][:6]
+    high_risk = [item["concept"] for item in scored if item["misunderstanding_risk"] >= 0.55][:6]
+    foundational = [item["concept"] for item in scored if item["foundational"]][:6]
+    revision_focus = [
+        {
+            "concept": item["concept"],
+            "priority": item["revision_priority"],
+            "reason": (
+                "High confusion risk"
+                if item["misunderstanding_risk"] >= 0.6
+                else "Foundational dependency concept"
+                if item["foundational"]
+                else "High centrality concept"
+            ),
+            "emphasis_level": item["emphasis_level"],
+        }
+        for item in scored[:6]
+    ]
+    return {
+        "concepts": scored,
+        "high_priority": high_priority,
+        "high_risk": high_risk,
+        "foundational": foundational,
+        "revision_focus": revision_focus,
+    }
+
+
+def build_adaptive_study_weighting(adaptive_intelligence: dict) -> dict:
+    concepts = adaptive_intelligence.get("concepts", []) or []
+    weighting = []
+    for item in concepts[:8]:
+        weighting.append({
+            "concept": item["concept"],
+            "cheat_sheet_weight": _clamp_score(item["revision_priority"]),
+            "flashcard_weight": _clamp_score((item["revision_priority"] * 0.7) + (item["misunderstanding_risk"] * 0.3)),
+            "quiz_weight": _clamp_score((item["exam_relevance"] * 0.55) + (item["misunderstanding_risk"] * 0.45)),
+            "summary_emphasis": item["emphasis_level"],
+        })
+    return {"weights": weighting}
+
+
 def _verify_generated_text(text: str, transcript_units: list[dict], minimum_score: float = 0.42) -> tuple[str, float]:
     cleaned = _normalise_ws(text)
     if not cleaned:
@@ -1085,12 +1605,24 @@ def enrich_lecture_payload(lecture_data: dict, section_rows: list[dict] | None =
     grounded_notes = build_grounded_notes(transcript, summary, section_rows=section_rows)
     concept_sections = build_concept_sections(grounded_notes)
     claim_registry = build_claim_registry(grounded_notes)
+    concept_entities = build_concept_entities(concept_sections, claim_registry)
+    concept_graph = build_concept_relationship_graph(concept_entities, claim_registry)
+    adaptive_intelligence = score_adaptive_concept_intelligence(concept_graph)
+    relationship_concept_map = build_relationship_concept_map(concept_graph)
+    verified_cheat_sheet = build_verified_cheat_sheet(concept_sections, claim_registry, adaptive_intelligence=adaptive_intelligence)
+    adaptive_study_weighting = build_adaptive_study_weighting(adaptive_intelligence)
 
     payload = dict(lecture_data)
     payload["grounded_notes"] = grounded_notes
     payload["concept_sections"] = concept_sections
     payload["chapter_hierarchy"] = concept_sections
     payload["claim_registry"] = claim_registry
+    payload["concept_entities"] = concept_entities
+    payload["concept_graph"] = concept_graph
+    payload["adaptive_intelligence"] = adaptive_intelligence
+    payload["adaptive_study_weighting"] = adaptive_study_weighting
+    payload["relationship_concept_map"] = relationship_concept_map
+    payload["verified_cheat_sheet"] = verified_cheat_sheet
     payload["ai_study_aids"] = build_ai_study_aids(lecture_data)
     payload["summary_confidence"] = lecture_summary_confidence(grounded_notes)
     payload["transcript_word_count"] = len(clean_transcript(transcript).split()) if transcript else 0
