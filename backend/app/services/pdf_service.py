@@ -25,6 +25,7 @@ from app.services.trust_service import (
     build_concept_entities,
     build_concept_relationship_graph,
     build_relationship_concept_map,
+    build_concept_note_cards,
     build_concept_sections,
     score_adaptive_concept_intelligence,
     build_verified_cheat_sheet,
@@ -219,6 +220,45 @@ def _section_render_profile(section: dict) -> dict:
         "concept_count": concept_count,
         "subtopic_count": subtopic_count,
     }
+
+
+def _concept_cards_to_pdf_sections(concept_note_cards: list[dict]) -> list[dict]:
+    sections = []
+    for card in concept_note_cards or []:
+        title = card.get("concept_name") or ""
+        if not title:
+            continue
+        citations = [card["source"]] if card.get("source") else []
+        section = {
+            "title": title,
+            "lead_sentence": card.get("definition") or "",
+            "prose": "",
+            "bullets": [],
+            "concepts": [title],
+            "examples": [card["professor_example"]] if card.get("professor_example") else [],
+            "definitions": [card["definition"]] if card.get("definition") else [],
+            "distinctions": [card["key_distinction"]] if card.get("key_distinction") else [],
+            "exam_traps": [card["exam_trap"]] if card.get("exam_trap") else [],
+            "subsections": [
+                label for label, value in [
+                    ("Definition", card.get("definition")),
+                    ("Key Distinction", card.get("key_distinction")),
+                    ("Exam Trap", card.get("exam_trap")),
+                    ("Professor's Example", card.get("professor_example")),
+                ] if value
+            ],
+            "subtopic_sections": [],
+            "raw_section": "",
+            "analogy": None,
+            "mistake": None,
+            "remember": None,
+            "citations": citations,
+            "confidence": card.get("confidence") or 0.0,
+            "verification_status": card.get("verification_status") or "supported",
+        }
+        section.update(_section_render_profile(section))
+        sections.append(section)
+    return sections
 
 
 def _adaptive_priority_for_text(text: str, adaptive_intelligence: dict) -> float:
@@ -1131,6 +1171,7 @@ async def generate_lecture_pdf(
     section_rows  = await asyncio.to_thread(get_lecture_sections, lecture_id)
     grounded_notes = build_grounded_notes(transcript, summary, section_rows=section_rows)
     concept_sections = build_concept_sections(grounded_notes)
+    concept_note_cards = build_concept_note_cards(concept_sections)
     claim_registry = build_claim_registry(grounded_notes)
     title = _resolve_document_title(title, transcript, topic, concept_sections)
     grounded_summary = "\n\n".join(
@@ -1155,7 +1196,19 @@ async def generate_lecture_pdf(
 
     # 2. Parse raw sections from master summary
     raw_sections = []
-    if concept_sections:
+    if concept_note_cards:
+        for card in concept_note_cards:
+            block = [card.get("concept_name", "Concept")]
+            if card.get("definition"):
+                block.append("Definition: " + card["definition"])
+            if card.get("key_distinction"):
+                block.append("Key distinction: " + card["key_distinction"])
+            if card.get("exam_trap"):
+                block.append("Exam trap: " + card["exam_trap"])
+            if card.get("professor_example"):
+                block.append("Professor example: " + card["professor_example"])
+            raw_sections.append("\n".join(block).strip())
+    elif concept_sections:
         for note in concept_sections:
             block = [note.get("title", "Summary")]
             if note.get("core_explanation"):
@@ -1246,10 +1299,12 @@ async def generate_lecture_pdf(
     # Key stats — extracted from transcript for exec summary callout
     tasks.append(asyncio.to_thread(_call_key_stats, transcript, topic))
 
-    # Per-section enrichment: analogy box, common mistake, remember callout, prose, bullets.
-    # One GPT call per concept section, all run in parallel with the document-level calls above.
-    for i, raw_sec in enumerate(raw_sections):
-        tasks.append(asyncio.to_thread(_call_enrich_section, raw_sec, i, n_sections, topic, language))
+    use_deterministic_concept_cards = bool(concept_note_cards)
+    # Verified concept-card notes are already transcript-grounded. Do not add
+    # per-section GPT prose/examples to the core PDF chapters.
+    if not use_deterministic_concept_cards:
+        for i, raw_sec in enumerate(raw_sections):
+            tasks.append(asyncio.to_thread(_call_enrich_section, raw_sec, i, n_sections, topic, language))
 
     # 4. Run all calls in parallel
     results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -1261,7 +1316,9 @@ async def generate_lecture_pdf(
     ri += 1
 
     enriched_sections: list[dict] = []
-    if concept_sections:
+    if concept_note_cards:
+        enriched_sections = _concept_cards_to_pdf_sections(concept_note_cards)
+    elif concept_sections:
         for note in concept_sections:
             section = {
                 "title":         note.get("title") or "Summary",
@@ -1364,9 +1421,10 @@ async def generate_lecture_pdf(
 
     # Per-section enrichment results (analogy, mistake, remember, prose, bullets)
     section_enrichments: list[dict] = []
-    for _ in raw_sections:
-        r = results[ri]; ri += 1
-        section_enrichments.append(r if not isinstance(r, Exception) else {})
+    if not use_deterministic_concept_cards:
+        for _ in raw_sections:
+            r = results[ri]; ri += 1
+            section_enrichments.append(r if not isinstance(r, Exception) else {})
 
     # Merge per-section enrichment into the already-built enriched_sections.
     # Fills analogy two-column box, common mistake amber box, remember green box,
