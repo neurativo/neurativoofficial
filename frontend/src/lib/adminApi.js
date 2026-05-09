@@ -50,6 +50,7 @@ export const adminApi = {
     listSessions:    (p = {})                  => _get('/sessions', p),
     listLectures:    (p = {})                  => _get('/lectures', p),
     getLecture:      (lectureId)               => _get(`/lectures/${lectureId}`),
+    recomputeLecture: (lectureId)              => _post(`/lectures/${lectureId}/recompute`),
     deleteLecture:   (lectureId)               => _delete(`/lectures/${lectureId}`),
     triggerCleanup:  (days = 30)               => _post('/system/cleanup', { days }),
     getSystem:       ()                        => _get('/system'),

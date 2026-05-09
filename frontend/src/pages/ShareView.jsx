@@ -48,6 +48,8 @@ const CSS = `
   .sv-sum-prose { font-size: 12px; color: ${C.muted}; line-height: 1.65; margin-bottom: 6px; }
   .sv-sum-concepts { display: flex; flex-wrap: wrap; gap: 4px; }
   .sv-sum-concept { font-size: 11px; color: ${C.sec}; background: ${C.bg}; border: 1px solid ${C.border}; border-radius: 5px; padding: 2px 7px; }
+  .sv-sum-citations { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .sv-sum-citation { font-size: 10px; color: ${C.muted}; border: 1px solid ${C.border}; border-radius: 999px; padding: 2px 6px; }
   .sv-transcript-toggle { display: flex; align-items: center; gap: 6px; font-size: 13px; color: ${C.sec}; background: none; border: 1px solid ${C.border}; border-radius: 9px; padding: 8px 14px; cursor: pointer; font-family: inherit; transition: border-color 0.15s; }
   .sv-transcript-toggle:hover { border-color: ${C.borderHov}; }
   .sv-transcript-list { margin-top: 16px; display: flex; flex-direction: column; gap: 10px; }
@@ -89,11 +91,18 @@ const CSS = `
 
 function parseSummary(text) {
     if (!text) return [];
-    return text.split('## ').filter(s => s.trim()).map((block) => {
+    const trimmed = text.trim();
+    if (!trimmed || /^processing/i.test(trimmed)) return [];
+    const hasStructuredSections = trimmed.includes('## ');
+    const blocks = hasStructuredSections
+        ? trimmed.split('## ').filter(s => s.trim())
+        : [trimmed];
+    return blocks.map((block, idx) => {
         const lines = block.split('\n');
-        const title = lines[0].trim();
+        const title = hasStructuredSections ? lines[0].trim() : (idx === 0 ? 'Summary' : `Section ${idx + 1}`);
         const highlights = [], concepts = [], examples = [], proseLines = [];
-        for (const line of lines.slice(1)) {
+        const contentLines = hasStructuredSections ? lines.slice(1) : lines;
+        for (const line of contentLines) {
             const l = line.trim();
             if (!l || l === '---') continue;
             if (l.startsWith('>')) { highlights.push(l.replace(/^>\s*/, '')); continue; }
@@ -116,6 +125,10 @@ function parseSummary(text) {
         let lead_sentence = fullProse, prose = '';
         const fb = fullProse.indexOf('. ');
         if (fb !== -1 && fb + 1 >= 40) { lead_sentence = fullProse.slice(0, fb + 1); prose = fullProse.slice(fb + 2).trim(); }
+        if (!hasStructuredSections && !fullProse) {
+            lead_sentence = lines.map(l => l.trim()).filter(Boolean).join(' ');
+            prose = '';
+        }
         return { title, lead_sentence, prose, concepts, highlights };
     });
 }
@@ -252,7 +265,9 @@ export default function ShareView() {
     }
 
     const summaryText = lecture.master_summary || lecture.summary || '';
-    const sections = parseSummary(summaryText);
+    const sections = Array.isArray(lecture.grounded_notes) && lecture.grounded_notes.length > 0
+        ? lecture.grounded_notes
+        : parseSummary(summaryText);
     const segments = lecture.transcript
         ? lecture.transcript.split('\n').filter(s => s.trim())
         : [];
@@ -307,6 +322,13 @@ export default function ShareView() {
                                             <div className="sv-sum-concepts">
                                                 {s.concepts.map((c, j) => (
                                                     <span key={j} className="sv-sum-concept" style={{ borderColor: a.border, color: a.title }}>{c}</span>
+                                                ))}
+                                            </div>
+                                        )}
+                                        {s.citations?.length > 0 && (
+                                            <div className="sv-sum-citations">
+                                                {s.citations.map((cite, j) => (
+                                                    <span key={j} className="sv-sum-citation">Source {cite.label}</span>
                                                 ))}
                                             </div>
                                         )}

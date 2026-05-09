@@ -30,6 +30,7 @@ _REPEAT_WORD_RE = re.compile(r'\b(\w+)(\s+\1){1,5}\b', re.IGNORECASE)
 # Collapse 3+ spaces/newlines
 _WHITESPACE_RE = re.compile(r'[ \t]{2,}')
 _NEWLINE_RE    = re.compile(r'\n{3,}')
+_TOKEN_RE = re.compile(r"\b[\w'-]+\b")
 
 # Approximate GPT token ≈ 0.75 words for English; cap at 80K tokens input
 # We cap at 60K words as a conservative estimate.
@@ -55,6 +56,46 @@ def _deduplicate_sentences(text: str) -> str:
     return " ".join(deduped)
 
 
+def _semantic_similarity(a: str, b: str) -> float:
+    a_tokens = {t.lower() for t in _TOKEN_RE.findall(a)}
+    b_tokens = {t.lower() for t in _TOKEN_RE.findall(b)}
+    if not a_tokens or not b_tokens:
+        return 0.0
+
+    overlap = len(a_tokens & b_tokens) / max(1, min(len(a_tokens), len(b_tokens)))
+    if overlap >= 0.9:
+        return overlap
+
+    a_words = a.lower().split()
+    b_words = b.lower().split()
+    if len(a_words) >= 6 and len(b_words) >= 6:
+        prefix = sum(1 for x, y in zip(a_words, b_words) if x == y)
+        suffix = sum(1 for x, y in zip(reversed(a_words), reversed(b_words)) if x == y)
+        prefix_ratio = prefix / min(len(a_words), len(b_words))
+        suffix_ratio = suffix / min(len(a_words), len(b_words))
+        overlap = max(overlap, prefix_ratio, suffix_ratio)
+    return overlap
+
+
+def _deduplicate_semantic_neighbours(text: str) -> str:
+    """
+    Remove adjacent near-duplicate sentences that differ only slightly because of
+    ASR overlap or restarts at chunk boundaries.
+    """
+    sentences = re.split(r'(?<=[.!?])\s+', text)
+    deduped = []
+    prev = None
+    for sentence in sentences:
+        cleaned = sentence.strip()
+        if not cleaned:
+            continue
+        if prev is not None and _semantic_similarity(cleaned, prev) >= 0.88:
+            continue
+        deduped.append(cleaned)
+        prev = cleaned
+    return " ".join(deduped)
+
+
 def clean(transcript: str) -> str:
     """
     Full cleaning pipeline. Returns cleaned transcript string.
@@ -76,6 +117,7 @@ def clean(transcript: str) -> str:
 
     # Step 4: remove consecutive duplicate sentences
     text = _deduplicate_sentences(text)
+    text = _deduplicate_semantic_neighbours(text)
 
     # Step 5: collapse whitespace
     text = _WHITESPACE_RE.sub(" ", text)

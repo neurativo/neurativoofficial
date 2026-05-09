@@ -23,6 +23,7 @@ export default function AdminLectureDetail() {
     const [activeTab, setActiveTab] = useState('Summary');
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [deleting, setDeleting] = useState(false);
+    const [recomputing, setRecomputing] = useState(false);
     const [toast, setToast] = useState('');
 
     useEffect(() => {
@@ -39,6 +40,19 @@ export default function AdminLectureDetail() {
         } catch {
             showToast('Failed to delete lecture');
             setDeleting(false);
+        }
+    }
+
+    async function recomputeLecture() {
+        setRecomputing(true);
+        try {
+            await adminApi.recomputeLecture(lectureId);
+            setLecture(l => ({ ...l, summary_status: 'recomputing' }));
+            showToast('Lecture recompute queued');
+        } catch {
+            showToast('Failed to queue recompute');
+        } finally {
+            setRecomputing(false);
         }
     }
 
@@ -60,6 +74,7 @@ export default function AdminLectureDetail() {
                 <span className="adm-meta-chip">Chunks: <strong>{lecture.total_chunks ?? '—'}</strong></span>
                 <span className="adm-meta-chip">Sections: <strong>{sections.length}</strong></span>
                 <span className="adm-meta-chip">Questions: <strong>{questions.length}</strong></span>
+                {lecture.summary_status && <span className="adm-meta-chip">Summary Status: <strong>{lecture.summary_status}</strong></span>}
                 {lecture.topic && <span className="adm-meta-chip">Topic: <strong>{lecture.topic}</strong></span>}
                 <span className="adm-meta-chip">Created: <strong>{fmtDate(lecture.created_at)}</strong></span>
                 {lecture.user_id && (
@@ -200,6 +215,9 @@ export default function AdminLectureDetail() {
                 </div>
             )}
 
+            <button className="adm-btn-ghost" style={{ marginTop: 20, marginRight: 10 }} onClick={recomputeLecture} disabled={recomputing}>
+                {recomputing ? 'Queueing Recompute…' : 'Recompute Lecture'}
+            </button>
             <button className="adm-btn-danger" style={{ marginTop: 20 }} onClick={() => setShowDeleteModal(true)}>
                 Delete This Lecture
             </button>

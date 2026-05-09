@@ -42,6 +42,7 @@ from app.services.credits_service import (
 from app.services.audio_service import compress, split_for_whisper, probe_duration_seconds
 from app.services.transcript_cleaner import clean as clean_transcript
 from app.services.content_generator import generate as generate_content, WHISPER_MODEL
+from app.services.content_generator import summary_has_required_structure
 from app.services.job_queue import create_job, update_job_status, job_is_running
 from app.services.live_cleanup_service import cleanup_stale_live_sessions
 from app.services.supabase_service import (
@@ -59,6 +60,7 @@ from app.services.supabase_service import (
     get_micro_summaries,
     create_lecture_section,
     get_section_summaries,
+    get_lecture_sections,
     get_latest_section_end_index,
     get_latest_section_count,
     get_unsummarized_chunks,
@@ -102,6 +104,7 @@ from app.services.supabase_service import (
     set_summary_status,
     get_announcements,
 )
+from app.services.trust_service import enrich_lecture_payload
 
 
 def _next_month_iso() -> str:
@@ -503,12 +506,13 @@ async def _process_from_transcript(
         topic   = (lecture or {}).get("topic")
         existing_summary    = (lecture or {}).get("master_summary") or ""
         existing_flashcards = (lecture or {}).get("flashcards") or []
+        existing_ok         = summary_has_required_structure(existing_summary, cleaned)
 
         content = await _asyncio.to_thread(
             generate_content,
             cleaned, title, topic, language,
-            False,  # force = False → use cache if available
-            existing_summary, existing_flashcards,
+            not existing_ok,  # force regenerate if cached summary looks malformed
+            existing_summary if existing_ok else "", existing_flashcards,
         )
     except Exception as e:
         await _asyncio.to_thread(update_job_status, lecture_id, "failed", f"Content generation failed: {e}")
@@ -521,8 +525,12 @@ async def _process_from_transcript(
     try:
         if content is None:
             print(f"[pipeline] {lecture_id}: using cached content (no GPT call needed)")
-        elif content:
+        elif content and summary_has_required_structure(content.get("summary", ""), cleaned):
             await _asyncio.to_thread(save_generated_content, lecture_id, content)
+        else:
+            fallback_summary = await _asyncio.to_thread(_build_strict_fallback_summary, cleaned, topic, language)
+            if fallback_summary:
+                await _asyncio.to_thread(update_lecture_summary_only, lecture_id, fallback_summary)
         # Mark done
         set_summary_status(lecture_id, "final")
         await _asyncio.to_thread(update_job_status, lecture_id, "done")
@@ -841,6 +849,35 @@ def start_live_session(request: Request, body: StartSessionBody = StartSessionBo
 
 _openai_client = OpenAI(api_key=settings.OPENAI_API_KEY) if settings.OPENAI_API_KEY else None
 
+_TITLE_STOPWORDS = {
+    "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "in", "into",
+    "is", "it", "of", "on", "or", "the", "this", "to", "we", "with", "you",
+}
+
+
+def _title_keywords(text: str) -> set[str]:
+    words = re.findall(r"[a-zA-Z][a-zA-Z0-9'-]{2,}", (text or "").lower())
+    return {w for w in words if w not in _TITLE_STOPWORDS}
+
+
+def _fallback_lecture_title(chunk_text: str, topic: str | None) -> str:
+    lower = (chunk_text or "").lower()
+    if topic == "economics" and "unit number one" in lower:
+        return "Economics Unit One Review"
+    if topic == "economics":
+        return "Economics Lecture Summary"
+    if topic and topic != "general":
+        return f"{topic.title()} Lecture Summary"[:60]
+    return "Lecture Summary"
+
+
+def _title_is_grounded(title: str, chunk_text: str) -> bool:
+    title_keys = _title_keywords(title)
+    chunk_keys = _title_keywords(chunk_text)
+    if not title_keys or not chunk_keys:
+        return False
+    return len(title_keys & chunk_keys) >= 1
+
 
 def _generate_lecture_title(chunk_text: str, topic: str | None) -> str:
     """
@@ -863,7 +900,26 @@ def _generate_lecture_title(chunk_text: str, topic: str | None) -> str:
         max_tokens=30,
         temperature=0.3,
     )
-    return resp.choices[0].message.content.strip().strip('"').strip("'")
+    title = resp.choices[0].message.content.strip().strip('"').strip("'")
+    if not _title_is_grounded(title, chunk_text):
+        return _fallback_lecture_title(chunk_text, topic)
+    return title
+
+
+def _build_strict_fallback_summary(cleaned: str, topic: str | None, language: str) -> str:
+    sections = []
+    for seg in segment_transcript(cleaned, topic):
+        start = max(0, int(seg.get("start") or 0))
+        end = max(start, int(seg.get("end") or len(cleaned)))
+        section = summarize_topic_segment(
+            cleaned[start:end],
+            title=seg.get("title") or "Section",
+            topic=topic,
+            language=language,
+        )
+        if section:
+            sections.append(section)
+    return "\n\n".join(sections)
 
 
 def _run_summarization(
@@ -1529,7 +1585,7 @@ def get_lecture_details(lecture_id: str, user=Depends(get_active_user)):
     lecture = get_lecture_for_summarization(lecture_id)
     if not lecture:
         raise HTTPException(status_code=404, detail="Lecture not found")
-    return lecture
+    return enrich_lecture_payload(lecture, section_rows=get_lecture_sections(lecture_id))
 
 
 @router.post("/ask/{lecture_id}")
@@ -1565,7 +1621,7 @@ def get_lecture_full_endpoint(lecture_id: str, user=Depends(get_active_user)):
                 lecture_data[field] = []
         elif val is None:
             lecture_data[field] = []
-    return lecture_data
+    return enrich_lecture_payload(lecture_data, section_rows=get_lecture_sections(lecture_id))
 
 
 @router.get("/lectures/{lecture_id}/visual-frames")
@@ -1626,7 +1682,7 @@ def get_shared_lecture(request: Request, token: str):
         increment_share_views(lecture["id"])
     except Exception:
         pass
-    return lecture
+    return enrich_lecture_payload(lecture, section_rows=get_lecture_sections(lecture["id"]))
 
 
 @router.delete("/lectures/{lecture_id}")

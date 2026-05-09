@@ -13,7 +13,7 @@ import collections
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from pydantic import BaseModel
 
 from app.core.auth import get_admin_user, User
@@ -44,8 +44,11 @@ from app.services.supabase_service import (
     get_stale_free_lectures,
     mark_content_deleted,
     set_deletion_scheduled,
+    set_summary_status,
+    get_lecture_full,
 )
 from app.services.cost_tracker import PRICING, LKR_RATE
+from app.services.recompute_service import recompute_final_summary
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -289,6 +292,27 @@ async def get_lecture_detail(lecture_id: str, admin: User = Depends(get_admin_us
     if not detail:
         raise HTTPException(status_code=404, detail="Lecture not found")
     return detail
+
+
+@router.post("/lectures/{lecture_id}/recompute")
+async def recompute_lecture(
+    lecture_id: str,
+    background_tasks: BackgroundTasks,
+    admin: User = Depends(get_admin_user),
+):
+    """Queue recomputation of stored lecture content from existing transcript data."""
+    lecture = get_lecture_full(lecture_id)
+    if not lecture:
+        raise HTTPException(status_code=404, detail="Lecture not found")
+
+    transcript = (lecture.get("transcript") or "").strip()
+    if not transcript:
+        raise HTTPException(status_code=400, detail="No transcript available to recompute from.")
+
+    set_summary_status(lecture_id, "recomputing")
+    background_tasks.add_task(recompute_final_summary, lecture_id)
+    _audit(admin.id, "recompute_lecture", lecture_id)
+    return {"ok": True, "lecture_id": lecture_id, "status": "queued"}
 
 
 @router.delete("/lectures/{lecture_id}")

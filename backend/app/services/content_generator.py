@@ -12,6 +12,7 @@ Checks DB cache before calling GPT — skips if all fields already populated.
 Caller (job_queue worker) is responsible for saving results to DB.
 """
 import json
+import re
 import time
 from typing import Optional
 from openai import OpenAI
@@ -55,6 +56,12 @@ _CODE_TOPICS = {
     "data structures", "machine learning", "deep learning", "artificial intelligence",
     "neural networks", "operating systems", "databases", "computer architecture",
     "cybersecurity", "networking",
+}
+
+_STOPWORDS = {
+    "a", "an", "and", "are", "as", "at", "be", "because", "by", "for", "from",
+    "has", "have", "in", "into", "is", "it", "its", "of", "on", "or", "that",
+    "the", "their", "this", "to", "was", "were", "will", "with", "your",
 }
 
 
@@ -158,6 +165,37 @@ def _build_prompt(
     )
 
     return system, user
+
+
+def _tokenise_keywords(text: str) -> set[str]:
+    words = re.findall(r"[a-zA-Z][a-zA-Z0-9'-]{2,}", (text or "").lower())
+    return {w for w in words if w not in _STOPWORDS}
+
+
+def summary_has_required_structure(summary: str, transcript: str = "") -> bool:
+    """
+    Reject obviously malformed master summaries before they are shown/exported.
+    Long lectures must produce structured sections with at least some lexical
+    overlap with the transcript; short lectures may use the compact fallback.
+    """
+    summary = (summary or "").strip()
+    if not summary:
+        return False
+
+    transcript_words = len((transcript or "").split())
+    is_short = transcript_words and transcript_words < 500
+
+    if not is_short and "## " not in summary:
+        return False
+
+    summary_keys = _tokenise_keywords(summary)
+    transcript_keys = _tokenise_keywords(transcript)
+    if transcript_keys:
+        overlap = len(summary_keys & transcript_keys)
+        if overlap < 5:
+            return False
+
+    return True
 
 
 def generate(

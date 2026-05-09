@@ -6,7 +6,10 @@ Uses a SINGLE GPT call via content_generator.generate() instead of
 the old multi-call approach (N+1 GPT calls for N topic segments).
 Saves summary, flashcards, quiz, and glossary in one shot.
 """
-from app.services.content_generator import generate as generate_content
+from app.services.content_generator import (
+    generate as generate_content,
+    summary_has_required_structure,
+)
 from app.services.transcript_cleaner import clean as clean_transcript
 from app.services.summarization_service import segment_transcript, summarize_topic_segment
 from app.services.supabase_service import (
@@ -57,17 +60,18 @@ def recompute_final_summary(lecture_id: str) -> None:
 
         existing_summary    = (lecture or {}).get("master_summary") or ""
         existing_flashcards = (lecture or {}).get("flashcards") or []
+        existing_ok         = summary_has_required_structure(existing_summary, cleaned)
 
         content = generate_content(
             cleaned, title, topic, language,
-            force=False,
-            existing_summary=existing_summary,
+            force=not existing_ok,
+            existing_summary=existing_summary if existing_ok else "",
             existing_flashcards=existing_flashcards,
         )
 
         if content is None:
             print(f"[recompute] {lecture_id}: cache hit — content already exists.")
-        elif content:
+        elif content and summary_has_required_structure(content.get("summary", ""), cleaned):
             save_generated_content(lecture_id, content)
             print(f"[recompute] {lecture_id}: content saved.")
         else:

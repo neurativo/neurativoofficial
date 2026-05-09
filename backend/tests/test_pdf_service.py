@@ -69,6 +69,50 @@ def test_build_lite_sections_falls_back_to_transcript_when_summary_empty():
     assert sections[0]["prose"]
 
 
+def test_fallback_title_replaces_ungrounded_title():
+    from app.services.pdf_service import _fallback_title
+
+    fixed = _fallback_title(
+        "Designing Personalized Solutions for Unique Needs",
+        "Right, so starting with unit number one. We discuss microeconomics and macroeconomics.",
+        "economics",
+    )
+
+    assert fixed == "Economics Unit One Review"
+
+
+def test_extract_summary_sections_loose_parses_plain_blocks():
+    from app.services.pdf_service import _extract_summary_sections_loose
+
+    raw = (
+        "Microeconomics vs. Macroeconomics\n\n"
+        "Microeconomics studies individuals.\n\n"
+        "Key concepts\nmicroeconomics\nmacroeconomics\n\n"
+        "Positive and Normative Statements\n\n"
+        "Positive statements can be verified.\n"
+    )
+
+    sections = _extract_summary_sections_loose(raw)
+
+    assert len(sections) >= 2
+    assert "Microeconomics vs. Macroeconomics" in sections[0]
+
+
+def test_fallback_takeaways_prefers_section_content():
+    from app.services.pdf_service import _fallback_takeaways
+
+    takeaways = _fallback_takeaways(
+        "",
+        [
+            {"remember": "Focus on one unit at a time to score marks efficiently."},
+            {"lead_sentence": "Microeconomics studies individuals and firms."},
+        ],
+    )
+
+    assert len(takeaways) == 2
+    assert "Focus on one unit" in takeaways[0]
+
+
 # ── _call_enrich_section — anti-hallucination ──────────────────────────────────
 
 def test_enrich_section_accepts_empty_concepts_and_examples():

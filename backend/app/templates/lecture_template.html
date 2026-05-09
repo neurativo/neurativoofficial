@@ -685,6 +685,25 @@
 
         /* Notes lines at bottom of each section */
         .section-notes { margin-top: 4mm; padding-top: 3mm; border-top: var(--hairline); }
+        .section-source {
+            margin-top: 3mm;
+            font-size: 7.4pt;
+            color: var(--ink-4);
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+        .section-source strong {
+            color: var(--ink-3);
+            font-weight: 600;
+            text-transform: none;
+            letter-spacing: 0;
+        }
+        .trust-note {
+            font-size: 8.5pt;
+            color: var(--ink-3);
+            line-height: 1.55;
+            margin: 0 0 5mm;
+        }
         .notes-label {
             font-size: 6.5pt;
             font-weight: 600;
@@ -1275,9 +1294,12 @@
     ══════════════════════════════════════ -->
     {% if enriched_sections %}
     <div class="eyebrow-row pb-before">
-        <span class="eyebrow-label">{{ section_label }}</span>
+        <span class="eyebrow-label">Verified Lecture Notes</span>
     </div>
     <hr class="eyebrow-rule">
+    <p class="trust-note">
+        These notes are built from transcript-supported sections{% if summary_confidence %} with an overall grounding score of {{ (summary_confidence * 100) | int }}%{% endif %}.
+    </p>
 
     {% for sec in enriched_sections %}
     <article class="section">
@@ -1345,6 +1367,15 @@
             </div>
             {% endif %}
 
+            {% if sec.citations %}
+            <div class="section-source">
+                Source
+                {% for cite in sec.citations %}
+                <strong>{{ cite.label }}</strong>{% if not loop.last %} · {% endif %}
+                {% endfor %}
+            </div>
+            {% endif %}
+
             {% if sec.mistake or sec.remember %}
             <div class="mr-box">
                 {% if sec.mistake %}
@@ -1403,7 +1434,7 @@
     ══════════════════════════════════════ -->
     {% if takeaways %}
     <div class="eyebrow-row pb-before">
-        <span class="eyebrow-label">Key Takeaways</span>
+        <span class="eyebrow-label">AI Study Aid</span>
     </div>
     <hr class="eyebrow-rule">
     <h2>Key Takeaways</h2>
@@ -1424,7 +1455,7 @@
     ══════════════════════════════════════ -->
     {% if glossary %}
     <div class="eyebrow-row pb-before">
-        <span class="eyebrow-label">{{ glossary_label }}</span>
+        <span class="eyebrow-label">AI Study Aid</span>
     </div>
     <hr class="eyebrow-rule">
     <h2>{{ glossary_label }}</h2>
@@ -1482,7 +1513,7 @@
     ══════════════════════════════════════ -->
     {% if quick_review %}
     <div class="eyebrow-row pb-before">
-        <span class="eyebrow-label">{{ review_label }}</span>
+        <span class="eyebrow-label">AI Study Aid</span>
     </div>
     <hr class="eyebrow-rule">
     <h2>{{ review_label }}</h2>
@@ -1569,7 +1600,7 @@
     ══════════════════════════════════════ -->
     {% if study_roadmap and (study_roadmap.prerequisites or study_roadmap.next_topics) %}
     <div class="eyebrow-row pb-before">
-        <span class="eyebrow-label">Your Learning Path</span>
+        <span class="eyebrow-label">AI Study Aid</span>
     </div>
     <hr class="eyebrow-rule">
     <h2>Your Learning Path</h2>

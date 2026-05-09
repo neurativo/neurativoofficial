@@ -11,8 +11,15 @@ from playwright.sync_api import sync_playwright
 
 from openai import OpenAI
 from app.core.config import settings
-from app.services.supabase_service import get_lecture_for_summarization, get_visual_frames
+from app.services.supabase_service import (
+    get_lecture_for_summarization,
+    get_section_summaries,
+    get_lecture_sections,
+    get_visual_frames,
+)
 from app.services.cost_tracker import log_cost
+from app.services.transcript_cleaner import clean as clean_transcript
+from app.services.trust_service import build_grounded_notes, lecture_summary_confidence
 
 # ── OpenAI client ─────────────────────────────────────────────────────────────
 _client = OpenAI(api_key=settings.OPENAI_API_KEY) if settings.OPENAI_API_KEY else None
@@ -133,6 +140,83 @@ def _truncate_words(text: str, limit: int) -> str:
     if len(words) <= limit:
         return " ".join(words)
     return " ".join(words[:limit]).rstrip(" .,;:") + "..."
+
+
+_PDF_STOPWORDS = {
+    "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "in", "into",
+    "is", "it", "of", "on", "or", "that", "the", "this", "to", "was", "were", "with",
+}
+
+
+def _keyword_set(text: str) -> set[str]:
+    words = re.findall(r"[a-zA-Z][a-zA-Z0-9'-]{2,}", (text or "").lower())
+    return {w for w in words if w not in _PDF_STOPWORDS}
+
+
+def _has_grounded_overlap(candidate: str, source: str, minimum: int = 2) -> bool:
+    return len(_keyword_set(candidate) & _keyword_set(source)) >= minimum
+
+
+def _fallback_title(title: str, transcript: str, topic: str | None) -> str:
+    if _has_grounded_overlap(title, transcript, minimum=1):
+        return title
+    lower = (transcript or "").lower()
+    if topic == "economics" and "unit number one" in lower:
+        return "Economics Unit One Review"
+    if topic and topic != "general":
+        return f"{topic.title()} Lecture Summary"[:60]
+    return "Lecture Summary"
+
+
+def _extract_summary_sections_loose(summary: str) -> list[str]:
+    """
+    Best-effort fallback for malformed summaries that omitted `##` headings but
+    still contain repeated title + prose + key-concepts blocks.
+    """
+    lines = [ln.rstrip() for ln in (summary or "").splitlines()]
+    sections = []
+    current = []
+
+    def flush():
+        block = "\n".join(current).strip()
+        if block:
+            sections.append(block)
+
+    for line in lines:
+        stripped = line.strip()
+        if (
+            stripped
+            and current
+            and not stripped.startswith(("Key concepts", "Examples", ">", "→", "- ", "`"))
+            and stripped[:1].isupper()
+            and len(stripped.split()) <= 10
+            and not stripped.endswith(".")
+        ):
+            flush()
+            current.clear()
+        current.append(line)
+    flush()
+    return [s for s in sections if s.strip()]
+
+
+def _fallback_takeaways(summary: str, sections: list[dict]) -> list[str]:
+    takeaways = []
+    for sec in sections:
+        sentence = (sec.get("remember") or sec.get("lead_sentence") or sec.get("prose") or "").strip()
+        if sentence:
+            takeaways.append(_truncate_words(sentence, 22))
+        if len(takeaways) == 5:
+            break
+    if takeaways:
+        return takeaways
+
+    for para in re.split(r"\n\s*\n", summary or ""):
+        cleaned = " ".join(para.split()).strip()
+        if cleaned:
+            takeaways.append(_truncate_words(cleaned, 22))
+        if len(takeaways) == 5:
+            break
+    return takeaways
 
 
 def _build_lite_sections(raw_sections: list[str], summary: str, transcript: str, limit: int) -> list[dict]:
@@ -835,32 +919,56 @@ async def generate_lecture_pdf(
         raise Exception("Lecture not found")
 
     transcript    = data.get("transcript") or ""
+    cleaned_transcript = clean_transcript(transcript)
     summary       = data.get("master_summary") or data.get("summary") or ""
-    title         = data.get("title") or "Lecture Notes"
+    topic         = data.get("topic") or None
+    title         = _fallback_title(data.get("title") or "Lecture Notes", transcript, topic)
     created_at    = str(data.get("created_at") or datetime.now().date())[:10]
     total_chunks  = data.get("total_chunks") or 0
     language      = data.get("language") or "en"
-    topic         = data.get("topic") or None
+    section_rows  = await asyncio.to_thread(get_lecture_sections, lecture_id)
+    grounded_notes = build_grounded_notes(transcript, summary, section_rows=section_rows)
+    grounded_summary = "\n\n".join(
+        " ".join(
+            part for part in [
+                note.get("title", ""),
+                note.get("lead_sentence", ""),
+                note.get("prose", ""),
+                " ".join(note.get("examples", []) or []),
+            ] if part
+        ).strip()
+        for note in grounded_notes
+    ).strip()
 
     # Duration: derive from total_chunks * 12s (more accurate than stored total_duration_seconds)
     duration_sec = total_chunks * 12
 
-    # Word count: deduplicate consecutive identical transcript lines before counting
-    if transcript:
-        raw_lines  = [ln.strip() for ln in transcript.split("\n") if ln.strip()]
-        dedup_lines: list[str] = []
-        for ln in raw_lines:
-            if not dedup_lines or ln != dedup_lines[-1]:
-                dedup_lines.append(ln)
-        word_count = len(" ".join(dedup_lines).split())
-    else:
-        word_count = 0
+    word_count = len(cleaned_transcript.split()) if cleaned_transcript else 0
 
     duration_formatted  = format_duration(duration_sec)
     section_label, review_label, glossary_label = _get_domain_labels(topic)
 
     # 2. Parse raw sections from master summary
-    raw_sections = [s.strip() for s in summary.split("## ") if s.strip()]
+    raw_sections = []
+    if grounded_notes:
+        for note in grounded_notes:
+            block = [note.get("title", "Summary")]
+            if note.get("lead_sentence"):
+                block.append(note["lead_sentence"])
+            if note.get("prose"):
+                block.append(note["prose"])
+            if note.get("concepts"):
+                block.append("Key concepts: " + ", ".join(f"`{c}`" for c in note["concepts"]))
+            if note.get("examples"):
+                block.append("Examples:")
+                block.extend(f"→ {example}" for example in note["examples"])
+            raw_sections.append("\n".join(block).strip())
+    else:
+        raw_sections = [s.strip() for s in summary.split("## ") if s.strip()]
+    if not raw_sections:
+        raw_sections = [s.strip() for s in get_section_summaries(lecture_id) if s.strip()]
+    if not raw_sections:
+        raw_sections = _extract_summary_sections_loose(summary)
     n_sections   = len(raw_sections)
     n_questions  = _question_count(duration_sec)
 
@@ -890,18 +998,14 @@ async def generate_lecture_pdf(
     # Executive summary
     tasks.append(asyncio.to_thread(_call_executive_summary, transcript, title, topic))
 
-    # Per-section enrichments
-    for i, sec in enumerate(raw_sections):
-        tasks.append(asyncio.to_thread(_call_enrich_section, sec, i, n_sections, topic, language))
-
     # Glossary
     tasks.append(asyncio.to_thread(_call_glossary, transcript, topic, 8 if n_sections >= 3 else 5))
 
     # Takeaways
-    tasks.append(asyncio.to_thread(_call_takeaways, transcript, summary, topic))
+    tasks.append(asyncio.to_thread(_call_takeaways, transcript, grounded_summary or summary, topic))
 
     # Quick review
-    tasks.append(asyncio.to_thread(_call_quick_review, transcript, summary, topic, n_questions))
+    tasks.append(asyncio.to_thread(_call_quick_review, transcript, grounded_summary or summary, topic, n_questions))
 
     # Conceptual map — only for 3+ sections (GPT-4o, synthesis quality matters)
     has_map = n_sections >= 3
@@ -929,9 +1033,25 @@ async def generate_lecture_pdf(
     ri += 1
 
     enriched_sections: list[dict] = []
-    for i in range(n_sections):
-        r = results[ri]; ri += 1
-        if isinstance(r, Exception):
+    if grounded_notes:
+        for note in grounded_notes:
+            enriched_sections.append({
+                "title":         note.get("title") or "Summary",
+                "lead_sentence": note.get("lead_sentence") or "",
+                "prose":         note.get("prose") or "",
+                "bullets":       note.get("highlights") or [],
+                "concepts":      note.get("concepts") or [],
+                "examples":      note.get("examples") or [],
+                "raw_section":   "",
+                "analogy":       None,
+                "mistake":       None,
+                "remember":      None,
+                "citations":     note.get("citations") or [],
+                "confidence":    note.get("confidence") or 0.0,
+                "verification_status": note.get("verification_status") or "supported",
+            })
+    else:
+        for i in range(n_sections):
             lead, rest = _extract_lead_sentence(raw_sections[i][:300])
             enriched_sections.append({
                 "title":         f"Section {i + 1}",
@@ -944,9 +1064,10 @@ async def generate_lecture_pdf(
                 "analogy":       None,
                 "mistake":       None,
                 "remember":      None,
+                "citations":     [],
+                "confidence":    0.0,
+                "verification_status": "weak",
             })
-        else:
-            enriched_sections.append(r)
 
     glossary: list[dict] = results[ri] if not isinstance(results[ri], Exception) else []
     ri += 1
@@ -995,6 +1116,12 @@ async def generate_lecture_pdf(
                           f"Keeping retry output but flagging lecture_id={lecture_id} for review.")
             except Exception as e:
                 print(f"[pdf] exec_summary retry error (non-fatal): {e}")
+
+    if takeaways and not _has_grounded_overlap(" ".join(takeaways), transcript, minimum=3):
+        print(f"[pdf] takeaways failed transcript-overlap validation; using fallback.")
+        takeaways = _fallback_takeaways(grounded_summary or summary, enriched_sections)
+    elif not takeaways:
+        takeaways = _fallback_takeaways(grounded_summary or summary, enriched_sections)
 
     # 6. Estimate reading time (total enriched words ÷ 238 wpm)
     doc_word_count = (
@@ -1051,6 +1178,7 @@ async def generate_lecture_pdf(
         "language":             language.upper(),
         "topic":                topic,
         "reading_time_minutes": reading_time_minutes,
+        "summary_confidence":   lecture_summary_confidence(grounded_notes),
         # Domain labels
         "section_label":        section_label,
         "review_label":         review_label,
@@ -1064,7 +1192,7 @@ async def generate_lecture_pdf(
         "conceptual_map":       conceptual_map,
         "study_roadmap":        study_roadmap,
         # Legacy variable (kept for backwards compatibility)
-        "summary_html":         clean_markdown_to_html(summary),
+        "summary_html":         clean_markdown_to_html(grounded_summary or summary),
         "compression_ratio":    0.0,
         # Visual frames
         "visual_frames":        visual_frames,

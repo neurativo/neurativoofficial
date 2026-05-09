@@ -450,6 +450,18 @@ def get_section_summaries(lecture_id: str):
     if hasattr(response, 'data'):
         return [item['section_summary'] for item in response.data]
     return []
+
+
+def get_lecture_sections(lecture_id: str) -> list[dict]:
+    """
+    Returns lecture sections with chunk ranges so callers can attach citations.
+    """
+    response = _fresh_db().table("lecture_sections")\
+        .select("section_index, chunk_range_start, chunk_range_end, section_summary")\
+        .eq("lecture_id", lecture_id)\
+        .order("section_index", desc=False)\
+        .execute()
+    return response.data if hasattr(response, "data") and response.data else []
 def get_latest_section_end_index(lecture_id: str) -> int:
     """
     Returns the chunk_range_end of the latest section, or -1 if no sections exist.

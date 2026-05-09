@@ -81,6 +81,17 @@ const CSS = `
   .lv-sum-example { font-size: 12px; color: ${C.sec}; padding-left: 12px; position: relative; line-height: 1.5; }
   .lv-sum-example::before { content: '→'; position: absolute; left: 0; color: ${C.muted}; }
 
+  .lv-sum-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+  .lv-sum-badge { font-size: 10px; font-weight: 600; color: #166534; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 999px; padding: 3px 7px; }
+  .lv-sum-citations { margin-top: 10px; font-size: 10px; color: ${C.muted}; display: flex; flex-wrap: wrap; gap: 6px; }
+  .lv-sum-citation { padding: 2px 6px; border-radius: 999px; border: 1px solid ${C.border}; background: ${C.bg}; }
+  .lv-trust-note { font-size: 12px; color: ${C.muted}; margin: 0 0 14px; line-height: 1.55; }
+  .lv-aid-panel { margin-top: 16px; background: ${C.card}; border: 1px dashed ${C.borderHov}; border-radius: 12px; padding: 14px 16px; }
+  .lv-aid-title { font-size: 12px; font-weight: 600; color: ${C.text}; margin-bottom: 6px; }
+  .lv-aid-copy { font-size: 12px; color: ${C.muted}; line-height: 1.55; margin-bottom: 10px; }
+  .lv-aid-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .lv-aid-chip { font-size: 11px; color: ${C.sec}; border: 1px solid ${C.border}; border-radius: 999px; padding: 4px 8px; background: ${C.bg}; }
+
   /* QA */
   .lv-qa-messages { display: flex; flex-direction: column; gap: 12px; padding-bottom: 16px; }
   .lv-qa-msg { padding: 10px 14px; border-radius: 10px; font-size: 13px; line-height: 1.6; max-width: 88%; }
@@ -262,11 +273,18 @@ function useIsDark() {
 // ─── parseSummary (mirrors App.jsx) ───────────────────────────────────────────
 function parseSummary(text) {
     if (!text) return [];
-    return text.split('## ').filter(s => s.trim()).map((block) => {
+    const trimmed = text.trim();
+    if (!trimmed || /^processing/i.test(trimmed)) return [];
+    const hasStructuredSections = trimmed.includes('## ');
+    const blocks = hasStructuredSections
+        ? trimmed.split('## ').filter(s => s.trim())
+        : [trimmed];
+    return blocks.map((block, idx) => {
         const lines = block.split('\n');
-        const title = lines[0].trim();
+        const title = hasStructuredSections ? lines[0].trim() : (idx === 0 ? 'Summary' : `Section ${idx + 1}`);
         const highlights = [], concepts = [], examples = [], proseLines = [];
-        for (const line of lines.slice(1)) {
+        const contentLines = hasStructuredSections ? lines.slice(1) : lines;
+        for (const line of contentLines) {
             const l = line.trim();
             if (!l || l === '---') continue;
             if (l.startsWith('>')) { highlights.push(l.replace(/^>\s*/, '')); continue; }
@@ -298,6 +316,10 @@ function parseSummary(text) {
             from = idx + 2;
         }
         if (!found) { const fb = fullProse.indexOf('. '); if (fb !== -1) { lead_sentence = fullProse.slice(0, fb + 1); prose = fullProse.slice(fb + 2).trim(); } }
+        if (!hasStructuredSections && !fullProse) {
+            lead_sentence = lines.map(l => l.trim()).filter(Boolean).join(' ');
+            prose = '';
+        }
         return { title, lead_sentence, prose, concepts, examples, highlights };
     });
 }
@@ -306,8 +328,13 @@ function SummaryCard({ section, accent, index, total, topic }) {
     const a = accent || ACCENTS_LIGHT[0];
     return (
         <div className="lv-sum-card summary-card-enter" style={{ borderLeft: `3px solid ${a.border}` }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                <div className="lv-sum-title" style={{ color: a.title, margin: 0 }}>{section.title}</div>
+            <div className="lv-sum-meta">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                    <div className="lv-sum-title" style={{ color: a.title, margin: 0 }}>{section.title}</div>
+                    {section.verification_status === 'supported' && (
+                        <span className="lv-sum-badge">Transcript-grounded</span>
+                    )}
+                </div>
                 {total > 1 && (
                     <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: 'var(--color-muted)', flexShrink: 0, paddingLeft: 8 }}>
                         {index + 1}/{total}
@@ -329,6 +356,13 @@ function SummaryCard({ section, accent, index, total, topic }) {
             {section.examples.length > 0 && (
                 <div className="lv-sum-examples">
                     {section.examples.map((e, i) => <div key={i} className="lv-sum-example">{renderDomainContent(e, topic) || e}</div>)}
+                </div>
+            )}
+            {section.citations?.length > 0 && (
+                <div className="lv-sum-citations">
+                    {section.citations.map((cite, i) => (
+                        <span key={i} className="lv-sum-citation">Source {cite.label}</span>
+                    ))}
                 </div>
             )}
         </div>
@@ -531,21 +565,21 @@ export default function LectureView() {
         creditsApi.getBalance().then(res => setCreditsInfo(res.data)).catch(() => {});
     }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Poll every 3s while summary is being recomputed; stop when final
+    // Poll every 3s while lecture processing/refinement is still in progress.
     useEffect(() => {
-        if (summaryStatus !== 'recomputing') return;
+        if (!isProcessing && summaryStatus !== 'recomputing') return;
         const interval = setInterval(() => {
             api.get(`/api/v1/lectures/${id}/full`)
                 .then(res => {
-                    if ((res.data.summary_status || 'live') !== 'recomputing') {
-                        setLecture(res.data);
-                        setSummaryStatus(res.data.summary_status || 'final');
-                    }
+                    const nextStatus = res.data.summary_status || 'live';
+                    setLecture(res.data);
+                    setSummaryStatus(nextStatus);
+                    setIsProcessing(nextStatus && !['final', 'done'].includes(nextStatus));
                 })
                 .catch(() => {});
         }, 3000);
         return () => clearInterval(interval);
-    }, [summaryStatus, id]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [summaryStatus, isProcessing, id]); // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
         if (activeTab === 'stats' && id && !stats) {
@@ -681,9 +715,11 @@ export default function LectureView() {
         ? lecture.transcript.split('\n').filter(s => s.trim())
         : [];
 
-    const wordCount = segments.reduce((n, s) => n + s.split(/\s+/).filter(Boolean).length, 0);
+    const wordCount = lecture?.transcript_word_count || segments.reduce((n, s) => n + s.split(/\s+/).filter(Boolean).length, 0);
     const summaryText = lecture?.master_summary || lecture?.summary || '';
-    const summarySections = parseSummary(summaryText);
+    const groundedSections = Array.isArray(lecture?.grounded_notes) ? lecture.grounded_notes : [];
+    const summarySections = groundedSections.length > 0 ? groundedSections : parseSummary(summaryText);
+    const aiStudyAids = lecture?.ai_study_aids?.items || [];
     const topicCount = summarySections.reduce((n, s) => n + s.concepts.length, 0);
     const titleDisplay = lecture?.title
         ? (lecture.title.length > 40 ? lecture.title.slice(0, 40) + '…' : lecture.title)
@@ -855,12 +891,36 @@ export default function LectureView() {
                         {/* Summary */}
                         {activeTab === 'summary' && (
                             <div className="lv-tab-body">
+                                {groundedSections.length > 0 && (
+                                    <p className="lv-trust-note">
+                                        Transcript-backed notes with source timestamps. Flashcards, quiz, and glossary remain AI-generated study tools.
+                                    </p>
+                                )}
                                 {summarySections.length === 0
-                                    ? <div style={{ fontSize: 13, color: C.muted, textAlign: 'center', paddingTop: 40 }}>Summary not yet generated</div>
-                                    : summarySections.map((s, i) => {
-                                        const palette = isDark ? ACCENTS_DARK : ACCENTS_LIGHT;
-                                        return <SummaryCard key={i} section={s} accent={palette[i % palette.length]} index={i} total={summarySections.length} topic={lecture?.topic} />;
-                                    })
+                                    ? <div style={{ fontSize: 13, color: C.muted, textAlign: 'center', paddingTop: 40 }}>
+                                        {isProcessing || summaryStatus === 'recomputing'
+                                            ? 'Summary is still being prepared'
+                                            : 'Summary not yet generated'}
+                                    </div>
+                                    : (
+                                        <>
+                                            {summarySections.map((s, i) => {
+                                                const palette = isDark ? ACCENTS_DARK : ACCENTS_LIGHT;
+                                                return <SummaryCard key={i} section={s} accent={palette[i % palette.length]} index={i} total={summarySections.length} topic={lecture?.topic} />;
+                                            })}
+                                            {aiStudyAids.length > 0 && (
+                                                <div className="lv-aid-panel">
+                                                    <div className="lv-aid-title">AI Study Aids</div>
+                                                    <div className="lv-aid-copy">Generated practice tools are kept separate from grounded notes.</div>
+                                                    <div className="lv-aid-chips">
+                                                        {aiStudyAids.map((item, i) => (
+                                                            <span key={i} className="lv-aid-chip">{item.label} {item.count ? `· ${item.count}` : ''}</span>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </>
+                                    )
                                 }
                             </div>
                         )}
