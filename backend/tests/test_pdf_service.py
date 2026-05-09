@@ -175,9 +175,22 @@ def test_concept_cards_to_pdf_sections_use_verified_card_fields_only():
     sections = _concept_cards_to_pdf_sections([{
         "concept_name": "Economic Goods & Scarcity",
         "definition": "Economic goods are scarce and have opportunity cost.",
+        "definitions": [
+            "Economic goods are scarce and have opportunity cost.",
+            "Economic goods can be free of charge but still limited in supply.",
+        ],
         "key_distinction": "Economic goods are limited, while free goods are unlimited in supply.",
+        "key_distinctions": ["Economic goods are limited, while free goods are unlimited in supply."],
         "exam_trap": "Free of charge does not mean free good.",
+        "exam_traps": [
+            "Free of charge does not mean free good.",
+            "Public goods are not free goods.",
+        ],
         "professor_example": "Government textbooks are still economic goods.",
+        "professor_examples": [
+            "Government textbooks are still economic goods.",
+            "A free Friday class is still an economic good.",
+        ],
         "source": {"label": "13:48 - 18:00", "start_seconds": 828, "end_seconds": 1080},
         "confidence": 0.9,
         "verification_status": "supported",
@@ -186,8 +199,15 @@ def test_concept_cards_to_pdf_sections_use_verified_card_fields_only():
     assert len(sections) == 1
     assert sections[0]["title"] == "Economic Goods & Scarcity"
     assert sections[0]["lead_sentence"] == "Economic goods are scarce and have opportunity cost."
-    assert sections[0]["examples"] == ["Government textbooks are still economic goods."]
-    assert sections[0]["exam_traps"] == ["Free of charge does not mean free good."]
+    assert sections[0]["examples"] == [
+        "Government textbooks are still economic goods.",
+        "A free Friday class is still an economic good.",
+    ]
+    assert sections[0]["exam_traps"] == [
+        "Free of charge does not mean free good.",
+        "Public goods are not free goods.",
+    ]
+    assert sections[0]["versus_items"]
     assert sections[0]["citations"] == [{"label": "13:48 - 18:00", "start_seconds": 828, "end_seconds": 1080}]
     assert sections[0]["analogy"] is None
     assert sections[0]["prose"] == ""

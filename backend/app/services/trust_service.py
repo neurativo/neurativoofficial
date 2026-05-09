@@ -53,6 +53,9 @@ _DEFINITION_MARKERS = (" is ", " are ", " refers to ", " means ", " defined as "
 _TRAP_MARKERS = (
     "do not confuse", "does not mean", "still", "not the same", "common mistake",
     "trap", "important clarification", "not simply", "not equal", "not equal to",
+    "trick", "they will ask", "comes in paper", "comes in papers", "don't confuse",
+    "students think", "students always get this wrong", "wrong", "do you agree",
+    "not really", "careful here", "corrected", "correction",
 )
 _ACADEMIC_TITLE_HINTS = (
     # Universal curriculum structure
@@ -1166,10 +1169,17 @@ def _collect_distinctions(note: dict) -> list[str]:
 def _collect_exam_traps(note: dict) -> list[str]:
     traps = []
     for text in [note.get("lead_sentence", ""), note.get("prose", "")] + (note.get("highlights") or []) + (note.get("examples") or []):
-        for sentence in _split_sentences(text):
+        sentences = _split_sentences(text)
+        for idx, sentence in enumerate(sentences):
             lowered = sentence.lower()
             if any(marker in lowered for marker in _TRAP_MARKERS):
-                traps.append(sentence)
+                window = []
+                if idx > 0:
+                    window.append(sentences[idx - 1])
+                window.append(sentence)
+                if idx + 1 < len(sentences):
+                    window.append(sentences[idx + 1])
+                traps.append(" ".join(window))
     return _dedupe_texts(traps)[:4]
 
 
@@ -1234,7 +1244,88 @@ def build_concept_sections(grounded_notes: list[dict]) -> list[dict]:
         chapters[merge_index - 1].extend(chapters[merge_index])
         del chapters[merge_index]
 
-    return [_merge_chapter_notes(group) for group in chapters if group]
+    return _merge_duplicate_concept_sections([_merge_chapter_notes(group) for group in chapters if group])
+
+
+def _section_merge_key(section: dict) -> str:
+    title = _normalise_ws(section.get("title", "")).lower().replace("&", " and ")
+    corpus = " ".join([
+        title,
+        section.get("core_explanation", ""),
+        " ".join(section.get("concepts") or []),
+        " ".join(section.get("key_definitions") or []),
+        " ".join(section.get("important_distinctions") or []),
+    ])
+    canonical = _canonical_curriculum_concept(corpus) or _canonical_title_from_text(
+        section.get("title", ""),
+        section.get("core_explanation", ""),
+        section.get("concepts") or [],
+        prose=" ".join(section.get("key_definitions") or []),
+        examples=section.get("examples") or [],
+        highlights=(section.get("important_distinctions") or []) + (section.get("exam_traps") or []),
+    )
+    if canonical:
+        return _normalise_ws(canonical).lower()
+    tokens = [t for t in _TOKEN_RE.findall(title) if t not in _STOPWORDS]
+    return " ".join(tokens[:5])
+
+
+def _merge_section_records(base: dict, incoming: dict) -> dict:
+    merged = dict(base)
+    text_fields = ("core_explanation",)
+    for field in text_fields:
+        merged[field] = " ".join(_dedupe_texts(_split_sentences(" ".join([
+            merged.get(field, ""),
+            incoming.get(field, ""),
+        ]))))[:1200]
+
+    for field in ("key_definitions", "important_distinctions", "exam_traps", "examples", "concepts", "subsections", "source_references"):
+        merged[field] = _dedupe_texts((merged.get(field) or []) + (incoming.get(field) or []))
+
+    citations = []
+    seen = set()
+    for citation in (merged.get("citations") or []) + (incoming.get("citations") or []):
+        key = (citation.get("start_seconds"), citation.get("end_seconds"), citation.get("label"))
+        if key in seen:
+            continue
+        seen.add(key)
+        citations.append(citation)
+    merged["citations"] = citations
+
+    subtopic_sections = []
+    seen_subtopics = set()
+    for item in (merged.get("subtopic_sections") or []) + (incoming.get("subtopic_sections") or []):
+        key = _normalise_ws(item.get("title", "")).lower()
+        if not key or key in seen_subtopics:
+            continue
+        seen_subtopics.add(key)
+        subtopic_sections.append(item)
+    merged["subtopic_sections"] = subtopic_sections[:8]
+
+    starts = [s for s in (merged.get("start_seconds"), incoming.get("start_seconds")) if s is not None]
+    ends = [s for s in (merged.get("end_seconds"), incoming.get("end_seconds")) if s is not None]
+    if starts:
+        merged["start_seconds"] = min(starts)
+    if ends:
+        merged["end_seconds"] = max(ends)
+    merged["confidence"] = round(max(float(merged.get("confidence") or 0.0), float(incoming.get("confidence") or 0.0)), 2)
+    merged["verification_status"] = "supported" if "supported" in {merged.get("verification_status"), incoming.get("verification_status")} else "weak"
+    return merged
+
+
+def _merge_duplicate_concept_sections(sections: list[dict]) -> list[dict]:
+    merged_by_key: dict[str, dict] = {}
+    order = []
+    for section in sections:
+        key = _section_merge_key(section)
+        if not key:
+            key = _normalise_ws(section.get("title", "")).lower()
+        if key in merged_by_key:
+            merged_by_key[key] = _merge_section_records(merged_by_key[key], section)
+        else:
+            merged_by_key[key] = section
+            order.append(key)
+    return [merged_by_key[key] for key in order]
 
 
 def _single_source_range(citations: list[dict]) -> dict | None:
@@ -1266,6 +1357,16 @@ def _first_useful_sentence(texts: list[str], limit: int = 2) -> str:
     return " ".join(_dedupe_texts(sentences)[:limit])
 
 
+def _useful_sentences(texts: list[str], limit: int = 4) -> list[str]:
+    sentences = []
+    for text in texts:
+        for sentence in _split_sentences(text):
+            if _educational_signal_type(sentence) == "administrative lecture content":
+                continue
+            sentences.append(sentence)
+    return _dedupe_texts(sentences)[:limit]
+
+
 def build_concept_note_cards(concept_sections: list[dict]) -> list[dict]:
     """
     Build the on-screen revision-note model.
@@ -1287,20 +1388,25 @@ def build_concept_note_cards(concept_sections: list[dict]) -> list[dict]:
         if role not in _STRUCTURAL_CONCEPT_ROLES:
             continue
 
-        definition = _first_useful_sentence(
-            (section.get("key_definitions") or []) + [section.get("core_explanation", "")]
+        definitions = _useful_sentences(
+            (section.get("key_definitions") or []) + [section.get("core_explanation", "")],
+            limit=3,
         )
+        definition = " ".join(definitions[:2])
         if not definition:
             continue
 
-        distinction = _first_useful_sentence(section.get("important_distinctions") or [], limit=2)
+        distinctions = _useful_sentences(section.get("important_distinctions") or [], limit=4)
+        distinction = " ".join(distinctions[:2])
         if not distinction and (" vs " in title.lower() or " versus " in title.lower()):
             concepts = _dedupe_texts(section.get("concepts") or [])
             if len(concepts) >= 2:
                 distinction = f"{concepts[0]} is contrasted with {concepts[1]}."
 
-        exam_trap = _first_useful_sentence(section.get("exam_traps") or [], limit=1)
-        professor_example = _first_useful_sentence(section.get("examples") or [], limit=1)
+        exam_traps = _useful_sentences(section.get("exam_traps") or [], limit=4)
+        exam_trap = exam_traps[0] if exam_traps else ""
+        professor_examples = _useful_sentences(section.get("examples") or [], limit=6)
+        professor_example = professor_examples[0] if professor_examples else ""
         source = _single_source_range(section.get("citations") or [])
         field_count = 2 + bool(distinction) + bool(exam_trap) + bool(professor_example)
         if source:
@@ -1311,9 +1417,13 @@ def build_concept_note_cards(concept_sections: list[dict]) -> list[dict]:
         cards.append({
             "concept_name": title,
             "definition": definition,
+            "definitions": definitions,
             "key_distinction": distinction,
+            "key_distinctions": distinctions,
             "exam_trap": exam_trap,
+            "exam_traps": exam_traps,
             "professor_example": professor_example,
+            "professor_examples": professor_examples,
             "source": source,
             "start_seconds": section.get("start_seconds"),
             "confidence": section.get("confidence", 0.0),
@@ -1377,27 +1487,31 @@ def _compress_core_idea(text: str, limit: int = 8) -> str:
 
 
 def _quick_recall_cue(text: str) -> str:
-    lowered = _normalise_ws(text).lower()
+    cleaned = _normalise_ws(text)
+    lowered = cleaned.lower()
     if not lowered:
         return ""
     if "testable" in lowered or "tested against facts" in lowered or "verifiable" in lowered:
-        return "Fact-based"
+        return "A positive statement is fact-based and can be tested or verified."
     if "value judgment" in lowered or "opinion" in lowered or "normative" in lowered:
-        return "Opinion-based"
+        return "A normative statement expresses a value judgment or opinion."
     if "scarce" in lowered or "limited in supply" in lowered or "opportunity cost" in lowered:
-        return "Limited supply"
+        return "An economic good is scarce, so using it involves opportunity cost."
     if "unlimited in supply" in lowered or "gifted by nature" in lowered or "abundant" in lowered:
-        return "Naturally abundant"
+        return "A free or non-economic good is naturally available without scarcity in the lecture context."
     if "public good" in lowered or "shared" in lowered:
-        return "Shared access"
+        return "A public good can be shared, but it is not the same as a free good."
     if "dissatisfaction" in lowered or "harm" in lowered or "pollution" in lowered or "garbage" in lowered:
-        return "Negative utility"
+        return "An economic bad creates disutility rather than satisfaction."
     if "human intervention" in lowered or "convert" in lowered or "conversion" in lowered:
-        return "Needs intervention"
-    tokens = [word for word in _TOKEN_RE.findall(text) if word.lower() not in _STOPWORDS]
-    if not tokens:
-        return ""
-    return " ".join(tokens[:3]).title()
+        return "Human intervention can convert a non-economic good into an economic good."
+    sentence = _split_sentences(cleaned)[0] if _split_sentences(cleaned) else cleaned
+    words = sentence.split()
+    if len(words) > 24:
+        sentence = " ".join(words[:24]).rstrip(" ,;:") + "."
+    elif sentence and sentence[-1] not in ".!?":
+        sentence += "."
+    return sentence
 
 
 def _pick_term_citation(item: dict, fallback_citations: list[dict]) -> list[dict]:
@@ -1486,7 +1600,7 @@ def build_verified_cheat_sheet(
             core_source = definition or (best_claim.get("text", "") if best_claim else overview)
             core_idea = _compress_core_idea(core_source or overview, limit=10)
             exam_trap = _compress_core_idea((subtopic.get("exam_traps") or [""])[0], limit=10)
-            quick_recall = _quick_recall_cue(" ".join(filter(None, [core_idea, exam_trap])))
+            quick_recall = _quick_recall_cue(" ".join(filter(None, [core_source, (subtopic.get("exam_traps") or [""])[0], overview])))
             confidence = max(
                 float(best_claim.get("confidence", 0.0)) if best_claim else 0.0,
                 float(chapter.get("confidence") or 0.0),
@@ -1522,7 +1636,7 @@ def build_verified_cheat_sheet(
                     "term": chapter_title or "Key Concept",
                     "core_idea": overview,
                     "exam_trap": exam_trap,
-                    "quick_recall": _quick_recall_cue(" ".join(filter(None, [overview, exam_trap]))),
+                    "quick_recall": _quick_recall_cue(" ".join(filter(None, [overview_source, (chapter.get("exam_traps") or [""])[0], chapter.get("core_explanation", "")]))),
                     "citations": chapter_citations[:1],
                     "confidence": round(float(chapter.get("confidence") or 0.0), 2),
                     "revision_priority": float(priority_lookup.get(_normalise_concept_key(chapter_title), {}).get("revision_priority", chapter.get("confidence") or 0.0)),
@@ -1552,7 +1666,7 @@ def build_verified_cheat_sheet(
                 "term": _normalise_ws(chapter.get("title", "")) or "Key Concept",
                 "core_idea": overview,
                 "exam_trap": _compress_core_idea((chapter.get("exam_traps") or [""])[0], limit=10),
-                "quick_recall": _quick_recall_cue(overview),
+                "quick_recall": _quick_recall_cue(chapter.get("core_explanation", "") or overview),
                 "citations": (chapter.get("citations") or [])[:1],
                 "confidence": round(float(chapter.get("confidence") or 0.0), 2),
                 "revision_priority": float(priority_lookup.get(_normalise_concept_key(chapter.get("title", "")), {}).get("revision_priority", chapter.get("confidence") or 0.0)),

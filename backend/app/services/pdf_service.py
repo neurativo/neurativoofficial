@@ -229,23 +229,28 @@ def _concept_cards_to_pdf_sections(concept_note_cards: list[dict]) -> list[dict]
         if not title:
             continue
         citations = [card["source"]] if card.get("source") else []
+        definitions = card.get("definitions") or ([card["definition"]] if card.get("definition") else [])
+        distinctions = card.get("key_distinctions") or ([card["key_distinction"]] if card.get("key_distinction") else [])
+        exam_traps = card.get("exam_traps") or ([card["exam_trap"]] if card.get("exam_trap") else [])
+        examples = card.get("professor_examples") or ([card["professor_example"]] if card.get("professor_example") else [])
         section = {
             "title": title,
             "lead_sentence": card.get("definition") or "",
             "prose": "",
             "bullets": [],
             "concepts": [title],
-            "examples": [card["professor_example"]] if card.get("professor_example") else [],
-            "definitions": [card["definition"]] if card.get("definition") else [],
-            "distinctions": [card["key_distinction"]] if card.get("key_distinction") else [],
-            "exam_traps": [card["exam_trap"]] if card.get("exam_trap") else [],
+            "examples": examples,
+            "definitions": definitions,
+            "distinctions": distinctions,
+            "versus_items": _build_versus_items(title, distinctions),
+            "exam_traps": exam_traps,
             "subsections": [
-                label for label, value in [
-                    ("Definition", card.get("definition")),
-                    ("Key Distinction", card.get("key_distinction")),
-                    ("Exam Trap", card.get("exam_trap")),
-                    ("Professor's Example", card.get("professor_example")),
-                ] if value
+                label for label, values in [
+                    ("Definition", definitions),
+                    ("Key Distinction", distinctions),
+                    ("Exam Trap", exam_traps),
+                    ("Professor's Examples", examples),
+                ] if values
             ],
             "subtopic_sections": [],
             "raw_section": "",
@@ -259,6 +264,22 @@ def _concept_cards_to_pdf_sections(concept_note_cards: list[dict]) -> list[dict]
         section.update(_section_render_profile(section))
         sections.append(section)
     return sections
+
+
+def _build_versus_items(title: str, distinctions: list[str]) -> list[dict]:
+    text = " ".join([title or ""] + (distinctions or []))
+    match = re.search(r"\b([A-Z][A-Za-z\s-]{2,40})\s+(?:vs\.?|versus)\s+([A-Z][A-Za-z\s-]{2,40})\b", text)
+    if match:
+        return [{"left": match.group(1).strip(), "right": match.group(2).strip(), "detail": (distinctions or [""])[0]}]
+    distinction = (distinctions or [""])[0]
+    while_match = re.search(r"(.{3,80}?)\s+(?:while|whereas|but|unlike)\s+(.{3,100})", distinction, flags=re.I)
+    if while_match:
+        return [{
+            "left": while_match.group(1).strip(" .,:;"),
+            "right": while_match.group(2).strip(" .,:;"),
+            "detail": distinction,
+        }]
+    return []
 
 
 def _adaptive_priority_for_text(text: str, adaptive_intelligence: dict) -> float:
@@ -296,6 +317,41 @@ def _prioritize_revision_outputs(
         ),
     )
     return glossary_sorted, takeaways_sorted, quick_review_sorted
+
+
+def _glossary_from_concept_sections(concept_sections: list[dict]) -> list[dict]:
+    terms = []
+    seen = set()
+    for section in concept_sections or []:
+        candidates = [section.get("title", "")] + (section.get("concepts") or [])
+        definitions = (section.get("key_definitions") or []) + [section.get("core_explanation", "")]
+        definition = next((d for d in definitions if d and len(d.split()) >= 4), "")
+        for term in candidates:
+            term = (term or "").strip()
+            key = term.lower()
+            if not term or key in seen or term.lower() in {"key concept", "lecture concept"}:
+                continue
+            if not definition:
+                continue
+            seen.add(key)
+            terms.append({"term": term, "definition": definition})
+    return terms
+
+
+def _merge_glossary(primary: list[dict], supplemental: list[dict], limit: int = 24) -> list[dict]:
+    merged = []
+    seen = set()
+    for item in (primary or []) + (supplemental or []):
+        term = (item.get("term") or "").strip()
+        definition = (item.get("definition") or "").strip()
+        key = term.lower()
+        if not term or not definition or key in seen:
+            continue
+        seen.add(key)
+        merged.append({"term": term, "definition": definition, **{k: v for k, v in item.items() if k not in {"term", "definition"}}})
+        if len(merged) >= limit:
+            break
+    return merged
 
 
 def _build_revision_focus_summary(adaptive_intelligence: dict) -> list[dict]:
@@ -610,6 +666,14 @@ def _call_enrich_section(
                     "- \"examples\": Array of concrete real-world examples or applications "
                     "the lecturer explicitly gave. Return an empty array if none were given. "
                     "Never invent examples that were not in the source text.\n"
+                    "- \"definition\": The professor's own definition restated cleanly. If the "
+                    "professor refined it, use the most complete transcript-supported version.\n"
+                    "- \"key_distinction\": The most important contrast taught in this section, "
+                    "for example positive vs normative or economic vs non-economic goods. Return null if absent.\n"
+                    "- \"exam_trap\": A transcript-supported warning, trick, correction, or misconception. "
+                    "Populate this whenever the section includes signals like trick, they will ask, "
+                    "comes in paper, don't confuse, common mistake, students think, wrong, do you agree, "
+                    "not really, careful here, or a student misconception being corrected. Return null only if absent.\n"
                     "- \"analogy\": A 2-3 sentence real-world analogy that makes this concept click. "
                     "Use 'Think of...' or 'Imagine...' framing. Only generate if a natural analogy "
                     "exists for this specific content. Return null if no natural analogy exists.\n"
@@ -647,6 +711,9 @@ def _call_enrich_section(
         "bullets":       data.get("bullets") or [],
         "concepts":      concepts,
         "examples":      examples,
+        "definitions":   [data.get("definition")] if data.get("definition") else [],
+        "distinctions":  [data.get("key_distinction")] if data.get("key_distinction") else [],
+        "exam_traps":    [data.get("exam_trap")] if data.get("exam_trap") else [],
         "raw_section":   section_text,
         "analogy":       data.get("analogy") or None,
         "mistake":       data.get("mistake") or None,
@@ -667,14 +734,19 @@ def _call_glossary(transcript: str, topic: str | None, n_terms: int = 8) -> list
                     "Note: The transcript may contain mixed languages. Extract meaning from all languages present. Respond in English.\n\n"
                     # transcript arg is the grounded_summary (full-lecture coverage) — use all of it
                     f"LECTURE CONTENT:\n{transcript[:9000]}\n\n"
-                    f"Extract {n_terms} key academic or technical terms from this lecture.{hint} "
-                    "For each term provide a clear 1-sentence definition a student can memorise. "
+                    f"Extract up to {n_terms} distinct academic or technical terms introduced or defined in this lecture.{hint} "
+                    "Prefer every lecture-defined term over generic textbook terms. For economics lectures, include each "
+                    "distinct economics term the professor introduced, including positive/normative statements, economic/non-economic goods, "
+                    "free goods, public goods, utility, disutility, opportunity cost, scarcity, and economic/non-economic resources when present. "
+                    "Definitions must match what the professor said and must never contradict explicit lecture statements. "
+                    "If the lecture says public goods are limited in supply, do not define them as unlimited. "
+                    "For each term provide one exam-ready sentence a student can memorise. "
                     'Return JSON: {"terms": [{"term": "...", "definition": "..."}]}'
                 ),
             }
         ],
         temperature=0.2,
-        max_tokens=700,
+        max_tokens=1200,
         response_format={"type": "json_object"},
     )
     log_cost("pdf_glossary", "gpt-4o-mini",
@@ -983,6 +1055,10 @@ def _render_pdf(html_content: str, title_short: str, watermark: bool = False) ->
                     "<div style='"
                     "width:100%;font-size:7pt;color:#94a3b8;"
                     "font-family:Arial,sans-serif;"
+                    "letter-spacing:0!important;word-spacing:0!important;"
+                    "font-variant-ligatures:none!important;"
+                    "font-feature-settings:&quot;liga&quot; 0,&quot;calt&quot; 0!important;"
+                    "text-rendering:geometricPrecision;"
                     "text-align:center;padding:0 22mm;"
                     "box-sizing:border-box;"
                     "'>Page <span class='pageNumber'></span> "
@@ -992,6 +1068,10 @@ def _render_pdf(html_content: str, title_short: str, watermark: bool = False) ->
                     footer = (
                         "<div style='"
                         "width:100%;font-family:Arial,sans-serif;"
+                        "letter-spacing:0!important;word-spacing:0!important;"
+                        "font-variant-ligatures:none!important;"
+                        "font-feature-settings:&quot;liga&quot; 0,&quot;calt&quot; 0!important;"
+                        "text-rendering:geometricPrecision;"
                         "box-sizing:border-box;padding:0 22mm;"
                         "display:flex;justify-content:space-between;align-items:center;"
                         "'>"
@@ -1014,6 +1094,10 @@ def _render_pdf(html_content: str, title_short: str, watermark: bool = False) ->
                         "<div style='"
                         "width:100%;font-size:7pt;color:#94a3b8;"
                         "font-family:Arial,sans-serif;"
+                        "letter-spacing:0!important;word-spacing:0!important;"
+                        "font-variant-ligatures:none!important;"
+                        "font-feature-settings:&quot;liga&quot; 0,&quot;calt&quot; 0!important;"
+                        "text-rendering:geometricPrecision;"
                         "display:flex;justify-content:space-between;"
                         "padding:0 22mm;border-bottom:0.5px solid #e2e8f0;"
                         "padding-bottom:4px;box-sizing:border-box;"
@@ -1269,7 +1353,7 @@ async def generate_lecture_pdf(
 
     # Glossary — use grounded_summary (derived from full master_summary) so terms from ALL
     # segments of the lecture are covered, not just the first chunk of raw transcript
-    tasks.append(asyncio.to_thread(_call_glossary, grounded_summary or cleaned_transcript, topic, 8 if n_sections >= 3 else 5))
+    tasks.append(asyncio.to_thread(_call_glossary, grounded_summary or cleaned_transcript, topic, 18 if n_sections >= 3 else 10))
 
     # Takeaways
     tasks.append(asyncio.to_thread(_call_takeaways, transcript, grounded_summary or summary, topic))
@@ -1394,6 +1478,7 @@ async def generate_lecture_pdf(
 
     glossary: list[dict] = results[ri] if not isinstance(results[ri], Exception) else []
     ri += 1
+    glossary = _merge_glossary(_glossary_from_concept_sections(concept_sections), glossary, limit=24)
 
     # Mnemonics — sequential second pass (needs glossary result)
     if glossary:
@@ -1441,6 +1526,10 @@ async def generate_lecture_pdf(
             section["mistake"] = enr["mistake"]
         if enr.get("remember") and not section.get("remember"):
             section["remember"] = enr["remember"]
+        for field in ("definitions", "distinctions", "exam_traps", "examples"):
+            if enr.get(field):
+                section[field] = list(dict.fromkeys((section.get(field) or []) + (enr.get(field) or [])))
+                section.update(_section_render_profile(section))
         # Only fill prose/bullets when section is content-thin (grounded_notes path)
         if not section.get("prose") and enr.get("prose"):
             section["prose"] = enr["prose"]

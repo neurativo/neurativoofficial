@@ -56,7 +56,7 @@
                 font-family: 'Inter', sans-serif;
                 font-size: 7pt;
                 color: #9ca3af;
-                letter-spacing: 0.1em;
+                letter-spacing: 0;
             }
         }
         @page :first { margin-top: 12mm; }
@@ -65,6 +65,12 @@
             box-sizing: border-box;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
+            letter-spacing: 0 !important;
+            word-spacing: 0 !important;
+            font-variant-ligatures: none !important;
+            -webkit-font-variant-ligatures: none !important;
+            font-feature-settings: "liga" 0, "calt" 0 !important;
+            text-rendering: geometricPrecision;
         }
         html, body { margin: 0; padding: 0; }
         body {
@@ -75,11 +81,11 @@
             background: var(--paper);
             /* Disable ligatures & zero letter/word spacing: prevents Chromium PDF
                text-layer interleaving when glyphs are subsetted with ligature encodings */
-            font-variant-ligatures: none;
-            -webkit-font-variant-ligatures: none;
-            font-feature-settings: "kern", "liga" 0, "calt" 0;
-            letter-spacing: 0;
-            word-spacing: 0;
+            font-variant-ligatures: none !important;
+            -webkit-font-variant-ligatures: none !important;
+            font-feature-settings: "liga" 0, "calt" 0 !important;
+            letter-spacing: 0 !important;
+            word-spacing: 0 !important;
             /* geometricPrecision + no subpixel smoothing = clean single-glyph advances */
             text-rendering: geometricPrecision;
             -webkit-font-smoothing: none;
@@ -821,6 +827,31 @@
         .edu-box.definition { background: #f9f7f2; }
         .edu-box.distinction { background: #f8fafc; }
         .edu-box.exam-trap { background: #fff9e7; border-color: #f2d48b; }
+        .versus-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2mm;
+            margin: 2.5mm 0;
+            page-break-inside: avoid;
+        }
+        .versus-cell {
+            border: var(--hairline);
+            border-radius: 6px;
+            padding: 2.6mm 3mm;
+            background: #f8fafc;
+        }
+        .versus-label {
+            font-size: 6.8pt;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: var(--ink-4);
+            margin-bottom: 1mm;
+        }
+        .versus-text {
+            font-size: 8.7pt;
+            color: var(--ink-2);
+            line-height: 1.45;
+        }
         .study-inline-grid {
             display: grid;
             grid-template-columns: 0.78fr 1.8fr;
@@ -1549,6 +1580,23 @@
             {% endif %}
 
             {% if sec.show_distinction_box %}
+            {% if sec.versus_items %}
+            {% for item in sec.versus_items[:1] %}
+            <div class="versus-grid">
+                <div class="versus-cell">
+                    <div class="versus-label">Left Side</div>
+                    <div class="versus-text">{{ item.left }}</div>
+                </div>
+                <div class="versus-cell">
+                    <div class="versus-label">Right Side</div>
+                    <div class="versus-text">{{ item.right }}</div>
+                </div>
+            </div>
+            {% if item.detail %}
+            <p>{{ item.detail }}</p>
+            {% endif %}
+            {% endfor %}
+            {% else %}
             <div class="edu-box">
                 <div class="edu-box-label">Important Distinctions</div>
                 <ul class="edu-box-list">
@@ -1557,6 +1605,7 @@
                     {% endfor %}
                 </ul>
             </div>
+            {% endif %}
             {% endif %}
 
             {% if sec.show_examples_block %}

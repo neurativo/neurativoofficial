@@ -370,7 +370,7 @@ def test_build_verified_cheat_sheet_builds_dense_rows_from_verified_chapters():
     assert cheat_sheet[0]["chapter_title"] == "Positive vs Normative Statements"
     assert cheat_sheet[0]["rows"][0]["term"] in {"Positive Statements", "Normative Statements"}
     assert all(row["core_idea"] for row in cheat_sheet[0]["rows"])
-    assert any(row["quick_recall"] == "Fact-based" for row in cheat_sheet[0]["rows"])
+    assert any("can be tested or verified" in row["quick_recall"] for row in cheat_sheet[0]["rows"])
 
 
 def test_build_verified_cheat_sheet_filters_contradicted_claims():
@@ -1071,6 +1071,85 @@ def test_build_concept_note_cards_replace_broken_on_screen_summary():
     assert cards[0]["exam_trap"] == "Positive does not mean good; it means testable."
     assert cards[0]["professor_example"]
     assert cards[0]["source"]["label"] == "06:12 - 10:36"
+
+
+def test_build_concept_note_cards_preserve_multiple_examples_and_exam_traps():
+    sections = [{
+        "title": "Economic Goods & Scarcity",
+        "core_explanation": "Economic goods are limited in supply and have opportunity cost.",
+        "key_definitions": ["Economic goods are scarce goods that satisfy wants."],
+        "important_distinctions": ["Economic goods are limited, while non-economic goods are gifted by nature."],
+        "exam_traps": [
+            "Textbooks given free by government are economic goods, not free goods.",
+            "Public goods are not free goods because they are limited in supply.",
+        ],
+        "examples": [
+            "Government textbooks are still economic goods.",
+            "A free Friday class is still an economic good.",
+        ],
+        "concepts": ["economic goods", "scarcity"],
+        "citations": [{"label": "13:48-18:00", "start_seconds": 828, "end_seconds": 1080}],
+        "start_seconds": 828,
+        "confidence": 0.91,
+        "verification_status": "supported",
+    }]
+
+    cards = build_concept_note_cards(sections)
+
+    assert cards[0]["professor_examples"] == [
+        "Government textbooks are still economic goods.",
+        "A free Friday class is still an economic good.",
+    ]
+    assert cards[0]["exam_traps"] == [
+        "Textbooks given free by government are economic goods, not free goods.",
+        "Public goods are not free goods because they are limited in supply.",
+    ]
+
+
+def test_build_concept_sections_merges_duplicate_titles_across_lecture():
+    grounded_notes = [
+        {
+            "title": "Economic Goods & Scarcity",
+            "lead_sentence": "Economic goods are scarce and limited in supply.",
+            "prose": "Economic goods create opportunity cost.",
+            "concepts": ["economic goods", "scarcity"],
+            "examples": ["Government textbooks are economic goods."],
+            "highlights": [],
+            "citations": [{"label": "10:00-12:00", "start_seconds": 600, "end_seconds": 720}],
+            "confidence": 0.9,
+            "verification_status": "supported",
+        },
+        {
+            "title": "Utility and Goods",
+            "lead_sentence": "Utility means satisfaction from goods.",
+            "prose": "Goods satisfy wants.",
+            "concepts": ["utility", "goods"],
+            "examples": [],
+            "highlights": [],
+            "citations": [{"label": "12:00-13:00", "start_seconds": 720, "end_seconds": 780}],
+            "confidence": 0.85,
+            "verification_status": "supported",
+        },
+        {
+            "title": "Economic Goods & Scarcity",
+            "lead_sentence": "Economic goods do not always have a price.",
+            "prose": "A free Friday class is still an economic good.",
+            "concepts": ["economic goods", "opportunity cost"],
+            "examples": ["A free Friday class is still an economic good."],
+            "highlights": ["Common mistake: economic goods do not always have a price."],
+            "citations": [{"label": "20:00-22:00", "start_seconds": 1200, "end_seconds": 1320}],
+            "confidence": 0.88,
+            "verification_status": "supported",
+        },
+    ]
+
+    sections = build_concept_sections(grounded_notes)
+    titles = [section["title"] for section in sections]
+
+    assert titles.count("Economic Goods & Scarcity") == 1
+    econ_section = next(section for section in sections if section["title"] == "Economic Goods & Scarcity")
+    assert "Government textbooks are economic goods." in econ_section["examples"]
+    assert "A free Friday class is still an economic good." in econ_section["examples"]
 
 
 def test_build_concept_sections_keeps_persistent_concept_examples_inside_chapter():
