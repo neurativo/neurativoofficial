@@ -1,5 +1,5 @@
 from app.services.transcript_cleaner import clean
-from app.services.trust_service import build_grounded_notes, enrich_lecture_payload
+from app.services.trust_service import build_concept_sections, build_grounded_notes, enrich_lecture_payload
 
 
 def test_semantic_dedupe_collapses_near_duplicate_sentences():
@@ -49,6 +49,28 @@ def test_enrich_lecture_payload_adds_grounded_notes_and_ai_study_aids():
     enriched = enrich_lecture_payload(lecture)
 
     assert enriched["grounded_notes"]
+    assert enriched["concept_sections"]
     assert enriched["summary_confidence"] > 0
     assert enriched["transcript_word_count"] > 0
     assert {item["type"] for item in enriched["ai_study_aids"]["items"]} == {"flashcards", "quiz", "glossary"}
+
+
+def test_build_concept_sections_extracts_educational_structure():
+    grounded_notes = [{
+        "title": "Economic vs Non-Economic Goods",
+        "lead_sentence": "Economic goods are scarce while non-economic goods are abundant.",
+        "prose": "A good being free of charge does not mean it is a free good. Government textbooks are still economic goods because supply is limited.",
+        "concepts": ["economic goods", "non-economic goods"],
+        "examples": ["Air is a non-economic good.", "Government textbooks are still economic goods."],
+        "highlights": ["Do not confuse free of charge with free goods."],
+        "citations": [{"label": "14:00-17:30", "start_seconds": 840, "end_seconds": 1050}],
+        "confidence": 0.88,
+        "verification_status": "supported",
+    }]
+
+    sections = build_concept_sections(grounded_notes)
+
+    assert sections[0]["title"] == "Economic vs Non-Economic Goods"
+    assert sections[0]["important_distinctions"]
+    assert sections[0]["exam_traps"]
+    assert sections[0]["examples"]

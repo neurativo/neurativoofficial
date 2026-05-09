@@ -17,7 +17,7 @@ def test_transcribe_audio_bytes_has_no_language_pin():
     )
 
 
-def test_background_task_uses_summarize_topic_segment():
+def test_background_task_uses_concept_master_summary():
     """_transcribe_background must call summarize_topic_segment for chunked summarisation.
 
     The old code passed [transcript_text] directly to generate_master_summary.
@@ -28,9 +28,8 @@ def test_background_task_uses_summarize_topic_segment():
     from app.api import endpoints
 
     source = inspect.getsource(endpoints._transcribe_background)
-    assert "summarize_topic_segment" in source, (
-        "_transcribe_background must call summarize_topic_segment to chunk-summarise "
-        "the transcript before passing to generate_master_summary."
+    assert "_process_lecture_job" in source or "_process_from_transcript" in source or "generate_concept_master_summary" in source, (
+        "_transcribe_background must use the concept-summary pipeline rather than raw transcript compression."
     )
 
 
@@ -44,7 +43,6 @@ def test_background_task_does_not_pass_raw_transcript_to_master_summary():
     from app.api import endpoints
 
     source = inspect.getsource(endpoints._transcribe_background)
-    assert "[transcript_text]" not in source or "summarize_topic_segment" in source, (
-        "_transcribe_background must not pass raw transcript directly to "
-        "generate_master_summary — use chunked summarize_topic_segment first."
+    assert "[transcript_text]" not in source or "_process_lecture_job" in source or "_process_from_transcript" in source or "generate_concept_master_summary" in source, (
+        "_transcribe_background must not pass raw transcript directly to generate_master_summary."
     )

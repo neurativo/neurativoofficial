@@ -50,6 +50,9 @@ const CSS = `
   .sv-sum-concept { font-size: 11px; color: ${C.sec}; background: ${C.bg}; border: 1px solid ${C.border}; border-radius: 5px; padding: 2px 7px; }
   .sv-sum-citations { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; }
   .sv-sum-citation { font-size: 10px; color: ${C.muted}; border: 1px solid ${C.border}; border-radius: 999px; padding: 2px 6px; }
+  .sv-sum-group { margin-top: 12px; }
+  .sv-sum-group-label { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: ${C.muted}; margin-bottom: 6px; }
+  .sv-sum-group-item { font-size: 12px; color: ${C.sec}; line-height: 1.6; padding: 8px 10px; border-radius: 10px; background: ${C.bg}; border: 1px solid ${C.border}; margin-bottom: 6px; }
   .sv-transcript-toggle { display: flex; align-items: center; gap: 6px; font-size: 13px; color: ${C.sec}; background: none; border: 1px solid ${C.border}; border-radius: 9px; padding: 8px 14px; cursor: pointer; font-family: inherit; transition: border-color 0.15s; }
   .sv-transcript-toggle:hover { border-color: ${C.borderHov}; }
   .sv-transcript-list { margin-top: 16px; display: flex; flex-direction: column; gap: 10px; }
@@ -265,7 +268,9 @@ export default function ShareView() {
     }
 
     const summaryText = lecture.master_summary || lecture.summary || '';
-    const sections = Array.isArray(lecture.grounded_notes) && lecture.grounded_notes.length > 0
+    const sections = Array.isArray(lecture.concept_sections) && lecture.concept_sections.length > 0
+        ? lecture.concept_sections
+        : Array.isArray(lecture.grounded_notes) && lecture.grounded_notes.length > 0
         ? lecture.grounded_notes
         : parseSummary(summaryText);
     const segments = lecture.transcript
@@ -313,16 +318,40 @@ export default function ShareView() {
                                 return (
                                     <div key={i} className="sv-sum-card" style={{ borderLeft: `3px solid ${a.border}` }}>
                                         <div className="sv-sum-title" style={{ color: a.title }}>{s.title}</div>
-                                        {s.highlights.map((h, j) => (
+                                        {(s.highlights || []).map((h, j) => (
                                             <div key={j} className="sv-sum-highlight" style={{ background: a.bg, borderLeftColor: a.border }}>{h}</div>
                                         ))}
-                                        {s.lead_sentence && <div className="sv-sum-lead">{s.lead_sentence}</div>}
+                                        {(s.core_explanation || s.lead_sentence) && <div className="sv-sum-lead">{s.core_explanation || s.lead_sentence}</div>}
                                         {s.prose && <div className="sv-sum-prose">{s.prose}</div>}
-                                        {s.concepts.length > 0 && (
+                                        {(s.concepts || []).length > 0 && (
                                             <div className="sv-sum-concepts">
-                                                {s.concepts.map((c, j) => (
+                                                {(s.concepts || []).map((c, j) => (
                                                     <span key={j} className="sv-sum-concept" style={{ borderColor: a.border, color: a.title }}>{c}</span>
                                                 ))}
+                                            </div>
+                                        )}
+                                        {(s.key_definitions || []).length > 0 && (
+                                            <div className="sv-sum-group">
+                                                <div className="sv-sum-group-label">Key Definitions</div>
+                                                {(s.key_definitions || []).map((item, j) => <div key={j} className="sv-sum-group-item">{item}</div>)}
+                                            </div>
+                                        )}
+                                        {(s.important_distinctions || []).length > 0 && (
+                                            <div className="sv-sum-group">
+                                                <div className="sv-sum-group-label">Important Distinctions</div>
+                                                {(s.important_distinctions || []).map((item, j) => <div key={j} className="sv-sum-group-item">{item}</div>)}
+                                            </div>
+                                        )}
+                                        {(s.exam_traps || []).length > 0 && (
+                                            <div className="sv-sum-group">
+                                                <div className="sv-sum-group-label">Exam Traps</div>
+                                                {(s.exam_traps || []).map((item, j) => <div key={j} className="sv-sum-group-item">{item}</div>)}
+                                            </div>
+                                        )}
+                                        {(s.examples || []).length > 0 && (
+                                            <div className="sv-sum-group">
+                                                <div className="sv-sum-group-label">Examples Mentioned</div>
+                                                {(s.examples || []).map((item, j) => <div key={j} className="sv-sum-group-item">{item}</div>)}
                                             </div>
                                         )}
                                         {s.citations?.length > 0 && (

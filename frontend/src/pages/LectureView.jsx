@@ -85,6 +85,10 @@ const CSS = `
   .lv-sum-badge { font-size: 10px; font-weight: 600; color: #166534; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 999px; padding: 3px 7px; }
   .lv-sum-citations { margin-top: 10px; font-size: 10px; color: ${C.muted}; display: flex; flex-wrap: wrap; gap: 6px; }
   .lv-sum-citation { padding: 2px 6px; border-radius: 999px; border: 1px solid ${C.border}; background: ${C.bg}; }
+  .lv-sum-group { margin-top: 12px; }
+  .lv-sum-group-label { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: ${C.muted}; margin-bottom: 6px; }
+  .lv-sum-group-list { display: flex; flex-direction: column; gap: 6px; }
+  .lv-sum-group-item { font-size: 12px; color: ${C.sec}; line-height: 1.6; padding: 8px 10px; border-radius: 10px; background: ${C.bg}; border: 1px solid ${C.border}; }
   .lv-trust-note { font-size: 12px; color: ${C.muted}; margin: 0 0 14px; line-height: 1.55; }
   .lv-aid-panel { margin-top: 16px; background: ${C.card}; border: 1px dashed ${C.borderHov}; border-radius: 12px; padding: 14px 16px; }
   .lv-aid-title { font-size: 12px; font-weight: 600; color: ${C.text}; margin-bottom: 6px; }
@@ -326,6 +330,13 @@ function parseSummary(text) {
 
 function SummaryCard({ section, accent, index, total, topic }) {
     const a = accent || ACCENTS_LIGHT[0];
+    const core = section.core_explanation || section.lead_sentence || '';
+    const prose = section.prose || '';
+    const definitions = section.key_definitions || [];
+    const distinctions = section.important_distinctions || [];
+    const traps = section.exam_traps || [];
+    const examples = section.examples || [];
+    const concepts = section.concepts || [];
     return (
         <div className="lv-sum-card summary-card-enter" style={{ borderLeft: `3px solid ${a.border}` }}>
             <div className="lv-sum-meta">
@@ -341,21 +352,45 @@ function SummaryCard({ section, accent, index, total, topic }) {
                     </span>
                 )}
             </div>
-            {section.highlights.map((h, i) => (
+            {(section.highlights || []).map((h, i) => (
                 <div key={i} className="lv-sum-highlight" style={{ background: a.bg, borderLeftColor: a.border }}>{renderDomainContent(h, topic) || h}</div>
             ))}
-            {section.lead_sentence && <div className="lv-sum-lead">{renderDomainContent(section.lead_sentence, topic) || section.lead_sentence}</div>}
-            {section.prose && <div className="lv-sum-prose">{renderDomainContent(section.prose, topic) || section.prose}</div>}
-            {section.concepts.length > 0 && (
+            {core && <div className="lv-sum-lead">{renderDomainContent(core, topic) || core}</div>}
+            {prose && <div className="lv-sum-prose">{renderDomainContent(prose, topic) || prose}</div>}
+            {concepts.length > 0 && (
                 <div className="lv-sum-concepts">
-                    {section.concepts.map((c, i) => (
+                    {concepts.map((c, i) => (
                         <span key={i} className="lv-sum-concept" style={{ borderColor: a.border, color: a.title }}>{renderDomainContent(c, topic) || c}</span>
                     ))}
                 </div>
             )}
-            {section.examples.length > 0 && (
+            {definitions.length > 0 && (
+                <div className="lv-sum-group">
+                    <div className="lv-sum-group-label">Key Definitions</div>
+                    <div className="lv-sum-group-list">
+                        {definitions.map((item, i) => <div key={i} className="lv-sum-group-item">{renderDomainContent(item, topic) || item}</div>)}
+                    </div>
+                </div>
+            )}
+            {distinctions.length > 0 && (
+                <div className="lv-sum-group">
+                    <div className="lv-sum-group-label">Important Distinctions</div>
+                    <div className="lv-sum-group-list">
+                        {distinctions.map((item, i) => <div key={i} className="lv-sum-group-item">{renderDomainContent(item, topic) || item}</div>)}
+                    </div>
+                </div>
+            )}
+            {traps.length > 0 && (
+                <div className="lv-sum-group">
+                    <div className="lv-sum-group-label">Exam Traps</div>
+                    <div className="lv-sum-group-list">
+                        {traps.map((item, i) => <div key={i} className="lv-sum-group-item">{renderDomainContent(item, topic) || item}</div>)}
+                    </div>
+                </div>
+            )}
+            {examples.length > 0 && (
                 <div className="lv-sum-examples">
-                    {section.examples.map((e, i) => <div key={i} className="lv-sum-example">{renderDomainContent(e, topic) || e}</div>)}
+                    {examples.map((e, i) => <div key={i} className="lv-sum-example">{renderDomainContent(e, topic) || e}</div>)}
                 </div>
             )}
             {section.citations?.length > 0 && (
@@ -717,8 +752,9 @@ export default function LectureView() {
 
     const wordCount = lecture?.transcript_word_count || segments.reduce((n, s) => n + s.split(/\s+/).filter(Boolean).length, 0);
     const summaryText = lecture?.master_summary || lecture?.summary || '';
+    const conceptSections = Array.isArray(lecture?.concept_sections) ? lecture.concept_sections : [];
     const groundedSections = Array.isArray(lecture?.grounded_notes) ? lecture.grounded_notes : [];
-    const summarySections = groundedSections.length > 0 ? groundedSections : parseSummary(summaryText);
+    const summarySections = conceptSections.length > 0 ? conceptSections : (groundedSections.length > 0 ? groundedSections : parseSummary(summaryText));
     const aiStudyAids = lecture?.ai_study_aids?.items || [];
     const topicCount = summarySections.reduce((n, s) => n + s.concepts.length, 0);
     const titleDisplay = lecture?.title
@@ -891,9 +927,9 @@ export default function LectureView() {
                         {/* Summary */}
                         {activeTab === 'summary' && (
                             <div className="lv-tab-body">
-                                {groundedSections.length > 0 && (
+                                {(conceptSections.length > 0 || groundedSections.length > 0) && (
                                     <p className="lv-trust-note">
-                                        Transcript-backed notes with source timestamps. Flashcards, quiz, and glossary remain AI-generated study tools.
+                                        Concept-organized lecture notes grounded in the transcript. Definitions, distinctions, exam traps, examples, and source timestamps are separated from AI study tools.
                                     </p>
                                 )}
                                 {summarySections.length === 0

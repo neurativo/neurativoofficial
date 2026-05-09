@@ -698,6 +698,24 @@
             text-transform: none;
             letter-spacing: 0;
         }
+        .edu-box {
+            margin-top: 4mm;
+            padding: 3.5mm 4mm;
+            border: var(--hairline);
+            border-radius: 6px;
+            background: var(--paper-2);
+        }
+        .edu-box + .edu-box { margin-top: 3mm; }
+        .edu-box-label {
+            font-size: 6.8pt;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--ink-4);
+            margin-bottom: 2mm;
+        }
+        .edu-box-list { margin: 0; padding-left: 4mm; }
+        .edu-box-list li { margin-bottom: 1.5mm; font-size: 8.9pt; color: var(--ink-2); line-height: 1.55; }
         .trust-note {
             font-size: 8.5pt;
             color: var(--ink-3);
@@ -1358,12 +1376,45 @@
             </div>
             {% endif %}
 
+            {% if sec.definitions %}
+            <div class="edu-box">
+                <div class="edu-box-label">Key Definitions</div>
+                <ul class="edu-box-list">
+                    {% for item in sec.definitions %}
+                    <li>{{ item }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+
+            {% if sec.distinctions %}
+            <div class="edu-box">
+                <div class="edu-box-label">Important Distinctions</div>
+                <ul class="edu-box-list">
+                    {% for item in sec.distinctions %}
+                    <li>{{ item }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+
             {% if sec.examples %}
             <div class="examples-wrap">
                 <div class="examples-label">Examples</div>
                 {% for e in sec.examples %}
                 <div class="example-row"><span class="example-arrow">→</span>{{ e }}</div>
                 {% endfor %}
+            </div>
+            {% endif %}
+
+            {% if sec.exam_traps %}
+            <div class="edu-box">
+                <div class="edu-box-label">Exam Traps</div>
+                <ul class="edu-box-list">
+                    {% for item in sec.exam_traps %}
+                    <li>{{ item }}</li>
+                    {% endfor %}
+                </ul>
             </div>
             {% endif %}
 

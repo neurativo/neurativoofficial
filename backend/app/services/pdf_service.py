@@ -19,7 +19,7 @@ from app.services.supabase_service import (
 )
 from app.services.cost_tracker import log_cost
 from app.services.transcript_cleaner import clean as clean_transcript
-from app.services.trust_service import build_grounded_notes, lecture_summary_confidence
+from app.services.trust_service import build_concept_sections, build_grounded_notes, lecture_summary_confidence
 
 # ── OpenAI client ─────────────────────────────────────────────────────────────
 _client = OpenAI(api_key=settings.OPENAI_API_KEY) if settings.OPENAI_API_KEY else None
@@ -928,16 +928,17 @@ async def generate_lecture_pdf(
     language      = data.get("language") or "en"
     section_rows  = await asyncio.to_thread(get_lecture_sections, lecture_id)
     grounded_notes = build_grounded_notes(transcript, summary, section_rows=section_rows)
+    concept_sections = build_concept_sections(grounded_notes)
     grounded_summary = "\n\n".join(
         " ".join(
             part for part in [
                 note.get("title", ""),
-                note.get("lead_sentence", ""),
+                note.get("core_explanation", "") or note.get("lead_sentence", ""),
                 note.get("prose", ""),
                 " ".join(note.get("examples", []) or []),
             ] if part
         ).strip()
-        for note in grounded_notes
+        for note in (concept_sections or grounded_notes)
     ).strip()
 
     # Duration: derive from total_chunks * 12s (more accurate than stored total_duration_seconds)
@@ -950,7 +951,18 @@ async def generate_lecture_pdf(
 
     # 2. Parse raw sections from master summary
     raw_sections = []
-    if grounded_notes:
+    if concept_sections:
+        for note in concept_sections:
+            block = [note.get("title", "Summary")]
+            if note.get("core_explanation"):
+                block.append(note["core_explanation"])
+            if note.get("concepts"):
+                block.append("Key concepts: " + ", ".join(f"`{c}`" for c in note["concepts"]))
+            if note.get("examples"):
+                block.append("Examples:")
+                block.extend(f"→ {example}" for example in note["examples"])
+            raw_sections.append("\n".join(block).strip())
+    elif grounded_notes:
         for note in grounded_notes:
             block = [note.get("title", "Summary")]
             if note.get("lead_sentence"):
@@ -961,7 +973,7 @@ async def generate_lecture_pdf(
                 block.append("Key concepts: " + ", ".join(f"`{c}`" for c in note["concepts"]))
             if note.get("examples"):
                 block.append("Examples:")
-                block.extend(f"→ {example}" for example in note["examples"])
+                block.extend(f"â†’ {example}" for example in note["examples"])
             raw_sections.append("\n".join(block).strip())
     else:
         raw_sections = [s.strip() for s in summary.split("## ") if s.strip()]
@@ -1033,7 +1045,27 @@ async def generate_lecture_pdf(
     ri += 1
 
     enriched_sections: list[dict] = []
-    if grounded_notes:
+    if concept_sections:
+        for note in concept_sections:
+            enriched_sections.append({
+                "title":         note.get("title") or "Summary",
+                "lead_sentence": note.get("core_explanation") or "",
+                "prose":         "",
+                "bullets":       [],
+                "concepts":      note.get("concepts") or [],
+                "examples":      note.get("examples") or [],
+                "definitions":   note.get("key_definitions") or [],
+                "distinctions":  note.get("important_distinctions") or [],
+                "exam_traps":    note.get("exam_traps") or [],
+                "raw_section":   "",
+                "analogy":       None,
+                "mistake":       None,
+                "remember":      None,
+                "citations":     note.get("citations") or [],
+                "confidence":    note.get("confidence") or 0.0,
+                "verification_status": note.get("verification_status") or "supported",
+            })
+    elif grounded_notes:
         for note in grounded_notes:
             enriched_sections.append({
                 "title":         note.get("title") or "Summary",
@@ -1042,6 +1074,9 @@ async def generate_lecture_pdf(
                 "bullets":       note.get("highlights") or [],
                 "concepts":      note.get("concepts") or [],
                 "examples":      note.get("examples") or [],
+                "definitions":   [],
+                "distinctions":  [],
+                "exam_traps":    [],
                 "raw_section":   "",
                 "analogy":       None,
                 "mistake":       None,
@@ -1060,6 +1095,9 @@ async def generate_lecture_pdf(
                 "bullets":       [],
                 "concepts":      [],
                 "examples":      [],
+                "definitions":   [],
+                "distinctions":  [],
+                "exam_traps":    [],
                 "raw_section":   raw_sections[i],
                 "analogy":       None,
                 "mistake":       None,

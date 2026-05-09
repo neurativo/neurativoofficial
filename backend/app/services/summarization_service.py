@@ -599,3 +599,31 @@ def summarize_topic_segment(
 
     print(f"summarize_topic_segment error after 3 attempts: {last_err}")
     return ""
+
+
+def generate_concept_master_summary(
+    full_text: str,
+    topic: str | None = None,
+    language: str = "en",
+) -> str:
+    """
+    Segment a transcript into semantic teaching blocks and summarize each block
+    directly into a concept-driven master summary.
+    """
+    if not full_text or not full_text.strip():
+        return ""
+
+    sections = []
+    for seg in segment_transcript(full_text, topic):
+        start = max(0, int(seg.get("start") or 0))
+        end = max(start, int(seg.get("end") or len(full_text)))
+        title = (seg.get("title") or "").strip() or "Section"
+        section = summarize_topic_segment(
+            full_text[start:end],
+            title=title,
+            topic=topic,
+            language=language,
+        )
+        if section:
+            sections.append(section.strip())
+    return "\n\n".join(sections)

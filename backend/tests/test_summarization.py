@@ -117,21 +117,15 @@ def test_summarize_topic_segment_returns_empty_on_blank_input():
 # ─────────────────────────────────────────────────────────────────────────────
 
 def test_recompute_final_summary_saves_master_and_sets_final():
-    """Full happy path: chunks → segments → summaries → saved, status='final'."""
-    fake_segments = [
-        {"title": "Topic A", "start": 0,  "end": 10},
-        {"title": "Topic B", "start": 10, "end": 20},
-    ]
+    """Full happy path: chunks → concept summary → saved, status='final'."""
     saved = {}
 
     with patch("app.services.recompute_service.get_lecture_language", return_value="en"), \
          patch("app.services.recompute_service.get_lecture_topic", return_value="biology"), \
          patch("app.services.recompute_service.get_all_chunk_transcripts",
                return_value=["hello world", "foo bar"]), \
-         patch("app.services.recompute_service.segment_transcript",
-               return_value=fake_segments), \
-         patch("app.services.recompute_service.summarize_topic_segment",
-               side_effect=lambda text, title, **kw: f"## {title}\n\nSummary.\n\n---"), \
+         patch("app.services.recompute_service.generate_concept_master_summary",
+               return_value="## Topic A\n\nSummary.\n\n---\n\n## Topic B\n\nSummary.\n\n---"), \
          patch("app.services.recompute_service.update_lecture_summary_only",
                side_effect=lambda lid, master: saved.update({"master": master})), \
          patch("app.services.recompute_service.set_summary_status",

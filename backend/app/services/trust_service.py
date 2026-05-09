@@ -1,9 +1,12 @@
 """
-trust_service.py - retrieval-backed grounding helpers for lecture notes.
+trust_service.py - transcript-grounded lecture intelligence helpers.
 
-Keeps the current summary pipeline intact while deriving a safer lecture-view
-payload: grounded notes, lightweight verification metadata, citations, and a
-clean separation between notes and AI study aids.
+The current product still stores markdown summaries, but this service derives a
+stronger structured view on top of them:
+- grounded notes with claim verification
+- concept-first educational sections
+- citations and confidence metadata
+- a clean split between grounded notes and AI study aids
 """
 from __future__ import annotations
 
@@ -13,12 +16,14 @@ from statistics import mean
 from app.services.transcript_cleaner import clean as clean_transcript
 
 _STOPWORDS = {
-    "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "in", "into",
-    "is", "it", "of", "on", "or", "that", "the", "this", "to", "was", "were", "with",
-    "we", "you", "they", "he", "she", "i", "our", "their", "your", "there", "here",
+    "a", "an", "and", "are", "as", "at", "be", "because", "by", "for", "from",
+    "in", "into", "is", "it", "its", "of", "on", "or", "that", "the", "their",
+    "this", "to", "was", "were", "with", "we", "you", "they", "he", "she",
+    "our", "your", "there", "here", "these", "those", "them",
 }
 _TOKEN_RE = re.compile(r"[a-zA-Z][a-zA-Z0-9'-]{1,}")
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
+_GENERIC_TITLES = {"summary", "section", "part 1", "part 2", "part 3", "lecture preview", "key idea"}
 _CONTRADICTION_PAIRS = (
     ("non economic", "economic"),
     ("positive statement", "normative statement"),
@@ -26,6 +31,15 @@ _CONTRADICTION_PAIRS = (
     ("increase", "decrease"),
     ("legal", "illegal"),
     ("true", "false"),
+)
+_DISTINCTION_MARKERS = (
+    " vs ", " versus ", " whereas ", " unlike ", " different ", " distinction ",
+    " compared with ", " compared to ", " not the same ", " contrast ",
+)
+_DEFINITION_MARKERS = (" is ", " are ", " refers to ", " means ", " defined as ", " called ")
+_TRAP_MARKERS = (
+    "do not confuse", "does not mean", "still", "not the same", "common mistake",
+    "trap", "important clarification", "not simply", "not equal", "not equal to",
 )
 
 
@@ -36,6 +50,10 @@ def _tokenise(text: str) -> set[str]:
 
 def _normalise_ws(text: str) -> str:
     return " ".join((text or "").split()).strip()
+
+
+def _split_sentences(text: str) -> list[str]:
+    return [s.strip() for s in _SENTENCE_SPLIT_RE.split(_normalise_ws(text)) if s.strip()]
 
 
 def _parse_summary_sections(summary: str) -> list[dict]:
@@ -66,13 +84,13 @@ def _parse_summary_sections(summary: str) -> list[dict]:
                 continue
             if re.match(r"^examples:\s*$", line, flags=re.I):
                 continue
-            if line.startswith(("→", "â†’")):
+            if line.startswith(("→", "â†’", "Ã¢â€ â€™")):
                 examples.append(line[1:].strip())
                 continue
             if line.startswith("- "):
                 bullet = line[2:].strip()
-                if bullet.startswith(("→", "â†’")) or "example" in bullet.lower():
-                    examples.append(bullet.lstrip("→â†’ ").strip())
+                if bullet.startswith(("→", "â†’", "Ã¢â€ â€™")) or "example" in bullet.lower():
+                    examples.append(bullet.lstrip("→â†’Ã¢â€ â€™ ").strip())
                 elif "`" in bullet or len(bullet.split()) <= 4:
                     concepts.append(bullet.replace("`", "").strip())
                 else:
@@ -106,9 +124,7 @@ def _split_transcript_units(transcript: str) -> list[dict]:
         lines = [transcript.strip()]
 
     for line_idx, line in enumerate(lines):
-        parts = [seg.strip() for seg in _SENTENCE_SPLIT_RE.split(line) if seg.strip()]
-        if not parts:
-            parts = [line]
+        parts = _split_sentences(line) or [line]
         for sent in parts:
             units.append({
                 "text": sent,
@@ -188,7 +204,30 @@ def _chunk_range_to_citation(start_idx: int | None, end_idx: int | None) -> dict
     }
 
 
-def _build_units(section: dict, transcript_units: list[dict]) -> tuple[list[dict], str, float, list[dict]]:
+def _derive_title(raw_title: str, lead_sentence: str, concepts: list[str]) -> str:
+    title = _normalise_ws(raw_title).strip(":#- ")
+    lowered = title.lower()
+    if title and lowered not in _GENERIC_TITLES and not re.fullmatch(r"section\s+\d+", lowered):
+        return title[:120]
+
+    lead = _normalise_ws(lead_sentence)
+    if re.search(r"\bvs\b|\bversus\b", lead, flags=re.I):
+        match = re.search(r"([A-Z][\w' -]{1,40}\s+(?:vs|versus)\s+[A-Z][\w' -]{1,40})", lead, flags=re.I)
+        if match:
+            return match.group(1).strip()[:120]
+
+    if concepts:
+        if len(concepts) >= 2:
+            return f"{concepts[0]} vs {concepts[1]}"[:120]
+        return concepts[0][:120]
+
+    words = [w for w in _TOKEN_RE.findall(lead) if w.lower() not in _STOPWORDS]
+    if not words:
+        return "Key Concept"
+    return " ".join(words[:6]).title()[:120]
+
+
+def _build_units(section: dict, transcript_units: list[dict]) -> tuple[list[dict], str, float, list[dict], dict]:
     units = []
     evidence_refs = []
     statuses = []
@@ -226,16 +265,17 @@ def _build_units(section: dict, transcript_units: list[dict]) -> tuple[list[dict
             })
         return cleaned
 
+    kept_lead = add_unit("claim", section.get("lead_sentence", "")) or ""
     verified_section = {
-        "title": section.get("title") or "Summary",
-        "lead_sentence": add_unit("claim", section.get("lead_sentence", "")) or "",
+        "title": _derive_title(section.get("title") or "Summary", kept_lead, section.get("concepts", []) or []),
+        "lead_sentence": kept_lead,
         "prose": "",
         "concepts": [],
         "examples": [],
         "highlights": [],
     }
 
-    prose_sentences = [s.strip() for s in _SENTENCE_SPLIT_RE.split(section.get("prose", "")) if s.strip()]
+    prose_sentences = _split_sentences(section.get("prose", ""))
     kept_prose = [add_unit("claim", sent) for sent in prose_sentences]
     verified_section["prose"] = " ".join(x for x in kept_prose if x)
 
@@ -256,12 +296,7 @@ def _build_units(section: dict, transcript_units: list[dict]) -> tuple[list[dict
 
     note_status = "unsupported"
     if statuses:
-        if "weak" in statuses and "supported" not in statuses:
-            note_status = "weak"
-        elif "weak" in statuses:
-            note_status = "supported"
-        else:
-            note_status = "supported"
+        note_status = "supported" if "supported" in statuses else "weak"
     confidence = round(mean(scores), 2) if scores else 0.0
     unique_refs = []
     seen = set()
@@ -324,6 +359,89 @@ def build_grounded_notes(
     return grounded
 
 
+def _dedupe_texts(items: list[str]) -> list[str]:
+    seen = set()
+    out = []
+    for item in items:
+        cleaned = _normalise_ws(item)
+        if not cleaned:
+            continue
+        key = cleaned.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(cleaned)
+    return out
+
+
+def _collect_definition_lines(note: dict) -> list[str]:
+    candidates = []
+    for text in [note.get("lead_sentence", ""), note.get("prose", "")] + (note.get("highlights") or []):
+        for sentence in _split_sentences(text):
+            lowered = sentence.lower()
+            if any(marker in lowered for marker in _DEFINITION_MARKERS):
+                candidates.append(sentence)
+    return _dedupe_texts(candidates)[:4]
+
+
+def _collect_distinctions(note: dict) -> list[str]:
+    distinctions = []
+    title = note.get("title", "")
+    if re.search(r"\bvs\b|\bversus\b", title, flags=re.I):
+        distinctions.append(title)
+    for text in [note.get("lead_sentence", ""), note.get("prose", "")] + (note.get("highlights") or []):
+        for sentence in _split_sentences(text):
+            lowered = sentence.lower()
+            if any(marker in lowered for marker in _DISTINCTION_MARKERS) or lowered.count(" not ") >= 1:
+                distinctions.append(sentence)
+    return _dedupe_texts(distinctions)[:4]
+
+
+def _collect_exam_traps(note: dict) -> list[str]:
+    traps = []
+    for text in [note.get("lead_sentence", ""), note.get("prose", "")] + (note.get("highlights") or []) + (note.get("examples") or []):
+        for sentence in _split_sentences(text):
+            lowered = sentence.lower()
+            if any(marker in lowered for marker in _TRAP_MARKERS):
+                traps.append(sentence)
+    return _dedupe_texts(traps)[:4]
+
+
+def _build_core_explanation(note: dict) -> str:
+    pieces = []
+    if note.get("lead_sentence"):
+        pieces.append(note["lead_sentence"])
+    if note.get("prose"):
+        pieces.append(note["prose"])
+    if not pieces and note.get("highlights"):
+        pieces.extend(note["highlights"])
+    return _normalise_ws(" ".join(pieces))
+
+
+def build_concept_sections(grounded_notes: list[dict]) -> list[dict]:
+    concept_sections = []
+    for note in grounded_notes:
+        citations = note.get("citations") or []
+        start_seconds = citations[0]["start_seconds"] if citations else None
+        end_seconds = citations[-1]["end_seconds"] if citations else None
+        concept_sections.append({
+            "title": note.get("title") or "Key Concept",
+            "core_explanation": _build_core_explanation(note),
+            "key_definitions": _collect_definition_lines(note),
+            "important_distinctions": _collect_distinctions(note),
+            "exam_traps": _collect_exam_traps(note),
+            "examples": _dedupe_texts(note.get("examples") or []),
+            "concepts": _dedupe_texts(note.get("concepts") or []),
+            "citations": citations,
+            "confidence": note.get("confidence", 0.0),
+            "verification_status": note.get("verification_status", "weak"),
+            "start_seconds": start_seconds,
+            "end_seconds": end_seconds,
+            "source_references": [c["label"] for c in citations],
+        })
+    return concept_sections
+
+
 def build_ai_study_aids(lecture_data: dict) -> dict:
     flashcards = lecture_data.get("flashcards") or []
     quiz = lecture_data.get("quiz") or []
@@ -350,8 +468,11 @@ def enrich_lecture_payload(lecture_data: dict, section_rows: list[dict] | None =
     transcript = lecture_data.get("transcript") or ""
     summary = lecture_data.get("master_summary") or lecture_data.get("summary") or ""
     grounded_notes = build_grounded_notes(transcript, summary, section_rows=section_rows)
+    concept_sections = build_concept_sections(grounded_notes)
+
     payload = dict(lecture_data)
     payload["grounded_notes"] = grounded_notes
+    payload["concept_sections"] = concept_sections
     payload["ai_study_aids"] = build_ai_study_aids(lecture_data)
     payload["summary_confidence"] = lecture_summary_confidence(grounded_notes)
     payload["transcript_word_count"] = len(clean_transcript(transcript).split()) if transcript else 0

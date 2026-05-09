@@ -24,6 +24,7 @@ from app.services.summarization_service import (
     generate_micro_summary,
     generate_section_summary,
     generate_master_summary,
+    generate_concept_master_summary,
 )
 from app.services.recompute_service import recompute_final_summary
 from app.services.embedding_service import get_embeddings, cosine_similarity
@@ -523,10 +524,17 @@ async def _process_from_transcript(
     # ── Step 6: Store results ─────────────────────────────────────────────────
     await _asyncio.to_thread(update_job_status, lecture_id, "storing")
     try:
+        concept_summary = await _asyncio.to_thread(
+            generate_concept_master_summary, cleaned, topic, language
+        )
         if content is None:
             print(f"[pipeline] {lecture_id}: using cached content (no GPT call needed)")
+            if concept_summary:
+                await _asyncio.to_thread(update_lecture_summary_only, lecture_id, concept_summary)
         elif content and summary_has_required_structure(content.get("summary", ""), cleaned):
             await _asyncio.to_thread(save_generated_content, lecture_id, content)
+            if concept_summary:
+                await _asyncio.to_thread(update_lecture_summary_only, lecture_id, concept_summary)
         else:
             fallback_summary = await _asyncio.to_thread(_build_strict_fallback_summary, cleaned, topic, language)
             if fallback_summary:
@@ -907,19 +915,7 @@ def _generate_lecture_title(chunk_text: str, topic: str | None) -> str:
 
 
 def _build_strict_fallback_summary(cleaned: str, topic: str | None, language: str) -> str:
-    sections = []
-    for seg in segment_transcript(cleaned, topic):
-        start = max(0, int(seg.get("start") or 0))
-        end = max(start, int(seg.get("end") or len(cleaned)))
-        section = summarize_topic_segment(
-            cleaned[start:end],
-            title=seg.get("title") or "Section",
-            topic=topic,
-            language=language,
-        )
-        if section:
-            sections.append(section)
-    return "\n\n".join(sections)
+    return generate_concept_master_summary(cleaned, topic=topic, language=language)
 
 
 def _run_summarization(

@@ -11,7 +11,7 @@ from app.services.content_generator import (
     summary_has_required_structure,
 )
 from app.services.transcript_cleaner import clean as clean_transcript
-from app.services.summarization_service import segment_transcript, summarize_topic_segment
+from app.services.summarization_service import generate_concept_master_summary
 from app.services.supabase_service import (
     get_all_chunk_transcripts,
     set_summary_status,
@@ -69,28 +69,23 @@ def recompute_final_summary(lecture_id: str) -> None:
             existing_flashcards=existing_flashcards,
         )
 
+        concept_summary = generate_concept_master_summary(cleaned, topic=topic, language=language)
+
         if content is None:
             print(f"[recompute] {lecture_id}: cache hit — content already exists.")
+            if concept_summary:
+                update_lecture_summary_only(lecture_id, concept_summary)
+                print(f"[recompute] {lecture_id}: concept summary refreshed.")
         elif content and summary_has_required_structure(content.get("summary", ""), cleaned):
             save_generated_content(lecture_id, content)
-            print(f"[recompute] {lecture_id}: content saved.")
+            if concept_summary:
+                update_lecture_summary_only(lecture_id, concept_summary)
+                print(f"[recompute] {lecture_id}: content saved with concept summary.")
+            else:
+                print(f"[recompute] {lecture_id}: content saved.")
         else:
-            segments = segment_transcript(cleaned, topic)
-            section_summaries = []
-            for seg in segments:
-                start = max(0, int(seg.get("start") or 0))
-                end = max(start, int(seg.get("end") or len(cleaned)))
-                summary = summarize_topic_segment(
-                    cleaned[start:end],
-                    title=seg.get("title") or "Section",
-                    topic=topic,
-                    language=language,
-                )
-                if summary:
-                    section_summaries.append(summary)
-
-            if section_summaries:
-                update_lecture_summary_only(lecture_id, "\n\n".join(section_summaries))
+            if concept_summary:
+                update_lecture_summary_only(lecture_id, concept_summary)
                 print(f"[recompute] {lecture_id}: fallback summary saved.")
             else:
                 print(f"[recompute] {lecture_id}: GPT call returned empty result.")
