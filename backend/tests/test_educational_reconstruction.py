@@ -312,7 +312,7 @@ def test_derive_educational_confidence_gate_suppresses_weak_concepts():
     summary = derive_master_summary_from_model(model, topic="economics")
 
     assert "Strong Concept" in summary
-    # Weak concept (confidence < 0.35) should be suppressed from output
+    # Weak concept (confidence < _CONFIDENCE_THRESHOLD = 0.25) should be suppressed from output
     assert "Weak Concept" not in summary
 
 

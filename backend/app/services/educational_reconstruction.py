@@ -339,7 +339,7 @@ def derive_master_summary_from_model(model: dict, topic: str | None = None) -> s
     - Admin/chatter/low_relevance never appear
     - Section order: educational_importance desc, confidence desc
     - procedural steps appear in order inside their parent section
-    - Concepts with educational_confidence < 0.35 are suppressed
+    - Concepts with educational_confidence < _CONFIDENCE_THRESHOLD (0.25) are suppressed
     """
     sections = []
 
