@@ -538,11 +538,20 @@ def _merge_chapter_notes(notes: list[dict]) -> dict:
     subsection_titles = []
     confidences = []
     statuses = []
+    subtopic_sections = []
 
     for note in notes:
         title = _derive_title(note.get("title", ""), note.get("lead_sentence", ""), note.get("concepts") or [])
         if title and title.lower() not in _GENERIC_TITLES and not re.fullmatch(r"section\s+\d+", title.lower()):
             subsection_titles.append(title)
+            subtopic_sections.append({
+                "title": title,
+                "overview": _build_core_explanation(note),
+                "definitions": _collect_definition_lines(note)[:2],
+                "examples": _dedupe_texts(note.get("examples") or [])[:2],
+                "exam_traps": _collect_exam_traps(note)[:2],
+                "citations": note.get("citations") or [],
+            })
 
         if note.get("lead_sentence"):
             core_parts.append(note["lead_sentence"])
@@ -591,6 +600,15 @@ def _merge_chapter_notes(notes: list[dict]) -> dict:
         if label not in subtopics:
             subtopics.append(label)
     subtopics = _dedupe_texts(subtopics)[:6]
+    deduped_subtopic_sections = []
+    seen_subtopic_titles = set()
+    for item in subtopic_sections:
+        key = item["title"].lower()
+        if key in seen_subtopic_titles:
+            continue
+        seen_subtopic_titles.add(key)
+        deduped_subtopic_sections.append(item)
+    deduped_subtopic_sections = deduped_subtopic_sections[:5]
 
     start_seconds = citations[0]["start_seconds"] if citations else None
     end_seconds = citations[-1]["end_seconds"] if citations else None
@@ -612,6 +630,7 @@ def _merge_chapter_notes(notes: list[dict]) -> dict:
         "end_seconds": end_seconds,
         "source_references": [c["label"] for c in citations],
         "subsections": subtopics,
+        "subtopic_sections": deduped_subtopic_sections,
     }
 
 
@@ -635,6 +654,8 @@ def _build_units(section: dict, transcript_units: list[dict]) -> tuple[list[dict
             "type": kind,
             "text": cleaned,
             "confidence": round(score, 2),
+            "support_score": round(score, 2),
+            "contradiction_score": 1.0 if contradicted else 0.0,
             "verification_status": status,
             "source_chunk_ids": [evidence["line_index"]] if evidence else [],
             "timestamps": (
@@ -858,6 +879,34 @@ def build_concept_sections(grounded_notes: list[dict]) -> list[dict]:
     return [_merge_chapter_notes(group) for group in chapters if group]
 
 
+def build_claim_registry(grounded_notes: list[dict]) -> list[dict]:
+    claims = []
+    seen = set()
+    for note in grounded_notes:
+        for unit in note.get("units") or []:
+            if unit.get("type") not in {"claim", "concept", "example"}:
+                continue
+            text = _normalise_ws(unit.get("text", ""))
+            if not text:
+                continue
+            key = (unit.get("type"), text.lower())
+            if key in seen:
+                continue
+            seen.add(key)
+            claims.append({
+                "type": unit.get("type"),
+                "text": text,
+                "chapter_title": note.get("title"),
+                "verification_status": unit.get("verification_status", note.get("verification_status", "weak")),
+                "confidence": unit.get("confidence", note.get("confidence", 0.0)),
+                "support_score": unit.get("support_score", unit.get("confidence", 0.0)),
+                "contradiction_score": unit.get("contradiction_score", 0.0),
+                "timestamps": unit.get("timestamps") or [],
+                "source_chunk_ids": unit.get("source_chunk_ids") or [],
+            })
+    return claims
+
+
 def _verify_generated_text(text: str, transcript_units: list[dict], minimum_score: float = 0.42) -> tuple[str, float]:
     cleaned = _normalise_ws(text)
     if not cleaned:
@@ -1035,10 +1084,13 @@ def enrich_lecture_payload(lecture_data: dict, section_rows: list[dict] | None =
     summary = lecture_data.get("master_summary") or lecture_data.get("summary") or ""
     grounded_notes = build_grounded_notes(transcript, summary, section_rows=section_rows)
     concept_sections = build_concept_sections(grounded_notes)
+    claim_registry = build_claim_registry(grounded_notes)
 
     payload = dict(lecture_data)
     payload["grounded_notes"] = grounded_notes
     payload["concept_sections"] = concept_sections
+    payload["chapter_hierarchy"] = concept_sections
+    payload["claim_registry"] = claim_registry
     payload["ai_study_aids"] = build_ai_study_aids(lecture_data)
     payload["summary_confidence"] = lecture_summary_confidence(grounded_notes)
     payload["transcript_word_count"] = len(clean_transcript(transcript).split()) if transcript else 0

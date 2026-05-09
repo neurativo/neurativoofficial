@@ -581,6 +581,51 @@
             font-size: 7.5pt;
             border: 0.5px solid #e7dfd2;
         }
+        .subtopic-stack { margin: 2.6mm 0 1.4mm; }
+        .subtopic-item {
+            padding: 2.6mm 0;
+            border-top: 0.5pt solid #ece7de;
+        }
+        .subtopic-item:first-child { border-top: none; padding-top: 0; }
+        .subtopic-head {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 1mm;
+        }
+        .subtopic-title {
+            font-family: var(--serif);
+            font-size: 10pt;
+            font-weight: 600;
+            color: var(--ink);
+        }
+        .subtopic-source {
+            font-size: 6.9pt;
+            color: var(--ink-4);
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+        .subtopic-overview {
+            font-size: 8.7pt;
+            color: var(--ink-2);
+            line-height: 1.5;
+            margin-bottom: 1.2mm;
+        }
+        .subtopic-inline-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px 10px;
+            font-size: 8pt;
+            color: var(--ink-3);
+            line-height: 1.45;
+        }
+        .subtopic-inline-list strong {
+            color: var(--ink);
+            font-weight: 600;
+            margin-right: 3px;
+        }
 
         /* Lead sentence (when no analogy) */
         .ls-lead {
@@ -1441,6 +1486,39 @@
                 <div class="examples-label">Examples</div>
                 {% for e in sec.examples %}
                 <div class="example-row"><span class="example-arrow">→</span>{{ e }}</div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {% if sec.subtopic_sections %}
+            <div class="subtopic-stack">
+                {% for item in sec.subtopic_sections %}
+                <div class="subtopic-item">
+                    <div class="subtopic-head">
+                        <div class="subtopic-title">{{ item.title }}</div>
+                        {% if item.citations %}
+                        <div class="subtopic-source">
+                            {% for cite in item.citations[:2] %}
+                            {{ cite.label }}{% if not loop.last %} · {% endif %}
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% if item.overview %}
+                    <div class="subtopic-overview">{{ item.overview }}</div>
+                    {% endif %}
+                    <div class="subtopic-inline-list">
+                        {% if item.definitions %}
+                        <span><strong>Definition</strong>{{ item.definitions[0] }}</span>
+                        {% endif %}
+                        {% if item.examples %}
+                        <span><strong>Example</strong>{{ item.examples[0] }}</span>
+                        {% endif %}
+                        {% if item.exam_traps %}
+                        <span><strong>Exam Trap</strong>{{ item.exam_traps[0] }}</span>
+                        {% endif %}
+                    </div>
+                </div>
                 {% endfor %}
             </div>
             {% endif %}

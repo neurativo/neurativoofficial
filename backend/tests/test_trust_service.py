@@ -1,5 +1,6 @@
 from app.services.transcript_cleaner import clean
 from app.services.trust_service import (
+    build_claim_registry,
     build_concept_sections,
     build_grounded_notes,
     enrich_lecture_payload,
@@ -111,6 +112,50 @@ def test_build_concept_sections_uses_canonical_educational_titles():
 
     assert sections[0]["title"] == "Branches of Economics"
     assert sections[1]["title"] in {"Economic vs Non-Economic Goods", "Public Goods vs Free Goods"}
+
+
+def test_build_concept_sections_include_nested_subtopic_sections():
+    grounded_notes = [{
+        "title": "Economic vs Non-Economic Goods",
+        "lead_sentence": "Economic goods are scarce while non-economic goods are abundant.",
+        "prose": "Public goods are different from free goods. Government textbooks are still economic goods because supply is limited.",
+        "concepts": ["economic goods", "non-economic goods", "public goods", "free goods"],
+        "examples": ["Government textbooks are still economic goods."],
+        "highlights": ["Do not confuse free goods with goods given free of charge."],
+        "citations": [{"label": "14:00-17:30", "start_seconds": 840, "end_seconds": 1050}],
+        "confidence": 0.9,
+        "verification_status": "supported",
+        "units": [],
+    }]
+
+    sections = build_concept_sections(grounded_notes)
+
+    assert sections[0]["subtopic_sections"]
+    assert any(item["title"] for item in sections[0]["subtopic_sections"])
+
+
+def test_build_claim_registry_exposes_support_and_contradiction_scores():
+    grounded_notes = [{
+        "title": "Positive vs Normative Statements",
+        "units": [
+            {
+                "type": "claim",
+                "text": "Positive statements can be tested against facts.",
+                "confidence": 0.92,
+                "support_score": 0.92,
+                "contradiction_score": 0.0,
+                "verification_status": "supported",
+                "timestamps": [{"seconds": 360, "label": "06:00"}],
+                "source_chunk_ids": [30],
+            }
+        ],
+    }]
+
+    claims = build_claim_registry(grounded_notes)
+
+    assert claims[0]["support_score"] == 0.92
+    assert claims[0]["contradiction_score"] == 0.0
+    assert claims[0]["chapter_title"] == "Positive vs Normative Statements"
 
 
 def test_build_concept_sections_merges_micro_sections_into_chapters():
