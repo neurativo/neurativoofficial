@@ -63,6 +63,15 @@ def recompute_final_summary(lecture_id: str) -> None:
         existing_flashcards = (lecture or {}).get("flashcards") or []
         existing_ok         = summary_has_required_structure(existing_summary, cleaned)
 
+        # ── Step 1: Educational reconstruction (primary path)
+        # generate_concept_master_summary() routes through reconstruct_lecture_model()
+        # first, falling back to the legacy summarize_topic_segment() path automatically.
+        # The result is the authoritative master_summary for this lecture.
+        concept_summary = generate_concept_master_summary(cleaned, topic=topic, language=language)
+
+        # ── Step 2: Study aids (flashcards, quiz, glossary)
+        # generate_content() is called for its study aids output only.
+        # Its .summary field is overridden by concept_summary in Step 4.
         content = generate_content(
             cleaned, title, topic, language,
             force=not existing_ok,
@@ -70,21 +79,24 @@ def recompute_final_summary(lecture_id: str) -> None:
             existing_flashcards=existing_flashcards,
         )
 
-        concept_summary = generate_concept_master_summary(cleaned, topic=topic, language=language)
-
         if content is None:
             print(f"[recompute] {lecture_id}: cache hit — content already exists.")
             if concept_summary:
                 update_lecture_summary_only(lecture_id, concept_summary)
                 print(f"[recompute] {lecture_id}: concept summary refreshed.")
         elif content and summary_has_required_structure(content.get("summary", ""), cleaned):
-            content = sanitize_generated_content_bundle(cleaned, content, summary=concept_summary or content.get("summary", ""))
+            # ── Step 3: Sanitize study aids using the authoritative summary
+            content = sanitize_generated_content_bundle(
+                cleaned, content,
+                summary=concept_summary or content.get("summary", "")
+            )
             save_generated_content(lecture_id, content)
+            # ── Step 4: Reconstruction summary overrides — always authoritative
             if concept_summary:
                 update_lecture_summary_only(lecture_id, concept_summary)
-                print(f"[recompute] {lecture_id}: content saved with concept summary.")
+                print(f"[recompute] {lecture_id}: content saved with reconstruction summary.")
             else:
-                print(f"[recompute] {lecture_id}: content saved.")
+                print(f"[recompute] {lecture_id}: content saved (legacy summary used).")
         else:
             if concept_summary:
                 update_lecture_summary_only(lecture_id, concept_summary)

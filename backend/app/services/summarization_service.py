@@ -611,12 +611,36 @@ def generate_concept_master_summary(
     language: str = "en",
 ) -> str:
     """
-    Segment a transcript into semantic teaching blocks and summarize each block
-    directly into a concept-driven master summary.
+    Primary path: educational reconstruction → model-derived summary.
+    Fallback: original summarize_topic_segment() path (unchanged, kept as _legacy).
+
+    The reconstruction path classifies concepts first, then derives the summary
+    from the structured educational model. This eliminates transcript-locality bias
+    and domain-locked heuristics.
     """
     if not full_text or not full_text.strip():
         return ""
 
+    try:
+        from app.services.educational_reconstruction import reconstruct_lecture_model
+        result = reconstruct_lecture_model(full_text, topic, language)
+        if result and result.get("master_summary"):
+            print(f"[summarization] reconstruction succeeded (quality={result.get('educational_model', {}).get('reconstruction_quality', 'unknown')})")
+            return result["master_summary"]
+    except Exception as e:
+        print(f"[summarization] reconstruction import/call error: {e}")
+
+    # Automatic fallback — no error raised, legacy path runs silently
+    print("[summarization] reconstruction failed or empty, using legacy path")
+    return _generate_concept_master_summary_legacy(full_text, topic, language)
+
+
+def _generate_concept_master_summary_legacy(
+    full_text: str,
+    topic: str | None = None,
+    language: str = "en",
+) -> str:
+    """Legacy path — original summarize_topic_segment() logic. Kept intact indefinitely."""
     sections = []
     for seg in segment_transcript(full_text, topic):
         start = max(0, int(seg.get("start") or 0))
