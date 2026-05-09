@@ -1288,6 +1288,21 @@
         }
         .foot-static .lhs { display: flex; gap: 10pt; align-items: center; }
         .foot-static .lhs .dot { width: 5px; height: 5px; background: var(--accent); display: inline-block; transform: rotate(45deg); }
+
+        /* Final PDF text-layer override. The :not(#id) selector deliberately
+           carries ID specificity so no heading/card class can reintroduce
+           non-zero spacing or ligatures and scramble copied PDF text. */
+        body,
+        body *:not(#neurativo-pdf-text-reset),
+        body *::before,
+        body *::after {
+            letter-spacing: 0 !important;
+            word-spacing: 0 !important;
+            font-variant-ligatures: none !important;
+            -webkit-font-variant-ligatures: none !important;
+            font-feature-settings: "liga" 0, "calt" 0 !important;
+            text-rendering: geometricPrecision !important;
+        }
     </style>
 </head>
 

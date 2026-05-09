@@ -1194,9 +1194,205 @@ def _build_core_explanation(note: dict) -> str:
     return _normalise_ws(" ".join(pieces))
 
 
+def _inventory_key(text: str) -> str:
+    canonical = _canonical_curriculum_concept(text)
+    if canonical:
+        return _normalise_ws(canonical).lower()
+    tokens = [t for t in _TOKEN_RE.findall(_normalise_ws(text).lower()) if t not in _STOPWORDS]
+    return " ".join(tokens[:6])
+
+
+def _concept_inventory_from_notes(grounded_notes: list[dict]) -> list[dict]:
+    """
+    Mandatory concept inventory pass.
+
+    This is intentionally coverage-oriented: a concept enters the inventory if
+    the transcript-backed note contains a definition, example, contrast, exam
+    trap, correction, or a substantial explanation. Admin/meta notes are
+    excluded before section generation can down-rank anything.
+    """
+    inventory_by_key: dict[str, dict] = {}
+    order = []
+
+    for note in grounded_notes or []:
+        signature = _note_curriculum_signature(note)
+        if signature["is_admin_only"]:
+            continue
+
+        definitions = _collect_definition_lines(note)
+        distinctions = _collect_distinctions(note)
+        exam_traps = _collect_exam_traps(note)
+        examples = _dedupe_texts(note.get("examples") or [])
+        explanation = _build_core_explanation(note)
+        concepts = _dedupe_texts(note.get("concepts") or [])
+        is_substantial = _word_count(explanation) >= 20
+        qualifies = any([
+            definitions,
+            distinctions,
+            exam_traps,
+            examples,
+            signature["concept_role"] in _STRUCTURAL_CONCEPT_ROLES,
+            signature["concept_role"] == "exam trap",
+            is_substantial,
+        ])
+        if not qualifies:
+            continue
+
+        title = signature.get("canonical") or _derive_title(note.get("title", ""), note.get("lead_sentence", ""), concepts)
+        if not title or title.lower() == "key concept" or _is_low_signal_title(title):
+            title = (concepts[0] if concepts else "").strip()
+        if not title:
+            continue
+
+        key = _inventory_key(" ".join([title, explanation, " ".join(concepts)]))
+        if not key:
+            continue
+
+        if key not in inventory_by_key:
+            inventory_by_key[key] = {
+                "key": key,
+                "title": title,
+                "core_explanation": explanation,
+                "key_definitions": [],
+                "important_distinctions": [],
+                "exam_traps": [],
+                "examples": [],
+                "concepts": [],
+                "citations": [],
+                "confidence": note.get("confidence", 0.0),
+                "verification_status": note.get("verification_status", "weak"),
+                "source_notes": [],
+            }
+            order.append(key)
+
+        item = inventory_by_key[key]
+        if explanation:
+            item["core_explanation"] = " ".join(_dedupe_texts(_split_sentences(" ".join([
+                item.get("core_explanation", ""),
+                explanation,
+            ]))))[:1200]
+        item["key_definitions"] = _dedupe_texts(item["key_definitions"] + definitions)[:5]
+        item["important_distinctions"] = _dedupe_texts(item["important_distinctions"] + distinctions)[:5]
+        item["exam_traps"] = _dedupe_texts(item["exam_traps"] + exam_traps)[:5]
+        item["examples"] = _dedupe_texts(item["examples"] + examples)[:8]
+        item["concepts"] = _dedupe_texts(item["concepts"] + concepts + [title])[:10]
+        item["confidence"] = max(float(item.get("confidence") or 0.0), float(note.get("confidence") or 0.0))
+        if note.get("verification_status") == "supported":
+            item["verification_status"] = "supported"
+        item["source_notes"].append(note)
+        for citation in note.get("citations") or []:
+            ckey = (citation.get("start_seconds"), citation.get("end_seconds"), citation.get("label"))
+            if not any((c.get("start_seconds"), c.get("end_seconds"), c.get("label")) == ckey for c in item["citations"]):
+                item["citations"].append(citation)
+
+    return [inventory_by_key[key] for key in order]
+
+
+def _section_covers_inventory_item(section: dict, item: dict) -> bool:
+    section_key = _section_merge_key(section)
+    item_key = item.get("key") or _inventory_key(item.get("title", ""))
+    if section_key and item_key and section_key == item_key:
+        return True
+    corpus = " ".join([
+        section.get("title", ""),
+        " ".join(section.get("concepts") or []),
+        section.get("core_explanation", ""),
+        " ".join(section.get("key_definitions") or []),
+    ]).lower()
+    title = _normalise_ws(item.get("title", "")).lower()
+    if title and title in corpus:
+        return True
+    item_tokens = _tokenise(" ".join([item.get("title", ""), " ".join(item.get("concepts") or [])]))
+    section_tokens = _tokenise(corpus)
+    return bool(item_tokens and len(item_tokens & section_tokens) / max(1, len(item_tokens)) >= 0.75)
+
+
+def _inventory_item_to_section(item: dict) -> dict:
+    citations = item.get("citations") or []
+    starts = [c.get("start_seconds") for c in citations if c.get("start_seconds") is not None]
+    ends = [c.get("end_seconds") for c in citations if c.get("end_seconds") is not None]
+    return {
+        "title": item.get("title") or "Lecture Concept",
+        "core_explanation": item.get("core_explanation") or "",
+        "key_definitions": item.get("key_definitions") or [],
+        "important_distinctions": item.get("important_distinctions") or [],
+        "exam_traps": item.get("exam_traps") or [],
+        "examples": item.get("examples") or [],
+        "concepts": item.get("concepts") or [item.get("title")],
+        "citations": citations,
+        "confidence": round(float(item.get("confidence") or 0.0), 2),
+        "verification_status": item.get("verification_status", "weak"),
+        "start_seconds": min(starts) if starts else None,
+        "end_seconds": max(ends) if ends else None,
+        "source_references": [c.get("label") for c in citations if c.get("label")],
+        "subsections": [],
+        "subtopic_sections": [],
+    }
+
+
+def _attach_inventory_item_to_section(section: dict, item: dict) -> dict:
+    merged = _merge_section_records(section, _inventory_item_to_section(item))
+    subtopic_title = item.get("title") or ""
+    if subtopic_title and subtopic_title != merged.get("title"):
+        subtopics = merged.get("subtopic_sections") or []
+        if not any(_normalise_ws(s.get("title", "")).lower() == subtopic_title.lower() for s in subtopics):
+            subtopics.append({
+                "title": subtopic_title,
+                "signal_type": "supporting concept",
+                "concept_role": "supporting concept",
+                "overview": item.get("core_explanation") or "",
+                "definitions": item.get("key_definitions") or [],
+                "examples": item.get("examples") or [],
+                "exam_traps": item.get("exam_traps") or [],
+                "citations": item.get("citations") or [],
+            })
+            merged["subtopic_sections"] = subtopics[:8]
+        merged["subsections"] = _dedupe_texts((merged.get("subsections") or []) + [subtopic_title])[:8]
+    return merged
+
+
+def _best_related_section_index(sections: list[dict], item: dict) -> int | None:
+    item_tokens = _tokenise(" ".join([
+        item.get("title", ""),
+        item.get("core_explanation", ""),
+        " ".join(item.get("concepts") or []),
+    ]))
+    best_idx = None
+    best_score = 0.0
+    for idx, section in enumerate(sections):
+        section_tokens = _tokenise(" ".join([
+            section.get("title", ""),
+            section.get("core_explanation", ""),
+            " ".join(section.get("concepts") or []),
+            " ".join(section.get("key_definitions") or []),
+        ]))
+        if not item_tokens or not section_tokens:
+            continue
+        overlap = len(item_tokens & section_tokens) / max(1, len(item_tokens))
+        if overlap > best_score:
+            best_score = overlap
+            best_idx = idx
+    return best_idx if best_score >= 0.35 else None
+
+
+def _ensure_inventory_coverage(sections: list[dict], inventory: list[dict]) -> list[dict]:
+    covered_sections = list(sections)
+    for item in inventory:
+        if any(_section_covers_inventory_item(section, item) for section in covered_sections):
+            continue
+        related_idx = _best_related_section_index(covered_sections, item)
+        if related_idx is not None:
+            covered_sections[related_idx] = _attach_inventory_item_to_section(covered_sections[related_idx], item)
+        else:
+            covered_sections.append(_inventory_item_to_section(item))
+    return _merge_duplicate_concept_sections(covered_sections)
+
+
 def build_concept_sections(grounded_notes: list[dict]) -> list[dict]:
     if not grounded_notes:
         return []
+
+    concept_inventory = _concept_inventory_from_notes(grounded_notes)
 
     structural_notes: list[dict] = []
     for note in grounded_notes:
@@ -1208,7 +1404,7 @@ def build_concept_sections(grounded_notes: list[dict]) -> list[dict]:
         structural_notes.append(note)
 
     if not structural_notes:
-        return []
+        return _ensure_inventory_coverage([], concept_inventory)
 
     total_notes = len(structural_notes)
     desired_sections = total_notes
@@ -1244,7 +1440,8 @@ def build_concept_sections(grounded_notes: list[dict]) -> list[dict]:
         chapters[merge_index - 1].extend(chapters[merge_index])
         del chapters[merge_index]
 
-    return _merge_duplicate_concept_sections([_merge_chapter_notes(group) for group in chapters if group])
+    generated = _merge_duplicate_concept_sections([_merge_chapter_notes(group) for group in chapters if group])
+    return _ensure_inventory_coverage(generated, concept_inventory)
 
 
 def _section_merge_key(section: dict) -> str:
@@ -1573,6 +1770,7 @@ def build_verified_cheat_sheet(
     for chapter in chapter_hierarchy:
         chapter_title = _normalise_ws(chapter.get("title", ""))
         chapter_citations = chapter.get("citations") or []
+        chapter_exam_trap = _compress_core_idea((chapter.get("exam_traps") or [""])[0], limit=16)
         chapter_claims = [
             claim for claim in allowed_claims
             if _normalise_ws(claim.get("chapter_title", "")).lower() == chapter_title.lower()
@@ -1599,7 +1797,7 @@ def build_verified_cheat_sheet(
             overview = subtopic.get("overview", "")
             core_source = definition or (best_claim.get("text", "") if best_claim else overview)
             core_idea = _compress_core_idea(core_source or overview, limit=10)
-            exam_trap = _compress_core_idea((subtopic.get("exam_traps") or [""])[0], limit=10)
+            exam_trap = _compress_core_idea((subtopic.get("exam_traps") or [""])[0], limit=16) or chapter_exam_trap
             quick_recall = _quick_recall_cue(" ".join(filter(None, [core_source, (subtopic.get("exam_traps") or [""])[0], overview])))
             confidence = max(
                 float(best_claim.get("confidence", 0.0)) if best_claim else 0.0,
@@ -1630,7 +1828,7 @@ def build_verified_cheat_sheet(
                 or (chapter_claim.get("text", "") if chapter_claim else chapter.get("core_explanation", ""))
             )
             overview = _compress_core_idea(overview_source, limit=11)
-            exam_trap = _compress_core_idea((chapter.get("exam_traps") or [""])[0], limit=10)
+            exam_trap = chapter_exam_trap
             if overview:
                 rows.append({
                     "term": chapter_title or "Key Concept",
@@ -1665,7 +1863,7 @@ def build_verified_cheat_sheet(
             "rows": [{
                 "term": _normalise_ws(chapter.get("title", "")) or "Key Concept",
                 "core_idea": overview,
-                "exam_trap": _compress_core_idea((chapter.get("exam_traps") or [""])[0], limit=10),
+                "exam_trap": chapter_exam_trap,
                 "quick_recall": _quick_recall_cue(chapter.get("core_explanation", "") or overview),
                 "citations": (chapter.get("citations") or [])[:1],
                 "confidence": round(float(chapter.get("confidence") or 0.0), 2),

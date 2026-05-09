@@ -1152,6 +1152,43 @@ def test_build_concept_sections_merges_duplicate_titles_across_lecture():
     assert "A free Friday class is still an economic good." in econ_section["examples"]
 
 
+def test_build_concept_sections_inventory_recovers_brief_exam_trap_concept():
+    grounded_notes = [
+        {
+            "title": "Kinematics Overview",
+            "lead_sentence": "Kinematics describes motion using measurable quantities.",
+            "prose": "The lecturer explains displacement and motion graphs.",
+            "concepts": ["kinematics", "displacement"],
+            "examples": [],
+            "highlights": [],
+            "citations": [{"label": "00:00-02:00", "start_seconds": 0, "end_seconds": 120}],
+            "confidence": 0.9,
+            "verification_status": "supported",
+        },
+        {
+            "title": "Velocity vs Speed",
+            "lead_sentence": "Don't confuse velocity with speed.",
+            "prose": "Velocity includes direction, while speed only tells how fast something moves.",
+            "concepts": ["velocity", "speed"],
+            "examples": [],
+            "highlights": ["Common mistake: students think velocity and speed are the same."],
+            "citations": [{"label": "12:00-12:45", "start_seconds": 720, "end_seconds": 765}],
+            "confidence": 0.88,
+            "verification_status": "supported",
+        },
+    ]
+
+    sections = build_concept_sections(grounded_notes)
+    corpus = " ".join(
+        section["title"] + " " + " ".join(section.get("subsections") or []) + " " + " ".join(section.get("exam_traps") or [])
+        for section in sections
+    ).lower()
+
+    assert "velocity" in corpus
+    assert "speed" in corpus
+    assert "students think velocity and speed are the same" in corpus
+
+
 def test_build_concept_sections_keeps_persistent_concept_examples_inside_chapter():
     grounded_notes = [
         {
