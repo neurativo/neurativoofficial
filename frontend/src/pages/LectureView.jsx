@@ -679,7 +679,7 @@ export default function LectureView() {
     const onHandleDragRef = React.useRef(null);
 
     useEffect(() => {
-        api.get(`/api/v1/lectures/${id}/full`)
+        api.get(`/api/v1/lectures/${id}/full?t=${Date.now()}`)
             .then(res => {
                 setLecture(res.data);
                 setSummaryStatus(res.data.summary_status || 'live');
@@ -695,7 +695,7 @@ export default function LectureView() {
     useEffect(() => {
         if (!isProcessing && summaryStatus !== 'recomputing') return;
         const interval = setInterval(() => {
-            api.get(`/api/v1/lectures/${id}/full`)
+            api.get(`/api/v1/lectures/${id}/full?t=${Date.now()}`)
                 .then(res => {
                     const nextStatus = res.data.summary_status || 'live';
                     setLecture(res.data);
