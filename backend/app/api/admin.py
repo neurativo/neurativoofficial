@@ -44,7 +44,6 @@ from app.services.supabase_service import (
     get_stale_free_lectures,
     mark_content_deleted,
     set_deletion_scheduled,
-    set_summary_status,
     get_lecture_full,
 )
 from app.services.cost_tracker import PRICING, LKR_RATE
@@ -309,7 +308,6 @@ async def recompute_lecture(
     if not transcript:
         raise HTTPException(status_code=400, detail="No transcript available to recompute from.")
 
-    set_summary_status(lecture_id, "recomputing")
     background_tasks.add_task(recompute_final_summary, lecture_id)
     _audit(admin.id, "recompute_lecture", lecture_id)
     return {"ok": True, "lecture_id": lecture_id, "status": "queued"}

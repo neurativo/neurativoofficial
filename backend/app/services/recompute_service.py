@@ -51,6 +51,7 @@ def recompute_final_summary(lecture_id: str) -> None:
     """
     snapshot: dict | None = None
     try:
+        print(f"[recompute] starting: {lecture_id}")
         language = get_lecture_language(lecture_id) or "en"
         topic = get_lecture_topic(lecture_id)
         lecture = get_lecture_full(lecture_id) or {}
@@ -58,15 +59,19 @@ def recompute_final_summary(lecture_id: str) -> None:
 
         original_transcript = _full_original_transcript(lecture, lecture_id)
         if not original_transcript.strip():
+            set_summary_status(lecture_id, "done")
             print(f"[recompute] {lecture_id}: no original transcript available; previous output unchanged.")
             return
 
+        print(f"[recompute] transcript length: {len(original_transcript)}")
         cleaned = clean_transcript(original_transcript)
         if not cleaned:
+            set_summary_status(lecture_id, "done")
             print(f"[recompute] {lecture_id}: transcript empty after cleaning; previous output unchanged.")
             return
 
         snapshot = snapshot_generated_outputs(lecture_id)
+        set_summary_status(lecture_id, "recomputing")
         clear_generated_outputs_for_recompute(lecture_id)
 
         concept_summary = generate_concept_master_summary(cleaned, topic=topic, language=language)
@@ -75,7 +80,10 @@ def recompute_final_summary(lecture_id: str) -> None:
 
         grounded_notes = build_grounded_notes(cleaned, concept_summary, section_rows=[])
         concept_sections = build_concept_sections(grounded_notes)
+        print(f"[recompute] building concept cards...")
         concept_note_cards = build_concept_note_cards(transcript=original_transcript, lecture_id=lecture_id)
+        print(f"[recompute] cards built: {len(concept_note_cards)}")
+        print(f"[recompute] validating grounding...")
         validate_summary_card_generation(
             concept_sections,
             concept_note_cards,
@@ -99,9 +107,11 @@ def recompute_final_summary(lecture_id: str) -> None:
                 content,
                 summary=concept_summary,
             )
+            print(f"[recompute] saving to database...")
             save_generated_content(lecture_id, content)
             update_lecture_summary_only(lecture_id, concept_summary)
             set_summary_status(lecture_id, "final")
+            print(f"[recompute] complete: {lecture_id}")
             print(f"[recompute] {lecture_id}: recompute complete with validated concept coverage.")
             return
 
@@ -111,6 +121,7 @@ def recompute_final_summary(lecture_id: str) -> None:
         if snapshot is not None:
             try:
                 restore_generated_outputs(lecture_id, snapshot)
+                set_summary_status(lecture_id, "done")
                 print(f"[recompute] {lecture_id}: failed and restored previous generated output: {exc}")
             except Exception as restore_exc:
                 print(
@@ -118,4 +129,5 @@ def recompute_final_summary(lecture_id: str) -> None:
                     f"{restore_exc}; original error: {exc}"
                 )
         else:
+            set_summary_status(lecture_id, "done")
             print(f"[recompute] {lecture_id}: failed before generated output was cleared: {exc}")
