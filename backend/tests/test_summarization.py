@@ -168,7 +168,7 @@ def test_recompute_final_summary_saves_master_and_sets_final():
 
 
 def test_recompute_final_summary_leaves_previous_state_when_no_transcript():
-    """If no original transcript exists, recompute does not mark partial output final."""
+    """If no original transcript exists, recompute resets status back to done."""
     status_set = {}
 
     with patch("app.services.recompute_service.get_lecture_language", return_value="en"), \
@@ -180,4 +180,4 @@ def test_recompute_final_summary_leaves_previous_state_when_no_transcript():
         from app.services.recompute_service import recompute_final_summary
         recompute_final_summary("lecture-empty")
 
-    assert status_set == {}
+    assert status_set == {"status": "done"}

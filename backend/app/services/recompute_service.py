@@ -5,7 +5,9 @@ Recompute snapshots the previous generated state, clears generated outputs,
 rebuilds from the original transcript only, validates concept coverage, then
 saves. If anything fails, the previous generated output is restored.
 """
+import time
 
+from app.core.config import settings
 from app.services.content_generator import (
     generate as generate_content,
     summary_has_required_structure,
@@ -52,9 +54,16 @@ def recompute_final_summary(lecture_id: str) -> None:
     snapshot: dict | None = None
     try:
         print(f"[recompute] starting: {lecture_id}")
+        if not settings.OPENAI_API_KEY:
+            set_summary_status(lecture_id, "done")
+            print(f"[recompute] {lecture_id}: OPENAI_API_KEY not configured.")
+            return
         language = get_lecture_language(lecture_id) or "en"
         topic = get_lecture_topic(lecture_id)
-        lecture = get_lecture_full(lecture_id) or {}
+        lecture = get_lecture_full(lecture_id)
+        if not lecture:
+            print(f"[recompute] {lecture_id}: lecture not found.")
+            return
         title = lecture.get("title") or "Live Session"
 
         original_transcript = _full_original_transcript(lecture, lecture_id)
@@ -83,6 +92,12 @@ def recompute_final_summary(lecture_id: str) -> None:
         print(f"[recompute] building concept cards...")
         concept_note_cards = build_concept_note_cards(transcript=original_transcript, lecture_id=lecture_id)
         print(f"[recompute] cards built: {len(concept_note_cards)}")
+        if not concept_note_cards:
+            if snapshot is not None:
+                restore_generated_outputs(lecture_id, snapshot)
+            set_summary_status(lecture_id, "done")
+            print(f"[recompute] {lecture_id}: no concept cards produced after filtering; previous output unchanged.")
+            return
         print(f"[recompute] validating grounding...")
         validate_summary_card_generation(
             concept_sections,
@@ -108,8 +123,20 @@ def recompute_final_summary(lecture_id: str) -> None:
                 summary=concept_summary,
             )
             print(f"[recompute] saving to database...")
-            save_generated_content(lecture_id, content)
-            update_lecture_summary_only(lecture_id, concept_summary)
+            save_error = None
+            for attempt in range(2):
+                try:
+                    save_generated_content(lecture_id, content)
+                    update_lecture_summary_only(lecture_id, concept_summary)
+                    save_error = None
+                    break
+                except Exception as exc:
+                    save_error = exc
+                    print(f"[recompute] save attempt {attempt + 1} failed for {lecture_id}: {exc}")
+                    if attempt == 0:
+                        time.sleep(1)
+            if save_error is not None:
+                raise RuntimeError(f"database save failed after retry: {save_error}")
             set_summary_status(lecture_id, "final")
             print(f"[recompute] complete: {lecture_id}")
             print(f"[recompute] {lecture_id}: recompute complete with validated concept coverage.")

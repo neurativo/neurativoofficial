@@ -1043,7 +1043,8 @@ def update_lecture_concept_note_cards(lecture_id: str, cards: list[dict]) -> Non
             .eq("id", lecture_id)
             .execute()
         )
-        print(f"[db-write] update result: {result}")
+        updated = bool(getattr(result, "data", None))
+        print(f"[db-write] update result: updated={updated}")
     except Exception as exc:
         print(f"[inventory-cache] write skipped for {lecture_id}: {exc}")
 

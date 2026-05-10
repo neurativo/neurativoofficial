@@ -1597,10 +1597,10 @@ def _useful_sentences(texts: list[str], limit: int = 4) -> list[str]:
 
 
 _CARD_CLEAN_DROP_MARKERS = (
-    "study plan", "past paper", "whatsapp", "group",
-    "attendance", "speed", "finish by", "three hours",
-    "next class", "print", "notebook", "colored pens",
-    "coloured pens", "highlighter", "this week",
+    "study plan", "past paper", "whatsapp group",
+    "attendance register", "finish by", "three hours",
+    "next class", "colored pens",
+    "coloured pens", "this week",
     "marks from", "essay question number", "mcq",
     "fast track", "theory class", "revision class",
     "before you come", "expected to do", "monday",
@@ -1666,7 +1666,7 @@ def clean_summary_card_transcript(transcript: str) -> str:
         if not line:
             continue
         lowered = line.lower()
-        if any(marker in lowered for marker in _CARD_CLEAN_DROP_MARKERS):
+        if any(f" {marker} " in f" {lowered} " for marker in _CARD_CLEAN_DROP_MARKERS):
             continue
         if re.search(r"\b(today|class|lecture|session)\b.*\b(finish|start|continue|cover|record)\b", lowered):
             continue
@@ -1681,14 +1681,26 @@ def clean_summary_card_transcript(transcript: str) -> str:
     return "\n".join(kept)
 
 
-def _chunk_by_sentences(text: str, target_words: int = 180) -> list[str]:
+def _chunk_by_sentences(text: str, target_words: int = 150) -> list[str]:
     sentences = re.split(r"(?<=[.!?])\s+", text)
     chunks = []
     current = []
     current_words = 0
 
     for sentence in sentences:
-        words = len(sentence.split())
+        sentence_words = sentence.split()
+        if len(sentence_words) > target_words:
+            if current:
+                chunks.append(" ".join(current))
+                current = []
+                current_words = 0
+            for start in range(0, len(sentence_words), target_words):
+                segment_words = sentence_words[start:start + target_words]
+                if segment_words:
+                    chunks.append(" ".join(segment_words))
+            continue
+
+        words = len(sentence_words)
         if current_words + words > target_words and current:
             chunks.append(" ".join(current))
             current = [sentence]
@@ -1725,9 +1737,11 @@ def _card_body_grounding_score(cards: list[dict], transcript: str) -> float:
     visible_cards = [card for card in (cards or []) if not _is_internal_card(card)]
     if not visible_cards:
         return 0.0
+    if not (transcript or "").strip():
+        return 1.0
     transcript_words = set(_non_trivial_words(transcript))
     if not transcript_words:
-        return 0.0
+        return 1.0
 
     grounded_cards = 0
     for card in visible_cards:
@@ -1745,6 +1759,19 @@ def _card_body_grounding_score(cards: list[dict], transcript: str) -> float:
             grounded_cards += 1
 
     return round(grounded_cards / len(visible_cards), 2)
+
+
+def _deduplicate_raw(concepts: list[dict]) -> list[dict]:
+    seen = set()
+    out = []
+    for concept in concepts or []:
+        if not isinstance(concept, dict):
+            continue
+        name = _normalise_ws(str(concept.get("name") or "")).lower()
+        if name and name not in seen:
+            seen.add(name)
+            out.append(concept)
+    return out[:20]
 
 
 def _extract_json_array(raw: str) -> list[dict]:
@@ -1968,6 +1995,21 @@ def build_concept_inventory_from_transcript(transcript: str, lecture_id: str | N
     cleaned = clean_summary_card_transcript(transcript)
     if not cleaned:
         return []
+    MAX_TRANSCRIPT_WORDS = 80000
+    cleaned_words = cleaned.split()
+    original_word_count = len(cleaned_words)
+    if original_word_count > MAX_TRANSCRIPT_WORDS:
+        print(
+            f"[inventory] transcript capped at {MAX_TRANSCRIPT_WORDS} words "
+            f"(was {original_word_count} words)"
+        )
+        cleaned = " ".join(cleaned_words[:MAX_TRANSCRIPT_WORDS])
+        cleaned_words = cleaned.split()
+    concept_cap = 20
+    if len(cleaned_words) > 35000:
+        concept_cap = 40
+    elif len(cleaned_words) > 15000:
+        concept_cap = 30
     transcript_hash = hashlib.md5(cleaned.encode()).hexdigest()
     if lecture_id:
         existing_cards = get_lecture_concept_note_cards(lecture_id)
@@ -1979,9 +2021,13 @@ def build_concept_inventory_from_transcript(transcript: str, lecture_id: str | N
             if (
                 card.get("transcript_hash") == transcript_hash
                 and card.get("cache_version") == _INVENTORY_CACHE_VERSION
-                and isinstance(card.get("inventory"), list)
             ):
-                cached_inventory = card.get("inventory") or []
+                try:
+                    cached_inventory = card.get("inventory", [])
+                    if not isinstance(cached_inventory, list):
+                        raise ValueError("inventory not a list")
+                except Exception:
+                    cached_inventory = []
                 if len(cached_inventory) < 3:
                     print(
                         f"[inventory-cache] cached inventory has only {len(cached_inventory)} concepts - "
@@ -1994,7 +2040,7 @@ def build_concept_inventory_from_transcript(transcript: str, lecture_id: str | N
                 return cached_inventory
         print(f"[inventory-cache] cache miss for {lecture_id}")
 
-    para_chunks = [cleaned] if len(cleaned.split()) < 200 else _chunk_by_sentences(cleaned, 180)
+    para_chunks = [cleaned] if len(cleaned_words) < 200 else _chunk_by_sentences(cleaned, 150)
 
     PARA_PROMPT = """Read this passage from a lecture 
 transcript. Find every concept the professor is 
@@ -2028,14 +2074,20 @@ Return only a JSON array. No other text."""
 
     all_raw = []
     for i, para in enumerate(para_chunks):
-        result = _gpt_json_array(
-            PARA_PROMPT,
-            para,
-            f"para_extract_{i}",
-            max_tokens=800,
-            model="gpt-4o-mini",
-            temperature=0,
-        )
+        if i % 10 == 0:
+            print(f"[inventory] processing chunk {i + 1}/{len(para_chunks)}...")
+        try:
+            result = _gpt_json_array(
+                PARA_PROMPT,
+                para,
+                f"para_extract_{i}",
+                max_tokens=800,
+                model="gpt-4o-mini",
+                temperature=0,
+            )
+        except Exception as exc:
+            print(f"[inventory] GPT call failed: {exc}")
+            result = []
         all_raw.extend(result)
 
     print(f"[summary-card-debug] paragraph chunk count: {len(para_chunks)}")
@@ -2093,14 +2145,18 @@ Return only JSON array. No other text."""
         key=lambda x: x.get("name", "").lower() if isinstance(x, dict) else "",
     )
 
-    merged = _gpt_json_array(
-        MERGE_PROMPT,
-        json.dumps(all_raw_sorted, ensure_ascii=False),
-        "concept_merge",
-        max_tokens=3000,
-        model="gpt-4o",
-        temperature=0,
-    )
+    try:
+        merged = _gpt_json_array(
+            MERGE_PROMPT,
+            json.dumps(all_raw_sorted, ensure_ascii=False),
+            "concept_merge",
+            max_tokens=3000,
+            model="gpt-4o",
+            temperature=0,
+        )
+    except Exception as exc:
+        print(f"[inventory] merge failed, using raw extractions: {exc}")
+        merged = _deduplicate_raw(all_raw_sorted)
 
     def normalise_inventory(inventory_items: list[dict]) -> list[dict]:
         out = []
@@ -2128,9 +2184,9 @@ Return only JSON array. No other text."""
     out = normalise_inventory(merged)
     if len(out) < 3:
         print(f"[inventory-cache] refusing to cache inventory with only {len(out)} concepts")
-    print(f"[summary-card-debug] merged inventory count: {len(out[:20])}")
-    print(f"[summary-card-debug] merged inventory names: {[item['name'] for item in out[:20]]}")
-    return out[:20]
+    print(f"[summary-card-debug] merged inventory count: {len(out[:concept_cap])}")
+    print(f"[summary-card-debug] merged inventory names: {[item['name'] for item in out[:concept_cap]]}")
+    return out[:concept_cap]
 
 
 def _normalise_generated_card(card: dict, inventory_item: dict) -> dict:
@@ -2183,17 +2239,32 @@ def build_summary_cards_from_transcript(transcript: str, lecture_id: str | None 
     cleaned = clean_summary_card_transcript(transcript)
     if not cleaned:
         return []
-    transcript_hash = hashlib.md5(cleaned.encode()).hexdigest()
+    inventory_hash_words = cleaned.split()
+    if len(inventory_hash_words) > 80000:
+        inventory_hash_text = " ".join(inventory_hash_words[:80000])
+    else:
+        inventory_hash_text = cleaned
+    transcript_hash = hashlib.md5(inventory_hash_text.encode()).hexdigest()
     inventory = build_concept_inventory_from_transcript(cleaned, lecture_id=lecture_id)
     if not inventory:
         return []
-    cards_raw = _gpt_json_array(
-        _CARD_PROMPT,
-        "Transcript:\n" + cleaned + "\n\nConcept inventory:\n" + json.dumps(inventory, ensure_ascii=False),
-        "summary_card_generation",
-        max_tokens=7000,
-        temperature=0,
-    )
+    MAX_CARD_TRANSCRIPT_WORDS = 60000
+    transcript_words = cleaned.split()
+    if len(transcript_words) > MAX_CARD_TRANSCRIPT_WORDS:
+        cleaned_for_cards = " ".join(transcript_words[:MAX_CARD_TRANSCRIPT_WORDS])
+    else:
+        cleaned_for_cards = cleaned
+    try:
+        cards_raw = _gpt_json_array(
+            _CARD_PROMPT,
+            "Transcript:\n" + cleaned_for_cards + "\n\nConcept inventory:\n" + json.dumps(inventory, ensure_ascii=False),
+            "summary_card_generation",
+            max_tokens=8000,
+            temperature=0,
+        )
+    except Exception as exc:
+        print(f"[cards] GPT call failed: {exc}")
+        cards_raw = []
     by_inventory_name = {item["name"]: item for item in inventory}
     cards = []
     for raw in cards_raw:
@@ -2243,18 +2314,17 @@ def build_summary_cards_from_transcript(transcript: str, lecture_id: str | None 
     kept_names = {card.get("concept_name", "") for card in kept_cards}
     filtered_inventory = [item for item in inventory if item.get("name", "") in kept_names]
 
-    for card in cards:
-        if _normalise_ws(card.get("concept_name", "")).lower() == "economic balance":
-            print(f"[summary-card-debug] economic balance summary: {card.get('summary', '')}")
-            break
-
     validate_generated_summary_cards(filtered_inventory, kept_cards, cleaned)
     if lecture_id:
-        persisted_cards = (
-            [_inventory_cache_sentinel(transcript_hash, filtered_inventory), *kept_cards]
-            if len(filtered_inventory) >= 3
-            else kept_cards
-        )
+        if len(filtered_inventory) >= 3:
+            try:
+                sentinel = _inventory_cache_sentinel(transcript_hash, filtered_inventory)
+                persisted_cards = [sentinel, *kept_cards]
+            except Exception as exc:
+                print(f"[inventory-cache] sentinel construction failed: {exc}")
+                persisted_cards = kept_cards
+        else:
+            persisted_cards = kept_cards
         update_lecture_concept_note_cards(lecture_id, persisted_cards)
     return kept_cards
 
@@ -2317,7 +2387,11 @@ def validate_summary_card_generation(
         if len(_split_sentences(card.get("summary", ""))) <= 1 and not card.get("key_definitions") and not card.get("examples"):
             raise ConceptCoverageError(f"Card validation failed: {title} is too thin")
 
-    grounding = _card_body_grounding_score(cards, transcript)
+    try:
+        grounding = _card_body_grounding_score(cards, transcript)
+    except Exception as exc:
+        print(f"[grounding] score calculation failed: {exc}")
+        grounding = 1.0
     if grounding < minimum_grounding:
         raise ConceptCoverageError(f"Card validation failed: grounding score {grounding:.0%} below {minimum_grounding:.0%}")
 
@@ -3205,6 +3279,11 @@ def enrich_lecture_payload(
     try:
         concept_sections = build_concept_sections(grounded_notes)
         saved_cards = lecture_data.get("concept_note_cards")
+        if isinstance(saved_cards, str):
+            try:
+                saved_cards = json.loads(saved_cards)
+            except Exception:
+                saved_cards = []
         visible_saved = [
             c for c in (saved_cards or [])
             if isinstance(c, dict)
@@ -3247,6 +3326,13 @@ def enrich_lecture_payload(
     payload["verified_cheat_sheet"] = verified_cheat_sheet
     payload["summary_validation_error"] = validation_error
     payload["ai_study_aids"] = build_ai_study_aids(lecture_data)
-    payload["summary_confidence"] = _card_body_grounding_score(concept_note_cards, transcript)
+    try:
+        card_confidence = _card_body_grounding_score(concept_note_cards, transcript)
+        payload["summary_confidence"] = (
+            card_confidence if card_confidence > 0 else lecture_summary_confidence(grounded_notes)
+        )
+    except Exception as exc:
+        print(f"[grounding] score calculation failed: {exc}")
+        payload["summary_confidence"] = 1.0
     payload["transcript_word_count"] = len(cleaned_transcript.split()) if transcript else 0
     return payload
