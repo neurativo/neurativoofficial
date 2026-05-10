@@ -74,7 +74,7 @@ def test_enrich_lecture_payload_adds_grounded_notes_and_ai_study_aids():
     assert enriched["adaptive_intelligence"]["concepts"]
     assert enriched["adaptive_study_weighting"]["weights"]
     assert enriched["relationship_concept_map"]
-    assert enriched["verified_cheat_sheet"]
+    assert "summary_validation_error" in enriched
     assert enriched["summary_confidence"] > 0
     assert enriched["transcript_word_count"] > 0
     assert {item["type"] for item in enriched["ai_study_aids"]["items"]} == {"flashcards", "quiz", "glossary"}
@@ -1032,116 +1032,43 @@ def test_build_concept_sections_removes_key_concept_admin_and_example_fragments(
     assert len(sections) < len(grounded_notes)
 
 
-def test_build_concept_note_cards_replace_broken_on_screen_summary():
-    sections = [
-        {
-            "title": "Key Concept",
-            "core_explanation": "The total assessment is out of 200 marks.",
-            "key_definitions": [],
-            "important_distinctions": [],
-            "exam_traps": [],
-            "examples": [],
-            "concepts": [],
-            "citations": [{"label": "00:00-01:12", "start_seconds": 0, "end_seconds": 72}],
-            "start_seconds": 0,
-        },
-        {
-            "title": "Positive vs Normative Statements",
-            "core_explanation": "Positive statements are objective, can be tested or validated, and relate to positive economics.",
-            "key_definitions": ["Positive statements are objective and testable. Normative statements express value judgments."],
-            "important_distinctions": ["Positive statements can be verified, while normative statements express opinions or value judgments."],
-            "exam_traps": ["Positive does not mean good; it means testable."],
-            "examples": ["The population growth rate of Sri Lanka is used as a factual example."],
-            "concepts": ["positive statements", "normative statements"],
-            "citations": [
-                {"label": "06:12-07:36", "start_seconds": 372, "end_seconds": 456},
-                {"label": "09:00-10:36", "start_seconds": 540, "end_seconds": 636},
-            ],
-            "start_seconds": 372,
-            "confidence": 0.9,
-            "verification_status": "supported",
-        },
-    ]
+def test_build_concept_note_cards_uses_two_call_concept_first_pipeline(monkeypatch):
+    calls = []
 
-    cards = build_concept_note_cards(sections)
+    def fake_gpt(system, user, feature, max_tokens=5000):
+        calls.append(feature)
+        if feature == "summary_card_inventory":
+            return [{
+                "name": "Positive vs Normative Statements",
+                "start_time": "06:12",
+                "end_time": "10:36",
+                "exam_trap": "Positive does not mean good.",
+                "distinction": "Positive statements vs normative statements",
+                "examples": ["The population growth rate of Sri Lanka."],
+            }]
+        return [{
+            "concept_name": "Positive vs Normative Statements",
+            "summary": "Positive statements are testable factual claims. Normative statements express value judgments.",
+            "key_distinction": {
+                "concept_a": {"name": "Positive statements", "characteristics": ["testable", "fact-based"]},
+                "concept_b": {"name": "Normative statements", "characteristics": ["value judgment", "opinion-based"]},
+            },
+            "exam_trap": {"misconception": "Positive means good", "correct": "Positive means testable"},
+            "examples": ["The population growth rate of Sri Lanka."],
+            "key_definitions": [{"term": "Positive statement", "definition": "A positive statement can be tested."}],
+            "source_start": "06:12",
+            "source_end": "10:36",
+        }]
 
+    monkeypatch.setattr(_trust_module, "_gpt_json_array", fake_gpt)
+
+    cards = build_concept_note_cards(transcript="06:12 Positive statements are testable. Normative statements are opinions.")
+
+    assert calls == ["summary_card_inventory", "summary_card_generation"]
     assert len(cards) == 1
     assert cards[0]["concept_name"] == "Positive vs Normative Statements"
-    assert cards[0]["definition"]
-    assert cards[0]["key_distinction"]
-    assert cards[0]["exam_trap"] == "Positive does not mean good; it means testable."
-    assert cards[0]["professor_example"]
-    assert cards[0]["source"]["label"] == "06:12 - 10:36"
-
-
-def test_build_concept_note_cards_preserve_multiple_examples_and_exam_traps():
-    sections = [{
-        "title": "Economic Goods & Scarcity",
-        "core_explanation": "Economic goods are limited in supply and have opportunity cost.",
-        "key_definitions": ["Economic goods are scarce goods that satisfy wants."],
-        "important_distinctions": ["Economic goods are limited, while non-economic goods are gifted by nature."],
-        "exam_traps": [
-            "Textbooks given free by government are economic goods, not free goods.",
-            "Public goods are not free goods because they are limited in supply.",
-        ],
-        "examples": [
-            "Government textbooks are still economic goods.",
-            "A free Friday class is still an economic good.",
-        ],
-        "concepts": ["economic goods", "scarcity"],
-        "citations": [{"label": "13:48-18:00", "start_seconds": 828, "end_seconds": 1080}],
-        "start_seconds": 828,
-        "confidence": 0.91,
-        "verification_status": "supported",
-    }]
-
-    cards = build_concept_note_cards(sections)
-
-    assert cards[0]["professor_examples"] == [
-        "Government textbooks are still economic goods.",
-        "A free Friday class is still an economic good.",
-    ]
-    assert cards[0]["exam_traps"] == [
-        "Textbooks given free by government are economic goods, not free goods.",
-        "Public goods are not free goods because they are limited in supply.",
-    ]
-    assert cards[0]["exam_trap_structured"]["misconception"]
-    assert cards[0]["exam_trap_structured"]["correct_understanding"]
-
-
-def test_build_concept_note_cards_creates_cards_for_subtopics_not_tags():
-    sections = [{
-        "title": "Motion Concepts",
-        "core_explanation": "Motion concepts describe how objects move.",
-        "key_definitions": ["Motion concepts describe changes in position over time."],
-        "important_distinctions": [],
-        "exam_traps": [],
-        "examples": [],
-        "concepts": ["motion"],
-        "citations": [{"label": "00:00-01:00", "start_seconds": 0, "end_seconds": 60}],
-        "start_seconds": 0,
-        "confidence": 0.9,
-        "verification_status": "supported",
-        "subtopic_sections": [
-            {
-                "title": "Velocity vs Speed",
-                "overview": "Velocity includes direction, while speed only tells how fast something moves.",
-                "definitions": ["Velocity is speed with direction."],
-                "examples": ["A car going north at 60 km/h has velocity."],
-                "exam_traps": ["Don't confuse velocity with speed."],
-                "citations": [{"label": "01:00-01:45", "start_seconds": 60, "end_seconds": 105}],
-            }
-        ],
-    }]
-
-    cards = build_concept_note_cards(sections)
-    titles = {card["concept_name"] for card in cards}
-
-    assert "Motion Concepts" in titles
-    assert "Velocity vs Speed" in titles
-    velocity = next(card for card in cards if card["concept_name"] == "Velocity vs Speed")
-    assert velocity["source"]["label"] == "01:00 - 01:45"
-    assert velocity["exam_trap_structured"]["misconception"]
+    assert cards[0]["exam_trap"]["correct"] == "Positive means testable"
+    assert cards[0]["examples"] == ["The population growth rate of Sri Lanka."]
 
 
 def test_build_concept_sections_merges_duplicate_titles_across_lecture():

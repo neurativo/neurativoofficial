@@ -11,9 +11,17 @@ stronger structured view on top of them:
 from __future__ import annotations
 
 import re
+import json
+import time
 from statistics import mean
 
+from openai import OpenAI
+
+from app.core.config import settings
+from app.services.cost_tracker import log_cost
 from app.services.transcript_cleaner import clean as clean_transcript
+
+_client = OpenAI(api_key=settings.OPENAI_API_KEY) if settings.OPENAI_API_KEY else None
 
 _STOPWORDS = {
     "a", "an", "and", "are", "as", "at", "be", "because", "by", "for", "from",
@@ -1585,248 +1593,290 @@ def _useful_sentences(texts: list[str], limit: int = 4) -> list[str]:
     return _dedupe_texts(sentences)[:limit]
 
 
-def _concept_text_match_score(text: str, concept_name: str, aliases: list[str] | None = None) -> float:
-    text_tokens = _tokenise(text)
-    concept_tokens = _tokenise(" ".join([concept_name or "", " ".join(aliases or [])]))
-    if not concept_tokens:
-        return 0.0
-    return len(text_tokens & concept_tokens) / max(1, len(concept_tokens))
+_CARD_CLEAN_DROP_MARKERS = (
+    "study plan", "past paper", "whatsapp", "group", "attendance", "speed",
+    "finish by", "three hours", "next class", "print", "notebook",
+    "colored pens", "coloured pens", "highlighter",
+)
 
 
-def _filter_items_for_concept(items: list[str], concept_name: str, aliases: list[str] | None = None) -> list[str]:
-    owned = []
-    for item in items or []:
-        if _concept_text_match_score(item, concept_name, aliases) >= 0.25:
-            owned.append(item)
-    return _dedupe_texts(owned)
-
-
-def _summary_for_card(source: dict, definitions: list[str]) -> str:
-    definition_set = {_normalise_ws(d).lower() for d in definitions}
-    candidates = []
-    for sentence in _split_sentences(source.get("overview", "") or source.get("core_explanation", "")):
-        cleaned = _normalise_ws(sentence)
-        if not cleaned:
+def clean_summary_card_transcript(transcript: str) -> str:
+    cleaned = clean_transcript(transcript or "")
+    kept = []
+    for raw_line in cleaned.splitlines():
+        line = _normalise_ws(raw_line)
+        if not line:
             continue
-        if cleaned.lower() in definition_set:
+        lowered = line.lower()
+        if any(marker in lowered for marker in _CARD_CLEAN_DROP_MARKERS):
             continue
-        candidates.append(cleaned)
-    if not candidates:
-        candidates = [d for d in definitions[:1] if d]
-    return " ".join(_dedupe_texts(candidates)[:3])
+        if re.search(r"\b(today|class|lecture|session)\b.*\b(finish|start|continue|cover|record)\b", lowered):
+            continue
+        sentences = []
+        for sentence in _split_sentences(line):
+            words = sentence.split()
+            if len(words) < 5 and sentence[-1:] not in ".!?":
+                continue
+            sentences.append(sentence)
+        if sentences:
+            kept.append(" ".join(sentences))
+    return "\n".join(kept)
 
 
-def _definition_items_for_card(source: dict, concept_name: str, aliases: list[str]) -> list[str]:
-    definitions = _useful_sentences(source.get("definitions") or source.get("key_definitions") or [], limit=4)
-    filtered = _filter_items_for_concept(definitions, concept_name, aliases)
-    if filtered:
-        return filtered[:3]
-    explanation = source.get("overview", "") or source.get("core_explanation", "")
-    explanation_sentences = _useful_sentences([explanation], limit=3)
-    for sentence in explanation_sentences:
-        if any(marker in sentence.lower() for marker in _DEFINITION_MARKERS) or _concept_text_match_score(sentence, concept_name, aliases) >= 0.25:
-            return [sentence]
-    return explanation_sentences[:1]
+def _extract_json_array(raw: str) -> list[dict]:
+    text = (raw or "").strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:json)?\s*", "", text)
+        text = re.sub(r"\s*```$", "", text)
+    if not text.startswith("["):
+        start = text.find("[")
+        end = text.rfind("]")
+        if start != -1 and end != -1 and end > start:
+            text = text[start:end + 1]
+    data = json.loads(text)
+    if not isinstance(data, list):
+        raise ConceptCoverageError("Summary card GPT response was not a JSON array")
+    return [item for item in data if isinstance(item, dict)]
 
 
-def _versus_sides_from_distinction(concept_name: str, distinction: str) -> dict | None:
-    text = _normalise_ws(distinction)
-    if not text:
-        return None
-    title_match = re.search(r"\b([A-Z][A-Za-z\s-]{2,40})\s+(?:vs\.?|versus)\s+([A-Z][A-Za-z\s-]{2,40})\b", concept_name)
-    if title_match:
-        return {"left": title_match.group(1).strip(), "right": title_match.group(2).strip(), "detail": text}
-    while_match = re.search(r"(.{3,100}?)\s+(?:while|whereas|but|unlike)\s+(.{3,120})", text, flags=re.I)
-    if while_match:
-        return {
-            "left": while_match.group(1).strip(" .,:;"),
-            "right": while_match.group(2).strip(" .,:;"),
-            "detail": text,
-        }
-    return None
+def _gpt_json_array(system_prompt: str, user_message: str, feature: str, max_tokens: int = 5000) -> list[dict]:
+    if not _client:
+        raise ConceptCoverageError("OpenAI client not configured for summary card generation")
+    last_error = None
+    for attempt in range(3):
+        try:
+            response = _client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_message},
+                ],
+                temperature=0.1,
+                max_tokens=max_tokens,
+            )
+            usage = getattr(response, "usage", None)
+            if usage:
+                log_cost(
+                    feature,
+                    "gpt-4o-mini",
+                    input_tokens=usage.prompt_tokens,
+                    output_tokens=usage.completion_tokens,
+                )
+            return _extract_json_array(response.choices[0].message.content)
+        except Exception as exc:
+            last_error = exc
+            if attempt < 2:
+                time.sleep(2 ** attempt)
+    raise ConceptCoverageError(f"{feature} failed: {last_error}")
 
 
-def _exam_trap_structured(trap: str, concept_name: str) -> dict:
-    cleaned = _normalise_ws(trap)
-    lowered = cleaned.lower()
-    misconception = ""
-    correct = ""
-    if " but " in lowered:
-        left, right = re.split(r"\bbut\b", cleaned, maxsplit=1, flags=re.I)
-        misconception = left.strip(" .,:;")
-        correct = right.strip(" .,:;")
-    elif "actually" in lowered:
-        left, right = re.split(r"\bactually\b", cleaned, maxsplit=1, flags=re.I)
-        misconception = left.strip(" .,:;")
-        correct = right.strip(" .,:;")
-    elif "does not mean" in lowered:
-        misconception = cleaned
-        correct = f"{concept_name} must be understood using the professor's corrected distinction."
-    elif "don't confuse" in lowered or "do not confuse" in lowered:
-        misconception = cleaned
-        correct = f"Keep {concept_name} separate from the contrasted concept."
-    else:
-        misconception = cleaned
-        correct = f"Use the professor's corrected explanation for {concept_name}."
-    return {
-        "concept": concept_name,
-        "misconception": misconception,
-        "correct_understanding": correct,
-        "text": cleaned,
-    }
+_INVENTORY_PROMPT = """You are an expert academic note-taker. Your job is to
+read a lecture transcript and identify every distinct concept the professor actually taught.
+
+Return a JSON array. Each item in the array is one concept.
+
+For each concept include:
+  name: the real term or principle name. Never 'Key Concept'.
+        Never a sentence. Examples of good names:
+        'Microeconomics vs Macroeconomics',
+        'Positive vs Normative Statements',
+        'Economic Bads',
+        'Converting Non-Economic to Economic Goods'
+  start_time: timestamp where professor first covered this
+  end_time: timestamp where professor last covered this
+  exam_trap: if the professor flagged a common mistake,
+             trick question, or student misconception
+             about this concept, describe it here.
+             If none, return null.
+  distinction: if the professor contrasted this concept
+               with another concept, name both here.
+               If none, return null.
+  examples: array of real examples the professor used.
+            Empty array if none.
+
+A concept qualifies if ANY of these are true:
+  - Professor gives it a name or definition
+  - Professor spends more than 30 seconds on it
+  - Professor uses an example to illustrate it
+  - Professor contrasts it with another concept
+  - Professor flags it as exam-relevant or tricky
+  - Professor corrects a student misconception
+
+A concept does NOT qualify if:
+  - It is about class logistics, timing, or attendance
+  - It is meta-commentary about the lecture itself
+  - It is a passing mention with no explanation
+
+Do not include any administrative content.
+Do not invent concepts not in the transcript.
+Do not merge distinct concepts into one.
+Return only the JSON array. No other text."""
 
 
-def _card_key(card: dict) -> str:
-    return _inventory_key(" ".join([
-        card.get("concept_name", ""),
-        card.get("summary", ""),
-        " ".join(card.get("definitions") or []),
-    ]))
+_CARD_PROMPT = """You are an expert academic note-taker. You have been
+given a lecture transcript and a list of concepts
+identified in that lecture.
+
+For each concept in the list generate a study card.
+
+Return a JSON array where each item is one card with
+these exact fields:
+
+  concept_name:
+    The name from the inventory. Use it exactly.
+
+  summary:
+    2 to 3 sentences. What this concept is and why
+    it matters. Derived from transcript only.
+    Must not be an example.
+    Must not repeat the key definitions.
+    Must not contain content from a different concept.
+
+  key_distinction:
+    Only include if the inventory says distinction
+    is not null.
+    Object with two keys:
+      concept_a: { name, characteristics: [array] }
+      concept_b: { name, characteristics: [array] }
+    Never just repeat the definition here.
+    null if no distinction.
+
+  exam_trap:
+    Only include if the inventory says exam_trap
+    is not null.
+    Object with two keys:
+      misconception: what students incorrectly think
+      correct: what is actually true
+    null if no exam trap.
+
+  examples:
+    Array of real examples from the transcript.
+    Preserve exactly as spoken.
+    Empty array if none — do not generate examples.
+
+  key_definitions:
+    Array of definition objects.
+    Each object has:
+      term: what is being defined
+      definition: one clear sentence from the transcript
+    Must not be the summary repeated.
+    Must not contain content from another concept.
+
+  source_start: start timestamp
+  source_end: end timestamp
+
+Return only the JSON array. No other text.
+Every concept from the inventory must have a card.
+Do not invent content not in the transcript.
+Do not add general knowledge to any card."""
 
 
-def _make_concept_card(source: dict) -> dict | None:
-    concept_name = _normalise_ws(source.get("title", ""))
-    if not concept_name or concept_name.lower() == "key concept" or _is_low_signal_title(concept_name):
-        return None
-    aliases = _dedupe_texts(source.get("concepts") or [])
-    definitions = _definition_items_for_card(source, concept_name, aliases)
-    if not definitions:
-        explanation = _normalise_ws(source.get("overview", "") or source.get("core_explanation", ""))
-        if explanation:
-            definition_sentence = _split_sentences(explanation)[0] if _split_sentences(explanation) else explanation
-            definitions = [definition_sentence]
-    if not definitions:
-        raise ConceptCoverageError(f"Card generation failed: no transcript-derived definition for {concept_name}")
-    summary = _summary_for_card(source, definitions)
-    distinctions = _useful_sentences(source.get("important_distinctions") or source.get("distinctions") or [], limit=3)
-    owned_distinctions = _filter_items_for_concept(distinctions, concept_name, aliases) or distinctions[:1]
-    key_distinction = owned_distinctions[0] if owned_distinctions else ""
-    trap_items = _useful_sentences(source.get("exam_traps") or [], limit=4)
-    owned_traps = _filter_items_for_concept(trap_items, concept_name, aliases) or trap_items
-    example_items = _useful_sentences(source.get("examples") or [], limit=8)
-    source_range = _single_source_range(source.get("citations") or [])
-    if not source_range:
-        raise ConceptCoverageError(f"Card generation failed: missing single source range for {concept_name}")
-    versus = _versus_sides_from_distinction(concept_name, key_distinction) if key_distinction else None
-    trap_structured = _exam_trap_structured(owned_traps[0], concept_name) if owned_traps else None
+def build_concept_inventory_from_transcript(transcript: str) -> list[dict]:
+    cleaned = clean_summary_card_transcript(transcript)
+    if not cleaned:
+        return []
+    inventory = _gpt_json_array(_INVENTORY_PROMPT, cleaned, "summary_card_inventory")
+    out = []
+    seen = set()
+    for item in inventory:
+        name = _normalise_ws(item.get("name", ""))
+        if not name or name.lower() == "key concept" or _is_low_signal_title(name):
+            continue
+        key = name.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({
+            "name": name,
+            "start_time": _normalise_ws(str(item.get("start_time") or "")),
+            "end_time": _normalise_ws(str(item.get("end_time") or "")),
+            "exam_trap": item.get("exam_trap") or None,
+            "distinction": item.get("distinction") or None,
+            "examples": item.get("examples") if isinstance(item.get("examples"), list) else [],
+        })
+    return out
+
+
+def _normalise_generated_card(card: dict, inventory_item: dict) -> dict:
+    concept_name = _normalise_ws(card.get("concept_name", "")) or inventory_item["name"]
+    source_start = _normalise_ws(str(card.get("source_start") or inventory_item.get("start_time") or ""))
+    source_end = _normalise_ws(str(card.get("source_end") or inventory_item.get("end_time") or ""))
+    definitions = card.get("key_definitions") if isinstance(card.get("key_definitions"), list) else []
+    examples = card.get("examples") if isinstance(card.get("examples"), list) else []
     return {
         "concept_name": concept_name,
-        "summary": summary,
-        "definition": definitions[0],
-        "definitions": definitions,
-        "key_distinction": key_distinction,
-        "key_distinctions": owned_distinctions,
-        "key_distinction_sides": versus,
-        "exam_trap": owned_traps[0] if owned_traps else "",
-        "exam_traps": owned_traps,
-        "exam_trap_structured": trap_structured,
-        "professor_example": example_items[0] if example_items else "",
-        "professor_examples": example_items,
-        "source": source_range,
-        "start_seconds": source.get("start_seconds"),
-        "confidence": source.get("confidence", 0.0),
-        "verification_status": source.get("verification_status", "weak"),
+        "summary": _normalise_ws(card.get("summary", "")),
+        "key_distinction": card.get("key_distinction") or None,
+        "exam_trap": card.get("exam_trap") or None,
+        "examples": [_normalise_ws(str(item)) for item in examples if _normalise_ws(str(item))],
+        "key_definitions": [
+            {
+                "term": _normalise_ws(str(item.get("term", ""))),
+                "definition": _normalise_ws(str(item.get("definition", ""))),
+            }
+            for item in definitions
+            if isinstance(item, dict) and (_normalise_ws(str(item.get("term", ""))) or _normalise_ws(str(item.get("definition", ""))))
+        ],
+        "source_start": source_start,
+        "source_end": source_end,
     }
 
 
-def _merge_duplicate_cards(cards: list[dict]) -> list[dict]:
-    by_key = {}
-    order = []
-    for card in cards:
-        key = _card_key(card)
-        if not key:
-            continue
-        if key not in by_key:
-            by_key[key] = card
-            order.append(key)
-            continue
-        existing = by_key[key]
-        for field in ("definitions", "key_distinctions", "exam_traps", "professor_examples"):
-            existing[field] = _dedupe_texts((existing.get(field) or []) + (card.get(field) or []))
-        existing["definition"] = existing.get("definitions", [""])[0]
-        existing["key_distinction"] = (existing.get("key_distinctions") or [""])[0]
-        existing["exam_trap"] = (existing.get("exam_traps") or [""])[0]
-        existing["professor_example"] = (existing.get("professor_examples") or [""])[0]
-        existing["summary"] = " ".join(_dedupe_texts(_split_sentences(" ".join([existing.get("summary", ""), card.get("summary", "")]))))[:700]
-        citations = [c for c in [existing.get("source"), card.get("source")] if c]
-        existing["source"] = _single_source_range(citations) if citations else existing.get("source")
-        existing["confidence"] = max(float(existing.get("confidence") or 0.0), float(card.get("confidence") or 0.0))
-        if card.get("verification_status") == "supported":
-            existing["verification_status"] = "supported"
-        if existing.get("exam_traps"):
-            existing["exam_trap_structured"] = _exam_trap_structured(existing["exam_traps"][0], existing["concept_name"])
-        if existing.get("key_distinction"):
-            existing["key_distinction_sides"] = _versus_sides_from_distinction(existing["concept_name"], existing["key_distinction"])
-    return [by_key[key] for key in order]
-
-
-def _card_covers_section(card: dict, section: dict) -> bool:
-    title = _normalise_ws(section.get("title", "")).lower()
-    card_title = _normalise_ws(card.get("concept_name", "")).lower()
-    if title and card_title == title:
-        return True
-    return _concept_text_match_score(" ".join([
-        card.get("concept_name", ""),
-        card.get("summary", ""),
-        " ".join(card.get("definitions") or []),
-    ]), section.get("title", ""), section.get("concepts") or []) >= 0.75
-
-
-def _ensure_card_coverage(cards: list[dict], concept_sections: list[dict]) -> list[dict]:
-    covered_cards = list(cards)
-    for section in concept_sections or []:
-        if _is_low_signal_title(section.get("title", "")):
-            continue
-        if any(_card_covers_section(card, section) for card in covered_cards):
-            continue
-        card = _make_concept_card(section)
-        if card:
-            covered_cards.append(card)
-    covered_cards = _merge_duplicate_cards(covered_cards)
-    missing = [
-        section.get("title", "")
-        for section in concept_sections or []
-        if not _is_low_signal_title(section.get("title", ""))
-        and not any(_card_covers_section(card, section) for card in covered_cards)
-    ]
+def validate_generated_summary_cards(inventory: list[dict], cards: list[dict], transcript: str = "") -> dict:
+    inventory_names = [c.get("name", "") for c in inventory if c.get("name")]
+    card_names = [c.get("concept_name", "") for c in cards if c.get("concept_name")]
+    missing = [name for name in inventory_names if name not in card_names]
     if missing:
-        raise ConceptCoverageError(f"Card coverage failed for concepts: {', '.join(missing)}")
-    return covered_cards
+        raise ConceptCoverageError(f"Summary card coverage failed. Missing concepts: {', '.join(missing)}")
+    if len(card_names) != len(set(name.lower() for name in card_names)):
+        raise ConceptCoverageError("Summary card validation failed: duplicate card titles")
+    bad = [name for name in card_names if name.lower() == "key concept" or _is_low_signal_title(name)]
+    if bad:
+        raise ConceptCoverageError(f"Summary card validation failed: invalid cards: {', '.join(bad)}")
+    for card in cards:
+        if not card.get("summary"):
+            raise ConceptCoverageError(f"Summary card validation failed: {card.get('concept_name')} has no summary")
+        if not card.get("source_start") or not card.get("source_end"):
+            raise ConceptCoverageError(f"Summary card validation failed: {card.get('concept_name')} has no single source range")
+        if len(_split_sentences(card.get("summary", ""))) < 1 and not card.get("key_definitions") and not card.get("examples"):
+            raise ConceptCoverageError(f"Summary card validation failed: {card.get('concept_name')} is too thin")
+    return {"concept_count": len(inventory_names), "card_count": len(cards), "missing": []}
 
 
-def build_concept_note_cards(concept_sections: list[dict]) -> list[dict]:
-    """
-    Build on-screen concept cards with one concept per card.
-
-    Cards are built from concept-owned section/subtopic records only. A concept
-    never becomes a tag inside another concept card; if it qualifies as a
-    section/subtopic it either gets its own card or card generation raises a
-    coverage error.
-    """
+def build_summary_cards_from_transcript(transcript: str) -> list[dict]:
+    cleaned = clean_summary_card_transcript(transcript)
+    if not cleaned:
+        return []
+    inventory = build_concept_inventory_from_transcript(cleaned)
+    if not inventory:
+        return []
+    cards_raw = _gpt_json_array(
+        _CARD_PROMPT,
+        "Transcript:\n" + cleaned + "\n\nConcept inventory:\n" + json.dumps(inventory, ensure_ascii=False),
+        "summary_card_generation",
+        max_tokens=7000,
+    )
+    by_inventory_name = {item["name"]: item for item in inventory}
     cards = []
-    for section in concept_sections or []:
-        card = _make_concept_card(section)
-        if card:
-            cards.append(card)
-        for subtopic in section.get("subtopic_sections") or []:
-            sub_card = _make_concept_card({
-                "title": subtopic.get("title", ""),
-                "overview": subtopic.get("overview", ""),
-                "definitions": subtopic.get("definitions") or [],
-                "important_distinctions": subtopic.get("distinctions") or [],
-                "exam_traps": subtopic.get("exam_traps") or [],
-                "examples": subtopic.get("examples") or [],
-                "concepts": [subtopic.get("title", "")],
-                "citations": subtopic.get("citations") or [],
-                "start_seconds": (subtopic.get("citations") or [{}])[0].get("start_seconds"),
-                "confidence": section.get("confidence", 0.0),
-                "verification_status": section.get("verification_status", "weak"),
-            })
-            if sub_card:
-                cards.append(sub_card)
+    for raw in cards_raw:
+        name = _normalise_ws(raw.get("concept_name", ""))
+        if name in by_inventory_name:
+            cards.append(_normalise_generated_card(raw, by_inventory_name[name]))
+    validate_generated_summary_cards(inventory, cards, cleaned)
+    return cards
 
-    cards = _ensure_card_coverage(_merge_duplicate_cards(cards), concept_sections)
-    return sorted(cards, key=lambda card: (card.get("start_seconds") is None, card.get("start_seconds") or 0))
+
+def build_concept_note_cards(concept_sections: list[dict] | None = None, *, transcript: str = "") -> list[dict]:
+    """
+    Generate on-screen concept cards with the new concept-first GPT pipeline.
+
+    The old section/chunk-derived card logic has been removed. Callers must pass
+    the full original transcript; cards are built from two sequential GPT calls:
+    concept inventory, then card content.
+    """
+    if not transcript:
+        raise ConceptCoverageError("Summary card generation requires the full original transcript")
+    return build_summary_cards_from_transcript(transcript)
 
 
 def validate_summary_card_generation(
@@ -1843,7 +1893,7 @@ def validate_summary_card_generation(
     source range, or weak grounding is a build error. Callers must not proceed
     to UI/PDF output when this raises ConceptCoverageError.
     """
-    cards = _ensure_card_coverage(_merge_duplicate_cards(concept_note_cards or []), concept_sections or [])
+    cards = concept_note_cards or []
     titles = [_normalise_ws(card.get("concept_name", "")) for card in cards]
     lowered_titles = [title.lower() for title in titles if title]
     if len(lowered_titles) != len(set(lowered_titles)):
@@ -1861,40 +1911,12 @@ def validate_summary_card_generation(
 
     for card in cards:
         title = card.get("concept_name", "")
-        source = card.get("source") or {}
-        if not source.get("label") or source.get("start_seconds") is None or source.get("end_seconds") is None:
+        if not card.get("source_start") or not card.get("source_end"):
             raise ConceptCoverageError(f"Card validation failed: {title} does not have exactly one source timestamp range")
         if not card.get("summary"):
             raise ConceptCoverageError(f"Card validation failed: {title} has no summary")
-        if not card.get("definitions"):
-            raise ConceptCoverageError(f"Card validation failed: {title} has no key definitions")
-        if card.get("exam_traps") and not card.get("exam_trap_structured"):
-            raise ConceptCoverageError(f"Card validation failed: {title} has exam traps without structured trap data")
-        if card.get("exam_trap_structured") and not card.get("exam_trap"):
-            raise ConceptCoverageError(f"Card validation failed: {title} has an empty exam trap field")
-
-    for section in concept_sections or []:
-        if _is_low_signal_title(section.get("title", "")):
-            continue
-        matching = [card for card in cards if _card_covers_section(card, section)]
-        if not matching:
-            raise ConceptCoverageError(f"Card validation failed: missing card for {section.get('title', '')}")
-        if section.get("exam_traps") and not matching[0].get("exam_trap"):
-            raise ConceptCoverageError(f"Card validation failed: exam trap missing for {section.get('title', '')}")
-        for subtopic in section.get("subtopic_sections") or []:
-            subtopic_title = _normalise_ws(subtopic.get("title", ""))
-            if not subtopic_title or _is_low_signal_title(subtopic_title):
-                continue
-            subtopic_section = {
-                "title": subtopic_title,
-                "concepts": [subtopic_title],
-                "key_definitions": subtopic.get("definitions") or [],
-            }
-            subtopic_matches = [card for card in cards if _card_covers_section(card, subtopic_section)]
-            if not subtopic_matches:
-                raise ConceptCoverageError(f"Card validation failed: missing card for {subtopic_title}")
-            if subtopic.get("exam_traps") and not subtopic_matches[0].get("exam_trap"):
-                raise ConceptCoverageError(f"Card validation failed: exam trap missing for {subtopic_title}")
+        if len(_split_sentences(card.get("summary", ""))) <= 1 and not card.get("key_definitions") and not card.get("examples"):
+            raise ConceptCoverageError(f"Card validation failed: {title} is too thin")
 
     grounding = lecture_summary_confidence(grounded_notes or [])
     if grounded_notes is not None and grounding < minimum_grounding:
@@ -1989,15 +2011,39 @@ def _quick_recall_cue(text: str) -> str:
 
 
 def _quick_recall_under_ten_words(card: dict) -> str:
+    first_def = (card.get("key_definitions") or [{}])[0]
+    definition = first_def.get("definition", "") if isinstance(first_def, dict) else str(first_def)
+    trap = card.get("exam_trap") or {}
+    trap_text = " ".join([trap.get("misconception", ""), trap.get("correct", "")]) if isinstance(trap, dict) else str(trap)
     cue = _quick_recall_cue(" ".join(filter(None, [
-        card.get("definition", ""),
+        definition,
         card.get("summary", ""),
-        card.get("exam_trap", ""),
+        trap_text,
     ])))
     words = cue.replace("—", " ").split()
     if len(words) <= 10:
         return cue
     return " ".join(words[:10]).rstrip(" .,;:") + "."
+
+
+def _timestamp_to_seconds(value: str | int | float | None) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return int(value)
+    text = str(value).strip()
+    if not text:
+        return None
+    parts = text.split(":")
+    try:
+        nums = [int(float(part)) for part in parts]
+    except ValueError:
+        return None
+    if len(nums) == 2:
+        return nums[0] * 60 + nums[1]
+    if len(nums) == 3:
+        return nums[0] * 3600 + nums[1] * 60 + nums[2]
+    return nums[0] if nums else None
 
 
 def _pick_term_citation(item: dict, fallback_citations: list[dict]) -> list[dict]:
@@ -2181,16 +2227,21 @@ def build_verified_cheat_sheet_from_cards(concept_note_cards: list[dict]) -> lis
             continue
         seen.add(key)
 
-        definition = _normalise_ws((card.get("definitions") or [card.get("definition", "")])[0])
+        first_def = (card.get("key_definitions") or [{}])[0]
+        definition = _normalise_ws(first_def.get("definition", "") if isinstance(first_def, dict) else str(first_def))
         summary = _normalise_ws(card.get("summary", ""))
         core_idea = _quick_recall_cue(definition or summary)
-        structured_trap = card.get("exam_trap_structured") or {}
+        structured_trap = card.get("exam_trap") or {}
         exam_trap = ""
-        if structured_trap:
+        if isinstance(structured_trap, dict) and structured_trap:
             misconception = _normalise_ws(structured_trap.get("misconception", ""))
-            correct = _normalise_ws(structured_trap.get("correct_understanding", ""))
+            correct = _normalise_ws(structured_trap.get("correct", ""))
             exam_trap = f"Students think {misconception} — actually {correct}".strip()
-        source = card.get("source") or {}
+        source = {
+            "label": f"{card.get('source_start')} - {card.get('source_end')}",
+            "start_seconds": _timestamp_to_seconds(card.get("source_start")),
+            "end_seconds": _timestamp_to_seconds(card.get("source_end")),
+        }
         rows.append({
             "term": term,
             "core_idea": core_idea,
@@ -2752,13 +2803,12 @@ def enrich_lecture_payload(
     grounded_notes = build_grounded_notes(cleaned_transcript, summary, section_rows=section_rows)
     try:
         concept_sections = build_concept_sections(grounded_notes)
-        concept_note_cards = build_concept_note_cards(concept_sections)
+        concept_note_cards = build_concept_note_cards(transcript=transcript)
         validate_summary_card_generation(concept_sections, concept_note_cards, grounded_notes)
     except ConceptCoverageError as exc:
         if strict_validation:
             raise
         validation_error = str(exc)
-        concept_sections = []
         concept_note_cards = []
     claim_registry = build_claim_registry(grounded_notes)
     concept_entities = build_concept_entities(concept_sections, claim_registry)

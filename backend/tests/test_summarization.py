@@ -139,6 +139,18 @@ def test_recompute_final_summary_saves_master_and_sets_final():
                side_effect=lambda lid: saved.update({"cleared": lid})), \
          patch("app.services.recompute_service.generate_concept_master_summary",
                return_value=master), \
+         patch("app.services.recompute_service.build_concept_note_cards",
+               return_value=[{
+                   "concept_name": "Microeconomics vs Macroeconomics",
+                   "summary": "Microeconomics studies individual units. Macroeconomics studies the whole economy.",
+                   "key_distinction": None,
+                   "exam_trap": None,
+                   "examples": [],
+                   "key_definitions": [{"term": "Microeconomics", "definition": "Microeconomics studies individual economic units."}],
+                   "source_start": "00:00",
+                   "source_end": "00:20",
+               }]), \
+         patch("app.services.recompute_service.validate_summary_card_generation", return_value={"card_count": 1}), \
          patch("app.services.recompute_service.generate_content",
                return_value={"summary": master, "flashcards": [], "quiz": [], "glossary": []}), \
          patch("app.services.recompute_service.save_generated_content",

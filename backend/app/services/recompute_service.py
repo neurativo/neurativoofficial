@@ -75,7 +75,7 @@ def recompute_final_summary(lecture_id: str) -> None:
 
         grounded_notes = build_grounded_notes(cleaned, concept_summary, section_rows=[])
         concept_sections = build_concept_sections(grounded_notes)
-        concept_note_cards = build_concept_note_cards(concept_sections)
+        concept_note_cards = build_concept_note_cards(transcript=original_transcript)
         validate_summary_card_generation(concept_sections, concept_note_cards, grounded_notes)
 
         content = generate_content(

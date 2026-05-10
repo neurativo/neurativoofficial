@@ -229,14 +229,32 @@ def _concept_cards_to_pdf_sections(concept_note_cards: list[dict]) -> list[dict]
         title = card.get("concept_name") or ""
         if not title:
             continue
-        citations = [card["source"]] if card.get("source") else []
-        definitions = card.get("definitions") or ([card["definition"]] if card.get("definition") else [])
-        distinctions = card.get("key_distinctions") or ([card["key_distinction"]] if card.get("key_distinction") else [])
-        exam_traps = card.get("exam_traps") or ([card["exam_trap"]] if card.get("exam_trap") else [])
-        examples = card.get("professor_examples") or ([card["professor_example"]] if card.get("professor_example") else [])
+        citations = [{
+            "label": f"{card.get('source_start')} - {card.get('source_end')}",
+            "start_seconds": None,
+            "end_seconds": None,
+        }] if card.get("source_start") and card.get("source_end") else []
+        definitions = [
+            f"{item.get('term')}: {item.get('definition')}"
+            for item in (card.get("key_definitions") or [])
+            if isinstance(item, dict) and (item.get("term") or item.get("definition"))
+        ]
+        distinction_obj = card.get("key_distinction") or {}
+        distinctions = []
+        if isinstance(distinction_obj, dict) and distinction_obj:
+            a = distinction_obj.get("concept_a") or {}
+            b = distinction_obj.get("concept_b") or {}
+            distinctions = [
+                " vs ".join([str(a.get("name", "")).strip(), str(b.get("name", "")).strip()]).strip(" vs ")
+            ]
+        trap_obj = card.get("exam_trap") or {}
+        exam_traps = []
+        if isinstance(trap_obj, dict) and trap_obj:
+            exam_traps = [f"Students think {trap_obj.get('misconception', '')}; actually {trap_obj.get('correct', '')}"]
+        examples = card.get("examples") or []
         section = {
             "title": title,
-            "lead_sentence": card.get("definition") or "",
+            "lead_sentence": (definitions or [card.get("summary", "")])[0],
             "prose": "",
             "bullets": [],
             "concepts": [title],
@@ -1256,7 +1274,7 @@ async def generate_lecture_pdf(
     section_rows  = await asyncio.to_thread(get_lecture_sections, lecture_id)
     grounded_notes = build_grounded_notes(cleaned_transcript, summary, section_rows=section_rows)
     concept_sections = build_concept_sections(grounded_notes)
-    concept_note_cards = build_concept_note_cards(concept_sections)
+    concept_note_cards = build_concept_note_cards(transcript=transcript)
     validate_summary_card_generation(concept_sections, concept_note_cards, grounded_notes)
     claim_registry = build_claim_registry(grounded_notes)
     title = _resolve_document_title(title, transcript, topic, concept_sections)
