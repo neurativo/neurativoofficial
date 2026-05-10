@@ -2736,17 +2736,30 @@ def lecture_summary_confidence(grounded_notes: list[dict]) -> float:
     return round(mean(scores), 2) if scores else 0.0
 
 
-def enrich_lecture_payload(lecture_data: dict, section_rows: list[dict] | None = None) -> dict:
+def enrich_lecture_payload(
+    lecture_data: dict,
+    section_rows: list[dict] | None = None,
+    *,
+    strict_validation: bool = False,
+) -> dict:
     if not lecture_data:
         return lecture_data
 
     transcript = lecture_data.get("transcript") or ""
     cleaned_transcript = clean_transcript(transcript)
     summary = lecture_data.get("master_summary") or lecture_data.get("summary") or ""
+    validation_error = None
     grounded_notes = build_grounded_notes(cleaned_transcript, summary, section_rows=section_rows)
-    concept_sections = build_concept_sections(grounded_notes)
-    concept_note_cards = build_concept_note_cards(concept_sections)
-    validate_summary_card_generation(concept_sections, concept_note_cards, grounded_notes)
+    try:
+        concept_sections = build_concept_sections(grounded_notes)
+        concept_note_cards = build_concept_note_cards(concept_sections)
+        validate_summary_card_generation(concept_sections, concept_note_cards, grounded_notes)
+    except ConceptCoverageError as exc:
+        if strict_validation:
+            raise
+        validation_error = str(exc)
+        concept_sections = []
+        concept_note_cards = []
     claim_registry = build_claim_registry(grounded_notes)
     concept_entities = build_concept_entities(concept_sections, claim_registry)
     concept_graph = build_concept_relationship_graph(concept_entities, claim_registry)
@@ -2767,6 +2780,7 @@ def enrich_lecture_payload(lecture_data: dict, section_rows: list[dict] | None =
     payload["adaptive_study_weighting"] = adaptive_study_weighting
     payload["relationship_concept_map"] = relationship_concept_map
     payload["verified_cheat_sheet"] = verified_cheat_sheet
+    payload["summary_validation_error"] = validation_error
     payload["ai_study_aids"] = build_ai_study_aids(lecture_data)
     payload["summary_confidence"] = lecture_summary_confidence(grounded_notes)
     payload["transcript_word_count"] = len(cleaned_transcript.split()) if transcript else 0
