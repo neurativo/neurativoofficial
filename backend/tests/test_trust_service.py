@@ -1,4 +1,5 @@
 import app.services.trust_service as _trust_module
+import pytest
 from app.services.transcript_cleaner import clean
 from app.services.trust_service import (
     build_adaptive_study_weighting,
@@ -1187,6 +1188,27 @@ def test_build_concept_sections_inventory_recovers_brief_exam_trap_concept():
     assert "velocity" in corpus
     assert "speed" in corpus
     assert "students think velocity and speed are the same" in corpus
+
+
+def test_inventory_coverage_failure_is_build_error(monkeypatch):
+    inventory = [{
+        "key": "velocity speed",
+        "title": "Velocity vs Speed",
+        "core_explanation": "Velocity includes direction, while speed only tells how fast something moves.",
+        "key_definitions": [],
+        "important_distinctions": ["Velocity includes direction, while speed only tells how fast something moves."],
+        "exam_traps": ["Don't confuse velocity with speed."],
+        "examples": [],
+        "concepts": ["velocity", "speed"],
+        "citations": [{"label": "12:00-12:45", "start_seconds": 720, "end_seconds": 765}],
+        "confidence": 0.9,
+        "verification_status": "supported",
+    }]
+
+    monkeypatch.setattr(_trust_module, "_section_covers_inventory_item", lambda section, item: False)
+
+    with pytest.raises(_trust_module.ConceptCoverageError):
+        _trust_module._ensure_inventory_coverage([], inventory)
 
 
 def test_build_concept_sections_keeps_persistent_concept_examples_inside_chapter():

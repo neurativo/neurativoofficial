@@ -163,6 +163,10 @@ _CAUSAL_MARKERS = ("because", "therefore", "leads to", "results in", "causes", "
 _STRUCTURAL_CONCEPT_ROLES = {"foundational concept", "supporting concept"}
 
 
+class ConceptCoverageError(RuntimeError):
+    """Raised when section generation cannot account for every inventory concept."""
+
+
 def _tokenise(text: str) -> set[str]:
     words = _TOKEN_RE.findall((text or "").lower())
     return {w for w in words if w not in _STOPWORDS}
@@ -1377,15 +1381,32 @@ def _best_related_section_index(sections: list[dict], item: dict) -> int | None:
 
 def _ensure_inventory_coverage(sections: list[dict], inventory: list[dict]) -> list[dict]:
     covered_sections = list(sections)
-    for item in inventory:
-        if any(_section_covers_inventory_item(section, item) for section in covered_sections):
-            continue
-        related_idx = _best_related_section_index(covered_sections, item)
-        if related_idx is not None:
-            covered_sections[related_idx] = _attach_inventory_item_to_section(covered_sections[related_idx], item)
-        else:
-            covered_sections.append(_inventory_item_to_section(item))
-    return _merge_duplicate_concept_sections(covered_sections)
+    missing: list[dict] = []
+
+    for _ in range(3):
+        missing = [
+            item for item in inventory
+            if not any(_section_covers_inventory_item(section, item) for section in covered_sections)
+        ]
+        if not missing:
+            return _merge_duplicate_concept_sections(covered_sections)
+
+        for item in missing:
+            related_idx = _best_related_section_index(covered_sections, item)
+            if related_idx is not None:
+                covered_sections[related_idx] = _attach_inventory_item_to_section(covered_sections[related_idx], item)
+            else:
+                covered_sections.append(_inventory_item_to_section(item))
+        covered_sections = _merge_duplicate_concept_sections(covered_sections)
+
+    missing = [
+        item for item in inventory
+        if not any(_section_covers_inventory_item(section, item) for section in covered_sections)
+    ]
+    if missing:
+        missing_titles = ", ".join(_normalise_ws(item.get("title", "")) or item.get("key", "") for item in missing)
+        raise ConceptCoverageError(f"Section coverage failed for inventory concepts: {missing_titles}")
+    return covered_sections
 
 
 def build_concept_sections(grounded_notes: list[dict]) -> list[dict]:
