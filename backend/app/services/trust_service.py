@@ -1639,14 +1639,14 @@ def _extract_json_array(raw: str) -> list[dict]:
     return [item for item in data if isinstance(item, dict)]
 
 
-def _gpt_json_array(system_prompt: str, user_message: str, feature: str, max_tokens: int = 5000) -> list[dict]:
+def _gpt_json_array(system_prompt: str, user_message: str, feature: str, max_tokens: int = 5000, model: str = "gpt-4o-mini") -> list[dict]:
     if not _client:
         raise ConceptCoverageError("OpenAI client not configured for summary card generation")
     last_error = None
     for attempt in range(3):
         try:
             response = _client.chat.completions.create(
-                model="gpt-4o-mini",
+                model=model,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_message},
@@ -1658,7 +1658,7 @@ def _gpt_json_array(system_prompt: str, user_message: str, feature: str, max_tok
             if usage:
                 log_cost(
                     feature,
-                    "gpt-4o-mini",
+                    model,
                     input_tokens=usage.prompt_tokens,
                     output_tokens=usage.completion_tokens,
                 )
@@ -1775,25 +1775,54 @@ def build_concept_inventory_from_transcript(transcript: str) -> list[dict]:
     cleaned = clean_summary_card_transcript(transcript)
     if not cleaned:
         return []
-    inventory = _gpt_json_array(_INVENTORY_PROMPT, cleaned, "summary_card_inventory")
-    out = []
-    seen = set()
-    for item in inventory:
-        name = _normalise_ws(item.get("name", ""))
-        if not name or name.lower() == "key concept" or _is_low_signal_title(name):
-            continue
-        key = name.lower()
-        if key in seen:
-            continue
-        seen.add(key)
-        out.append({
-            "name": name,
-            "start_time": _normalise_ws(str(item.get("start_time") or "")),
-            "end_time": _normalise_ws(str(item.get("end_time") or "")),
-            "exam_trap": item.get("exam_trap") or None,
-            "distinction": item.get("distinction") or None,
-            "examples": item.get("examples") if isinstance(item.get("examples"), list) else [],
-        })
+
+    def normalise_inventory(inventory_items: list[dict]) -> list[dict]:
+        out = []
+        seen = set()
+        for item in inventory_items:
+            name = _normalise_ws(item.get("name", ""))
+            if not name or name.lower() == "key concept" or _is_low_signal_title(name):
+                continue
+            key = name.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append({
+                "name": name,
+                "start_time": _normalise_ws(str(item.get("start_time") or "")),
+                "end_time": _normalise_ws(str(item.get("end_time") or "")),
+                "exam_trap": item.get("exam_trap") or None,
+                "distinction": item.get("distinction") or None,
+                "examples": item.get("examples") if isinstance(item.get("examples"), list) else [],
+            })
+        return out
+
+    inventory = _gpt_json_array(_INVENTORY_PROMPT, cleaned, "summary_card_inventory", model="gpt-4o")
+    out = normalise_inventory(inventory)
+    transcript_minutes = len(cleaned.split()) / 130
+    min_expected_concepts = max(3, int(transcript_minutes * 0.8))
+    if len(out) < min_expected_concepts:
+        warning = (
+            f"Inventory returned {len(out)} concepts for a {transcript_minutes:.1f} minute lecture. "
+            f"Expected at least {min_expected_concepts}. "
+            "Re-running inventory with stricter prompt."
+        )
+        print(warning)
+        strict_prompt = (
+            _INVENTORY_PROMPT
+            + "\n\n"
+            + f"IMPORTANT: This transcript is {transcript_minutes:.1f} minutes long. You must return at least "
+            + f"{min_expected_concepts} concepts. If you returned fewer, "
+            + "you have missed concepts. Re-read the transcript and "
+            + "find every concept the professor defined or explained."
+        )
+        retry_inventory = _gpt_json_array(strict_prompt, cleaned, "summary_card_inventory_retry", model="gpt-4o")
+        out = normalise_inventory(retry_inventory)
+        if len(out) < min_expected_concepts:
+            print(
+                f"Inventory returned {len(out)} concepts after retry for a {transcript_minutes:.1f} minute lecture. "
+                f"Expected at least {min_expected_concepts}. Proceeding anyway."
+            )
     return out
 
 

@@ -1035,9 +1035,9 @@ def test_build_concept_sections_removes_key_concept_admin_and_example_fragments(
 def test_build_concept_note_cards_uses_two_call_concept_first_pipeline(monkeypatch):
     calls = []
 
-    def fake_gpt(system, user, feature, max_tokens=5000):
+    def fake_gpt(system, user, feature, max_tokens=5000, model="gpt-4o-mini"):
         calls.append(feature)
-        if feature == "summary_card_inventory":
+        if feature in {"summary_card_inventory", "summary_card_inventory_retry"}:
             return [{
                 "name": "Positive vs Normative Statements",
                 "start_time": "06:12",
@@ -1064,7 +1064,7 @@ def test_build_concept_note_cards_uses_two_call_concept_first_pipeline(monkeypat
 
     cards = build_concept_note_cards(transcript="06:12 Positive statements are testable. Normative statements are opinions.")
 
-    assert calls == ["summary_card_inventory", "summary_card_generation"]
+    assert calls == ["summary_card_inventory", "summary_card_inventory_retry", "summary_card_generation"]
     assert len(cards) == 1
     assert cards[0]["concept_name"] == "Positive vs Normative Statements"
     assert cards[0]["exam_trap"]["correct"] == "Positive means testable"
