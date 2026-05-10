@@ -1585,69 +1585,243 @@ def _useful_sentences(texts: list[str], limit: int = 4) -> list[str]:
     return _dedupe_texts(sentences)[:limit]
 
 
+def _concept_text_match_score(text: str, concept_name: str, aliases: list[str] | None = None) -> float:
+    text_tokens = _tokenise(text)
+    concept_tokens = _tokenise(" ".join([concept_name or "", " ".join(aliases or [])]))
+    if not concept_tokens:
+        return 0.0
+    return len(text_tokens & concept_tokens) / max(1, len(concept_tokens))
+
+
+def _filter_items_for_concept(items: list[str], concept_name: str, aliases: list[str] | None = None) -> list[str]:
+    owned = []
+    for item in items or []:
+        if _concept_text_match_score(item, concept_name, aliases) >= 0.25:
+            owned.append(item)
+    return _dedupe_texts(owned)
+
+
+def _summary_for_card(source: dict, definitions: list[str]) -> str:
+    definition_set = {_normalise_ws(d).lower() for d in definitions}
+    candidates = []
+    for sentence in _split_sentences(source.get("overview", "") or source.get("core_explanation", "")):
+        cleaned = _normalise_ws(sentence)
+        if not cleaned:
+            continue
+        if cleaned.lower() in definition_set:
+            continue
+        candidates.append(cleaned)
+    if not candidates:
+        candidates = [d for d in definitions[:1] if d]
+    return " ".join(_dedupe_texts(candidates)[:3])
+
+
+def _definition_items_for_card(source: dict, concept_name: str, aliases: list[str]) -> list[str]:
+    definitions = _useful_sentences(source.get("definitions") or source.get("key_definitions") or [], limit=4)
+    filtered = _filter_items_for_concept(definitions, concept_name, aliases)
+    if filtered:
+        return filtered[:3]
+    explanation = source.get("overview", "") or source.get("core_explanation", "")
+    explanation_sentences = _useful_sentences([explanation], limit=3)
+    for sentence in explanation_sentences:
+        if any(marker in sentence.lower() for marker in _DEFINITION_MARKERS) or _concept_text_match_score(sentence, concept_name, aliases) >= 0.25:
+            return [sentence]
+    return explanation_sentences[:1]
+
+
+def _versus_sides_from_distinction(concept_name: str, distinction: str) -> dict | None:
+    text = _normalise_ws(distinction)
+    if not text:
+        return None
+    title_match = re.search(r"\b([A-Z][A-Za-z\s-]{2,40})\s+(?:vs\.?|versus)\s+([A-Z][A-Za-z\s-]{2,40})\b", concept_name)
+    if title_match:
+        return {"left": title_match.group(1).strip(), "right": title_match.group(2).strip(), "detail": text}
+    while_match = re.search(r"(.{3,100}?)\s+(?:while|whereas|but|unlike)\s+(.{3,120})", text, flags=re.I)
+    if while_match:
+        return {
+            "left": while_match.group(1).strip(" .,:;"),
+            "right": while_match.group(2).strip(" .,:;"),
+            "detail": text,
+        }
+    return None
+
+
+def _exam_trap_structured(trap: str, concept_name: str) -> dict:
+    cleaned = _normalise_ws(trap)
+    lowered = cleaned.lower()
+    misconception = ""
+    correct = ""
+    if " but " in lowered:
+        left, right = re.split(r"\bbut\b", cleaned, maxsplit=1, flags=re.I)
+        misconception = left.strip(" .,:;")
+        correct = right.strip(" .,:;")
+    elif "actually" in lowered:
+        left, right = re.split(r"\bactually\b", cleaned, maxsplit=1, flags=re.I)
+        misconception = left.strip(" .,:;")
+        correct = right.strip(" .,:;")
+    elif "does not mean" in lowered:
+        misconception = cleaned
+        correct = f"{concept_name} must be understood using the professor's corrected distinction."
+    elif "don't confuse" in lowered or "do not confuse" in lowered:
+        misconception = cleaned
+        correct = f"Keep {concept_name} separate from the contrasted concept."
+    else:
+        misconception = cleaned
+        correct = f"Use the professor's corrected explanation for {concept_name}."
+    return {
+        "concept": concept_name,
+        "misconception": misconception,
+        "correct_understanding": correct,
+        "text": cleaned,
+    }
+
+
+def _card_key(card: dict) -> str:
+    return _inventory_key(" ".join([
+        card.get("concept_name", ""),
+        card.get("summary", ""),
+        " ".join(card.get("definitions") or []),
+    ]))
+
+
+def _make_concept_card(source: dict) -> dict | None:
+    concept_name = _normalise_ws(source.get("title", ""))
+    if not concept_name or concept_name.lower() == "key concept" or _is_low_signal_title(concept_name):
+        return None
+    aliases = _dedupe_texts(source.get("concepts") or [])
+    definitions = _definition_items_for_card(source, concept_name, aliases)
+    if not definitions:
+        return None
+    summary = _summary_for_card(source, definitions)
+    distinctions = _useful_sentences(source.get("important_distinctions") or source.get("distinctions") or [], limit=3)
+    owned_distinctions = _filter_items_for_concept(distinctions, concept_name, aliases) or distinctions[:1]
+    key_distinction = owned_distinctions[0] if owned_distinctions else ""
+    trap_items = _useful_sentences(source.get("exam_traps") or [], limit=4)
+    owned_traps = _filter_items_for_concept(trap_items, concept_name, aliases) or trap_items
+    example_items = _useful_sentences(source.get("examples") or [], limit=8)
+    source_range = _single_source_range(source.get("citations") or [])
+    field_count = bool(summary) + bool(definitions) + bool(key_distinction) + bool(owned_traps) + bool(example_items) + bool(source_range)
+    if field_count < 3:
+        return None
+    versus = _versus_sides_from_distinction(concept_name, key_distinction) if key_distinction else None
+    trap_structured = _exam_trap_structured(owned_traps[0], concept_name) if owned_traps else None
+    return {
+        "concept_name": concept_name,
+        "summary": summary,
+        "definition": definitions[0],
+        "definitions": definitions,
+        "key_distinction": key_distinction,
+        "key_distinctions": owned_distinctions,
+        "key_distinction_sides": versus,
+        "exam_trap": owned_traps[0] if owned_traps else "",
+        "exam_traps": owned_traps,
+        "exam_trap_structured": trap_structured,
+        "professor_example": example_items[0] if example_items else "",
+        "professor_examples": example_items,
+        "source": source_range,
+        "start_seconds": source.get("start_seconds"),
+        "confidence": source.get("confidence", 0.0),
+        "verification_status": source.get("verification_status", "weak"),
+    }
+
+
+def _merge_duplicate_cards(cards: list[dict]) -> list[dict]:
+    by_key = {}
+    order = []
+    for card in cards:
+        key = _card_key(card)
+        if not key:
+            continue
+        if key not in by_key:
+            by_key[key] = card
+            order.append(key)
+            continue
+        existing = by_key[key]
+        for field in ("definitions", "key_distinctions", "exam_traps", "professor_examples"):
+            existing[field] = _dedupe_texts((existing.get(field) or []) + (card.get(field) or []))
+        existing["definition"] = existing.get("definitions", [""])[0]
+        existing["key_distinction"] = (existing.get("key_distinctions") or [""])[0]
+        existing["exam_trap"] = (existing.get("exam_traps") or [""])[0]
+        existing["professor_example"] = (existing.get("professor_examples") or [""])[0]
+        existing["summary"] = " ".join(_dedupe_texts(_split_sentences(" ".join([existing.get("summary", ""), card.get("summary", "")]))))[:700]
+        citations = [c for c in [existing.get("source"), card.get("source")] if c]
+        existing["source"] = _single_source_range(citations) if citations else existing.get("source")
+        existing["confidence"] = max(float(existing.get("confidence") or 0.0), float(card.get("confidence") or 0.0))
+        if card.get("verification_status") == "supported":
+            existing["verification_status"] = "supported"
+        if existing.get("exam_traps"):
+            existing["exam_trap_structured"] = _exam_trap_structured(existing["exam_traps"][0], existing["concept_name"])
+        if existing.get("key_distinction"):
+            existing["key_distinction_sides"] = _versus_sides_from_distinction(existing["concept_name"], existing["key_distinction"])
+    return [by_key[key] for key in order]
+
+
+def _card_covers_section(card: dict, section: dict) -> bool:
+    title = _normalise_ws(section.get("title", "")).lower()
+    card_title = _normalise_ws(card.get("concept_name", "")).lower()
+    if title and card_title == title:
+        return True
+    return _concept_text_match_score(" ".join([
+        card.get("concept_name", ""),
+        card.get("summary", ""),
+        " ".join(card.get("definitions") or []),
+    ]), section.get("title", ""), section.get("concepts") or []) >= 0.75
+
+
+def _ensure_card_coverage(cards: list[dict], concept_sections: list[dict]) -> list[dict]:
+    covered_cards = list(cards)
+    for section in concept_sections or []:
+        if _is_low_signal_title(section.get("title", "")):
+            continue
+        if any(_card_covers_section(card, section) for card in covered_cards):
+            continue
+        card = _make_concept_card(section)
+        if card:
+            covered_cards.append(card)
+    covered_cards = _merge_duplicate_cards(covered_cards)
+    missing = [
+        section.get("title", "")
+        for section in concept_sections or []
+        if not _is_low_signal_title(section.get("title", ""))
+        and not any(_card_covers_section(card, section) for card in covered_cards)
+    ]
+    if missing:
+        raise ConceptCoverageError(f"Card coverage failed for concepts: {', '.join(missing)}")
+    return covered_cards
+
+
 def build_concept_note_cards(concept_sections: list[dict]) -> list[dict]:
     """
-    Build the on-screen revision-note model.
+    Build on-screen concept cards with one concept per card.
 
-    This intentionally differs from grounded_notes: only structural curriculum
-    concepts become cards; examples/admin fragments remain supporting evidence.
+    Cards are built from concept-owned section/subtopic records only. A concept
+    never becomes a tag inside another concept card; if it qualifies as a
+    section/subtopic it either gets its own card or card generation raises a
+    coverage error.
     """
     cards = []
     for section in concept_sections or []:
-        title = _normalise_ws(section.get("title", ""))
-        if not title or title.lower() == "key concept" or _is_low_signal_title(title):
-            continue
-        role = _classify_concept_role(title, " ".join([
-            section.get("core_explanation", ""),
-            " ".join(section.get("concepts") or []),
-            " ".join(section.get("key_definitions") or []),
-            " ".join(section.get("important_distinctions") or []),
-        ]))
-        if role not in _STRUCTURAL_CONCEPT_ROLES:
-            continue
+        card = _make_concept_card(section)
+        if card:
+            cards.append(card)
+        for subtopic in section.get("subtopic_sections") or []:
+            sub_card = _make_concept_card({
+                "title": subtopic.get("title", ""),
+                "overview": subtopic.get("overview", ""),
+                "definitions": subtopic.get("definitions") or [],
+                "important_distinctions": subtopic.get("distinctions") or [],
+                "exam_traps": subtopic.get("exam_traps") or [],
+                "examples": subtopic.get("examples") or [],
+                "concepts": [subtopic.get("title", "")],
+                "citations": subtopic.get("citations") or [],
+                "start_seconds": (subtopic.get("citations") or [{}])[0].get("start_seconds"),
+                "confidence": section.get("confidence", 0.0),
+                "verification_status": section.get("verification_status", "weak"),
+            })
+            if sub_card:
+                cards.append(sub_card)
 
-        definitions = _useful_sentences(
-            (section.get("key_definitions") or []) + [section.get("core_explanation", "")],
-            limit=3,
-        )
-        definition = " ".join(definitions[:2])
-        if not definition:
-            continue
-
-        distinctions = _useful_sentences(section.get("important_distinctions") or [], limit=4)
-        distinction = " ".join(distinctions[:2])
-        if not distinction and (" vs " in title.lower() or " versus " in title.lower()):
-            concepts = _dedupe_texts(section.get("concepts") or [])
-            if len(concepts) >= 2:
-                distinction = f"{concepts[0]} is contrasted with {concepts[1]}."
-
-        exam_traps = _useful_sentences(section.get("exam_traps") or [], limit=4)
-        exam_trap = exam_traps[0] if exam_traps else ""
-        professor_examples = _useful_sentences(section.get("examples") or [], limit=6)
-        professor_example = professor_examples[0] if professor_examples else ""
-        source = _single_source_range(section.get("citations") or [])
-        field_count = 2 + bool(distinction) + bool(exam_trap) + bool(professor_example)
-        if source:
-            field_count += 1
-        if field_count < 4:
-            continue
-
-        cards.append({
-            "concept_name": title,
-            "definition": definition,
-            "definitions": definitions,
-            "key_distinction": distinction,
-            "key_distinctions": distinctions,
-            "exam_trap": exam_trap,
-            "exam_traps": exam_traps,
-            "professor_example": professor_example,
-            "professor_examples": professor_examples,
-            "source": source,
-            "start_seconds": section.get("start_seconds"),
-            "confidence": section.get("confidence", 0.0),
-            "verification_status": section.get("verification_status", "weak"),
-        })
-
+    cards = _ensure_card_coverage(_merge_duplicate_cards(cards), concept_sections)
     return sorted(cards, key=lambda card: (card.get("start_seconds") is None, card.get("start_seconds") or 0))
 
 

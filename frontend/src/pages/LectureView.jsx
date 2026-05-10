@@ -407,6 +407,10 @@ function SummaryCard({ section, accent, index, total, topic }) {
 function ConceptNoteCard({ card, accent, index, total, topic }) {
     const a = accent || ACCENTS_LIGHT[0];
     const sourceLabel = card?.source?.label || '';
+    const definitions = Array.isArray(card?.definitions) ? card.definitions : (card?.definition ? [card.definition] : []);
+    const examples = Array.isArray(card?.professor_examples) ? card.professor_examples : (card?.professor_example ? [card.professor_example] : []);
+    const trap = card?.exam_trap_structured || null;
+    const distinctionSides = card?.key_distinction_sides || null;
     return (
         <div className="lv-sum-card summary-card-enter" style={{ borderLeft: `3px solid ${a.border}` }}>
             <div className="lv-sum-meta">
@@ -423,30 +427,58 @@ function ConceptNoteCard({ card, accent, index, total, topic }) {
                 )}
             </div>
 
-            {card.definition && (
+            {card.summary && (
                 <div className="lv-sum-group">
-                    <div className="lv-sum-group-label">Definition</div>
-                    <div className="lv-sum-group-item">{renderDomainContent(card.definition, topic) || card.definition}</div>
+                    <div className="lv-sum-group-label">Summary</div>
+                    <div className="lv-sum-group-item">{renderDomainContent(card.summary, topic) || card.summary}</div>
                 </div>
             )}
 
-            {card.key_distinction && (
+            {definitions.length > 0 && (
+                <div className="lv-sum-group">
+                    <div className="lv-sum-group-label">Key Definitions</div>
+                    {definitions.map((item, i) => (
+                        <div key={i} className="lv-sum-group-item">{renderDomainContent(item, topic) || item}</div>
+                    ))}
+                </div>
+            )}
+
+            {distinctionSides ? (
+                <div className="lv-sum-group">
+                    <div className="lv-sum-group-label">Key Distinction</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                        <div className="lv-sum-group-item">{renderDomainContent(distinctionSides.left, topic) || distinctionSides.left}</div>
+                        <div className="lv-sum-group-item">{renderDomainContent(distinctionSides.right, topic) || distinctionSides.right}</div>
+                    </div>
+                    {distinctionSides.detail && (
+                        <div className="lv-sum-group-item" style={{ marginTop: 8 }}>{renderDomainContent(distinctionSides.detail, topic) || distinctionSides.detail}</div>
+                    )}
+                </div>
+            ) : card.key_distinction && (
                 <div className="lv-sum-group">
                     <div className="lv-sum-group-label">Key Distinction</div>
                     <div className="lv-sum-group-item">{renderDomainContent(card.key_distinction, topic) || card.key_distinction}</div>
                 </div>
             )}
 
-            {card.exam_trap && (
+            {trap ? (
+                <div className="lv-sum-highlight" style={{ background: '#fef3c7', borderLeftColor: '#f59e0b', color: '#78350f' }}>
+                    <strong>Exam Trap</strong>
+                    <div><strong>Students think: </strong>{renderDomainContent(trap.misconception, topic) || trap.misconception}</div>
+                    <div><strong>Actually: </strong>{renderDomainContent(trap.correct_understanding, topic) || trap.correct_understanding}</div>
+                </div>
+            ) : card.exam_trap && (
                 <div className="lv-sum-highlight" style={{ background: '#fef3c7', borderLeftColor: '#f59e0b', color: '#78350f' }}>
                     <strong>Exam Trap: </strong>{renderDomainContent(card.exam_trap, topic) || card.exam_trap}
                 </div>
             )}
 
-            {card.professor_example && (
+            {examples.length > 0 && (
                 <div className="lv-sum-group">
-                    <div className="lv-sum-group-label">Professor's Example</div>
-                    <div className="lv-sum-group-item">{renderDomainContent(card.professor_example, topic) || card.professor_example}</div>
+                    <div className="lv-sum-group-label">Professor's Examples</div>
+                    {examples.map((item, i) => (
+                        <div key={i} className="lv-sum-group-item">{renderDomainContent(item, topic) || item}</div>
+                    ))}
                 </div>
             )}
 

@@ -1105,6 +1105,43 @@ def test_build_concept_note_cards_preserve_multiple_examples_and_exam_traps():
         "Textbooks given free by government are economic goods, not free goods.",
         "Public goods are not free goods because they are limited in supply.",
     ]
+    assert cards[0]["exam_trap_structured"]["misconception"]
+    assert cards[0]["exam_trap_structured"]["correct_understanding"]
+
+
+def test_build_concept_note_cards_creates_cards_for_subtopics_not_tags():
+    sections = [{
+        "title": "Motion Concepts",
+        "core_explanation": "Motion concepts describe how objects move.",
+        "key_definitions": ["Motion concepts describe changes in position over time."],
+        "important_distinctions": [],
+        "exam_traps": [],
+        "examples": [],
+        "concepts": ["motion"],
+        "citations": [{"label": "00:00-01:00", "start_seconds": 0, "end_seconds": 60}],
+        "start_seconds": 0,
+        "confidence": 0.9,
+        "verification_status": "supported",
+        "subtopic_sections": [
+            {
+                "title": "Velocity vs Speed",
+                "overview": "Velocity includes direction, while speed only tells how fast something moves.",
+                "definitions": ["Velocity is speed with direction."],
+                "examples": ["A car going north at 60 km/h has velocity."],
+                "exam_traps": ["Don't confuse velocity with speed."],
+                "citations": [{"label": "01:00-01:45", "start_seconds": 60, "end_seconds": 105}],
+            }
+        ],
+    }]
+
+    cards = build_concept_note_cards(sections)
+    titles = {card["concept_name"] for card in cards}
+
+    assert "Motion Concepts" in titles
+    assert "Velocity vs Speed" in titles
+    velocity = next(card for card in cards if card["concept_name"] == "Velocity vs Speed")
+    assert velocity["source"]["label"] == "01:00 - 01:45"
+    assert velocity["exam_trap_structured"]["misconception"]
 
 
 def test_build_concept_sections_merges_duplicate_titles_across_lecture():
