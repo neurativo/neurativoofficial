@@ -227,7 +227,7 @@ def _concept_cards_to_pdf_sections(concept_note_cards: list[dict]) -> list[dict]
     sections = []
     for card in concept_note_cards or []:
         title = card.get("concept_name") or ""
-        if not title:
+        if not title or title.startswith("__"):
             continue
         citations = [{
             "label": f"{card.get('source_start')} - {card.get('source_end')}",
@@ -1274,8 +1274,13 @@ async def generate_lecture_pdf(
     section_rows  = await asyncio.to_thread(get_lecture_sections, lecture_id)
     grounded_notes = build_grounded_notes(cleaned_transcript, summary, section_rows=section_rows)
     concept_sections = build_concept_sections(grounded_notes)
-    concept_note_cards = build_concept_note_cards(transcript=transcript)
-    validate_summary_card_generation(concept_sections, concept_note_cards, grounded_notes)
+    concept_note_cards = build_concept_note_cards(transcript=transcript, lecture_id=lecture_id)
+    validate_summary_card_generation(
+        concept_sections,
+        concept_note_cards,
+        grounded_notes,
+        transcript=transcript,
+    )
     claim_registry = build_claim_registry(grounded_notes)
     title = _resolve_document_title(title, transcript, topic, concept_sections)
     grounded_summary = "\n\n".join(

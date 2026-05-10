@@ -843,7 +843,12 @@ export default function LectureView() {
 
     const wordCount = lecture?.transcript_word_count || segments.reduce((n, s) => n + s.split(/\s+/).filter(Boolean).length, 0);
     const summaryText = lecture?.master_summary || lecture?.summary || '';
-    const conceptNoteCards = Array.isArray(lecture?.concept_note_cards) ? lecture.concept_note_cards : [];
+    const conceptNoteCards = Array.isArray(lecture?.concept_note_cards)
+        ? lecture.concept_note_cards.filter(card => {
+            const name = typeof card?.concept_name === 'string' ? card.concept_name : '';
+            return !name.startsWith('__');
+        })
+        : [];
     const conceptSections = Array.isArray(lecture?.concept_sections) ? lecture.concept_sections : [];
     const groundedSections = Array.isArray(lecture?.grounded_notes) ? lecture.grounded_notes : [];
     const summarySections = conceptSections.length > 0 ? conceptSections : (groundedSections.length > 0 ? groundedSections : parseSummary(summaryText));
@@ -905,7 +910,7 @@ export default function LectureView() {
                             onDone={() => {
                                 setIsProcessing(false);
                                 // Refresh lecture data
-                                api.get(`/api/v1/lectures/${lecture.id}`).then(r => setLecture(r.data)).catch(() => {});
+                                api.get(`/api/v1/lectures/${lecture.id}/full`).then(r => setLecture(r.data)).catch(() => {});
                             }}
                         />
                     </div>

@@ -474,14 +474,20 @@ def snapshot_generated_outputs(lecture_id: str) -> dict:
     db = _fresh_db()
     try:
         lecture_resp = db.table("lectures").select(
-            "master_summary, summary, flashcards, quiz, glossary, "
+            "master_summary, summary, flashcards, quiz, glossary, concept_note_cards, "
             "summary_status, total_sections, last_summarized_length"
         ).eq("id", lecture_id).execute()
     except Exception:
-        lecture_resp = db.table("lectures").select(
-            "master_summary, summary, flashcards, quiz, glossary, "
-            "total_sections, last_summarized_length"
-        ).eq("id", lecture_id).execute()
+        try:
+            lecture_resp = db.table("lectures").select(
+                "master_summary, summary, flashcards, quiz, glossary, concept_note_cards, "
+                "total_sections, last_summarized_length"
+            ).eq("id", lecture_id).execute()
+        except Exception:
+            lecture_resp = db.table("lectures").select(
+                "master_summary, summary, flashcards, quiz, glossary, "
+                "total_sections, last_summarized_length"
+            ).eq("id", lecture_id).execute()
     section_resp = db.table("lecture_sections").select(
         "section_index, chunk_range_start, chunk_range_end, section_summary"
     ).eq("lecture_id", lecture_id).order("section_index", desc=False).execute()
@@ -956,7 +962,7 @@ def increment_share_views(lecture_id: str) -> None:
 def get_lecture_full(lecture_id: str):
     """
     Returns complete lecture data including share fields for the LectureView page.
-    Falls back to a query without summary_status if the column doesn't exist yet.
+    Falls back if summary_status or concept_note_cards is missing in production.
     """
     db = _fresh_db()
     try:
@@ -964,24 +970,72 @@ def get_lecture_full(lecture_id: str):
             "id, title, topic, language, transcript, master_summary, summary, "
             "total_chunks, total_sections, total_duration_seconds, created_at, "
             "share_token, share_views, summary_status, "
-            "flashcards, quiz, glossary, deletion_scheduled_at, content_deleted"
+            "flashcards, quiz, glossary, concept_note_cards, deletion_scheduled_at, content_deleted"
         ).eq("id", lecture_id).execute()
         if hasattr(response, "data") and response.data:
             return response.data[0]
         return None
     except Exception:
-        # summary_status column may not exist in production yet — fall back
-        response = db.table("lectures").select(
-            "id, title, topic, language, transcript, master_summary, summary, "
-            "total_chunks, total_sections, total_duration_seconds, created_at, "
-            "share_token, share_views, "
-            "flashcards, quiz, glossary, deletion_scheduled_at, content_deleted"
-        ).eq("id", lecture_id).execute()
-        if hasattr(response, "data") and response.data:
-            row = response.data[0]
-            row.setdefault("summary_status", "final")
-            return row
+        try:
+            response = db.table("lectures").select(
+                "id, title, topic, language, transcript, master_summary, summary, "
+                "total_chunks, total_sections, total_duration_seconds, created_at, "
+                "share_token, share_views, "
+                "flashcards, quiz, glossary, concept_note_cards, deletion_scheduled_at, content_deleted"
+            ).eq("id", lecture_id).execute()
+            if hasattr(response, "data") and response.data:
+                row = response.data[0]
+                row.setdefault("summary_status", "final")
+                return row
+        except Exception:
+            response = db.table("lectures").select(
+                "id, title, topic, language, transcript, master_summary, summary, "
+                "total_chunks, total_sections, total_duration_seconds, created_at, "
+                "share_token, share_views, "
+                "flashcards, quiz, glossary, deletion_scheduled_at, content_deleted"
+            ).eq("id", lecture_id).execute()
+            if hasattr(response, "data") and response.data:
+                row = response.data[0]
+                row.setdefault("summary_status", "final")
+                row.setdefault("concept_note_cards", [])
+                return row
         return None
+
+
+def get_lecture_concept_note_cards(lecture_id: str):
+    """Returns saved concept note cards for a lecture, or an empty list."""
+    db = _fresh_db()
+    try:
+        response = (
+            db.table("lectures")
+            .select("concept_note_cards")
+            .eq("id", lecture_id)
+            .execute()
+        )
+        if hasattr(response, "data") and response.data:
+            raw = response.data[0].get("concept_note_cards")
+            if isinstance(raw, list):
+                return raw
+            if isinstance(raw, str) and raw.strip():
+                import json as _json
+                try:
+                    parsed = _json.loads(raw)
+                    return parsed if isinstance(parsed, list) else []
+                except Exception:
+                    return []
+    except Exception as exc:
+        print(f"[inventory-cache] read skipped for {lecture_id}: {exc}")
+    return []
+
+
+def update_lecture_concept_note_cards(lecture_id: str, cards: list[dict]) -> None:
+    """Stores concept note cards, including any internal sentinel records."""
+    import json as _json
+    db = _fresh_db()
+    try:
+        db.table("lectures").update({"concept_note_cards": _json.dumps(cards or [])}).eq("id", lecture_id).execute()
+    except Exception as exc:
+        print(f"[inventory-cache] write skipped for {lecture_id}: {exc}")
 
 
 # =============================================================================

@@ -1614,7 +1614,7 @@ def get_lecture_full_endpoint(lecture_id: str, user=Depends(get_active_user)):
     if not lecture_data:
         raise HTTPException(status_code=404, detail="Lecture not found")
     import json as _json
-    for field in ("flashcards", "quiz", "glossary"):
+    for field in ("flashcards", "quiz", "glossary", "concept_note_cards"):
         val = lecture_data.get(field)
         if isinstance(val, str):
             try:

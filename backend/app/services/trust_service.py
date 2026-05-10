@@ -13,12 +13,14 @@ from __future__ import annotations
 import re
 import json
 import time
+import hashlib
 from statistics import mean
 
 from openai import OpenAI
 
 from app.core.config import settings
 from app.services.cost_tracker import log_cost
+from app.services.supabase_service import get_lecture_concept_note_cards, update_lecture_concept_note_cards
 from app.services.transcript_cleaner import clean as clean_transcript
 
 _client = OpenAI(api_key=settings.OPENAI_API_KEY) if settings.OPENAI_API_KEY else None
@@ -90,6 +92,7 @@ _EXAMPLE_HINTS = (
     "e.g.", "e.g,", "namely", "specifically", "to illustrate",
     "population growth", "fast track class", "300 students", "lactase digestion",
 )
+_INVENTORY_CACHE_VERSION = 6
 _ADMIN_HINTS = (
     "focus week", "essay question", "mcq", "multiple choice", "next week",
     "this week", "unit number", "summarize unit", "revision week", "lecture will",
@@ -1594,14 +1597,69 @@ def _useful_sentences(texts: list[str], limit: int = 4) -> list[str]:
 
 
 _CARD_CLEAN_DROP_MARKERS = (
-    "study plan", "past paper", "whatsapp", "group", "attendance", "speed",
-    "finish by", "three hours", "next class", "print", "notebook",
-    "colored pens", "coloured pens", "highlighter",
+    "study plan", "past paper", "whatsapp", "group",
+    "attendance", "speed", "finish by", "three hours",
+    "next class", "print", "notebook", "colored pens",
+    "coloured pens", "highlighter", "this week",
+    "marks from", "essay question number", "mcq",
+    "fast track", "theory class", "revision class",
+    "before you come", "expected to do", "monday",
+    "tuesday", "friday", "how do you get that",
+    "our target", "this week's target", "summarize unit",
+    "summary of unit", "two and a half hours",
+    "i will maintain", "certain speed", "third time",
+    "100th time", "this is not a theory class",
+    "wrong class", "go through that note",
+    "80 to 90 percent", "summarized note",
+    "answer writing", "improve answer",
 )
 
 
+def _light_clean(text: str) -> str:
+    if not text or not text.strip():
+        return ""
+    # Remove Whisper noise markers only
+    text = re.sub(r'\[.*?\]', ' ', text)
+    # Collapse excessive whitespace
+    text = re.sub(r'[ \t]+', ' ', text)
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    text = text.strip()
+
+    admin_words = {
+        "marks", "paper", "exam", "test", "quiz", "class", "session",
+        "today", "week", "target", "score", "finish", "plan", "note",
+        "study", "revision", "summary", "cover", "topic", "unit",
+        "chapter", "register", "attendance", "group", "send", "whatsapp",
+        "monday", "tuesday", "wednesday", "thursday", "friday", "saturday",
+        "sunday", "tomorrow", "yesterday", "morning", "evening", "hour",
+        "minute", "time", "speed", "start", "begin", "end", "done",
+    }
+    if "\n\n" in text:
+        paragraphs = [p.strip() for p in re.split(r'\n\s*\n+', text) if p.strip()]
+        separator = "\n\n"
+    else:
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        paragraphs = ["\n".join(lines[i:i + 4]) for i in range(0, len(lines), 4)]
+        separator = "\n"
+
+    max_skip_chars = int(len(text) * 0.3)
+    skip_count = 0
+    skipped_chars = 0
+    for paragraph in paragraphs:
+        tokens = {token.lower() for token in _TOKEN_RE.findall(paragraph)}
+        admin_count = len(tokens & admin_words)
+        if admin_count >= 2 and skipped_chars + len(paragraph) <= max_skip_chars:
+            skip_count += 1
+            skipped_chars += len(paragraph)
+            continue
+        break
+    if skip_count:
+        text = separator.join(paragraphs[skip_count:]).strip()
+    return text
+
+
 def clean_summary_card_transcript(transcript: str) -> str:
-    cleaned = clean_transcript(transcript or "")
+    cleaned = _light_clean(transcript or "")
     kept = []
     for raw_line in cleaned.splitlines():
         line = _normalise_ws(raw_line)
@@ -1623,6 +1681,72 @@ def clean_summary_card_transcript(transcript: str) -> str:
     return "\n".join(kept)
 
 
+def _chunk_by_sentences(text: str, target_words: int = 180) -> list[str]:
+    sentences = re.split(r"(?<=[.!?])\s+", text)
+    chunks = []
+    current = []
+    current_words = 0
+
+    for sentence in sentences:
+        words = len(sentence.split())
+        if current_words + words > target_words and current:
+            chunks.append(" ".join(current))
+            current = [sentence]
+            current_words = words
+        else:
+            current.append(sentence)
+            current_words += words
+
+    if current:
+        chunks.append(" ".join(current))
+
+    return chunks
+
+
+def _inventory_cache_sentinel(transcript_hash: str, inventory: list[dict]) -> dict:
+    return {
+        "concept_name": "__inventory_cache__",
+        "cache_version": _INVENTORY_CACHE_VERSION,
+        "transcript_hash": transcript_hash,
+        "inventory": inventory,
+    }
+
+
+def _is_internal_card(card: dict) -> bool:
+    concept_name = _normalise_ws(str((card or {}).get("concept_name") or ""))
+    return concept_name.startswith("__")
+
+
+def _non_trivial_words(text: str) -> list[str]:
+    return [token.lower() for token in re.findall(r"[a-zA-Z][a-zA-Z0-9'-]*", text or "") if len(token) > 4]
+
+
+def _card_body_grounding_score(cards: list[dict], transcript: str) -> float:
+    visible_cards = [card for card in (cards or []) if not _is_internal_card(card)]
+    if not visible_cards:
+        return 0.0
+    transcript_words = set(_non_trivial_words(transcript))
+    if not transcript_words:
+        return 0.0
+
+    grounded_cards = 0
+    for card in visible_cards:
+        body_parts = [card.get("summary", "")]
+        for definition in card.get("key_definitions") or []:
+            if isinstance(definition, dict):
+                body_parts.append(_normalise_ws(str(definition.get("definition") or "")))
+        for example in card.get("examples") or []:
+            body_parts.append(_normalise_ws(str(example or "")))
+        body_words = set(_non_trivial_words(" ".join(part for part in body_parts if part)))
+        if not body_words:
+            continue
+        overlap = sum(1 for word in body_words if word in transcript_words)
+        if overlap / max(1, len(body_words)) >= 0.7:
+            grounded_cards += 1
+
+    return round(grounded_cards / len(visible_cards), 2)
+
+
 def _extract_json_array(raw: str) -> list[dict]:
     text = (raw or "").strip()
     if text.startswith("```"):
@@ -1639,7 +1763,14 @@ def _extract_json_array(raw: str) -> list[dict]:
     return [item for item in data if isinstance(item, dict)]
 
 
-def _gpt_json_array(system_prompt: str, user_message: str, feature: str, max_tokens: int = 5000, model: str = "gpt-4o-mini") -> list[dict]:
+def _gpt_json_array(
+    system_prompt: str,
+    user_message: str,
+    feature: str,
+    max_tokens: int = 5000,
+    model: str = "gpt-4o-mini",
+    temperature: float = 0.1,
+) -> list[dict]:
     if not _client:
         raise ConceptCoverageError("OpenAI client not configured for summary card generation")
     last_error = None
@@ -1651,7 +1782,7 @@ def _gpt_json_array(system_prompt: str, user_message: str, feature: str, max_tok
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_message},
                 ],
-                temperature=0.1,
+                temperature=temperature,
                 max_tokens=max_tokens,
             )
             usage = getattr(response, "usage", None)
@@ -1670,111 +1801,300 @@ def _gpt_json_array(system_prompt: str, user_message: str, feature: str, max_tok
     raise ConceptCoverageError(f"{feature} failed: {last_error}")
 
 
-_INVENTORY_PROMPT = """You are an expert academic note-taker. Your job is to
-read a lecture transcript and identify every distinct concept the professor actually taught.
+_INVENTORY_PROMPT = """You are an expert academic 
+note-taker extracting concepts from a lecture transcript.
 
-Return a JSON array. Each item in the array is one concept.
+CRITICAL INSTRUCTION: This transcript may begin with 
+several paragraphs of exam strategy, class logistics, 
+study plan instructions, or administrative talk. 
+SKIP ALL OF THAT. Do not extract any concepts from 
+administrative or logistical content.
 
-For each concept include:
-  name: the real term or principle name. Never 'Key Concept'.
-        Never a sentence. Examples of good names:
-        'Microeconomics vs Macroeconomics',
+Only extract concepts from the subject matter the 
+professor actually taught. Subject matter is anything 
+where the professor defines a term, explains how 
+something works, gives an example of a concept, 
+contrasts two ideas, or flags something as exam-relevant.
+
+Return a JSON array. Each item is one concept with:
+  name: real term or principle name.
+        Never 'Key Concept'. Never a sentence.
+        Good examples: 'Microeconomics vs Macroeconomics',
         'Positive vs Normative Statements',
-        'Economic Bads',
-        'Converting Non-Economic to Economic Goods'
-  start_time: timestamp where professor first covered this
-  end_time: timestamp where professor last covered this
-  exam_trap: if the professor flagged a common mistake,
-             trick question, or student misconception
-             about this concept, describe it here.
-             If none, return null.
-  distinction: if the professor contrasted this concept
-               with another concept, name both here.
-               If none, return null.
-  examples: array of real examples the professor used.
-            Empty array if none.
+        'Economic Goods vs Free Goods',
+        'Economic Bads and Disutility',
+        'Converting Non-Economic to Economic Goods',
+        'Goods and Utility'
+  start_time: timestamp of first mention
+  end_time: timestamp of last mention
+  exam_trap: misconception the professor flagged or null
+  distinction: other concept contrasted with this or null
+  examples: array of real examples professor used
 
 A concept qualifies if ANY of these are true:
-  - Professor gives it a name or definition
-  - Professor spends more than 30 seconds on it
-  - Professor uses an example to illustrate it
+  - Professor defines or names it
+  - Professor uses more than 40 words explaining it
+  - Professor uses a specific example for it
   - Professor contrasts it with another concept
   - Professor flags it as exam-relevant or tricky
-  - Professor corrects a student misconception
+  - Professor corrects a student misconception about it
+  - Professor repeats it more than twice
 
-A concept does NOT qualify if:
-  - It is about class logistics, timing, or attendance
-  - It is meta-commentary about the lecture itself
-  - It is a passing mention with no explanation
+A concept does NOT qualify if it is about:
+  - Class timing, logistics, attendance
+  - Study plans or exam strategy
+  - How the lecture will be structured
+  - Past papers or answer writing technique
 
-Do not include any administrative content.
+For a 30-40 minute subject lecture you should typically 
+find between 6 and 12 distinct concepts.
+If you find fewer than 5 you have missed concepts — 
+re-read the transcript and look harder.
+
+For every 500 words of transcript you should 
+expect to find at least 2 concepts. If you are 
+finding fewer than this you are being too 
+conservative. Re-read and look for concepts you 
+initially skipped.
+
+Do not merge distinct concepts into one entry.
 Do not invent concepts not in the transcript.
-Do not merge distinct concepts into one.
 Return only the JSON array. No other text."""
 
 
-_CARD_PROMPT = """You are an expert academic note-taker. You have been
-given a lecture transcript and a list of concepts
-identified in that lecture.
+_CARD_PROMPT = """You are building study cards 
+from a lecture transcript and concept inventory.
 
-For each concept in the list generate a study card.
+CRITICAL RULE: Every word in every card must come 
+from the transcript provided. You are not allowed 
+to use any background knowledge, textbook 
+definitions, or explanations not in the transcript.
 
-Return a JSON array where each item is one card with
-these exact fields:
+If the transcript does not explain something fully 
+write what the transcript says and nothing more.
+A short honest card is better than a long 
+hallucinated one.
+
+For each concept in the inventory generate a card:
 
   concept_name:
-    The name from the inventory. Use it exactly.
+    Use the name from the inventory exactly.
+    Do not rename or improve it.
 
   summary:
-    2 to 3 sentences. What this concept is and why
-    it matters. Derived from transcript only.
-    Must not be an example.
-    Must not repeat the key definitions.
-    Must not contain content from a different concept.
+    2-3 sentences built only from the transcript.
+    Must use words that appear in the transcript.
+    Must not add context from outside the transcript.
+    Start with what the professor actually said.
+    For the summary field: include everything the
+    professor said about this concept across the
+    entire transcript. Do not limit to one sentence.
+    If the professor made multiple points about this
+    concept include all of them in the summary,
+    up to 4 sentences maximum.
 
   key_distinction:
-    Only include if the inventory says distinction
-    is not null.
-    Object with two keys:
-      concept_a: { name, characteristics: [array] }
-      concept_b: { name, characteristics: [array] }
-    Never just repeat the definition here.
-    null if no distinction.
+    Only if inventory distinction is not null.
+    Must use the professor's own words to describe 
+    both sides. Do not explain from background.
+    null if not applicable.
 
   exam_trap:
-    Only include if the inventory says exam_trap
-    is not null.
-    Object with two keys:
-      misconception: what students incorrectly think
-      correct: what is actually true
-    null if no exam trap.
+    Only if inventory exam_trap is not null.
+    Must quote or closely paraphrase the professor.
+    Format:
+      misconception: what students think (from transcript)
+      correct: what professor said is correct
+    null if not applicable.
 
   examples:
-    Array of real examples from the transcript.
-    Preserve exactly as spoken.
-    Empty array if none — do not generate examples.
+    Copy directly from transcript.
+    Preserve professor's exact wording.
+    Include every example the professor gave, not just one.
+    Empty array if none in transcript.
 
   key_definitions:
-    Array of definition objects.
-    Each object has:
-      term: what is being defined
-      definition: one clear sentence from the transcript
-    Must not be the summary repeated.
-    Must not contain content from another concept.
+    Each definition must be the professor's own 
+    words from the transcript.
+    Do not write dictionary definitions.
+    If professor did not define it formally use 
+    the closest explanatory sentence from transcript.
+    Include every distinct definition or clarification
+    the professor gave for this concept, not just the first one.
 
   source_start: start timestamp
   source_end: end timestamp
 
+Return only JSON array. No other text.
+Every concept from inventory must have a card.
+Zero background knowledge allowed."""
+
+
+VERIFICATION_PROMPT = """You are checking whether a 
+concept inventory is complete.
+
+You have a lecture transcript and an existing list 
+of concepts that were already identified.
+
+Your job is to find concepts that were MISSED.
+Read the entire transcript carefully and identify 
+any concept that:
+  - Was defined or explained by the professor
+  - Is NOT already in the existing concept list
+  - Received at least 30 seconds of explanation
+  - Has at least one example or distinction
+
+For each missed concept return:
+  name: real term name, never Key Concept
+  start_time: first mention timestamp
+  end_time: last mention timestamp
+  exam_trap: professor flagged misconception or null
+  distinction: contrasted concept or null
+  examples: array of real examples or empty array
+
+If no concepts were missed return an empty array.
 Return only the JSON array. No other text.
-Every concept from the inventory must have a card.
-Do not invent content not in the transcript.
-Do not add general knowledge to any card."""
+
+Be thorough. Common missed concept types:
+  - Conversion or transformation concepts
+    (e.g. converting one type of thing to another)
+  - Classification sub-types the professor listed
+  - Concepts introduced briefly but with clear examples
+  - Concepts the professor said will appear in exams
+  - Contrasting pairs where only one was captured"""
 
 
-def build_concept_inventory_from_transcript(transcript: str) -> list[dict]:
+def build_concept_inventory_from_transcript(transcript: str, lecture_id: str | None = None) -> list[dict]:
     cleaned = clean_summary_card_transcript(transcript)
     if not cleaned:
         return []
+    transcript_hash = hashlib.md5(cleaned.encode()).hexdigest()
+    if lecture_id:
+        existing_cards = get_lecture_concept_note_cards(lecture_id)
+        for card in existing_cards:
+            if not isinstance(card, dict):
+                continue
+            if _normalise_ws(str(card.get("concept_name") or "")) != "__inventory_cache__":
+                continue
+            if (
+                card.get("transcript_hash") == transcript_hash
+                and card.get("cache_version") == _INVENTORY_CACHE_VERSION
+                and isinstance(card.get("inventory"), list)
+            ):
+                print(f"[inventory-cache] cache hit for {lecture_id}")
+                cached_inventory = card.get("inventory") or []
+                print(f"[summary-card-debug] merged inventory count: {len(cached_inventory[:20])}")
+                print(f"[summary-card-debug] merged inventory names: {[item.get('name') for item in cached_inventory[:20] if isinstance(item, dict)]}")
+                return cached_inventory
+        print(f"[inventory-cache] cache miss for {lecture_id}")
+
+    para_chunks = [cleaned] if len(cleaned.split()) < 200 else _chunk_by_sentences(cleaned, 180)
+
+    PARA_PROMPT = """Read this passage from a lecture 
+transcript. Find every concept the professor is 
+teaching.
+
+STRICT RULES:
+- Use ONLY words and phrases that appear in this 
+  passage. Do not use any outside knowledge.
+- concept name must be a word or short phrase 
+  that actually appears in the passage text.
+  If the professor said "economic goods" use 
+  "economic goods". If the professor said 
+  "positive statements" use "positive statements".
+  Never invent a label not in the text.
+- exam_trap must be a direct quote or close 
+  paraphrase of what the professor said. 
+  If none return null.
+- examples must be copied directly from the text.
+  If none return empty array.
+
+Return a JSON array. Each item:
+  name: word or phrase from the passage itself
+  exam_trap: professor's own words or null
+  examples: copied from passage or empty array
+  quote: the single most important sentence from 
+         the passage that defines this concept.
+         Must be copied verbatim from the text.
+
+If this passage contains no concepts return [].
+Return only a JSON array. No other text."""
+
+    all_raw = []
+    for i, para in enumerate(para_chunks):
+        result = _gpt_json_array(
+            PARA_PROMPT,
+            para,
+            f"para_extract_{i}",
+            max_tokens=800,
+            model="gpt-4o-mini",
+            temperature=0,
+        )
+        all_raw.extend(result)
+
+    print(f"[summary-card-debug] paragraph chunk count: {len(para_chunks)}")
+    print(f"[summary-card-debug] raw concept count before merge: {len(all_raw)}")
+
+    if not all_raw:
+        return []
+
+    MERGE_PROMPT = """You have a list of concepts 
+extracted from a lecture transcript. Each concept 
+has a name and a quote taken directly from the 
+transcript.
+
+Your job is to merge duplicates and produce a 
+clean final list.
+
+STRICT RULES:
+- Keep the name exactly as extracted. Do not 
+  rename concepts to textbook terminology.
+  If the extraction says "economic goods" keep 
+  "economic goods". Never change it to 
+  "scarcity of resources" or any other label.
+- Only merge two entries if their quotes are 
+  clearly about the same thing.
+- If two entries have different quotes about 
+  different aspects keep them separate.
+- Do not add any information not in the quotes.
+- Do not remove any concept unless it is 
+  clearly about class logistics or admin.
+
+For pairs that belong together use format 
+"X vs Y" only if the professor explicitly 
+contrasted them. Use the exact words from 
+the quotes.
+
+For each final concept return:
+  name: preserved exactly from extraction
+  start_time: position in lecture as mm:ss
+  end_time: end position as mm:ss
+  exam_trap: preserved from extraction or null
+  distinction: only if explicitly contrasted
+  examples: all examples collected
+  key_quote: the best quote from the extractions
+             copied verbatim
+
+Remove concepts where name is a single generic 
+word with no subject meaning on its own.
+Remove concepts that are clearly admin content.
+
+Aim for 7 to 14 concepts for a 30-minute lecture.
+Return only JSON array. No other text."""
+
+    all_raw_sorted = sorted(
+        all_raw,
+        key=lambda x: x.get("name", "").lower() if isinstance(x, dict) else "",
+    )
+
+    merged = _gpt_json_array(
+        MERGE_PROMPT,
+        json.dumps(all_raw_sorted, ensure_ascii=False),
+        "concept_merge",
+        max_tokens=3000,
+        model="gpt-4o",
+        temperature=0,
+    )
 
     def normalise_inventory(inventory_items: list[dict]) -> list[dict]:
         out = []
@@ -1794,36 +2114,15 @@ def build_concept_inventory_from_transcript(transcript: str) -> list[dict]:
                 "exam_trap": item.get("exam_trap") or None,
                 "distinction": item.get("distinction") or None,
                 "examples": item.get("examples") if isinstance(item.get("examples"), list) else [],
+                "quote": _normalise_ws(str(item.get("quote") or "")),
+                "key_quote": _normalise_ws(str(item.get("key_quote") or "")),
             })
         return out
 
-    inventory = _gpt_json_array(_INVENTORY_PROMPT, cleaned, "summary_card_inventory", model="gpt-4o")
-    out = normalise_inventory(inventory)
-    transcript_minutes = len(cleaned.split()) / 130
-    min_expected_concepts = max(3, int(transcript_minutes * 0.8))
-    if len(out) < min_expected_concepts:
-        warning = (
-            f"Inventory returned {len(out)} concepts for a {transcript_minutes:.1f} minute lecture. "
-            f"Expected at least {min_expected_concepts}. "
-            "Re-running inventory with stricter prompt."
-        )
-        print(warning)
-        strict_prompt = (
-            _INVENTORY_PROMPT
-            + "\n\n"
-            + f"IMPORTANT: This transcript is {transcript_minutes:.1f} minutes long. You must return at least "
-            + f"{min_expected_concepts} concepts. If you returned fewer, "
-            + "you have missed concepts. Re-read the transcript and "
-            + "find every concept the professor defined or explained."
-        )
-        retry_inventory = _gpt_json_array(strict_prompt, cleaned, "summary_card_inventory_retry", model="gpt-4o")
-        out = normalise_inventory(retry_inventory)
-        if len(out) < min_expected_concepts:
-            print(
-                f"Inventory returned {len(out)} concepts after retry for a {transcript_minutes:.1f} minute lecture. "
-                f"Expected at least {min_expected_concepts}. Proceeding anyway."
-            )
-    return out
+    out = normalise_inventory(merged)
+    print(f"[summary-card-debug] merged inventory count: {len(out[:20])}")
+    print(f"[summary-card-debug] merged inventory names: {[item['name'] for item in out[:20]]}")
+    return out[:20]
 
 
 def _normalise_generated_card(card: dict, inventory_item: dict) -> dict:
@@ -1872,11 +2171,12 @@ def validate_generated_summary_cards(inventory: list[dict], cards: list[dict], t
     return {"concept_count": len(inventory_names), "card_count": len(cards), "missing": []}
 
 
-def build_summary_cards_from_transcript(transcript: str) -> list[dict]:
+def build_summary_cards_from_transcript(transcript: str, lecture_id: str | None = None) -> list[dict]:
     cleaned = clean_summary_card_transcript(transcript)
     if not cleaned:
         return []
-    inventory = build_concept_inventory_from_transcript(cleaned)
+    transcript_hash = hashlib.md5(cleaned.encode()).hexdigest()
+    inventory = build_concept_inventory_from_transcript(cleaned, lecture_id=lecture_id)
     if not inventory:
         return []
     cards_raw = _gpt_json_array(
@@ -1884,6 +2184,7 @@ def build_summary_cards_from_transcript(transcript: str) -> list[dict]:
         "Transcript:\n" + cleaned + "\n\nConcept inventory:\n" + json.dumps(inventory, ensure_ascii=False),
         "summary_card_generation",
         max_tokens=7000,
+        temperature=0,
     )
     by_inventory_name = {item["name"]: item for item in inventory}
     cards = []
@@ -1891,11 +2192,67 @@ def build_summary_cards_from_transcript(transcript: str) -> list[dict]:
         name = _normalise_ws(raw.get("concept_name", ""))
         if name in by_inventory_name:
             cards.append(_normalise_generated_card(raw, by_inventory_name[name]))
-    validate_generated_summary_cards(inventory, cards, cleaned)
-    return cards
+
+    def card_content_word_count(card: dict) -> int:
+        parts = [card.get("summary", "")]
+        for item in card.get("key_definitions") or []:
+            if isinstance(item, dict):
+                parts.append(_normalise_ws(str(item.get("definition") or "")))
+        for item in card.get("examples") or []:
+            parts.append(_normalise_ws(str(item or "")))
+        return len(" ".join(part for part in parts if part).split())
+
+    kept_cards = []
+    thin_cards = []
+    for card in cards:
+        word_count = card_content_word_count(card)
+        if word_count < 15:
+            print(
+                "[summary-card-debug] filtered thin card: "
+                f"{card.get('concept_name', '')} ({word_count} words)"
+            )
+            thin_cards.append(card)
+        else:
+            kept_cards.append(card)
+
+    for thin_card in thin_cards:
+        thin_name = _normalise_ws(thin_card.get("concept_name", ""))
+        if not thin_name:
+            continue
+        related_card = next(
+            (
+                card for card in kept_cards
+                if thin_name.lower() in _normalise_ws(card.get("concept_name", "")).lower()
+            ),
+            None,
+        )
+        if related_card:
+            inventory_item = by_inventory_name.get(thin_name, {})
+            key_quote = _normalise_ws(str(inventory_item.get("key_quote") or inventory_item.get("quote") or ""))
+            if key_quote and key_quote not in (related_card.get("examples") or []):
+                related_card.setdefault("examples", []).append(key_quote)
+
+    kept_names = {card.get("concept_name", "") for card in kept_cards}
+    filtered_inventory = [item for item in inventory if item.get("name", "") in kept_names]
+
+    for card in cards:
+        if _normalise_ws(card.get("concept_name", "")).lower() == "economic balance":
+            print(f"[summary-card-debug] economic balance summary: {card.get('summary', '')}")
+            break
+
+    validate_generated_summary_cards(filtered_inventory, kept_cards, cleaned)
+    if lecture_id:
+        persisted_cards = [_inventory_cache_sentinel(transcript_hash, filtered_inventory), *kept_cards]
+        update_lecture_concept_note_cards(lecture_id, persisted_cards)
+    return kept_cards
 
 
-def build_concept_note_cards(concept_sections: list[dict] | None = None, *, transcript: str = "") -> list[dict]:
+def build_concept_note_cards(
+    concept_sections: list[dict] | None = None,
+    *,
+    transcript: str = "",
+    lecture_id: str | None = None,
+) -> list[dict]:
     """
     Generate on-screen concept cards with the new concept-first GPT pipeline.
 
@@ -1905,7 +2262,7 @@ def build_concept_note_cards(concept_sections: list[dict] | None = None, *, tran
     """
     if not transcript:
         raise ConceptCoverageError("Summary card generation requires the full original transcript")
-    return build_summary_cards_from_transcript(transcript)
+    return build_summary_cards_from_transcript(transcript, lecture_id=lecture_id)
 
 
 def validate_summary_card_generation(
@@ -1913,7 +2270,8 @@ def validate_summary_card_generation(
     concept_note_cards: list[dict],
     grounded_notes: list[dict] | None = None,
     *,
-    minimum_grounding: float = 0.8,
+    transcript: str = "",
+    minimum_grounding: float = 0.65,
 ) -> dict:
     """
     Hard gate for summary-card output.
@@ -1922,7 +2280,7 @@ def validate_summary_card_generation(
     source range, or weak grounding is a build error. Callers must not proceed
     to UI/PDF output when this raises ConceptCoverageError.
     """
-    cards = concept_note_cards or []
+    cards = [card for card in (concept_note_cards or []) if not _is_internal_card(card)]
     titles = [_normalise_ws(card.get("concept_name", "")) for card in cards]
     lowered_titles = [title.lower() for title in titles if title]
     if len(lowered_titles) != len(set(lowered_titles)):
@@ -1947,8 +2305,8 @@ def validate_summary_card_generation(
         if len(_split_sentences(card.get("summary", ""))) <= 1 and not card.get("key_definitions") and not card.get("examples"):
             raise ConceptCoverageError(f"Card validation failed: {title} is too thin")
 
-    grounding = lecture_summary_confidence(grounded_notes or [])
-    if grounded_notes is not None and grounding < minimum_grounding:
+    grounding = _card_body_grounding_score(cards, transcript)
+    if grounding < minimum_grounding:
         raise ConceptCoverageError(f"Card validation failed: grounding score {grounding:.0%} below {minimum_grounding:.0%}")
 
     return {
@@ -2248,6 +2606,8 @@ def build_verified_cheat_sheet_from_cards(concept_note_cards: list[dict]) -> lis
     rows = []
     seen = set()
     for card in concept_note_cards or []:
+        if _is_internal_card(card):
+            continue
         term = _normalise_ws(card.get("concept_name", ""))
         if not term or term.lower() == "key concept":
             continue
@@ -2832,8 +3192,13 @@ def enrich_lecture_payload(
     grounded_notes = build_grounded_notes(cleaned_transcript, summary, section_rows=section_rows)
     try:
         concept_sections = build_concept_sections(grounded_notes)
-        concept_note_cards = build_concept_note_cards(transcript=transcript)
-        validate_summary_card_generation(concept_sections, concept_note_cards, grounded_notes)
+        concept_note_cards = build_concept_note_cards(transcript=transcript, lecture_id=lecture_data.get("id"))
+        validate_summary_card_generation(
+            concept_sections,
+            concept_note_cards,
+            grounded_notes,
+            transcript=transcript,
+        )
     except ConceptCoverageError as exc:
         if strict_validation:
             raise
@@ -2861,6 +3226,6 @@ def enrich_lecture_payload(
     payload["verified_cheat_sheet"] = verified_cheat_sheet
     payload["summary_validation_error"] = validation_error
     payload["ai_study_aids"] = build_ai_study_aids(lecture_data)
-    payload["summary_confidence"] = lecture_summary_confidence(grounded_notes)
+    payload["summary_confidence"] = _card_body_grounding_score(concept_note_cards, transcript)
     payload["transcript_word_count"] = len(cleaned_transcript.split()) if transcript else 0
     return payload

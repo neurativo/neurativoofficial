@@ -1035,9 +1035,17 @@ def test_build_concept_sections_removes_key_concept_admin_and_example_fragments(
 def test_build_concept_note_cards_uses_two_call_concept_first_pipeline(monkeypatch):
     calls = []
 
-    def fake_gpt(system, user, feature, max_tokens=5000, model="gpt-4o-mini"):
+    def fake_gpt(system, user, feature, max_tokens=5000, model="gpt-4o-mini", temperature=0.1):
         calls.append(feature)
-        if feature in {"summary_card_inventory", "summary_card_inventory_retry"}:
+        if feature == "para_extract_0":
+            return [{
+                "name": "Positive statements",
+                "present": True,
+                "exam_trap": "Positive does not mean good.",
+                "distinction": "Normative statements",
+                "examples": ["The population growth rate of Sri Lanka."],
+            }]
+        if feature == "concept_merge":
             return [{
                 "name": "Positive vs Normative Statements",
                 "start_time": "06:12",
@@ -1064,7 +1072,7 @@ def test_build_concept_note_cards_uses_two_call_concept_first_pipeline(monkeypat
 
     cards = build_concept_note_cards(transcript="06:12 Positive statements are testable. Normative statements are opinions.")
 
-    assert calls == ["summary_card_inventory", "summary_card_inventory_retry", "summary_card_generation"]
+    assert calls == ["para_extract_0", "concept_merge", "summary_card_generation"]
     assert len(cards) == 1
     assert cards[0]["concept_name"] == "Positive vs Normative Statements"
     assert cards[0]["exam_trap"]["correct"] == "Positive means testable"
