@@ -462,6 +462,84 @@ def get_lecture_sections(lecture_id: str) -> list[dict]:
         .order("section_index", desc=False)\
         .execute()
     return response.data if hasattr(response, "data") and response.data else []
+
+
+def snapshot_generated_outputs(lecture_id: str) -> dict:
+    """
+    Capture generated lecture outputs before a destructive recompute.
+
+    Transcript/chunks are intentionally not part of this snapshot because they
+    are source material, not generated output.
+    """
+    db = _fresh_db()
+    try:
+        lecture_resp = db.table("lectures").select(
+            "master_summary, summary, flashcards, quiz, glossary, "
+            "summary_status, total_sections, last_summarized_length"
+        ).eq("id", lecture_id).execute()
+    except Exception:
+        lecture_resp = db.table("lectures").select(
+            "master_summary, summary, flashcards, quiz, glossary, "
+            "total_sections, last_summarized_length"
+        ).eq("id", lecture_id).execute()
+    section_resp = db.table("lecture_sections").select(
+        "section_index, chunk_range_start, chunk_range_end, section_summary"
+    ).eq("lecture_id", lecture_id).order("section_index", desc=False).execute()
+    return {
+        "lecture": (lecture_resp.data or [{}])[0] if hasattr(lecture_resp, "data") else {},
+        "sections": section_resp.data if hasattr(section_resp, "data") and section_resp.data else [],
+    }
+
+
+def clear_generated_outputs_for_recompute(lecture_id: str) -> None:
+    """
+    Delete previously generated outputs before rebuilding from the transcript.
+    """
+    db = _fresh_db()
+    db.table("lecture_sections").delete().eq("lecture_id", lecture_id).execute()
+    update = {
+        "master_summary": "",
+        "summary": "",
+        "flashcards": None,
+        "quiz": None,
+        "glossary": None,
+        "total_sections": 0,
+        "last_summarized_length": 0,
+    }
+    try:
+        db.table("lectures").update({
+            **update,
+            "summary_status": "recomputing",
+        }).eq("id", lecture_id).execute()
+    except Exception:
+        db.table("lectures").update(update).eq("id", lecture_id).execute()
+
+
+def restore_generated_outputs(lecture_id: str, snapshot: dict) -> None:
+    """
+    Restore generated outputs after a failed recompute.
+    """
+    db = _fresh_db()
+    lecture_update = dict((snapshot or {}).get("lecture") or {})
+    if lecture_update:
+        try:
+            db.table("lectures").update(lecture_update).eq("id", lecture_id).execute()
+        except Exception:
+            lecture_update.pop("summary_status", None)
+            if lecture_update:
+                db.table("lectures").update(lecture_update).eq("id", lecture_id).execute()
+    db.table("lecture_sections").delete().eq("lecture_id", lecture_id).execute()
+    rows = []
+    for row in (snapshot or {}).get("sections") or []:
+        rows.append({
+            "lecture_id": lecture_id,
+            "section_index": row.get("section_index"),
+            "chunk_range_start": row.get("chunk_range_start"),
+            "chunk_range_end": row.get("chunk_range_end"),
+            "section_summary": row.get("section_summary"),
+        })
+    if rows:
+        db.table("lecture_sections").insert(rows).execute()
 def get_latest_section_end_index(lecture_id: str) -> int:
     """
     Returns the chunk_range_end of the latest section, or -1 if no sections exist.

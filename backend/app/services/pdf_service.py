@@ -28,10 +28,11 @@ from app.services.trust_service import (
     build_concept_note_cards,
     build_concept_sections,
     score_adaptive_concept_intelligence,
-    build_verified_cheat_sheet,
+    build_verified_cheat_sheet_from_cards,
     build_grounded_notes,
     lecture_summary_confidence,
     sanitize_pdf_artifacts,
+    validate_summary_card_generation,
 )
 
 # ── OpenAI client ─────────────────────────────────────────────────────────────
@@ -1253,9 +1254,10 @@ async def generate_lecture_pdf(
     total_chunks  = data.get("total_chunks") or 0
     language      = data.get("language") or "en"
     section_rows  = await asyncio.to_thread(get_lecture_sections, lecture_id)
-    grounded_notes = build_grounded_notes(transcript, summary, section_rows=section_rows)
+    grounded_notes = build_grounded_notes(cleaned_transcript, summary, section_rows=section_rows)
     concept_sections = build_concept_sections(grounded_notes)
     concept_note_cards = build_concept_note_cards(concept_sections)
+    validate_summary_card_generation(concept_sections, concept_note_cards, grounded_notes)
     claim_registry = build_claim_registry(grounded_notes)
     title = _resolve_document_title(title, transcript, topic, concept_sections)
     grounded_summary = "\n\n".join(
@@ -1582,11 +1584,7 @@ async def generate_lecture_pdf(
         quick_review,
         adaptive_intelligence,
     )
-    verified_cheat_sheet = build_verified_cheat_sheet(
-        concept_sections,
-        claim_registry,
-        adaptive_intelligence=adaptive_intelligence,
-    )
+    verified_cheat_sheet = build_verified_cheat_sheet_from_cards(concept_note_cards)
     revision_focus = _build_revision_focus_summary(adaptive_intelligence)
     toc_entries = _compose_toc_entries(
         enriched_sections,

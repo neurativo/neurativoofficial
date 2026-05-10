@@ -117,15 +117,32 @@ def test_summarize_topic_segment_returns_empty_on_blank_input():
 # ─────────────────────────────────────────────────────────────────────────────
 
 def test_recompute_final_summary_saves_master_and_sets_final():
-    """Full happy path: chunks → concept summary → saved, status='final'."""
+    """Full happy path: original transcript → validated rebuild → status='final'."""
     saved = {}
+    transcript = (
+        "Microeconomics is defined as the study of individual economic units such as households and firms. "
+        "Macroeconomics refers to the study of the whole economy, including GDP and inflation."
+    )
+    master = (
+        "## Microeconomics vs Macroeconomics\n"
+        "Microeconomics is defined as the study of individual economic units such as households and firms. "
+        "Macroeconomics refers to the study of the whole economy, including GDP and inflation.\n"
+        "Key concepts: `microeconomics`, `macroeconomics`\n"
+    )
 
     with patch("app.services.recompute_service.get_lecture_language", return_value="en"), \
          patch("app.services.recompute_service.get_lecture_topic", return_value="biology"), \
-         patch("app.services.recompute_service.get_all_chunk_transcripts",
-               return_value=["hello world", "foo bar"]), \
+         patch("app.services.recompute_service.get_lecture_full",
+               return_value={"title": "Lecture", "transcript": transcript}), \
+         patch("app.services.recompute_service.snapshot_generated_outputs", return_value={"lecture": {}, "sections": []}), \
+         patch("app.services.recompute_service.clear_generated_outputs_for_recompute",
+               side_effect=lambda lid: saved.update({"cleared": lid})), \
          patch("app.services.recompute_service.generate_concept_master_summary",
-               return_value="## Topic A\n\nSummary.\n\n---\n\n## Topic B\n\nSummary.\n\n---"), \
+               return_value=master), \
+         patch("app.services.recompute_service.generate_content",
+               return_value={"summary": master, "flashcards": [], "quiz": [], "glossary": []}), \
+         patch("app.services.recompute_service.save_generated_content",
+               side_effect=lambda lid, content: saved.update({"content": content})), \
          patch("app.services.recompute_service.update_lecture_summary_only",
                side_effect=lambda lid, master: saved.update({"master": master})), \
          patch("app.services.recompute_service.set_summary_status",
@@ -133,21 +150,22 @@ def test_recompute_final_summary_saves_master_and_sets_final():
         from app.services.recompute_service import recompute_final_summary
         recompute_final_summary("lecture-123")
 
+    assert saved["cleared"] == "lecture-123"
     assert saved["status"] == "final"
-    assert "## Topic A" in saved["master"]
-    assert "## Topic B" in saved["master"]
+    assert "## Microeconomics vs Macroeconomics" in saved["master"]
 
 
-def test_recompute_final_summary_sets_final_even_when_no_chunks():
-    """If no chunks exist, status still becomes 'final' (no crash)."""
+def test_recompute_final_summary_leaves_previous_state_when_no_transcript():
+    """If no original transcript exists, recompute does not mark partial output final."""
     status_set = {}
 
     with patch("app.services.recompute_service.get_lecture_language", return_value="en"), \
          patch("app.services.recompute_service.get_lecture_topic", return_value=None), \
+         patch("app.services.recompute_service.get_lecture_full", return_value={"transcript": ""}), \
          patch("app.services.recompute_service.get_all_chunk_transcripts", return_value=[]), \
          patch("app.services.recompute_service.set_summary_status",
                side_effect=lambda lid, s: status_set.update({"status": s})):
         from app.services.recompute_service import recompute_final_summary
         recompute_final_summary("lecture-empty")
 
-    assert status_set["status"] == "final"
+    assert status_set == {}

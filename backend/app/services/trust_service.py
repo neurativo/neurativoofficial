@@ -1691,7 +1691,12 @@ def _make_concept_card(source: dict) -> dict | None:
     aliases = _dedupe_texts(source.get("concepts") or [])
     definitions = _definition_items_for_card(source, concept_name, aliases)
     if not definitions:
-        return None
+        explanation = _normalise_ws(source.get("overview", "") or source.get("core_explanation", ""))
+        if explanation:
+            definition_sentence = _split_sentences(explanation)[0] if _split_sentences(explanation) else explanation
+            definitions = [definition_sentence]
+    if not definitions:
+        raise ConceptCoverageError(f"Card generation failed: no transcript-derived definition for {concept_name}")
     summary = _summary_for_card(source, definitions)
     distinctions = _useful_sentences(source.get("important_distinctions") or source.get("distinctions") or [], limit=3)
     owned_distinctions = _filter_items_for_concept(distinctions, concept_name, aliases) or distinctions[:1]
@@ -1700,9 +1705,8 @@ def _make_concept_card(source: dict) -> dict | None:
     owned_traps = _filter_items_for_concept(trap_items, concept_name, aliases) or trap_items
     example_items = _useful_sentences(source.get("examples") or [], limit=8)
     source_range = _single_source_range(source.get("citations") or [])
-    field_count = bool(summary) + bool(definitions) + bool(key_distinction) + bool(owned_traps) + bool(example_items) + bool(source_range)
-    if field_count < 3:
-        return None
+    if not source_range:
+        raise ConceptCoverageError(f"Card generation failed: missing single source range for {concept_name}")
     versus = _versus_sides_from_distinction(concept_name, key_distinction) if key_distinction else None
     trap_structured = _exam_trap_structured(owned_traps[0], concept_name) if owned_traps else None
     return {
@@ -1825,6 +1829,84 @@ def build_concept_note_cards(concept_sections: list[dict]) -> list[dict]:
     return sorted(cards, key=lambda card: (card.get("start_seconds") is None, card.get("start_seconds") or 0))
 
 
+def validate_summary_card_generation(
+    concept_sections: list[dict],
+    concept_note_cards: list[dict],
+    grounded_notes: list[dict] | None = None,
+    *,
+    minimum_grounding: float = 0.8,
+) -> dict:
+    """
+    Hard gate for summary-card output.
+
+    A missing concept, duplicate title, empty trap for a detected trap, missing
+    source range, or weak grounding is a build error. Callers must not proceed
+    to UI/PDF output when this raises ConceptCoverageError.
+    """
+    cards = _ensure_card_coverage(_merge_duplicate_cards(concept_note_cards or []), concept_sections or [])
+    titles = [_normalise_ws(card.get("concept_name", "")) for card in cards]
+    lowered_titles = [title.lower() for title in titles if title]
+    if len(lowered_titles) != len(set(lowered_titles)):
+        raise ConceptCoverageError("Card validation failed: duplicate concept card titles")
+
+    bad_titles = [
+        title for title in titles
+        if not title
+        or title.lower() == "key concept"
+        or len(_split_sentences(title)) > 1
+        or _is_low_signal_title(title)
+    ]
+    if bad_titles:
+        raise ConceptCoverageError(f"Card validation failed: invalid concept titles: {', '.join(bad_titles)}")
+
+    for card in cards:
+        title = card.get("concept_name", "")
+        source = card.get("source") or {}
+        if not source.get("label") or source.get("start_seconds") is None or source.get("end_seconds") is None:
+            raise ConceptCoverageError(f"Card validation failed: {title} does not have exactly one source timestamp range")
+        if not card.get("summary"):
+            raise ConceptCoverageError(f"Card validation failed: {title} has no summary")
+        if not card.get("definitions"):
+            raise ConceptCoverageError(f"Card validation failed: {title} has no key definitions")
+        if card.get("exam_traps") and not card.get("exam_trap_structured"):
+            raise ConceptCoverageError(f"Card validation failed: {title} has exam traps without structured trap data")
+        if card.get("exam_trap_structured") and not card.get("exam_trap"):
+            raise ConceptCoverageError(f"Card validation failed: {title} has an empty exam trap field")
+
+    for section in concept_sections or []:
+        if _is_low_signal_title(section.get("title", "")):
+            continue
+        matching = [card for card in cards if _card_covers_section(card, section)]
+        if not matching:
+            raise ConceptCoverageError(f"Card validation failed: missing card for {section.get('title', '')}")
+        if section.get("exam_traps") and not matching[0].get("exam_trap"):
+            raise ConceptCoverageError(f"Card validation failed: exam trap missing for {section.get('title', '')}")
+        for subtopic in section.get("subtopic_sections") or []:
+            subtopic_title = _normalise_ws(subtopic.get("title", ""))
+            if not subtopic_title or _is_low_signal_title(subtopic_title):
+                continue
+            subtopic_section = {
+                "title": subtopic_title,
+                "concepts": [subtopic_title],
+                "key_definitions": subtopic.get("definitions") or [],
+            }
+            subtopic_matches = [card for card in cards if _card_covers_section(card, subtopic_section)]
+            if not subtopic_matches:
+                raise ConceptCoverageError(f"Card validation failed: missing card for {subtopic_title}")
+            if subtopic.get("exam_traps") and not subtopic_matches[0].get("exam_trap"):
+                raise ConceptCoverageError(f"Card validation failed: exam trap missing for {subtopic_title}")
+
+    grounding = lecture_summary_confidence(grounded_notes or [])
+    if grounded_notes is not None and grounding < minimum_grounding:
+        raise ConceptCoverageError(f"Card validation failed: grounding score {grounding:.0%} below {minimum_grounding:.0%}")
+
+    return {
+        "card_count": len(cards),
+        "concept_count": len([s for s in concept_sections or [] if not _is_low_signal_title(s.get("title", ""))]),
+        "grounding_score": grounding,
+    }
+
+
 def build_claim_registry(grounded_notes: list[dict]) -> list[dict]:
     claims = []
     seen = set()
@@ -1904,6 +1986,18 @@ def _quick_recall_cue(text: str) -> str:
     elif sentence and sentence[-1] not in ".!?":
         sentence += "."
     return sentence
+
+
+def _quick_recall_under_ten_words(card: dict) -> str:
+    cue = _quick_recall_cue(" ".join(filter(None, [
+        card.get("definition", ""),
+        card.get("summary", ""),
+        card.get("exam_trap", ""),
+    ])))
+    words = cue.replace("—", " ").split()
+    if len(words) <= 10:
+        return cue
+    return " ".join(words[:10]).rstrip(" .,;:") + "."
 
 
 def _pick_term_citation(item: dict, fallback_citations: list[dict]) -> list[dict]:
@@ -2067,6 +2161,54 @@ def build_verified_cheat_sheet(
             }],
         })
     return fallback_rows
+
+
+def build_verified_cheat_sheet_from_cards(concept_note_cards: list[dict]) -> list[dict]:
+    """
+    Build the cheat sheet directly from the final validated cards.
+
+    One final card produces one row, so the screen card set, PDF sections, and
+    cheat sheet cannot drift apart.
+    """
+    rows = []
+    seen = set()
+    for card in concept_note_cards or []:
+        term = _normalise_ws(card.get("concept_name", ""))
+        if not term or term.lower() == "key concept":
+            continue
+        key = term.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+
+        definition = _normalise_ws((card.get("definitions") or [card.get("definition", "")])[0])
+        summary = _normalise_ws(card.get("summary", ""))
+        core_idea = _quick_recall_cue(definition or summary)
+        structured_trap = card.get("exam_trap_structured") or {}
+        exam_trap = ""
+        if structured_trap:
+            misconception = _normalise_ws(structured_trap.get("misconception", ""))
+            correct = _normalise_ws(structured_trap.get("correct_understanding", ""))
+            exam_trap = f"Students think {misconception} — actually {correct}".strip()
+        source = card.get("source") or {}
+        rows.append({
+            "term": term,
+            "core_idea": core_idea,
+            "exam_trap": exam_trap,
+            "quick_recall": _quick_recall_under_ten_words(card),
+            "citations": [source] if source else [],
+            "confidence": round(float(card.get("confidence") or 0.0), 2),
+            "revision_priority": round(float(card.get("confidence") or 0.0), 2),
+            "emphasis_level": "high" if exam_trap else "medium",
+        })
+
+    if not rows:
+        return []
+    rows = sorted(rows, key=lambda row: (
+        ((row.get("citations") or [{}])[0].get("start_seconds") is None),
+        (row.get("citations") or [{}])[0].get("start_seconds") or 0,
+    ))
+    return [{"chapter_title": "Concept Cards", "rows": rows}]
 
 
 def _normalise_concept_key(text: str) -> str:
@@ -2599,16 +2741,18 @@ def enrich_lecture_payload(lecture_data: dict, section_rows: list[dict] | None =
         return lecture_data
 
     transcript = lecture_data.get("transcript") or ""
+    cleaned_transcript = clean_transcript(transcript)
     summary = lecture_data.get("master_summary") or lecture_data.get("summary") or ""
-    grounded_notes = build_grounded_notes(transcript, summary, section_rows=section_rows)
+    grounded_notes = build_grounded_notes(cleaned_transcript, summary, section_rows=section_rows)
     concept_sections = build_concept_sections(grounded_notes)
     concept_note_cards = build_concept_note_cards(concept_sections)
+    validate_summary_card_generation(concept_sections, concept_note_cards, grounded_notes)
     claim_registry = build_claim_registry(grounded_notes)
     concept_entities = build_concept_entities(concept_sections, claim_registry)
     concept_graph = build_concept_relationship_graph(concept_entities, claim_registry)
     adaptive_intelligence = score_adaptive_concept_intelligence(concept_graph)
     relationship_concept_map = build_relationship_concept_map(concept_graph)
-    verified_cheat_sheet = build_verified_cheat_sheet(concept_sections, claim_registry, adaptive_intelligence=adaptive_intelligence)
+    verified_cheat_sheet = build_verified_cheat_sheet_from_cards(concept_note_cards)
     adaptive_study_weighting = build_adaptive_study_weighting(adaptive_intelligence)
 
     payload = dict(lecture_data)
@@ -2625,5 +2769,5 @@ def enrich_lecture_payload(lecture_data: dict, section_rows: list[dict] | None =
     payload["verified_cheat_sheet"] = verified_cheat_sheet
     payload["ai_study_aids"] = build_ai_study_aids(lecture_data)
     payload["summary_confidence"] = lecture_summary_confidence(grounded_notes)
-    payload["transcript_word_count"] = len(clean_transcript(transcript).split()) if transcript else 0
+    payload["transcript_word_count"] = len(cleaned_transcript.split()) if transcript else 0
     return payload
