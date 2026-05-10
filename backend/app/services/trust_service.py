@@ -1981,8 +1981,14 @@ def build_concept_inventory_from_transcript(transcript: str, lecture_id: str | N
                 and card.get("cache_version") == _INVENTORY_CACHE_VERSION
                 and isinstance(card.get("inventory"), list)
             ):
-                print(f"[inventory-cache] cache hit for {lecture_id}")
                 cached_inventory = card.get("inventory") or []
+                if len(cached_inventory) < 3:
+                    print(
+                        f"[inventory-cache] cached inventory has only {len(cached_inventory)} concepts - "
+                        f"ignoring stale cache and re-extracting"
+                    )
+                    break
+                print(f"[inventory-cache] cache hit for {lecture_id}")
                 print(f"[summary-card-debug] merged inventory count: {len(cached_inventory[:20])}")
                 print(f"[summary-card-debug] merged inventory names: {[item.get('name') for item in cached_inventory[:20] if isinstance(item, dict)]}")
                 return cached_inventory
@@ -2120,6 +2126,8 @@ Return only JSON array. No other text."""
         return out
 
     out = normalise_inventory(merged)
+    if len(out) < 3:
+        print(f"[inventory-cache] refusing to cache inventory with only {len(out)} concepts")
     print(f"[summary-card-debug] merged inventory count: {len(out[:20])}")
     print(f"[summary-card-debug] merged inventory names: {[item['name'] for item in out[:20]]}")
     return out[:20]
@@ -2242,7 +2250,11 @@ def build_summary_cards_from_transcript(transcript: str, lecture_id: str | None 
 
     validate_generated_summary_cards(filtered_inventory, kept_cards, cleaned)
     if lecture_id:
-        persisted_cards = [_inventory_cache_sentinel(transcript_hash, filtered_inventory), *kept_cards]
+        persisted_cards = (
+            [_inventory_cache_sentinel(transcript_hash, filtered_inventory), *kept_cards]
+            if len(filtered_inventory) >= 3
+            else kept_cards
+        )
         update_lecture_concept_note_cards(lecture_id, persisted_cards)
     return kept_cards
 
@@ -3192,7 +3204,16 @@ def enrich_lecture_payload(
     grounded_notes = build_grounded_notes(cleaned_transcript, summary, section_rows=section_rows)
     try:
         concept_sections = build_concept_sections(grounded_notes)
-        concept_note_cards = build_concept_note_cards(transcript=transcript, lecture_id=lecture_data.get("id"))
+        saved_cards = lecture_data.get("concept_note_cards")
+        visible_saved = [
+            c for c in (saved_cards or [])
+            if isinstance(c, dict)
+            and not str(c.get("concept_name", "")).startswith("__")
+        ]
+        if len(visible_saved) >= 3:
+            concept_note_cards = saved_cards
+        else:
+            concept_note_cards = build_concept_note_cards(transcript=transcript, lecture_id=lecture_data.get("id"))
         validate_summary_card_generation(
             concept_sections,
             concept_note_cards,

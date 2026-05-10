@@ -1031,9 +1031,19 @@ def get_lecture_concept_note_cards(lecture_id: str):
 def update_lecture_concept_note_cards(lecture_id: str, cards: list[dict]) -> None:
     """Stores concept note cards, including any internal sentinel records."""
     import json as _json
+    print(
+        f"[db-write] update_lecture_concept_note_cards called for "
+        f"{lecture_id} with {len(cards)} cards"
+    )
     db = _fresh_db()
     try:
-        db.table("lectures").update({"concept_note_cards": _json.dumps(cards or [])}).eq("id", lecture_id).execute()
+        result = (
+            db.table("lectures")
+            .update({"concept_note_cards": _json.dumps(cards or [])})
+            .eq("id", lecture_id)
+            .execute()
+        )
+        print(f"[db-write] update result: {result}")
     except Exception as exc:
         print(f"[inventory-cache] write skipped for {lecture_id}: {exc}")
 
