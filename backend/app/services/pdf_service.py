@@ -18,8 +18,8 @@ from app.services.supabase_service import (
     get_visual_frames,
 )
 from app.services.cost_tracker import log_cost
-from app.services.transcript_cleaner import clean as clean_transcript
 from app.services.trust_service import (
+    _light_clean,
     build_claim_registry,
     build_adaptive_study_weighting,
     build_concept_entities,
@@ -37,6 +37,12 @@ from app.services.trust_service import (
 
 # ── OpenAI client ─────────────────────────────────────────────────────────────
 _client = OpenAI(api_key=settings.OPENAI_API_KEY) if settings.OPENAI_API_KEY else None
+
+_PDF_TRANSCRIPT_ONLY_RULE = (
+    "Only use information from the transcript provided. "
+    "Do not add background knowledge, textbook content, or information not present in the transcript. "
+    "If the transcript is about a specific subject, only generate content about what was actually taught in this specific lecture."
+)
 
 
 
@@ -622,7 +628,8 @@ def _call_executive_summary(transcript: str, title: str, topic: str | None, stri
                     "Only use information from this transcript. "
                     "Do not add any external knowledge, context, or content from any other source. "
                     "If something is not in the transcript, do not include it. "
-                    "Write dense, precise prose. Use present tense ('The lecture examines...'). No bullet points."
+                    "Write dense, precise prose. Use present tense ('The lecture examines...'). No bullet points. "
+                    f"{_PDF_TRANSCRIPT_ONLY_RULE}"
                 ),
             },
             {
@@ -666,6 +673,10 @@ def _call_enrich_section(
     resp = _client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
+            {
+                "role": "system",
+                "content": _PDF_TRANSCRIPT_ONLY_RULE,
+            },
             {
                 "role": "user",
                 "content": (
@@ -748,6 +759,10 @@ def _call_glossary(transcript: str, topic: str | None, n_terms: int = 8) -> list
         model="gpt-4o-mini",
         messages=[
             {
+                "role": "system",
+                "content": _PDF_TRANSCRIPT_ONLY_RULE,
+            },
+            {
                 "role": "user",
                 "content": (
                     "Note: The transcript may contain mixed languages. Extract meaning from all languages present. Respond in English.\n\n"
@@ -784,6 +799,10 @@ def _call_takeaways(transcript: str, summary: str, topic: str | None) -> list[st
     resp = _client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
+            {
+                "role": "system",
+                "content": _PDF_TRANSCRIPT_ONLY_RULE,
+            },
             {
                 "role": "user",
                 "content": (
@@ -823,6 +842,10 @@ def _call_quick_review(
     resp = _client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
+            {
+                "role": "system",
+                "content": _PDF_TRANSCRIPT_ONLY_RULE,
+            },
             {
                 "role": "user",
                 "content": (
@@ -873,7 +896,8 @@ def _call_study_roadmap(
                     "You are an expert curriculum designer who maps academic learning paths. "
                     "You only use information from the transcript provided — never from general knowledge about the subject. "
                     "If the professor explicitly mentions future topics, unit numbers, or follow-up lessons, "
-                    "those must appear as the first entries in next_topics."
+                    "those must appear as the first entries in next_topics. "
+                    f"{_PDF_TRANSCRIPT_ONLY_RULE}"
                 ),
             },
             {
@@ -921,7 +945,10 @@ def _call_conceptual_map(section_summaries: list[str]) -> list[dict]:
         messages=[
             {
                 "role": "system",
-                "content": "You synthesise academic knowledge, finding the ideas that bridge across lecture sections.",
+                "content": (
+                    "You synthesise academic knowledge, finding the ideas that bridge across lecture sections. "
+                    f"{_PDF_TRANSCRIPT_ONLY_RULE}"
+                ),
             },
             {
                 "role": "user",
@@ -965,6 +992,10 @@ def _call_mnemonics(glossary: list[dict]) -> list[dict]:
         resp = _client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
+                {
+                    "role": "system",
+                    "content": _PDF_TRANSCRIPT_ONLY_RULE,
+                },
                 {
                     "role": "user",
                     "content": (
@@ -1030,6 +1061,10 @@ def _call_key_stats(transcript: str, topic: str | None) -> list[dict]:
             model="gpt-4o-mini",
             messages=[
                 {
+                    "role": "system",
+                    "content": _PDF_TRANSCRIPT_ONLY_RULE,
+                },
+                {
                     "role": "user",
                     "content": (
                         "Note: The transcript may contain mixed languages. Extract meaning from all languages present. Respond in English.\n\n"
@@ -1061,15 +1096,26 @@ def _call_key_stats(transcript: str, topic: str | None) -> list[dict]:
 
 def _render_pdf(html_content: str, title_short: str, watermark: bool = False) -> bytes:
     # Use a per-call context manager instead of a global browser singleton.
+    print("[pdf-render] starting Playwright render")
     with sync_playwright() as pw:
-        browser = pw.chromium.launch(headless=True)
+        print("[pdf-render] launching chromium")
+        browser = pw.chromium.launch(
+            headless=True,
+            args=[
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-dev-shm-usage",
+            ],
+        )
         try:
             page = browser.new_page()
             try:
-                page.set_content(html_content, wait_until="networkidle")
+                print("[pdf-render] setting page content")
+                page.set_content(html_content, wait_until="networkidle", timeout=30000)
                 # Explicitly wait for all fonts to finish loading before snapshotting.
-                # networkidle alone doesn't guarantee font-swap has completed — this does.
+                # networkidle alone doesn't guarantee font-swap has completed ? this does.
                 page.evaluate("() => document.fonts.ready")
+                print("[pdf-render] page content ready")
                 footer = (
                     "<div style='"
                     "width:100%;font-size:7pt;color:#94a3b8;"
@@ -1081,7 +1127,7 @@ def _render_pdf(html_content: str, title_short: str, watermark: bool = False) ->
                     "text-align:center;padding:0 22mm;"
                     "box-sizing:border-box;"
                     "'>Page <span class='pageNumber'></span> "
-                    "of <span class='totalPages'></span> · Neurativo</div>"
+                    "of <span class='totalPages'></span> ? Neurativo</div>"
                 )
                 if watermark:
                     footer = (
@@ -1100,10 +1146,11 @@ def _render_pdf(html_content: str, title_short: str, watermark: bool = False) ->
                         "<span style='font-size:7pt;font-weight:600;color:#7c3aed;"
                         "background:#f5f3ff;padding:2px 8px;border-radius:4px;"
                         "border:1px solid #ddd8fe;'>"
-                        "Neurativo Free — upgrade for the full report"
+                        "Neurativo Free ? upgrade for the full report"
                         "</span>"
                         "</div>"
                     )
+                print("[pdf-render] generating pdf bytes")
                 pdf_bytes = page.pdf(
                     format="A4",
                     margin={"top": "28mm", "bottom": "16mm", "left": "22mm", "right": "22mm"},
@@ -1129,6 +1176,7 @@ def _render_pdf(html_content: str, title_short: str, watermark: bool = False) ->
                 page.close()
         finally:
             browser.close()
+    print("[pdf-render] render complete")
     return pdf_bytes
 
 
@@ -1256,468 +1304,485 @@ async def generate_lecture_pdf(
     quality="standard": Full sections + GPT enrichment (Student plan).
     quality="full":     Full sections + GPT enrichment + all extras (Pro plan).
     """
-    IS_FREE = quality == "free"
-    IS_LITE = quality == "lite" or IS_FREE
-    # 1. Fetch lecture data
-    data = await asyncio.to_thread(get_lecture_for_summarization, lecture_id)
-    if not data:
-        raise Exception("Lecture not found")
-
-    transcript    = data.get("transcript") or ""
-    cleaned_transcript = clean_transcript(transcript)
-    summary       = data.get("master_summary") or data.get("summary") or ""
-    topic         = data.get("topic") or None
-    title         = data.get("title") or "Lecture Notes"
-    created_at    = str(data.get("created_at") or datetime.now().date())[:10]
-    total_chunks  = data.get("total_chunks") or 0
-    language      = data.get("language") or "en"
-    section_rows  = await asyncio.to_thread(get_lecture_sections, lecture_id)
-    grounded_notes = build_grounded_notes(cleaned_transcript, summary, section_rows=section_rows)
-    concept_sections = build_concept_sections(grounded_notes)
-    concept_note_cards = build_concept_note_cards(transcript=transcript, lecture_id=lecture_id)
-    validate_summary_card_generation(
-        concept_sections,
-        concept_note_cards,
-        grounded_notes,
-        transcript=transcript,
-    )
-    claim_registry = build_claim_registry(grounded_notes)
-    title = _resolve_document_title(title, transcript, topic, concept_sections)
-    grounded_summary = "\n\n".join(
-        " ".join(
-            part for part in [
-                note.get("title", ""),
-                note.get("core_explanation", "") or note.get("lead_sentence", ""),
-                note.get("prose", ""),
-                " ".join(note.get("examples", []) or []),
-            ] if part
-        ).strip()
-        for note in (concept_sections or grounded_notes)
-    ).strip()
-
-    # Duration: derive from total_chunks * 12s (more accurate than stored total_duration_seconds)
-    duration_sec = total_chunks * 12
-
-    word_count = len(cleaned_transcript.split()) if cleaned_transcript else 0
-
-    duration_formatted  = format_duration(duration_sec)
-    section_label, review_label, glossary_label = _get_domain_labels(topic)
-
-    # 2. Parse raw sections from master summary
-    raw_sections = []
-    if concept_note_cards:
-        for card in concept_note_cards:
-            block = [card.get("concept_name", "Concept")]
-            if card.get("definition"):
-                block.append("Definition: " + card["definition"])
-            if card.get("key_distinction"):
-                block.append("Key distinction: " + card["key_distinction"])
-            if card.get("exam_trap"):
-                block.append("Exam trap: " + card["exam_trap"])
-            if card.get("professor_example"):
-                block.append("Professor example: " + card["professor_example"])
-            raw_sections.append("\n".join(block).strip())
-    elif concept_sections:
-        for note in concept_sections:
-            block = [note.get("title", "Summary")]
-            if note.get("core_explanation"):
-                block.append(note["core_explanation"])
-            if note.get("concepts"):
-                block.append("Key concepts: " + ", ".join(f"`{c}`" for c in note["concepts"]))
-            if note.get("examples"):
-                block.append("Examples:")
-                block.extend(f"→ {example}" for example in note["examples"])
-            raw_sections.append("\n".join(block).strip())
-    elif grounded_notes:
-        for note in grounded_notes:
-            block = [note.get("title", "Summary")]
-            if note.get("lead_sentence"):
-                block.append(note["lead_sentence"])
-            if note.get("prose"):
-                block.append(note["prose"])
-            if note.get("concepts"):
-                block.append("Key concepts: " + ", ".join(f"`{c}`" for c in note["concepts"]))
-            if note.get("examples"):
-                block.append("Examples:")
-                block.extend(f"â†’ {example}" for example in note["examples"])
-            raw_sections.append("\n".join(block).strip())
-    else:
-        raw_sections = [s.strip() for s in summary.split("## ") if s.strip()]
-    if not raw_sections:
-        raw_sections = [s.strip() for s in get_section_summaries(lecture_id) if s.strip()]
-    if not raw_sections:
-        raw_sections = _extract_summary_sections_loose(summary)
-    n_sections   = len(raw_sections)
-    n_questions  = _question_count(duration_sec)
-
-    # ── Lite/Free tier: skip all GPT calls ───────────────────────────────────
-    if IS_LITE:
-        # Free plan: first 2 sections + watermark; Lite: first 4 sections, no watermark
-        section_limit = 2 if IS_FREE else 4
-        raw_sections = raw_sections[:section_limit]
-        return await _generate_lite_pdf(
-            lecture_id=lecture_id,
-            title=title,
-            created_at=created_at,
-            duration_formatted=duration_formatted,
-            word_count=word_count,
-            topic=topic,
-            language=language,
-            transcript=transcript,
-            summary=summary,
-            raw_sections=raw_sections,
-            total_sections_actual=n_sections,
-            watermark=IS_FREE,
-        )
-
-    # 3. Build parallel task list
-    tasks: list = []
-
-    # Executive summary — use cleaned transcript (no filler) for richer content per token
-    tasks.append(asyncio.to_thread(_call_executive_summary, cleaned_transcript, title, topic))
-
-    # Glossary — use grounded_summary (derived from full master_summary) so terms from ALL
-    # segments of the lecture are covered, not just the first chunk of raw transcript
-    tasks.append(asyncio.to_thread(_call_glossary, grounded_summary or cleaned_transcript, topic, 18 if n_sections >= 3 else 10))
-
-    # Takeaways
-    tasks.append(asyncio.to_thread(_call_takeaways, transcript, grounded_summary or summary, topic))
-
-    # Quick review
-    tasks.append(asyncio.to_thread(_call_quick_review, transcript, grounded_summary or summary, topic, n_questions))
-
-    concept_entities = build_concept_entities(concept_sections, claim_registry)
-    concept_graph = build_concept_relationship_graph(concept_entities, claim_registry)
-    adaptive_intelligence = score_adaptive_concept_intelligence(concept_graph)
-    adaptive_study_weighting = build_adaptive_study_weighting(adaptive_intelligence)
-    deterministic_conceptual_map = build_relationship_concept_map(concept_graph)
-
-    # Conceptual map — only call GPT fallback when the grounded graph is too thin.
-    has_map = n_sections >= 3 and not deterministic_conceptual_map
-    if has_map:
-        tasks.append(asyncio.to_thread(_call_conceptual_map, raw_sections))
-
-    # Study roadmap — always generated (GPT-4o, curriculum positioning)
-    # Pass transcript so forward references ("we'll cover unit 8 next") are surfaced
-    tasks.append(asyncio.to_thread(
-        _call_study_roadmap, topic, title,
-        [s.split('\n')[0].strip() for s in raw_sections],   # first line = section title
-        transcript,
-    ))
-
-    # Key stats — extracted from transcript for exec summary callout
-    tasks.append(asyncio.to_thread(_call_key_stats, transcript, topic))
-
-    use_deterministic_concept_cards = bool(concept_note_cards)
-    # Verified concept-card notes are already transcript-grounded. Do not add
-    # per-section GPT prose/examples to the core PDF chapters.
-    if not use_deterministic_concept_cards:
-        for i, raw_sec in enumerate(raw_sections):
-            tasks.append(asyncio.to_thread(_call_enrich_section, raw_sec, i, n_sections, topic, language))
-
-    # 4. Run all calls in parallel
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-
-    # 5. Unpack results in task order
-    ri = 0
-
-    exec_summary = results[ri] if not isinstance(results[ri], Exception) else ""
-    ri += 1
-
-    enriched_sections: list[dict] = []
-    if concept_note_cards:
-        enriched_sections = _concept_cards_to_pdf_sections(concept_note_cards)
-    elif concept_sections:
-        for note in concept_sections:
-            section = {
-                "title":         note.get("title") or "Summary",
-                "lead_sentence": note.get("core_explanation") or "",
-                "prose":         "",
-                "bullets":       [],
-                "concepts":      note.get("concepts") or [],
-                "examples":      note.get("examples") or [],
-                "definitions":   note.get("key_definitions") or [],
-                "distinctions":  note.get("important_distinctions") or [],
-                "exam_traps":    note.get("exam_traps") or [],
-                "subsections":   note.get("subsections") or [],
-                "subtopic_sections": note.get("subtopic_sections") or [],
-                "raw_section":   "",
-                "analogy":       None,
-                "mistake":       None,
-                "remember":      None,
-                "citations":     note.get("citations") or [],
-                "confidence":    note.get("confidence") or 0.0,
-                "verification_status": note.get("verification_status") or "supported",
-            }
-            section.update(_section_render_profile(section))
-            enriched_sections.append(section)
-    elif grounded_notes:
-        for note in grounded_notes:
-            section = {
-                "title":         note.get("title") or "Summary",
-                "lead_sentence": note.get("lead_sentence") or "",
-                "prose":         note.get("prose") or "",
-                "bullets":       note.get("highlights") or [],
-                "concepts":      note.get("concepts") or [],
-                "examples":      note.get("examples") or [],
-                "definitions":   [],
-                "distinctions":  [],
-                "exam_traps":    [],
-                "subsections":   [],
-                "subtopic_sections": [],
-                "raw_section":   "",
-                "analogy":       None,
-                "mistake":       None,
-                "remember":      None,
-                "citations":     note.get("citations") or [],
-                "confidence":    note.get("confidence") or 0.0,
-                "verification_status": note.get("verification_status") or "supported",
-            }
-            section.update(_section_render_profile(section))
-            enriched_sections.append(section)
-    else:
-        for i in range(n_sections):
-            lead, rest = _extract_lead_sentence(raw_sections[i][:300])
-            section = {
-                "title":         f"Section {i + 1}",
-                "lead_sentence": lead,
-                "prose":         rest,
-                "bullets":       [],
-                "concepts":      [],
-                "examples":      [],
-                "definitions":   [],
-                "distinctions":  [],
-                "exam_traps":    [],
-                "subsections":   [],
-                "subtopic_sections": [],
-                "raw_section":   raw_sections[i],
-                "analogy":       None,
-                "mistake":       None,
-                "remember":      None,
-                "citations":     [],
-                "confidence":    0.0,
-                "verification_status": "weak",
-            }
-            section.update(_section_render_profile(section))
-            enriched_sections.append(section)
-
-    glossary: list[dict] = results[ri] if not isinstance(results[ri], Exception) else []
-    ri += 1
-    glossary = _merge_glossary(_glossary_from_concept_sections(concept_sections), glossary, limit=24)
-
-    # Mnemonics — sequential second pass (needs glossary result)
-    if glossary:
-        try:
-            glossary = await asyncio.to_thread(_call_mnemonics, glossary)
-        except Exception as e:
-            print(f"mnemonics pass error (non-fatal): {e}")
-
-    takeaways: list[str] = results[ri] if not isinstance(results[ri], Exception) else []
-    ri += 1
-
-    quick_review: list[dict] = results[ri] if not isinstance(results[ri], Exception) else []
-    ri += 1
-
-    conceptual_map: list[dict] = deterministic_conceptual_map
-    if has_map:
-        r = results[ri]; ri += 1
-        conceptual_map = r if not isinstance(r, Exception) else []
-
-    r = results[ri]; ri += 1
-    study_roadmap: dict = r if not isinstance(r, Exception) else {"next_topics": [], "prerequisites": []}
-
-    r = results[ri]; ri += 1
-    key_stats: list[dict] = r if not isinstance(r, Exception) else []
-
-    # Per-section enrichment results (analogy, mistake, remember, prose, bullets)
-    section_enrichments: list[dict] = []
-    if not use_deterministic_concept_cards:
-        for _ in raw_sections:
-            r = results[ri]; ri += 1
-            section_enrichments.append(r if not isinstance(r, Exception) else {})
-
-    # Merge per-section enrichment into the already-built enriched_sections.
-    # Fills analogy two-column box, common mistake amber box, remember green box,
-    # flowing prose, and bullet list — all template-ready, none previously populated.
-    for i, section in enumerate(enriched_sections):
-        if i >= len(section_enrichments):
-            break
-        enr = section_enrichments[i]
-        if not isinstance(enr, dict):
-            continue
-        if enr.get("analogy") and not section.get("analogy"):
-            section["analogy"] = enr["analogy"]
-        if enr.get("mistake") and not section.get("mistake"):
-            section["mistake"] = enr["mistake"]
-        if enr.get("remember") and not section.get("remember"):
-            section["remember"] = enr["remember"]
-        for field in ("definitions", "distinctions", "exam_traps", "examples"):
-            if enr.get(field):
-                section[field] = list(dict.fromkeys((section.get(field) or []) + (enr.get(field) or [])))
-                section.update(_section_render_profile(section))
-        # Only fill prose/bullets when section is content-thin (grounded_notes path)
-        if not section.get("prose") and enr.get("prose"):
-            section["prose"] = enr["prose"]
-            section.update(_section_render_profile(section))
-        if not section.get("bullets") and enr.get("bullets"):
-            section["bullets"] = enr["bullets"]
-
-    # 5b. Validate exec_summary content aligns with the transcript.
-    # Extracts the top 5 meaningful terms from the transcript and checks that
-    # at least 3 appear in the summary. Catches cross-job contamination early.
-    if exec_summary and transcript:
-        top_terms = _top_terms(transcript[:8000], n=5)
-        summary_lower = exec_summary.lower()
-        matched = sum(1 for t in top_terms if t in summary_lower)
-        if matched < 3:
-            print(f"[pdf] exec_summary validation: only {matched}/5 transcript terms found "
-                  f"({top_terms}). Regenerating with strict prompt.")
-            try:
-                exec_summary = await asyncio.to_thread(
-                    _call_executive_summary, transcript, title, topic, True
-                )
-                matched_retry = sum(1 for t in top_terms if t in exec_summary.lower())
-                if matched_retry < 3:
-                    print(f"[pdf] exec_summary still failed after strict retry ({matched_retry}/5). "
-                          f"Keeping retry output but flagging lecture_id={lecture_id} for review.")
-            except Exception as e:
-                print(f"[pdf] exec_summary retry error (non-fatal): {e}")
-
-    if takeaways and not _has_grounded_overlap(" ".join(takeaways), transcript, minimum=3):
-        print(f"[pdf] takeaways failed transcript-overlap validation; using fallback.")
-        takeaways = _fallback_takeaways(grounded_summary or summary, enriched_sections)
-    elif not takeaways:
-        takeaways = _fallback_takeaways(grounded_summary or summary, enriched_sections)
-
-    sanitized_artifacts = sanitize_pdf_artifacts(
-        transcript,
-        grounded_notes,
-        glossary=glossary,
-        quick_review=quick_review,
-        takeaways=takeaways,
-        study_roadmap=study_roadmap,
-    )
-    glossary = sanitized_artifacts["glossary"]
-    quick_review = sanitized_artifacts["quick_review"]
-    takeaways = sanitized_artifacts["takeaways"] or _fallback_takeaways(grounded_summary or summary, enriched_sections)
-    study_roadmap = sanitized_artifacts["study_roadmap"]
-    glossary, takeaways, quick_review = _prioritize_revision_outputs(
-        glossary,
-        takeaways,
-        quick_review,
-        adaptive_intelligence,
-    )
-    verified_cheat_sheet = build_verified_cheat_sheet_from_cards(concept_note_cards)
-    revision_focus = _build_revision_focus_summary(adaptive_intelligence)
-    toc_entries = _compose_toc_entries(
-        enriched_sections,
-        include_exec=bool(exec_summary),
-        include_map=bool(conceptual_map),
-        include_quick_review=bool(quick_review),
-        include_cheat_sheet=bool(verified_cheat_sheet),
-    )
-
-    # 6. Estimate reading time (total enriched words ÷ 238 wpm)
-    doc_word_count = (
-        len((exec_summary or "").split())
-        + sum(
-            len((s.get("lead_sentence", "") + " " + s.get("prose", "") + " "
-                 + " ".join(s.get("bullets", []))).split())
-            for s in enriched_sections
-        )
-        + sum(len((t.get("term", "") + " " + t.get("definition", "")).split()) for t in glossary)
-        + sum(len(tw.split()) for tw in takeaways)
-        + sum(len((q.get("question", "") + " " + q.get("answer", "")).split()) for q in quick_review)
-        + sum(len(c.get("paragraph", "").split()) for c in conceptual_map)
-        + sum(len((t.get("topic", "") + " " + t.get("reason", "")).split()) for t in study_roadmap.get("next_topics", []))
-        + sum(len((p.get("concept", "") + " " + p.get("reason", "")).split()) for p in study_roadmap.get("prerequisites", []))
-        + sum(
-            len(
-                (
-                    row.get("term", "")
-                    + " "
-                    + row.get("core_idea", "")
-                    + " "
-                    + row.get("exam_trap", "")
-                    + " "
-                    + row.get("quick_recall", "")
-                ).split()
-            )
-            for section in verified_cheat_sheet
-            for row in section.get("rows", [])
-        )
-    )
-    reading_time_minutes = max(1, math.ceil(doc_word_count / 238))
-
-    # 6b. Fetch visual frames captured during this lecture
     try:
-        visual_frames = await asyncio.to_thread(get_visual_frames, lecture_id)
-    except Exception:
-        visual_frames = []
+        IS_FREE = quality == "free"
+        IS_LITE = quality == "lite" or IS_FREE
+        lecture_data = await asyncio.to_thread(get_lecture_for_summarization, lecture_id)
+        if not lecture_data:
+            raise Exception("Lecture not found")
 
-    # 7. Render Jinja2 template
-    template_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "templates")
-    env          = Environment(loader=FileSystemLoader(template_dir))
+        transcript = lecture_data.get("transcript") or ""
+        cleaned_transcript = _light_clean(transcript or "")
+        if len(cleaned_transcript.split()) < 100:
+            print("[pdf] light clean produced too little content ? using raw transcript")
+            cleaned_transcript = (transcript or "").strip()
+        summary = lecture_data.get("master_summary") or lecture_data.get("summary") or ""
+        topic = lecture_data.get("topic") or None
+        title = lecture_data.get("title") or "Lecture Notes"
+        created_at = str(lecture_data.get("created_at") or datetime.now().date())[:10]
+        total_chunks = lecture_data.get("total_chunks") or 0
+        language = lecture_data.get("language") or "en"
+        section_rows = await asyncio.to_thread(get_lecture_sections, lecture_id)
+        grounded_notes = build_grounded_notes(cleaned_transcript, summary, section_rows=section_rows)
+        concept_sections = build_concept_sections(grounded_notes)
 
-    def _fmt_time_mmss(seconds):
-        m = (seconds or 0) // 60
-        s = (seconds or 0) % 60
-        return f"{m:02d}:{s:02d}"
+        saved_cards = lecture_data.get("concept_note_cards") or []
+        if isinstance(saved_cards, str):
+            try:
+                saved_cards = json.loads(saved_cards)
+            except Exception:
+                saved_cards = []
+        visible_saved = [
+            c for c in saved_cards
+            if isinstance(c, dict)
+            and not str(c.get("concept_name", "")).startswith("__")
+        ]
+        if len(visible_saved) >= 3:
+            concept_note_cards = saved_cards
+            print(f"[pdf] using {len(visible_saved)} saved concept cards")
+        else:
+            concept_note_cards = build_concept_note_cards(
+                transcript=transcript,
+                lecture_id=lecture_id,
+            )
+            print(f"[pdf] regenerated concept cards: {len(concept_note_cards)}")
 
-    env.filters["format_time"] = _fmt_time_mmss
-    def _truncate_words(s: str, n: int) -> str:
-        words = str(s).split()
-        return (" ".join(words[:n]) + "…") if len(words) > n else str(s)
-    env.filters["truncate_words"] = _truncate_words
-    template     = env.get_template("lecture_template.html")
+        validate_summary_card_generation(
+            concept_sections,
+            concept_note_cards,
+            grounded_notes,
+            transcript=transcript,
+        )
+        claim_registry = build_claim_registry(grounded_notes)
+        title = _resolve_document_title(title, transcript, topic, concept_sections)
+        grounded_summary = "\n\n".join(
+            " ".join(
+                part for part in [
+                    note.get("title", ""),
+                    note.get("core_explanation", "") or note.get("lead_sentence", ""),
+                    note.get("prose", ""),
+                    " ".join(note.get("examples", []) or []),
+                ] if part
+            ).strip()
+            for note in (concept_sections or grounded_notes)
+        ).strip()
 
-    total_concepts = sum(len(s.get("concepts", [])) for s in enriched_sections)
-    qa_pairs       = len(quick_review)
+        duration_sec = total_chunks * 12
+        word_count = len(cleaned_transcript.split()) if cleaned_transcript else 0
+        duration_formatted = format_duration(duration_sec)
+        section_label, review_label, glossary_label = _get_domain_labels(topic)
 
-    context = {
-        # Cover
-        "title":                title,
-        "created_at":           created_at,
-        "duration_formatted":   duration_formatted,
-        "word_count":           f"{word_count:,}",
-        "total_chunks":         total_chunks,
-        "total_sections":       n_sections,
-        "total_concepts":       total_concepts,
-        "qa_pairs":             qa_pairs,
-        "language":             language.upper(),
-        "topic":                topic,
-        "reading_time_minutes": reading_time_minutes,
-        "summary_confidence":   lecture_summary_confidence(grounded_notes),
-        # Domain labels
-        "section_label":        section_label,
-        "review_label":         review_label,
-        "glossary_label":       glossary_label,
-        # Enriched content
-        "executive_summary":    exec_summary,
-        "enriched_sections":    enriched_sections,
-        "glossary":             glossary,
-        "takeaways":            takeaways,
-        "quick_review":         quick_review,
-        "conceptual_map":       conceptual_map,
-        "concept_graph":        concept_graph,
-        "adaptive_intelligence": adaptive_intelligence,
-        "adaptive_study_weighting": adaptive_study_weighting,
-        "revision_focus":       revision_focus,
-        "study_roadmap":        study_roadmap,
-        "verified_cheat_sheet": verified_cheat_sheet,
-        "toc_entries":          toc_entries,
-        # Legacy variable (kept for backwards compatibility)
-        "summary_html":         clean_markdown_to_html(grounded_summary or summary),
-        "compression_ratio":    0.0,
-        # Visual frames
-        "visual_frames":        visual_frames,
-        "key_stats":            key_stats[:4],
-        "accent_color":         _get_domain_color(topic),
-    }
+        def _card_field_text(value) -> str:
+            if value is None:
+                return ""
+            if isinstance(value, str):
+                return value.strip()
+            if isinstance(value, dict):
+                if "misconception" in value or "correct" in value:
+                    parts = []
+                    if value.get("misconception"):
+                        parts.append(f"Students think: {value['misconception']}")
+                    if value.get("correct"):
+                        parts.append(f"Actually: {value['correct']}")
+                    return " ".join(parts).strip()
+                if "concept_a" in value or "concept_b" in value:
+                    parts = []
+                    for side in ("concept_a", "concept_b"):
+                        item = value.get(side) or {}
+                        if isinstance(item, dict):
+                            name = str(item.get("name") or "").strip()
+                            chars = ", ".join(item.get("characteristics") or [])
+                            text = ": ".join(x for x in (name, chars) if x)
+                            if text:
+                                parts.append(text)
+                    return " vs ".join(parts).strip()
+                return " ".join(str(v).strip() for v in value.values() if str(v).strip()).strip()
+            if isinstance(value, list):
+                chunks = [_card_field_text(item) for item in value]
+                return " | ".join(chunk for chunk in chunks if chunk).strip()
+            return str(value).strip()
 
-    html_content = template.render(**context)
+        raw_sections = []
+        if concept_note_cards:
+            for card in concept_note_cards:
+                if not isinstance(card, dict) or str(card.get("concept_name", "")).startswith("__"):
+                    continue
+                block = [card.get("concept_name", "Concept")]
+                if card.get("summary"):
+                    block.append(card["summary"])
+                definitions = _card_field_text(card.get("key_definitions"))
+                if definitions:
+                    block.append("Definitions: " + definitions)
+                if card.get("key_distinction"):
+                    block.append("Key distinction: " + _card_field_text(card["key_distinction"]))
+                if card.get("exam_trap"):
+                    block.append("Exam trap: " + _card_field_text(card["exam_trap"]))
+                examples = _card_field_text(card.get("examples"))
+                if examples:
+                    block.append("Examples: " + examples)
+                raw_sections.append("\n".join(block).strip())
+        elif concept_sections:
+            for note in concept_sections:
+                block = [note.get("title", "Summary")]
+                if note.get("core_explanation"):
+                    block.append(note["core_explanation"])
+                if note.get("concepts"):
+                    block.append("Key concepts: " + ", ".join(f"`{c}`" for c in note["concepts"]))
+                if note.get("examples"):
+                    block.append("Examples:")
+                    block.extend(f"-> {example}" for example in note["examples"])
+                raw_sections.append("\n".join(block).strip())
+        elif grounded_notes:
+            for note in grounded_notes:
+                block = [note.get("title", "Summary")]
+                if note.get("lead_sentence"):
+                    block.append(note["lead_sentence"])
+                if note.get("prose"):
+                    block.append(note["prose"])
+                if note.get("concepts"):
+                    block.append("Key concepts: " + ", ".join(f"`{c}`" for c in note["concepts"]))
+                if note.get("examples"):
+                    block.append("Examples:")
+                    block.extend(f"-> {example}" for example in note["examples"])
+                raw_sections.append("\n".join(block).strip())
+        else:
+            raw_sections = [s.strip() for s in summary.split("## ") if s.strip()]
+        if not raw_sections:
+            raw_sections = [s.strip() for s in get_section_summaries(lecture_id) if s.strip()]
+        if not raw_sections:
+            raw_sections = _extract_summary_sections_loose(summary)
+        n_sections = len(raw_sections)
+        n_questions = _question_count(duration_sec)
 
-    # 8. Generate PDF in thread (Playwright is sync)
-    title_short = title[:50] + ("…" if len(title) > 50 else "")
-    pdf_bytes   = await asyncio.to_thread(_render_pdf, html_content, title_short, False)
-    return pdf_bytes
+        if IS_LITE:
+            section_limit = 2 if IS_FREE else 4
+            raw_sections = raw_sections[:section_limit]
+            return await _generate_lite_pdf(
+                lecture_id=lecture_id,
+                title=title,
+                created_at=created_at,
+                duration_formatted=duration_formatted,
+                word_count=word_count,
+                topic=topic,
+                language=language,
+                transcript=cleaned_transcript,
+                summary=summary,
+                raw_sections=raw_sections,
+                total_sections_actual=n_sections,
+                watermark=IS_FREE,
+            )
+
+        tasks: list = []
+        tasks.append(asyncio.to_thread(_call_executive_summary, cleaned_transcript, title, topic))
+        tasks.append(asyncio.to_thread(_call_glossary, grounded_summary or cleaned_transcript, topic, 18 if n_sections >= 3 else 10))
+        tasks.append(asyncio.to_thread(_call_takeaways, cleaned_transcript, grounded_summary or summary, topic))
+        tasks.append(asyncio.to_thread(_call_quick_review, cleaned_transcript, grounded_summary or summary, topic, n_questions))
+
+        concept_entities = build_concept_entities(concept_sections, claim_registry)
+        concept_graph = build_concept_relationship_graph(concept_entities, claim_registry)
+        adaptive_intelligence = score_adaptive_concept_intelligence(concept_graph)
+        adaptive_study_weighting = build_adaptive_study_weighting(adaptive_intelligence)
+        deterministic_conceptual_map = build_relationship_concept_map(concept_graph)
+
+        has_map = n_sections >= 3 and not deterministic_conceptual_map
+        if has_map:
+            tasks.append(asyncio.to_thread(_call_conceptual_map, raw_sections))
+
+        tasks.append(asyncio.to_thread(
+            _call_study_roadmap,
+            topic,
+            title,
+            [s.splitlines()[0].strip() if s.splitlines() else "" for s in raw_sections],
+            cleaned_transcript,
+        ))
+        tasks.append(asyncio.to_thread(_call_key_stats, cleaned_transcript, topic))
+
+        use_deterministic_concept_cards = bool(visible_saved or concept_note_cards)
+        if not use_deterministic_concept_cards:
+            for i, raw_sec in enumerate(raw_sections):
+                tasks.append(asyncio.to_thread(_call_enrich_section, raw_sec, i, n_sections, topic, language))
+
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        ri = 0
+        exec_summary = results[ri] if not isinstance(results[ri], Exception) else ""
+        ri += 1
+
+        enriched_sections: list[dict] = []
+        if concept_note_cards:
+            enriched_sections = _concept_cards_to_pdf_sections(concept_note_cards)
+        elif concept_sections:
+            for note in concept_sections:
+                section = {
+                    "title": note.get("title") or "Summary",
+                    "lead_sentence": note.get("core_explanation") or "",
+                    "prose": "",
+                    "bullets": [],
+                    "concepts": note.get("concepts") or [],
+                    "examples": note.get("examples") or [],
+                    "definitions": note.get("key_definitions") or [],
+                    "distinctions": note.get("important_distinctions") or [],
+                    "exam_traps": note.get("exam_traps") or [],
+                    "subsections": note.get("subsections") or [],
+                    "subtopic_sections": note.get("subtopic_sections") or [],
+                    "raw_section": "",
+                    "analogy": None,
+                    "mistake": None,
+                    "remember": None,
+                    "citations": note.get("citations") or [],
+                    "confidence": note.get("confidence") or 0.0,
+                    "verification_status": note.get("verification_status") or "supported",
+                }
+                section.update(_section_render_profile(section))
+                enriched_sections.append(section)
+        elif grounded_notes:
+            for note in grounded_notes:
+                section = {
+                    "title": note.get("title") or "Summary",
+                    "lead_sentence": note.get("lead_sentence") or "",
+                    "prose": note.get("prose") or "",
+                    "bullets": note.get("highlights") or [],
+                    "concepts": note.get("concepts") or [],
+                    "examples": note.get("examples") or [],
+                    "definitions": [],
+                    "distinctions": [],
+                    "exam_traps": [],
+                    "subsections": [],
+                    "subtopic_sections": [],
+                    "raw_section": "",
+                    "analogy": None,
+                    "mistake": None,
+                    "remember": None,
+                    "citations": note.get("citations") or [],
+                    "confidence": note.get("confidence") or 0.0,
+                    "verification_status": note.get("verification_status") or "supported",
+                }
+                section.update(_section_render_profile(section))
+                enriched_sections.append(section)
+        else:
+            for i in range(n_sections):
+                lead, rest = _extract_lead_sentence(raw_sections[i][:300])
+                section = {
+                    "title": f"Section {i + 1}",
+                    "lead_sentence": lead,
+                    "prose": rest,
+                    "bullets": [],
+                    "concepts": [],
+                    "examples": [],
+                    "definitions": [],
+                    "distinctions": [],
+                    "exam_traps": [],
+                    "subsections": [],
+                    "subtopic_sections": [],
+                    "raw_section": raw_sections[i],
+                    "analogy": None,
+                    "mistake": None,
+                    "remember": None,
+                    "citations": [],
+                    "confidence": 0.0,
+                    "verification_status": "weak",
+                }
+                section.update(_section_render_profile(section))
+                enriched_sections.append(section)
+
+        glossary: list[dict] = results[ri] if not isinstance(results[ri], Exception) else []
+        ri += 1
+        glossary = _merge_glossary(_glossary_from_concept_sections(concept_sections), glossary, limit=24)
+        if glossary:
+            try:
+                glossary = await asyncio.to_thread(_call_mnemonics, glossary)
+            except Exception as e:
+                print(f"mnemonics pass error (non-fatal): {e}")
+
+        takeaways: list[str] = results[ri] if not isinstance(results[ri], Exception) else []
+        ri += 1
+        quick_review: list[dict] = results[ri] if not isinstance(results[ri], Exception) else []
+        ri += 1
+
+        conceptual_map: list[dict] = deterministic_conceptual_map
+        if has_map:
+            r = results[ri]
+            ri += 1
+            conceptual_map = r if not isinstance(r, Exception) else []
+
+        r = results[ri]
+        ri += 1
+        study_roadmap: dict = r if not isinstance(r, Exception) else {"next_topics": [], "prerequisites": []}
+
+        r = results[ri]
+        ri += 1
+        key_stats: list[dict] = r if not isinstance(r, Exception) else []
+
+        section_enrichments: list[dict] = []
+        if not use_deterministic_concept_cards:
+            for _ in raw_sections:
+                r = results[ri]
+                ri += 1
+                section_enrichments.append(r if not isinstance(r, Exception) else {})
+
+        for i, section in enumerate(enriched_sections):
+            if i >= len(section_enrichments):
+                break
+            enr = section_enrichments[i]
+            if not isinstance(enr, dict):
+                continue
+            if enr.get("analogy") and not section.get("analogy"):
+                section["analogy"] = enr["analogy"]
+            if enr.get("mistake") and not section.get("mistake"):
+                section["mistake"] = enr["mistake"]
+            if enr.get("remember") and not section.get("remember"):
+                section["remember"] = enr["remember"]
+            for field in ("definitions", "distinctions", "exam_traps", "examples"):
+                if enr.get(field):
+                    section[field] = list(dict.fromkeys((section.get(field) or []) + (enr.get(field) or [])))
+                    section.update(_section_render_profile(section))
+            if not section.get("prose") and enr.get("prose"):
+                section["prose"] = enr["prose"]
+                section.update(_section_render_profile(section))
+            if not section.get("bullets") and enr.get("bullets"):
+                section["bullets"] = enr["bullets"]
+
+        if exec_summary and transcript:
+            top_terms = _top_terms(transcript[:8000], n=5)
+            summary_lower = exec_summary.lower()
+            matched = sum(1 for t in top_terms if t in summary_lower)
+            if matched < 3:
+                print(f"[pdf] exec_summary validation: only {matched}/5 transcript terms found ({top_terms}). Regenerating with strict prompt.")
+                try:
+                    exec_summary = await asyncio.to_thread(_call_executive_summary, cleaned_transcript, title, topic, True)
+                    matched_retry = sum(1 for t in top_terms if t in exec_summary.lower())
+                    if matched_retry < 3:
+                        print(f"[pdf] exec_summary still failed after strict retry ({matched_retry}/5). Keeping retry output but flagging lecture_id={lecture_id} for review.")
+                except Exception as e:
+                    print(f"[pdf] exec_summary retry error (non-fatal): {e}")
+
+        if takeaways and not _has_grounded_overlap(" ".join(takeaways), transcript, minimum=3):
+            print(f"[pdf] takeaways failed transcript-overlap validation; using fallback.")
+            takeaways = _fallback_takeaways(grounded_summary or summary, enriched_sections)
+        elif not takeaways:
+            takeaways = _fallback_takeaways(grounded_summary or summary, enriched_sections)
+
+        sanitized_artifacts = sanitize_pdf_artifacts(
+            transcript,
+            grounded_notes,
+            glossary=glossary,
+            quick_review=quick_review,
+            takeaways=takeaways,
+            study_roadmap=study_roadmap,
+        )
+        glossary = sanitized_artifacts["glossary"]
+        quick_review = sanitized_artifacts["quick_review"]
+        takeaways = sanitized_artifacts["takeaways"] or _fallback_takeaways(grounded_summary or summary, enriched_sections)
+        study_roadmap = sanitized_artifacts["study_roadmap"]
+        glossary, takeaways, quick_review = _prioritize_revision_outputs(
+            glossary,
+            takeaways,
+            quick_review,
+            adaptive_intelligence,
+        )
+        verified_cheat_sheet = build_verified_cheat_sheet_from_cards(concept_note_cards)
+        revision_focus = _build_revision_focus_summary(adaptive_intelligence)
+        toc_entries = _compose_toc_entries(
+            enriched_sections,
+            include_exec=bool(exec_summary),
+            include_map=bool(conceptual_map),
+            include_quick_review=bool(quick_review),
+            include_cheat_sheet=bool(verified_cheat_sheet),
+        )
+
+        doc_word_count = (
+            len((exec_summary or "").split())
+            + sum(
+                len((s.get("lead_sentence", "") + " " + s.get("prose", "") + " " + " ".join(s.get("bullets", []))).split())
+                for s in enriched_sections
+            )
+            + sum(len((t.get("term", "") + " " + t.get("definition", "")).split()) for t in glossary)
+            + sum(len(tw.split()) for tw in takeaways)
+            + sum(len((q.get("question", "") + " " + q.get("answer", "")).split()) for q in quick_review)
+            + sum(len(c.get("paragraph", "").split()) for c in conceptual_map)
+            + sum(len((t.get("topic", "") + " " + t.get("reason", "")).split()) for t in study_roadmap.get("next_topics", []))
+            + sum(len((p.get("concept", "") + " " + p.get("reason", "")).split()) for p in study_roadmap.get("prerequisites", []))
+            + sum(
+                len(
+                    (
+                        row.get("term", "")
+                        + " "
+                        + row.get("core_idea", "")
+                        + " "
+                        + row.get("exam_trap", "")
+                        + " "
+                        + row.get("quick_recall", "")
+                    ).split()
+                )
+                for section in verified_cheat_sheet
+                for row in section.get("rows", [])
+            )
+        )
+        reading_time_minutes = max(1, math.ceil(doc_word_count / 238))
+
+        try:
+            visual_frames = await asyncio.to_thread(get_visual_frames, lecture_id)
+        except Exception:
+            visual_frames = []
+
+        template_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "templates")
+        env = Environment(loader=FileSystemLoader(template_dir))
+
+        def _fmt_time_mmss(seconds):
+            m = (seconds or 0) // 60
+            s = (seconds or 0) % 60
+            return f"{m:02d}:{s:02d}"
+
+        env.filters["format_time"] = _fmt_time_mmss
+
+        def _truncate_words(s: str, n: int) -> str:
+            words = str(s).split()
+            return (" ".join(words[:n]) + "?") if len(words) > n else str(s)
+
+        env.filters["truncate_words"] = _truncate_words
+        template = env.get_template("lecture_template.html")
+        total_concepts = sum(len(s.get("concepts", [])) for s in enriched_sections)
+        qa_pairs = len(quick_review)
+        context = {
+            "title": title,
+            "created_at": created_at,
+            "duration_formatted": duration_formatted,
+            "word_count": f"{word_count:,}",
+            "total_chunks": total_chunks,
+            "total_sections": n_sections,
+            "total_concepts": total_concepts,
+            "qa_pairs": qa_pairs,
+            "language": language.upper(),
+            "topic": topic,
+            "reading_time_minutes": reading_time_minutes,
+            "summary_confidence": lecture_summary_confidence(grounded_notes),
+            "section_label": section_label,
+            "review_label": review_label,
+            "glossary_label": glossary_label,
+            "executive_summary": exec_summary,
+            "enriched_sections": enriched_sections,
+            "glossary": glossary,
+            "takeaways": takeaways,
+            "quick_review": quick_review,
+            "conceptual_map": conceptual_map,
+            "concept_graph": concept_graph,
+            "adaptive_intelligence": adaptive_intelligence,
+            "adaptive_study_weighting": adaptive_study_weighting,
+            "revision_focus": revision_focus,
+            "study_roadmap": study_roadmap,
+            "verified_cheat_sheet": verified_cheat_sheet,
+            "toc_entries": toc_entries,
+            "summary_html": clean_markdown_to_html(grounded_summary or summary),
+            "compression_ratio": 0.0,
+            "visual_frames": visual_frames,
+            "key_stats": key_stats[:4],
+            "accent_color": _get_domain_color(topic),
+        }
+        html_content = template.render(**context)
+        title_short = title[:50] + ("?" if len(title) > 50 else "")
+        pdf_bytes = await asyncio.to_thread(_render_pdf, html_content, title_short, False)
+        return pdf_bytes
+    except Exception as exc:
+        import traceback
+        print(f"[pdf] generation failed: {exc}")
+        print(traceback.format_exc())
+        raise
