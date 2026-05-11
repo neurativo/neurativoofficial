@@ -1744,7 +1744,8 @@
             <div class="subtopics-label">Subtopics</div>
             <div class="subtopics-row">
                 {% for sub in sec.subsections %}
-                <span {% if 'Exam Trap' in sub %}class="subtopic-chip exam-chip"{% elif 'Example' in sub %}class="subtopic-chip example-chip"{% else %}class="subtopic-chip"{% endif %}>{{ sub }}</span>
+                {% set chip_class = 'subtopic-chip exam-chip' if 'Exam Trap' in sub else 'subtopic-chip example-chip' if 'Example' in sub else 'subtopic-chip' %}
+                <span class="{{ chip_class }}">{{ sub }}</span>
                 {% endfor %}
             </div>
             {% endif %}
@@ -1956,7 +1957,7 @@
         {% if conn.heading %}
         <div class="connection-heading">{{ conn.heading }}</div>
         {% endif %}
-        <p>{{ conn.paragraph or conn.connection or conn.paragraph }}</p>
+        <p>{{ conn.paragraph or conn.connection }}</p>
     </div>
     {% endfor %}
     {% endif %}
@@ -2136,7 +2137,7 @@
     <h2>How to Use This Report</h2>
 
     {% if study_roadmap.days %}
-    <div class="study-plan-grid">
+    <div class="study-plan-grid" style="grid-template-columns: {{ 'repeat(3, 1fr)' if study_roadmap.days|length <= 3 else 'repeat(auto-fill, minmax(72mm, 1fr))' }}">
         {% for day in study_roadmap.days %}
         <div class="study-day-card">
             <div class="study-day-header">

@@ -104,22 +104,28 @@ def _get_cover_stats(topic: str | None, enriched_sections: list[dict], concept_n
     # Count code blocks / equations / key concepts depending on domain
     topic_lower = (topic or "").lower()
 
-    if topic_lower in ("computer science", "software", "engineering", "programming"):
+    if topic_lower in ("computer science", "software", "programming"):
         # Count sections that have code examples
         n_code = sum(1 for s in enriched_sections if any(
             "def " in str(e) or "class " in str(e) or "()" in str(e) or "import " in str(e)
             for e in (s.get("examples") or [])
         ))
+        stat4_value = max(n_code, n_traps)
+        if stat4_value == 0:
+            stat4_value = n_sections
         stat3 = {"k": "Sections", "v": str(n_sections), "u": "In this report"}
-        stat4 = {"k": "Code Patterns", "v": str(max(n_code, n_traps)), "u": "Must-know idioms"}
+        stat4 = {"k": "Code Patterns", "v": str(stat4_value), "u": "Must-know idioms"}
     elif topic_lower in ("physics", "mathematics", "chemistry", "engineering"):
         # Count sections that have equations
         n_eq = sum(1 for s in enriched_sections if any(
             "=" in str(e) or "∫" in str(e) or "Δ" in str(e) or "²" in str(e)
             for e in (s.get("examples") or []) + (s.get("definitions") or [])
         ))
+        stat4_value = max(n_eq, n_traps)
+        if stat4_value == 0:
+            stat4_value = n_sections
         stat3 = {"k": "Sections", "v": str(n_sections), "u": "In this report"}
-        stat4 = {"k": "Key Equations", "v": str(max(n_eq, n_traps)), "u": "Must-memorise"}
+        stat4 = {"k": "Key Equations", "v": str(stat4_value), "u": "Must-memorise"}
     elif topic_lower in ("economics", "business", "finance"):
         # Count exam traps — economics PDFs highlight mark targets
         n_cards = len([c for c in (concept_note_cards or []) if isinstance(c, dict) and not str(c.get("concept_name", "")).startswith("__")])
@@ -1931,11 +1937,12 @@ async def generate_lecture_pdf(
         quick_review = sanitized_artifacts["quick_review"]
         takeaways = sanitized_artifacts["takeaways"] or _fallback_takeaways(grounded_summary or summary, enriched_sections)
         study_roadmap = {
-            "days": study_roadmap.get("days", []),
-            "reminders": study_roadmap.get("reminders", []),
+            "days": sanitized_artifacts["study_roadmap"].get("days", []),
+            "reminders": sanitized_artifacts["study_roadmap"].get("reminders", []),
             "next_topics": sanitized_artifacts["study_roadmap"].get("next_topics", []),
             "prerequisites": sanitized_artifacts["study_roadmap"].get("prerequisites", []),
         }
+        print(f"[pdf] study_roadmap keys after sanitize: {list(study_roadmap.keys())}")
         glossary, takeaways, quick_review = _prioritize_revision_outputs(
             glossary,
             takeaways,

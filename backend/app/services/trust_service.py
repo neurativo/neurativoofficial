@@ -3574,7 +3574,7 @@ def sanitize_pdf_artifacts(
         if status in {"supported", "weak"}:
             takeaways_out.append(takeaway)
 
-    roadmap = study_roadmap or {"next_topics": [], "prerequisites": []}
+    roadmap = study_roadmap or {"days": [], "reminders": [], "next_topics": [], "prerequisites": []}
     next_topics_out = []
     for item in roadmap.get("next_topics", []) or []:
         text = _normalise_ws(f"{item.get('topic', '')}. {item.get('reason', '')}")
@@ -3593,6 +3593,8 @@ def sanitize_pdf_artifacts(
         "quick_review": quick_review_out,
         "takeaways": takeaways_out,
         "study_roadmap": {
+            "days": roadmap.get("days", []) or [],
+            "reminders": roadmap.get("reminders", []) or [],
             "next_topics": next_topics_out,
             "prerequisites": prerequisites_out,
         },
