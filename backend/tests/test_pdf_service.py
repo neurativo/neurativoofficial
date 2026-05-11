@@ -198,7 +198,11 @@ def test_concept_cards_to_pdf_sections_use_verified_card_fields_only():
         "Government textbooks are still economic goods.",
         "A free Friday class is still an economic good.",
     ]
-    assert sections[0]["exam_traps"] == ["Students think Free of charge means free good; actually Free of charge can still be an economic good"]
+    assert sections[0]["exam_traps"] == [{
+        "misconception": "Free of charge means free good",
+        "correct": "Free of charge can still be an economic good",
+    }]
+    assert sections[0]["exam_trap_structured"] is True
     assert sections[0]["versus_items"]
     assert sections[0]["citations"] == [{"label": "13:48 - 18:00", "start_seconds": None, "end_seconds": None}]
     assert sections[0]["analogy"] is None

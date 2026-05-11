@@ -1344,6 +1344,69 @@
           color: #065f46;
           line-height: 1.5;
         }
+        .section-meta-rows {
+          margin: 0 0 3mm;
+          border: 0.5pt solid var(--ink-6);
+          border-radius: 5px;
+          overflow: hidden;
+        }
+        .section-meta-row {
+          display: grid;
+          grid-template-columns: 22mm 1fr;
+          border-bottom: 0.5pt solid var(--ink-6);
+          page-break-inside: avoid;
+        }
+        .section-meta-row:last-child {
+          border-bottom: none;
+        }
+        .section-meta-label {
+          font-size: 6.8pt;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.14em;
+          color: var(--ink-4);
+          padding: 2.5mm 3mm;
+          background: var(--ink-7);
+          border-right: 0.5pt solid var(--ink-6);
+          display: flex;
+          align-items: flex-start;
+          padding-top: 3mm;
+        }
+        .section-meta-value {
+          font-size: 8.5pt;
+          color: var(--ink-2);
+          padding: 2.5mm 3mm;
+          line-height: 1.5;
+        }
+        .examples-inline {
+          font-family: var(--mono);
+          font-size: 8pt;
+          color: #1d6b52;
+        }
+        .exam-trap-row .section-meta-label {
+          color: #b45309;
+          background: #fffbeb;
+        }
+        .exam-trap-inline {
+          color: var(--ink-2);
+          background: #fffbeb;
+        }
+        .exam-trap-inline strong {
+          color: #92400e;
+          font-weight: 600;
+          display: block;
+          margin-bottom: 1mm;
+        }
+        .exam-chip {
+          background: #fffbeb;
+          color: #b45309;
+          border-color: #fde68a;
+        }
+        .example-chip {
+          background: #f0fdf4;
+          color: #166534;
+          border-color: #bbf7d0;
+        }
     </style>
 </head>
 
@@ -1570,7 +1633,7 @@
             <div class="subtopics-label">Subtopics</div>
             <div class="subtopics-row">
                 {% for sub in sec.subsections %}
-                <span class="subtopic-chip">{{ sub }}</span>
+                <span {% if 'Exam Trap' in sub %}class="subtopic-chip exam-chip"{% elif 'Example' in sub %}class="subtopic-chip example-chip"{% else %}class="subtopic-chip"{% endif %}>{{ sub }}</span>
                 {% endfor %}
             </div>
             {% endif %}
@@ -1581,6 +1644,31 @@
                 <div class="label">{{ item.label }}</div>
                 <div class="value{% if item.kind == 'exam-trap' %} trap{% endif %}">{{ item.text }}</div>
                 {% endfor %}
+            </div>
+            {% endif %}
+
+            {% if sec.examples or sec.exam_traps %}
+            <div class="section-meta-rows">
+              {% if sec.examples %}
+              <div class="section-meta-row">
+                <div class="section-meta-label">EXAMPLES</div>
+                <div class="section-meta-value examples-inline">{{ sec.examples | join(' · ') }}</div>
+              </div>
+              {% endif %}
+              {% if sec.exam_traps %}
+              {% for trap in sec.exam_traps %}
+              <div class="section-meta-row exam-trap-row">
+                <div class="section-meta-label">EXAM TRAP</div>
+                <div class="section-meta-value exam-trap-inline">
+                  {% if trap is mapping and trap.misconception %}
+                  <strong>{{ trap.misconception }}</strong> {{ trap.correct }}
+                  {% else %}
+                  {{ trap }}
+                  {% endif %}
+                </div>
+              </div>
+              {% endfor %}
+              {% endif %}
             </div>
             {% endif %}
 
@@ -1651,27 +1739,6 @@
                 </ul>
             </div>
             {% endif %}
-            {% endif %}
-
-            {% if sec.exam_traps %}
-            {% for trap in sec.exam_traps %}
-            {% if trap is mapping and trap.misconception %}
-            <div class="exam-trap-block">
-              <div class="exam-trap-label">EXAM TRAP</div>
-              <div class="exam-trap-body">
-                <span class="exam-trap-wrong">{{ trap.misconception }}</span>
-                <span class="exam-trap-correct">{{ trap.correct }}</span>
-              </div>
-            </div>
-            {% else %}
-            <div class="exam-trap-block">
-              <div class="exam-trap-label">EXAM TRAP</div>
-              <div class="exam-trap-body">
-                <span class="exam-trap-wrong">{{ trap }}</span>
-              </div>
-            </div>
-            {% endif %}
-            {% endfor %}
             {% endif %}
 
             {% if sec.examples %}
