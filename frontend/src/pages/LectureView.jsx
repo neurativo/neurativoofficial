@@ -659,6 +659,7 @@ export default function LectureView() {
     const [summaryStatus, setSummaryStatus] = useState('live');
     const [loading, setLoading]         = useState(true);
     const [exportOpen, setExportOpen]   = useState(false);
+    const [exportInProgress, setExportInProgress] = useState(false);
     const [shareOpen, setShareOpen]     = useState(false);
     const [activeTab, setActiveTab]     = useState('summary');
     const [qaHistory, setQaHistory]     = useState([]);
@@ -896,7 +897,14 @@ export default function LectureView() {
                                 </Link>
                             );
                         })()}
-                        <button className="lv-btn-ghost" onClick={() => setExportOpen(true)}>
+                        <button
+                            className="lv-btn-ghost"
+                            onClick={() => {
+                                setExportInProgress(true);
+                                setExportOpen(true);
+                            }}
+                            disabled={exportInProgress}
+                        >
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                             <span className="lv-btn-text">Export PDF</span>
                         </button>
@@ -1455,7 +1463,14 @@ export default function LectureView() {
         )}
 
         {exportOpen && (
-            <ExportModal lectureId={id} onClose={() => setExportOpen(false)} />
+            <ExportModal
+                lectureId={id}
+                onClose={() => {
+                    setExportOpen(false);
+                    setExportInProgress(false);
+                }}
+                onStart={() => setExportInProgress(true)}
+            />
         )}
         {shareOpen && (
             <ShareModal

@@ -1540,7 +1540,7 @@ def get_analytics(lecture_id: str, user=Depends(get_active_user)):
 
 
 @router.get("/lectures/{lecture_id}/export/pdf")
-@limiter.limit("3/minute")
+@limiter.limit("10/minute")
 async def export_pdf(request: Request, lecture_id: str, user=Depends(get_active_user)):
     _check_owner(lecture_id, user.id)
     profile   = get_user_profile(str(user.id))

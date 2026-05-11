@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../lib/api';
 
 const STAGES = [
@@ -13,13 +13,17 @@ const STAGES = [
     { pct: 97, msg: 'Finalising document...' },
 ];
 
-export default function ExportModal({ lectureId, onClose }) {
+export default function ExportModal({ lectureId, onClose, onStart }) {
     const [progress, setProgress] = useState(STAGES[0].pct);
     const [status,   setStatus]   = useState(STAGES[0].msg);
     const [phase,    setPhase]    = useState('loading'); // loading | success | error
     const [errorMsg, setErrorMsg] = useState('');
+    const inFlightRef = useRef(false);
 
     const runExport = useCallback(async () => {
+        if (inFlightRef.current) return;
+        inFlightRef.current = true;
+        onStart?.();
         setPhase('loading');
         setProgress(STAGES[0].pct);
         setStatus(STAGES[0].msg);
@@ -46,6 +50,7 @@ export default function ExportModal({ lectureId, onClose }) {
                 a.download = 'Neurativo_Report.pdf';
                 a.click();
                 window.URL.revokeObjectURL(url);
+                inFlightRef.current = false;
                 setTimeout(() => onClose(), 1600);
             }, 400);
         } catch (err) {
@@ -55,8 +60,9 @@ export default function ExportModal({ lectureId, onClose }) {
             setStatus('Export failed');
             setPhase('error');
             setErrorMsg(msg);
+            inFlightRef.current = false;
         }
-    }, [lectureId, onClose]);
+    }, [lectureId, onClose, onStart]);
 
     useEffect(() => { runExport(); }, [runExport]);
 
