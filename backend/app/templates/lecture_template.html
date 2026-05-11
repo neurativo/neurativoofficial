@@ -540,7 +540,11 @@
             page-break-inside: avoid;
             break-inside: avoid;
         }
-        .section + .section { padding-top: 6mm; }
+        .section + .section {
+            padding-top: 6mm;
+            page-break-before: always;
+            break-before: page;
+        }
 
         /* 3-column header: §N | title+sub | watermark space */
         .section-head {

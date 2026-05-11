@@ -3058,6 +3058,15 @@ def build_verified_cheat_sheet_from_cards(concept_note_cards: list[dict]) -> lis
                     "correct": correct,
                 }
                 exam_trap = f"Students think {misconception} — actually {correct}".strip()
+        elif isinstance(structured_trap, str) and _normalise_ws(structured_trap):
+            fallback_correct = _normalise_ws(definition or summary)
+            misconception = f"Students think: {_normalise_ws(structured_trap)}"
+            if fallback_correct and misconception.lower() != fallback_correct.lower():
+                exam_trap_structured = {
+                    "misconception": misconception,
+                    "correct": fallback_correct,
+                }
+                exam_trap = f"{misconception} — actually {fallback_correct}".strip()
         source = {
             "label": f"{card.get('source_start')} - {card.get('source_end')}",
             "start_seconds": _timestamp_to_seconds(card.get("source_start")),

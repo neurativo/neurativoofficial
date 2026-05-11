@@ -229,6 +229,19 @@ def _normalise_structured_exam_trap(value) -> dict | None:
     return {"misconception": misconception, "correct": correct}
 
 
+def _fallback_structured_exam_trap(raw_trap, *, summary: str = "", distinction_text: str = "") -> dict | None:
+    trap_text = str(raw_trap or "").strip()
+    if len(trap_text) <= 10:
+        return None
+    correct = str(distinction_text or "").strip() or str(summary or "").strip()
+    if not correct:
+        return None
+    misconception = f"Students think: {trap_text}"
+    if misconception.lower() == correct.lower():
+        return None
+    return {"misconception": misconception, "correct": correct}
+
+
 def _exam_trap_text(value) -> str:
     if isinstance(value, dict):
         misconception = str(value.get("misconception") or "").strip()
@@ -353,7 +366,16 @@ def _concept_cards_to_pdf_sections(concept_note_cards: list[dict]) -> list[dict]
             exam_traps = [structured_trap]
             exam_trap_structured = structured_trap
         elif isinstance(trap_obj, str) and trap_obj.strip():
-            exam_traps = [trap_obj.strip()]
+            fallback_trap = _fallback_structured_exam_trap(
+                trap_obj,
+                summary=summary,
+                distinction_text=(distinctions or [""])[0],
+            )
+            if fallback_trap:
+                exam_traps = [fallback_trap]
+                exam_trap_structured = fallback_trap
+            else:
+                exam_traps = [trap_obj.strip()]
         section = {
             "title": title,
             "lead_sentence": (definitions or [card.get("summary", "")])[0],
@@ -849,6 +871,7 @@ def _call_enrich_section(
     examples = data.get("examples") or []
     print(f"[enrich_section] s{idx + 1}/{total}: title={data.get('title')!r} concepts={concepts} examples={examples}")
     structured_trap = _normalise_structured_exam_trap(data.get("exam_trap"))
+    print(f"[enrich_section] s{idx + 1}/{total}: structured_exam_trap={'yes' if structured_trap else 'no'}")
     exam_traps = [structured_trap] if structured_trap else []
     return {
         "title":         data.get("title", f"Section {idx + 1}"),
