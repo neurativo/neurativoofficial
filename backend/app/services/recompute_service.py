@@ -106,15 +106,31 @@ def recompute_final_summary(lecture_id: str) -> None:
             transcript=original_transcript,
         )
 
-        content = generate_content(
-            cleaned,
-            title,
-            topic,
-            language,
-            force=True,
-            existing_summary="",
-            existing_flashcards=[],
-        )
+        print(f"[recompute] generating flashcards/quiz/glossary...")
+        print(f"[recompute] transcript length for content gen: {len(cleaned)}")
+        print(f"[recompute] content gen inputs:")
+        print(f"  title: {title}")
+        print(f"  topic: {topic}")
+        print(f"  language: {language}")
+        print(f"  transcript first 100 chars: {cleaned[:100]}")
+        try:
+            content = generate_content(
+                cleaned,
+                title,
+                topic,
+                language,
+                force=True,
+                existing_summary="",
+                existing_flashcards=[],
+            )
+        except Exception as exc:
+            print(f"[recompute] content generation FAILED: {exc}")
+            raise
+        print(f"[recompute] content gen result:")
+        print(f"  flashcards: {len((content or {}).get('flashcards') or [])}")
+        print(f"  quiz: {len((content or {}).get('quiz') or [])}")
+        print(f"  glossary: {len((content or {}).get('glossary') or [])}")
+        print(f"  summary length: {len((content or {}).get('summary') or '')}")
 
         if content and summary_has_required_structure(content.get("summary", ""), cleaned):
             content = sanitize_generated_content_bundle(
@@ -122,6 +138,10 @@ def recompute_final_summary(lecture_id: str) -> None:
                 content,
                 summary=concept_summary,
             )
+            print(f"[recompute] about to save:")
+            print(f"  flashcards: {len((content or {}).get('flashcards') or [])}")
+            print(f"  quiz: {len((content or {}).get('quiz') or [])}")
+            print(f"  glossary: {len((content or {}).get('glossary') or [])}")
             print(f"[recompute] saving to database...")
             save_error = None
             for attempt in range(2):

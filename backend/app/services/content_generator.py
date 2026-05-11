@@ -1,46 +1,47 @@
 # backend/app/services/content_generator.py
 """
-content_generator.py — single GPT call for all lecture content.
+content_generator.py - single GPT call for all lecture content.
 
 Produces in one API call:
   - master_summary   (markdown, structured sections)
-  - flashcards       [{front, back}] × 10–20
-  - quiz             [{question, options[4], answer, explanation}] × 5–12
-  - glossary         [{term, definition}] × 10–20
+  - flashcards       [{front, back}] x 10-20
+  - quiz             [{question, options[4], answer, explanation}] x 5-12
+  - glossary         [{term, definition}] x 10-20
 
-Checks DB cache before calling GPT — skips if all fields already populated.
+Checks DB cache before calling GPT - skips if all fields already populated.
 Caller (job_queue worker) is responsible for saving results to DB.
 """
 import json
 import re
 import time
 from typing import Optional
+
 from openai import OpenAI
+
 from app.core.config import settings
 from app.services.cost_tracker import log_cost
-
 _client = OpenAI(
     api_key=settings.OPENAI_API_KEY,
     timeout=120,
 ) if settings.OPENAI_API_KEY else None
 
-# Whisper model — hardcoded, never change
+# Whisper model - hardcoded, never change
 WHISPER_MODEL = "whisper-1"
 
 
 _DEPTH_INSTRUCTION = (
     " Preserve the exact technical depth of the speaker. "
-    "If graduate-level terminology, notation, or domain jargon is used, reproduce it faithfully — "
+    "If graduate-level terminology, notation, or domain jargon is used, reproduce it faithfully - "
     "do not simplify or paraphrase technical terms for a general audience."
 )
 
 _TRANSCRIPT_ONLY_RULE = (
-    "\n\nCRITICAL — TRANSCRIPT FIDELITY:"
+    "\n\nCRITICAL - TRANSCRIPT FIDELITY:"
     " Only include information explicitly stated in the transcript."
     " Do NOT add background knowledge, textbook context, or explanations the professor did not give."
     " If a concept is mentioned but not elaborated on, note it briefly as 'mentioned in passing' rather than expanding it."
     " Preserve specific numbers, names, dates, and terms exactly as spoken."
-    " Do not rewrite or academicise informal speech — keep the professor's own examples and phrasing."
+    " Do not rewrite or academicise informal speech - keep the professor's own examples and phrasing."
     " It is correct and expected to produce shorter output when the lecture content is sparse."
 )
 
@@ -97,17 +98,23 @@ def _topic_hint(topic: str | None) -> str:
 
 def _flashcard_count(word_count: int) -> int:
     """Scale flashcard count with lecture length."""
-    if word_count < 1500:  return 8
-    if word_count < 5000:  return 12
-    if word_count < 15000: return 16
+    if word_count < 1500:
+        return 8
+    if word_count < 5000:
+        return 12
+    if word_count < 15000:
+        return 16
     return 20
 
 
 def _quiz_count(word_count: int) -> int:
     """Scale quiz question count with lecture length."""
-    if word_count < 1500:  return 4
-    if word_count < 5000:  return 6
-    if word_count < 15000: return 8
+    if word_count < 1500:
+        return 4
+    if word_count < 5000:
+        return 6
+    if word_count < 15000:
+        return 8
     return 12
 
 
@@ -118,16 +125,15 @@ def _build_prompt(
     language: str,
 ) -> tuple[str, str]:
     """Returns (system_prompt, user_prompt)."""
-    word_count   = len(transcript.split())
-    n_flash      = _flashcard_count(word_count)
-    n_quiz       = _quiz_count(word_count)
-    topic_hint   = _topic_hint(topic)
-    fmt          = _format_guidance(topic)
-    lang_note    = (
+    word_count = len(transcript.split())
+    n_flash = _flashcard_count(word_count)
+    n_quiz = _quiz_count(word_count)
+    topic_hint = _topic_hint(topic)
+    fmt = _format_guidance(topic)
+    lang_note = (
         "" if language == "en"
         else f" The transcript is in {language}. Write all output in the same language."
     )
-    # Dynamic word budget: scales with transcript length
     word_budget = min(1800, max(1000, 400 + word_count // 10))
 
     system = (
@@ -135,10 +141,10 @@ def _build_prompt(
         f"{_DEPTH_INSTRUCTION}{fmt}{lang_note}"
         f"{_TRANSCRIPT_ONLY_RULE}\n\n"
         "You generate four types of learning content from a lecture transcript in a single response.\n"
-        "Return ONLY valid JSON — no markdown fences, no preamble.\n\n"
+        "Return ONLY valid JSON - no markdown fences, no preamble.\n\n"
         "JSON schema:\n"
         "{\n"
-        '  "summary": "<markdown string — see rules below>",\n'
+        '  "summary": "<markdown string - see rules below>",\n'
         '  "flashcards": [{"front": "<question or term>", "back": "<answer or definition>"}],\n'
         '  "quiz": [{"question": "<question>", "options": ["A: ...", "B: ...", "C: ...", "D: ..."], "answer": "<A/B/C/D>", "explanation": "<why correct>"}],\n'
         '  "glossary": [{"term": "<term>", "definition": "<precise academic definition>"}]\n'
@@ -146,17 +152,22 @@ def _build_prompt(
         "SUMMARY RULES:\n"
         "- Use ## Section Title headings for each major topic\n"
         "- One lead sentence per section (present tense, specific)\n"
-        "- 2–3 sentences of explanation per section\n"
+        "- 2-3 sentences of explanation per section\n"
         "- A > blockquote with a counterintuitive or surprising insight (mandatory for every section)\n"
         "- Key concepts: `term1`, `term2`, `term3` (mandatory, backticks only)\n"
-        "- Examples: → first example → second example (mandatory)\n"
+        "- Examples: -> first example -> second example (mandatory)\n"
         "- Do NOT use **bold**. Use `backticks` for key terms only.\n"
         f"- Maximum {word_budget} words total across all sections\n\n"
         f"FLASHCARD RULES: {n_flash} cards. Front = question or key term. Back = precise answer or definition. "
-        "Cover the most testable concepts from the lecture.\n\n"
+        "Cover the most testable concepts from the lecture. Flashcards must test subject matter concepts only. "
+        "Never generate a flashcard about class logistics, exam structure, mark allocations, study plans, or anything the professor said about the class itself. "
+        "Only generate cards about what the professor taught.\n\n"
         f"QUIZ RULES: {n_quiz} multiple-choice questions. Bloom's taxonomy: mix recall, understanding, and application. "
-        "Each option must be plausible. Explanation must be 1–2 sentences.\n\n"
-        "GLOSSARY RULES: 10–20 terms. Use domain-standard definitions. Order alphabetically."
+        "Each option must be plausible. Explanation must be 1-2 sentences. Quiz questions must test understanding of subject matter concepts only. "
+        "Never ask about mark allocations, exam structure, class logistics, or study plans. Every question must relate to a concept the professor actually explained.\n\n"
+        "GLOSSARY RULES: 15-25 terms. Include every distinct subject matter term the professor defined or explained. "
+        "Use the professor's own definition where possible, not a textbook definition. Order alphabetically. "
+        "Never include terms about class logistics or exam structure."
     )
 
     user = (
@@ -216,7 +227,6 @@ def generate(
     Cache check: if existing_summary AND existing_flashcards are both non-empty
     AND force=False, returns None to signal "use cached values".
     """
-    # Cache check — skip GPT if all content already exists
     if (
         not force
         and existing_summary
@@ -224,11 +234,30 @@ def generate(
         and existing_flashcards
         and len(existing_flashcards) > 0
     ):
-        return None   # Signal: use cached
+        return None
 
     if not _client:
         return {}
 
+    from app.services.trust_service import _light_clean
+
+    original = transcript or ""
+    cleaned = _light_clean(original)
+    if len(cleaned.split()) < 100:
+        print(
+            f"[content-gen] cleaning produced too little content "
+            f"({len(cleaned.split())} words) - using original transcript"
+        )
+        transcript = original
+    else:
+        transcript = cleaned
+
+    if not transcript.strip():
+        print(f"[content-gen] transcript empty after cleaning - using raw input")
+        transcript = original.strip()
+    print(f"[content-gen] first 300 chars of transcript sent to GPT: {transcript[:300]}")
+    print(f"[content-gen] last 300 chars of transcript sent to GPT: {transcript[-300:]}")
+    print(f"[content-gen] total words: {len(transcript.split())}")
     system, user = _build_prompt(transcript, title, topic, language)
 
     last_err = None
@@ -238,10 +267,10 @@ def generate(
                 model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": system},
-                    {"role": "user",   "content": user},
+                    {"role": "user", "content": user},
                 ],
                 temperature=0.2,
-                max_tokens=5000,   # enough for all four sections combined (larger summaries for long lectures)
+                max_tokens=5000,
                 response_format={"type": "json_object"},
             )
             log_cost(
@@ -252,22 +281,28 @@ def generate(
             )
             raw = resp.choices[0].message.content
             data = json.loads(raw)
-
-            # Validate structure — fill missing keys with safe defaults
-            result = {
-                "summary":    data.get("summary", ""),
+            print(f"[content-gen] raw response length: {len(raw)}")
+            print(
+                f"[content-gen] raw response keys present: "
+                f"{list(data.keys()) if isinstance(data, dict) else 'not a dict'}"
+            )
+            print(f"[content-gen] flashcards type: {type(data.get('flashcards'))}")
+            print(f"[content-gen] flashcards value: {data.get('flashcards')}")
+            print(f"[content-gen] quiz type: {type(data.get('quiz'))}")
+            print(f"[content-gen] glossary type: {type(data.get('glossary'))}")
+            return {
+                "summary": data.get("summary", ""),
                 "flashcards": data.get("flashcards", []),
-                "quiz":       data.get("quiz", []),
-                "glossary":   data.get("glossary", []),
+                "quiz": data.get("quiz", []),
+                "glossary": data.get("glossary", []),
             }
-            return result
 
-        except json.JSONDecodeError as e:
-            print(f"[content_generator] JSON parse error (attempt {attempt+1}): {e}")
-            last_err = e
-        except Exception as e:
-            last_err = e
-            print(f"[content_generator] GPT error (attempt {attempt+1}): {e}")
+        except json.JSONDecodeError as exc:
+            print(f"[content_generator] JSON parse error (attempt {attempt + 1}): {exc}")
+            last_err = exc
+        except Exception as exc:
+            last_err = exc
+            print(f"[content_generator] GPT error (attempt {attempt + 1}): {exc}")
         if attempt < 2:
             time.sleep(2 ** attempt)
 

@@ -1774,6 +1774,25 @@ def _deduplicate_raw(concepts: list[dict]) -> list[dict]:
     return out[:20]
 
 
+def _normalise_card_shapes(cards_raw: list[dict]) -> list[dict]:
+    normalised = []
+    for card in cards_raw or []:
+        if not isinstance(card, dict):
+            continue
+        if "concept_name" in card:
+            normalised.append(card)
+            continue
+        keys = [k for k in card.keys() if k not in ("concept_name",)]
+        if len(keys) == 1:
+            concept_name = keys[0]
+            inner = card[concept_name]
+            if isinstance(inner, dict):
+                inner = dict(inner)
+                inner["concept_name"] = concept_name
+                normalised.append(inner)
+    return normalised
+
+
 def _extract_json_array(raw: str) -> list[dict]:
     text = (raw or "").strip()
     if text.startswith("```"):
@@ -1891,6 +1910,23 @@ Return only the JSON array. No other text."""
 
 _CARD_PROMPT = """You are building study cards 
 from a lecture transcript and concept inventory.
+
+Return a JSON array where each element is 
+a flat object with concept_name as an explicit 
+field. Do not use concept names as dictionary 
+keys. Each object must have this exact structure:
+{
+  'concept_name': 'the concept name here',
+  'summary': '...',
+  'key_distinction': null or object,
+  'exam_trap': null or object,
+  'examples': [],
+  'key_definitions': [],
+  'source_start': '00:00',
+  'source_end': '00:00'
+}
+Never nest the card content inside the concept 
+name as a key.
 
 CRITICAL RULE: Every word in every card must come 
 from the transcript provided. You are not allowed 
@@ -2248,6 +2284,8 @@ def build_summary_cards_from_transcript(transcript: str, lecture_id: str | None 
     inventory = build_concept_inventory_from_transcript(cleaned, lecture_id=lecture_id)
     if not inventory:
         return []
+    print(f"[cards] cached inventory returned: {len(inventory)} concepts")
+    print(f"[cards] calling card generation...")
     MAX_CARD_TRANSCRIPT_WORDS = 60000
     transcript_words = cleaned.split()
     if len(transcript_words) > MAX_CARD_TRANSCRIPT_WORDS:
@@ -2265,6 +2303,13 @@ def build_summary_cards_from_transcript(transcript: str, lecture_id: str | None 
     except Exception as exc:
         print(f"[cards] GPT call failed: {exc}")
         cards_raw = []
+    cards_raw = _normalise_card_shapes(cards_raw)
+    print(f"[cards] raw cards from GPT: {len(cards_raw)}")
+    print(f"[cards] inventory names: {[c.get('name') for c in inventory]}")
+    print(f"[cards] GPT returned names: {[c.get('concept_name') for c in cards_raw]}")
+    if cards_raw:
+        print(f"[cards] first raw card keys: {list(cards_raw[0].keys())}")
+        print(f"[cards] first raw card: {json.dumps(cards_raw[0], ensure_ascii=False)[:300]}")
     by_inventory_name = {item["name"]: item for item in inventory}
     cards = []
     for raw in cards_raw:
@@ -2286,6 +2331,7 @@ def build_summary_cards_from_transcript(transcript: str, lecture_id: str | None 
     for card in cards:
         word_count = card_content_word_count(card)
         if word_count < 15:
+            print(f"[cards] filtered: {card.get('concept_name')} - word count: {word_count}")
             print(
                 "[summary-card-debug] filtered thin card: "
                 f"{card.get('concept_name', '')} ({word_count} words)"
@@ -2293,6 +2339,7 @@ def build_summary_cards_from_transcript(transcript: str, lecture_id: str | None 
             thin_cards.append(card)
         else:
             kept_cards.append(card)
+    print(f"[cards] after filtering: {len(kept_cards)}")
 
     for thin_card in thin_cards:
         thin_name = _normalise_ws(thin_card.get("concept_name", ""))
@@ -3128,25 +3175,35 @@ def sanitize_generated_content_bundle(transcript: str, content: dict, summary: s
         term = _normalise_ws(item.get("term", ""))
         definition = _normalise_ws(item.get("definition", ""))
         if not term or not definition:
+            print(f"[sanitize] glossary '{term[:30]}' -> dropped (missing term or definition)")
             continue
         if term.lower() not in allowed_terms and term.lower() not in _tokenise(transcript):
+            print(f"[sanitize] glossary '{term[:30]}' -> dropped (term not grounded in allowed terms/transcript)")
             continue
         status, _ = _verify_generated_text(f"{term}. {definition}", transcript_units, minimum_score=0.3)
         if status in {"supported", "weak"}:
             glossary_out.append({"term": term, "definition": definition})
+            print(f"[sanitize] glossary '{term[:30]}' -> kept")
+        else:
+            print(f"[sanitize] glossary '{term[:30]}' -> dropped ({status})")
 
     flashcards_out = []
     for card in content.get("flashcards") or []:
         front = _normalise_ws(card.get("front", ""))
         back = _normalise_ws(card.get("back", ""))
         if not front or not back:
+            print(f"[sanitize] flashcard '{front[:50]}' -> dropped (missing front or back)")
             continue
         status_back, _ = _verify_generated_text(back, transcript_units, minimum_score=0.3)
         status_pair, _ = _verify_generated_text(f"{front}. {back}", transcript_units, minimum_score=0.22)
         if status_back == "contradicted" or status_pair == "contradicted":
+            print(f"[sanitize] flashcard '{front[:50]}' -> dropped (contradicted)")
             continue
         if status_back in {"supported", "weak"} or status_pair in {"supported", "weak"}:
             flashcards_out.append({"front": front, "back": back})
+            print(f"[sanitize] flashcard '{front[:50]}' -> kept")
+        else:
+            print(f"[sanitize] flashcard '{front[:50]}' -> dropped (back={status_back}, pair={status_pair})")
 
     quiz_out = []
     for item in content.get("quiz") or []:
@@ -3155,10 +3212,12 @@ def sanitize_generated_content_bundle(transcript: str, content: dict, summary: s
         explanation = _normalise_ws(item.get("explanation", ""))
         options = item.get("options") or []
         if not question or not answer:
+            print(f"[sanitize] quiz '{question[:50]}' -> dropped (missing question or answer)")
             continue
         combo = ". ".join(x for x in [question, explanation] if x)
         status, _ = _verify_generated_text(combo or question, transcript_units, minimum_score=0.22)
         if status == "contradicted":
+            print(f"[sanitize] quiz '{question[:50]}' -> dropped (contradicted)")
             continue
         answer_option = None
         if answer and options:
@@ -3170,6 +3229,7 @@ def sanitize_generated_content_bundle(transcript: str, content: dict, summary: s
         if answer_option:
             answer_status, _ = _verify_generated_text(answer_option, transcript_units, minimum_score=0.22)
             if answer_status == "contradicted":
+                print(f"[sanitize] quiz '{question[:50]}' -> dropped (answer contradicted)")
                 continue
         if status in {"supported", "weak"}:
             quiz_out.append({
@@ -3178,6 +3238,9 @@ def sanitize_generated_content_bundle(transcript: str, content: dict, summary: s
                 "answer": answer,
                 "explanation": explanation,
             })
+            print(f"[sanitize] quiz '{question[:50]}' -> kept")
+        else:
+            print(f"[sanitize] quiz '{question[:50]}' -> dropped ({status})")
 
     return {
         **content,
