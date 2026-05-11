@@ -92,7 +92,7 @@ _EXAMPLE_HINTS = (
     "e.g.", "e.g,", "namely", "specifically", "to illustrate",
     "population growth", "fast track class", "300 students", "lactase digestion",
 )
-_INVENTORY_CACHE_VERSION = 6
+_INVENTORY_CACHE_VERSION = 7
 _ADMIN_HINTS = (
     "focus week", "essay question", "mcq", "multiple choice", "next week",
     "this week", "unit number", "summarize unit", "revision week", "lecture will",
@@ -189,6 +189,21 @@ def _normalise_ws(text: str) -> str:
 
 def _word_count(text: str) -> int:
     return len(_TOKEN_RE.findall(text or ""))
+
+
+def _title_case_name(text: str) -> str:
+    words = _normalise_ws(text).split()
+    if not words:
+        return ""
+    lower_words = {"vs", "and", "or", "of", "to", "the", "a", "an", "in"}
+    out = []
+    for i, word in enumerate(words):
+        lowered = word.lower()
+        if i > 0 and lowered in lower_words:
+            out.append(lowered)
+        else:
+            out.append(word[:1].upper() + word[1:])
+    return " ".join(out)
 
 
 def _split_sentences(text: str) -> list[str]:
@@ -1862,6 +1877,84 @@ where the professor defines a term, explains how
 something works, gives an example of a concept, 
 contrasts two ideas, or flags something as exam-relevant.
 
+TECHNICAL CONTENT HANDLING:
+This transcript may come from any academic
+field including but not limited to:
+programming, mathematics, physics, chemistry,
+biology, medicine, law, economics, history,
+literature, engineering, data science.
+
+When technical content is present:
+- Preserve code snippets, function names,
+  and programming terms exactly as spoken
+- Preserve mathematical expressions and
+  equations as closely as possible to how
+  they were spoken
+- Preserve chemical formulas and scientific
+  notation exactly
+- Preserve medical terminology, drug names,
+  and clinical terms exactly
+- Preserve legal citations and case names exactly
+- Never simplify or paraphrase technical terms
+- A concept is still valid even if only
+  partially explained - extract what was said
+
+RULES FOR CODE, EQUATIONS, AND FORMULAS:
+
+RULE 1 - HEARD CLEARLY:
+If a code snippet, equation, or formula was
+clearly spoken or shown in the transcript,
+preserve it exactly as spoken.
+Convert spoken math to notation where clear:
+example: professor says 'f of x equals x
+squared plus 2x' -> preserve as: f(x) = x² + 2x
+example: professor says 'time complexity is
+O of n log n' -> preserve as: O(n log n)
+Place all code and formulas in the examples
+field so they render distinctly from plain text.
+
+RULE 2 - PARTIALLY HEARD:
+If part of a formula, equation, or code snippet
+was clearly heard but part was unclear or
+inaudible, preserve exactly what was heard
+and mark the unclear portion with [?].
+Example: professor said 'E equals mc' then
+became inaudible -> preserve as: E = mc[?]
+Never fill in the [?] with background knowledge.
+Never complete a partial formula even if you
+know the full version.
+If professor said 'the formula is x squared
+plus [unclear]' -> preserve as: x² + [?]
+
+RULE 3 - CANNOT IDENTIFY:
+If a technical term, formula, code snippet,
+or equation was mentioned but is completely
+unclear or inaudible from the transcript,
+write exactly:
+[unclear technical term - refer to recording]
+Never attempt to reconstruct it.
+Never guess what it might have been.
+
+RULE 4 - NEVER RECONSTRUCT:
+Never use background knowledge to complete
+or correct what the professor said.
+If the professor made an error in a formula
+and then corrected it, preserve only the
+corrected version.
+If the professor stated something that seems
+incomplete, preserve it as stated with [?]
+marking the unclear part.
+The student must refer to their own recording
+for anything marked [?] or [unclear].
+
+These four rules apply to every field:
+- A partial Python function -> preserve with [?]
+- A partial differential equation -> preserve with [?]
+- A partial chemical formula -> preserve with [?]
+- A partial legal citation -> preserve with [?]
+- A partial medical dosage -> preserve with [?]
+Never guess. Never complete. Never reconstruct.
+
 Return a JSON array. Each item is one concept with:
   name: real term or principle name.
         Never 'Key Concept'. Never a sentence.
@@ -1927,6 +2020,84 @@ keys. Each object must have this exact structure:
 }
 Never nest the card content inside the concept 
 name as a key.
+
+TECHNICAL CONTENT HANDLING:
+This transcript may come from any academic
+field including but not limited to:
+programming, mathematics, physics, chemistry,
+biology, medicine, law, economics, history,
+literature, engineering, data science.
+
+When technical content is present:
+- Preserve code snippets, function names,
+  and programming terms exactly as spoken
+- Preserve mathematical expressions and
+  equations as closely as possible to how
+  they were spoken
+- Preserve chemical formulas and scientific
+  notation exactly
+- Preserve medical terminology, drug names,
+  and clinical terms exactly
+- Preserve legal citations and case names exactly
+- Never simplify or paraphrase technical terms
+- A concept is still valid even if only
+  partially explained - extract what was said
+
+RULES FOR CODE, EQUATIONS, AND FORMULAS:
+
+RULE 1 - HEARD CLEARLY:
+If a code snippet, equation, or formula was
+clearly spoken or shown in the transcript,
+preserve it exactly as spoken.
+Convert spoken math to notation where clear:
+example: professor says 'f of x equals x
+squared plus 2x' -> preserve as: f(x) = x² + 2x
+example: professor says 'time complexity is
+O of n log n' -> preserve as: O(n log n)
+Place all code and formulas in the examples
+field so they render distinctly from plain text.
+
+RULE 2 - PARTIALLY HEARD:
+If part of a formula, equation, or code snippet
+was clearly heard but part was unclear or
+inaudible, preserve exactly what was heard
+and mark the unclear portion with [?].
+Example: professor said 'E equals mc' then
+became inaudible -> preserve as: E = mc[?]
+Never fill in the [?] with background knowledge.
+Never complete a partial formula even if you
+know the full version.
+If professor said 'the formula is x squared
+plus [unclear]' -> preserve as: x² + [?]
+
+RULE 3 - CANNOT IDENTIFY:
+If a technical term, formula, code snippet,
+or equation was mentioned but is completely
+unclear or inaudible from the transcript,
+write exactly:
+[unclear technical term - refer to recording]
+Never attempt to reconstruct it.
+Never guess what it might have been.
+
+RULE 4 - NEVER RECONSTRUCT:
+Never use background knowledge to complete
+or correct what the professor said.
+If the professor made an error in a formula
+and then corrected it, preserve only the
+corrected version.
+If the professor stated something that seems
+incomplete, preserve it as stated with [?]
+marking the unclear part.
+The student must refer to their own recording
+for anything marked [?] or [unclear].
+
+These four rules apply to every field:
+- A partial Python function -> preserve with [?]
+- A partial differential equation -> preserve with [?]
+- A partial chemical formula -> preserve with [?]
+- A partial legal citation -> preserve with [?]
+- A partial medical dosage -> preserve with [?]
+Never guess. Never complete. Never reconstruct.
 
 CRITICAL RULE: Every word in every card must come 
 from the transcript provided. You are not allowed 
@@ -2097,6 +2268,84 @@ STRICT RULES:
 - examples must be copied directly from the text.
   If none return empty array.
 
+TECHNICAL CONTENT HANDLING:
+This transcript may come from any academic
+field including but not limited to:
+programming, mathematics, physics, chemistry,
+biology, medicine, law, economics, history,
+literature, engineering, data science.
+
+When technical content is present:
+- Preserve code snippets, function names,
+  and programming terms exactly as spoken
+- Preserve mathematical expressions and
+  equations as closely as possible to how
+  they were spoken
+- Preserve chemical formulas and scientific
+  notation exactly
+- Preserve medical terminology, drug names,
+  and clinical terms exactly
+- Preserve legal citations and case names exactly
+- Never simplify or paraphrase technical terms
+- A concept is still valid even if only
+  partially explained - extract what was said
+
+RULES FOR CODE, EQUATIONS, AND FORMULAS:
+
+RULE 1 - HEARD CLEARLY:
+If a code snippet, equation, or formula was
+clearly spoken or shown in the transcript,
+preserve it exactly as spoken.
+Convert spoken math to notation where clear:
+example: professor says 'f of x equals x
+squared plus 2x' -> preserve as: f(x) = x² + 2x
+example: professor says 'time complexity is
+O of n log n' -> preserve as: O(n log n)
+Place all code and formulas in the examples
+field so they render distinctly from plain text.
+
+RULE 2 - PARTIALLY HEARD:
+If part of a formula, equation, or code snippet
+was clearly heard but part was unclear or
+inaudible, preserve exactly what was heard
+and mark the unclear portion with [?].
+Example: professor said 'E equals mc' then
+became inaudible -> preserve as: E = mc[?]
+Never fill in the [?] with background knowledge.
+Never complete a partial formula even if you
+know the full version.
+If professor said 'the formula is x squared
+plus [unclear]' -> preserve as: x² + [?]
+
+RULE 3 - CANNOT IDENTIFY:
+If a technical term, formula, code snippet,
+or equation was mentioned but is completely
+unclear or inaudible from the transcript,
+write exactly:
+[unclear technical term - refer to recording]
+Never attempt to reconstruct it.
+Never guess what it might have been.
+
+RULE 4 - NEVER RECONSTRUCT:
+Never use background knowledge to complete
+or correct what the professor said.
+If the professor made an error in a formula
+and then corrected it, preserve only the
+corrected version.
+If the professor stated something that seems
+incomplete, preserve it as stated with [?]
+marking the unclear part.
+The student must refer to their own recording
+for anything marked [?] or [unclear].
+
+These four rules apply to every field:
+- A partial Python function -> preserve with [?]
+- A partial differential equation -> preserve with [?]
+- A partial chemical formula -> preserve with [?]
+- A partial legal citation -> preserve with [?]
+- A partial medical dosage -> preserve with [?]
+Never guess. Never complete. Never reconstruct.
+
 Return a JSON array. Each item:
   name: word or phrase from the passage itself
   exam_trap: professor's own words or null
@@ -2201,6 +2450,7 @@ Return only JSON array. No other text."""
             name = _normalise_ws(item.get("name", ""))
             if not name or name.lower() == "key concept" or _is_low_signal_title(name):
                 continue
+            name = _title_case_name(name)
             key = name.lower()
             if key in seen:
                 continue
@@ -2310,12 +2560,17 @@ def build_summary_cards_from_transcript(transcript: str, lecture_id: str | None 
     if cards_raw:
         print(f"[cards] first raw card keys: {list(cards_raw[0].keys())}")
         print(f"[cards] first raw card: {json.dumps(cards_raw[0], ensure_ascii=False)[:300]}")
-    by_inventory_name = {item["name"]: item for item in inventory}
+    by_inventory_name = {
+        _normalise_ws(item["name"]).lower(): item
+        for item in inventory
+        if item.get("name")
+    }
     cards = []
     for raw in cards_raw:
         name = _normalise_ws(raw.get("concept_name", ""))
-        if name in by_inventory_name:
-            cards.append(_normalise_generated_card(raw, by_inventory_name[name]))
+        inventory_item = by_inventory_name.get(name.lower())
+        if inventory_item:
+            cards.append(_normalise_generated_card(raw, inventory_item))
 
     def card_content_word_count(card: dict) -> int:
         parts = [card.get("summary", "")]
@@ -2353,10 +2608,15 @@ def build_summary_cards_from_transcript(transcript: str, lecture_id: str | None 
             None,
         )
         if related_card:
-            inventory_item = by_inventory_name.get(thin_name, {})
+            inventory_item = by_inventory_name.get(thin_name.lower(), {})
             key_quote = _normalise_ws(str(inventory_item.get("key_quote") or inventory_item.get("quote") or ""))
             if key_quote and key_quote not in (related_card.get("examples") or []):
                 related_card.setdefault("examples", []).append(key_quote)
+
+    for card in kept_cards:
+        name = card.get("concept_name", "")
+        if name and not name.startswith("__"):
+            card["concept_name"] = _title_case_name(name)
 
     kept_names = {card.get("concept_name", "") for card in kept_cards}
     filtered_inventory = [item for item in inventory if item.get("name", "") in kept_names]

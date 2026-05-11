@@ -417,7 +417,12 @@ function ConceptNoteCard({ card, accent, index, total, topic }) {
         <div className="lv-sum-card summary-card-enter" style={{ borderLeft: `3px solid ${a.border}` }}>
             <div className="lv-sum-meta">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                    <div className="lv-sum-title" style={{ color: a.title, margin: 0, fontSize: 16 }}>{card.concept_name}</div>
+                    <div className="lv-sum-title" style={{ color: a.title, margin: 0, fontSize: 16 }}>
+                        {(card.concept_name || "")
+                            .split(" ")
+                            .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+                            .join(" ")}
+                    </div>
                 </div>
                 {total > 1 && (
                     <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: 'var(--color-muted)', flexShrink: 0, paddingLeft: 8 }}>
