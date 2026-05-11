@@ -240,6 +240,7 @@
             max-width: 14cm;
             margin: 0 0 14mm;
             font-weight: 400;
+            overflow: hidden;
         }
 
         /* Horizontal 4-tile stat strip */
@@ -606,6 +607,8 @@
         .section.compact p { margin-bottom: 0.45em; }
         .section.dense .section-body { line-height: 1.48; }
         .subtopics-label {
+            position: relative;
+            z-index: 2;
             font-size: 6.8pt;
             font-weight: 700;
             text-transform: uppercase;
@@ -613,7 +616,15 @@
             color: var(--ink-4);
             margin: 0 0 1.1mm;
         }
-        .subtopics-row { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 2.2mm; }
+        .subtopics-row {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin: 0 0 2.2mm;
+            overflow: hidden;
+        }
         .subtopic-chip {
             display: inline-flex;
             align-items: center;
@@ -623,6 +634,9 @@
             color: var(--ink-3);
             font-size: 7.5pt;
             border: 0.5px solid #e7dfd2;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         .subtopic-stack { margin: 2.6mm 0 1.4mm; }
         .subtopic-item {
@@ -1124,6 +1138,8 @@
             font-size: 9.5pt;
             color: var(--ink-2);
             line-height: 1.65;
+            overflow: visible;
+            max-height: none;
         }
         .takeaway-num { font-weight: 700; color: var(--accent-text); min-width: 16px; font-size: 9pt; padding-top: 1px; }
 
@@ -1362,6 +1378,20 @@
           color: #065f46;
           line-height: 1.5;
         }
+        .trap-wrong {
+          display: block;
+          font-size: 8.7pt;
+          color: #92400e;
+          font-weight: 600;
+          line-height: 1.5;
+          margin-bottom: 1mm;
+        }
+        .trap-correct {
+          display: block;
+          font-size: 8.7pt;
+          color: #065f46;
+          line-height: 1.5;
+        }
         .section-meta-rows {
           margin: 0 0 3mm;
           border: 0.5pt solid var(--ink-6);
@@ -1543,7 +1573,7 @@
             <h1 class="cover-title">{{ title }}</h1>
 
             {% if executive_summary %}
-            <p class="cover-deck">{{ executive_summary.split('\n\n')[0] | truncate(220, True) }}</p>
+            <p class="cover-deck">{{ cover_summary_preview or executive_summary.split('\n\n')[0] }}</p>
             {% endif %}
 
             <div class="cover-strip">
@@ -1701,7 +1731,7 @@
     <div class="revision-focus-strip">
         {% for item in revision_focus %}
         <div class="revision-focus-card">
-            <div class="label">{{ item.emphasis_level | upper }} PRIORITY</div>
+            <div class="label">KEY CONCEPT</div>
             <div class="concept">{{ item.concept }}</div>
             <div class="reason">{{ item.reason }}</div>
         </div>
@@ -1759,7 +1789,7 @@
             </div>
             {% endif %}
 
-            {% if sec.examples or sec.exam_traps %}
+            {% if sec.examples %}
             <div class="section-meta-rows">
               {% if sec.examples %}
               <div class="section-meta-row">
@@ -1767,20 +1797,17 @@
                 <div class="section-meta-value examples-inline">{{ sec.examples | join(' · ') }}</div>
               </div>
               {% endif %}
-              {% if sec.exam_traps %}
-              {% for trap in sec.exam_traps %}
-              <div class="section-meta-row exam-trap-row">
-                <div class="section-meta-label">EXAM TRAP</div>
-                <div class="section-meta-value exam-trap-inline">
-                  {% if trap is mapping and trap.misconception %}
-                  <strong>{{ trap.misconception }}</strong> {{ trap.correct }}
-                  {% else %}
-                  {{ trap }}
-                  {% endif %}
-                </div>
-              </div>
-              {% endfor %}
-              {% endif %}
+            </div>
+            {% endif %}
+
+            {% if sec.exam_trap_structured and sec.exam_trap_structured.misconception and sec.exam_trap_structured.correct and sec.exam_trap_structured.misconception != sec.exam_trap_structured.correct %}
+            <div class="exam-trap-block">
+              <span class="trap-wrong">✗ Students think: {{ sec.exam_trap_structured.misconception }}</span>
+              <span class="trap-correct">✓ Actually: {{ sec.exam_trap_structured.correct }}</span>
+            </div>
+            {% elif sec.exam_traps %}
+            <div class="exam-trap-block">
+              <span class="trap-wrong">{{ sec.exam_traps[0] }}</span>
             </div>
             {% endif %}
 
@@ -2094,7 +2121,7 @@
     <div class="cheat-page">
         <div class="cheat-head">
             <h2>Cheat Sheet</h2>
-            <div class="meta">Verified Revision Grid · {{ verified_cheat_sheet|length }} chapters · Print &amp; keep</div>
+            <div class="meta">Verified Revision Grid · {{ cheat_sheet_chapter_count }} sections · Print &amp; keep</div>
         </div>
 
         <div class="cheat-grid">
@@ -2117,7 +2144,13 @@
                 {% endif %}
             </div>
             <div class="cell">{{ row.core_idea }}</div>
-            <div class="cell trap-cell">{{ row.exam_trap or "—" }}</div>
+            <div class="cell trap-cell">
+                {% if row.exam_trap_structured and row.exam_trap_structured.misconception and row.exam_trap_structured.correct and row.exam_trap_structured.misconception != row.exam_trap_structured.correct %}
+                Students think {{ row.exam_trap_structured.misconception }} — actually {{ row.exam_trap_structured.correct }}
+                {% else %}
+                —
+                {% endif %}
+            </div>
             <div class="cell recall-cell">{{ row.quick_recall or "—" }}</div>
             {% endfor %}
             {% endfor %}

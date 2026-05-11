@@ -217,6 +217,18 @@ def _truncate_words(text: str, limit: int) -> str:
     return " ".join(words[:limit]).rstrip(" .,;:") + "..."
 
 
+def _normalise_structured_exam_trap(value) -> dict | None:
+    if not isinstance(value, dict):
+        return None
+    misconception = str(value.get("misconception") or "").strip()
+    correct = str(value.get("correct") or "").strip()
+    if not misconception or not correct:
+        return None
+    if misconception.lower() == correct.lower():
+        return None
+    return {"misconception": misconception, "correct": correct}
+
+
 def _exam_trap_text(value) -> str:
     if isinstance(value, dict):
         misconception = str(value.get("misconception") or "").strip()
@@ -251,8 +263,6 @@ def _compact_inline_items(section: dict) -> list[dict]:
         items.append({"label": "Distinction", "text": _truncate_words(section["distinctions"][0], 18), "kind": "distinction"})
     if section.get("examples"):
         items.append({"label": "Example", "text": _truncate_words(section["examples"][0], 16), "kind": "example"})
-    if section.get("exam_traps"):
-        items.append({"label": "Exam Trap", "text": _truncate_words(_exam_trap_text(section["exam_traps"][0]), 16), "kind": "exam-trap"})
     return items[:4]
 
 
@@ -337,13 +347,11 @@ def _concept_cards_to_pdf_sections(concept_note_cards: list[dict]) -> list[dict]
             ]
         trap_obj = card.get("exam_trap") or {}
         exam_traps = []
-        exam_trap_structured = False
-        if isinstance(trap_obj, dict) and trap_obj:
-            misconception = str(trap_obj.get("misconception") or "").strip()
-            correct = str(trap_obj.get("correct") or "").strip()
-            if misconception and correct:
-                exam_traps = [{"misconception": misconception, "correct": correct}]
-                exam_trap_structured = True
+        exam_trap_structured = None
+        structured_trap = _normalise_structured_exam_trap(trap_obj)
+        if structured_trap:
+            exam_traps = [structured_trap]
+            exam_trap_structured = structured_trap
         elif isinstance(trap_obj, str) and trap_obj.strip():
             exam_traps = [trap_obj.strip()]
         section = {
@@ -628,7 +636,7 @@ def _fallback_takeaways(summary: str, sections: list[dict]) -> list[str]:
     for sec in sections:
         sentence = (sec.get("remember") or sec.get("lead_sentence") or sec.get("prose") or "").strip()
         if sentence:
-            takeaways.append(_truncate_words(sentence, 22))
+            takeaways.append(sentence)
         if len(takeaways) == 5:
             break
     if takeaways:
@@ -637,7 +645,7 @@ def _fallback_takeaways(summary: str, sections: list[dict]) -> list[str]:
     for para in re.split(r"\n\s*\n", summary or ""):
         cleaned = " ".join(para.split()).strip()
         if cleaned:
-            takeaways.append(_truncate_words(cleaned, 22))
+            takeaways.append(cleaned)
         if len(takeaways) == 5:
             break
     return takeaways
@@ -806,7 +814,10 @@ def _call_enrich_section(
                     "professor refined it, use the most complete transcript-supported version.\n"
                     "- \"key_distinction\": The most important contrast taught in this section, "
                     "for example positive vs normative or economic vs non-economic goods. Return null if absent.\n"
-                    "- \"exam_trap\": When the section contains a misconception correction, trick warning, or student error pattern, return an object with two fields: \"misconception\" (what students wrongly think, starting with 'Students think...') and \"correct\" (the actual truth, starting with 'Actually...'). The format must always be exactly: misconception = 'Students think X' and correct = 'Actually Y'. Return null only if genuinely absent.\n"
+                    "- \"exam_trap\": When the section contains a misconception correction, trick warning, or student error pattern, return an object with two fields:\n"
+                    '  "misconception": "What students wrongly believe — must be a FALSE or incomplete belief, not the correct answer. Start with \'Students often think...\' or \'A common mistake is thinking...\'"\n'
+                    '  "correct": "The actual correct understanding that corrects the misconception above — must differ from misconception"\n'
+                    "CRITICAL: misconception and correct must NEVER be the same text. misconception = what students commonly get wrong or misunderstand; correct = the actual correct understanding. These two fields MUST be different from each other. Never copy the definition verbatim into both fields. If you cannot identify a genuine misconception from the transcript, set exam_trap to null.\n"
                     "- \"analogy\": A 2-3 sentence real-world analogy that makes this concept click. "
                     "Use 'Think of...' or 'Imagine...' framing. Only generate if a natural analogy "
                     "exists for this specific content. Return null if no natural analogy exists.\n"
@@ -837,6 +848,8 @@ def _call_enrich_section(
     concepts = data.get("concepts") or []
     examples = data.get("examples") or []
     print(f"[enrich_section] s{idx + 1}/{total}: title={data.get('title')!r} concepts={concepts} examples={examples}")
+    structured_trap = _normalise_structured_exam_trap(data.get("exam_trap"))
+    exam_traps = [structured_trap] if structured_trap else []
     return {
         "title":         data.get("title", f"Section {idx + 1}"),
         "lead_sentence": lead,
@@ -846,7 +859,8 @@ def _call_enrich_section(
         "examples":      examples,
         "definitions":   [data.get("definition")] if data.get("definition") else [],
         "distinctions":  [data.get("key_distinction")] if data.get("key_distinction") else [],
-        "exam_traps":    [data.get("exam_trap")] if data.get("exam_trap") else [],
+        "exam_traps":    exam_traps,
+        "exam_trap_structured": structured_trap,
         "raw_section":   section_text,
         "analogy":       data.get("analogy") or None,
         "mistake":       data.get("mistake") or None,
@@ -1524,6 +1538,7 @@ async def _generate_lite_pdf(
         "review_label":         review_label,
         "glossary_label":       glossary_label,
         "executive_summary":    executive_summary,
+        "cover_summary_preview": (executive_summary[:220].rsplit(" ", 1)[0] + "...") if executive_summary and len(executive_summary) > 220 else executive_summary,
         "enriched_sections":    sections_data,
         "glossary":             [],
         "takeaways":            [],
@@ -1793,6 +1808,7 @@ async def generate_lecture_pdf(
                     "citations": note.get("citations") or [],
                     "confidence": note.get("confidence") or 0.0,
                     "verification_status": note.get("verification_status") or "supported",
+                    "exam_trap_structured": None,
                 }
                 section.update(_section_render_profile(section))
                 enriched_sections.append(section)
@@ -1817,6 +1833,7 @@ async def generate_lecture_pdf(
                     "citations": note.get("citations") or [],
                     "confidence": note.get("confidence") or 0.0,
                     "verification_status": note.get("verification_status") or "supported",
+                    "exam_trap_structured": None,
                 }
                 section.update(_section_render_profile(section))
                 enriched_sections.append(section)
@@ -1842,6 +1859,7 @@ async def generate_lecture_pdf(
                     "citations": [],
                     "confidence": 0.0,
                     "verification_status": "weak",
+                    "exam_trap_structured": None,
                 }
                 section.update(_section_render_profile(section))
                 enriched_sections.append(section)
@@ -1895,6 +1913,8 @@ async def generate_lecture_pdf(
                 section["mistake"] = enr["mistake"]
             if enr.get("remember") and not section.get("remember"):
                 section["remember"] = enr["remember"]
+            if enr.get("exam_trap_structured") and not section.get("exam_trap_structured"):
+                section["exam_trap_structured"] = enr["exam_trap_structured"]
             for field in ("definitions", "distinctions", "exam_traps", "examples"):
                 if enr.get(field):
                     section[field] = list(dict.fromkeys((section.get(field) or []) + (enr.get(field) or [])))
@@ -2025,6 +2045,10 @@ async def generate_lecture_pdf(
         template = env.get_template("lecture_template.html")
         total_concepts = sum(len(s.get("concepts", [])) for s in enriched_sections)
         qa_pairs = len(quick_review)
+        cheat_sheet_chapter_count = len([
+            c for c in (concept_note_cards or [])
+            if isinstance(c, dict) and not str(c.get("concept_name", "")).startswith("__")
+        ])
         cover_stats = _get_cover_stats(topic, enriched_sections, concept_note_cards, quick_review)
         context = {
             "title": title,
@@ -2045,6 +2069,7 @@ async def generate_lecture_pdf(
             "review_label": review_label,
             "glossary_label": glossary_label,
             "executive_summary": exec_summary,
+            "cover_summary_preview": (exec_summary[:220].rsplit(" ", 1)[0] + "...") if exec_summary and len(exec_summary) > 220 else exec_summary,
             "enriched_sections": enriched_sections,
             "glossary": glossary,
             "takeaways": takeaways,
@@ -2054,6 +2079,7 @@ async def generate_lecture_pdf(
             "adaptive_intelligence": adaptive_intelligence,
             "adaptive_study_weighting": adaptive_study_weighting,
             "revision_focus": revision_focus,
+            "cheat_sheet_chapter_count": cheat_sheet_chapter_count,
             "study_roadmap": study_roadmap,
             "verified_cheat_sheet": verified_cheat_sheet,
             "toc_entries": toc_entries,

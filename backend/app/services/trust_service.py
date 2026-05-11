@@ -3048,10 +3048,16 @@ def build_verified_cheat_sheet_from_cards(concept_note_cards: list[dict]) -> lis
         core_idea = _quick_recall_cue(definition or summary)
         structured_trap = card.get("exam_trap") or {}
         exam_trap = ""
+        exam_trap_structured = None
         if isinstance(structured_trap, dict) and structured_trap:
             misconception = _normalise_ws(structured_trap.get("misconception", ""))
             correct = _normalise_ws(structured_trap.get("correct", ""))
-            exam_trap = f"Students think {misconception} — actually {correct}".strip()
+            if misconception and correct and misconception.lower() != correct.lower():
+                exam_trap_structured = {
+                    "misconception": misconception,
+                    "correct": correct,
+                }
+                exam_trap = f"Students think {misconception} — actually {correct}".strip()
         source = {
             "label": f"{card.get('source_start')} - {card.get('source_end')}",
             "start_seconds": _timestamp_to_seconds(card.get("source_start")),
@@ -3061,6 +3067,7 @@ def build_verified_cheat_sheet_from_cards(concept_note_cards: list[dict]) -> lis
             "term": term,
             "core_idea": core_idea,
             "exam_trap": exam_trap,
+            "exam_trap_structured": exam_trap_structured,
             "quick_recall": _quick_recall_cue(definition or summary),
             "citations": [source] if source else [],
             "confidence": round(float(card.get("confidence") or 0.0), 2),

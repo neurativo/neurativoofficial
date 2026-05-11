@@ -202,7 +202,10 @@ def test_concept_cards_to_pdf_sections_use_verified_card_fields_only():
         "misconception": "Free of charge means free good",
         "correct": "Free of charge can still be an economic good",
     }]
-    assert sections[0]["exam_trap_structured"] is True
+    assert sections[0]["exam_trap_structured"] == {
+        "misconception": "Free of charge means free good",
+        "correct": "Free of charge can still be an economic good",
+    }
     assert sections[0]["versus_items"]
     assert sections[0]["citations"] == [{"label": "13:48 - 18:00", "start_seconds": None, "end_seconds": None}]
     assert sections[0]["analogy"] is None
