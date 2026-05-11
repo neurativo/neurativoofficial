@@ -92,7 +92,7 @@ _EXAMPLE_HINTS = (
     "e.g.", "e.g,", "namely", "specifically", "to illustrate",
     "population growth", "fast track class", "300 students", "lactase digestion",
 )
-_INVENTORY_CACHE_VERSION = 7
+_INVENTORY_CACHE_VERSION = 8
 _ADMIN_HINTS = (
     "focus week", "essay question", "mcq", "multiple choice", "next week",
     "this week", "unit number", "summarize unit", "revision week", "lecture will",
@@ -2422,18 +2422,22 @@ Remove concepts where name is a single generic
 word with no subject meaning on its own.
 Remove concepts that are clearly admin content.
 
+For start_time and end_time: estimate the timestamp based on the
+position of this concept in the transcript.
+If the transcript is approximately 33 minutes long and this concept
+appears in the first third, start_time should be around 04:00 to 12:00.
+Format as mm:ss. Do not return 00:00 unless the concept genuinely
+appears at the very start.
+Use the order of concepts in the raw extraction list to estimate position.
+
 Aim for 7 to 14 concepts for a 30-minute lecture.
 Return only JSON array. No other text."""
-
-    all_raw_sorted = sorted(
-        all_raw,
-        key=lambda x: x.get("name", "").lower() if isinstance(x, dict) else "",
-    )
+    all_raw_ordered = [item for item in all_raw if isinstance(item, dict)]
 
     try:
         merged = _gpt_json_array(
             MERGE_PROMPT,
-            json.dumps(all_raw_sorted, ensure_ascii=False),
+            json.dumps(all_raw_ordered, ensure_ascii=False),
             "concept_merge",
             max_tokens=3000,
             model="gpt-4o",
@@ -2441,11 +2445,13 @@ Return only JSON array. No other text."""
         )
     except Exception as exc:
         print(f"[inventory] merge failed, using raw extractions: {exc}")
-        merged = _deduplicate_raw(all_raw_sorted)
+        merged = _deduplicate_raw(all_raw_ordered)
 
     def normalise_inventory(inventory_items: list[dict]) -> list[dict]:
         out = []
         seen = set()
+        estimated_duration_seconds = max(60, int(round((len(cleaned_words) / 150) * 60))) if cleaned_words else 60
+        total_items = max(1, len(inventory_items))
         for item in inventory_items:
             name = _normalise_ws(item.get("name", ""))
             if not name or name.lower() == "key concept" or _is_low_signal_title(name):
@@ -2455,10 +2461,25 @@ Return only JSON array. No other text."""
             if key in seen:
                 continue
             seen.add(key)
+            index = len(out)
+            slot_seconds = max(45, estimated_duration_seconds // total_items)
+            start_guess = min(
+                max(0, estimated_duration_seconds - 1),
+                int(round((index / max(1, total_items)) * estimated_duration_seconds))
+            )
+            if index == 0 and start_guess == 0:
+                start_guess = min(estimated_duration_seconds - 1, max(15, slot_seconds // 4))
+            end_guess = min(estimated_duration_seconds, start_guess + slot_seconds)
+            start_time = _normalise_ws(str(item.get("start_time") or ""))
+            end_time = _normalise_ws(str(item.get("end_time") or ""))
+            if not re.match(r"^\d{2}:\d{2}(?::\d{2})?$", start_time) or start_time == "00:00":
+                start_time = _fmt_timestamp(start_guess)
+            if not re.match(r"^\d{2}:\d{2}(?::\d{2})?$", end_time) or end_time == "00:00":
+                end_time = _fmt_timestamp(max(start_guess + 30, end_guess))
             out.append({
                 "name": name,
-                "start_time": _normalise_ws(str(item.get("start_time") or "")),
-                "end_time": _normalise_ws(str(item.get("end_time") or "")),
+                "start_time": start_time,
+                "end_time": end_time,
                 "exam_trap": item.get("exam_trap") or None,
                 "distinction": item.get("distinction") or None,
                 "examples": item.get("examples") if isinstance(item.get("examples"), list) else [],
@@ -2767,14 +2788,16 @@ def _quick_recall_cue(text: str) -> str:
     lowered = cleaned.lower()
     if not lowered:
         return ""
+    if "resources" in lowered and ("unlimited in supply" in lowered or "gifted by nature" in lowered or "abundant" in lowered):
+        return "Non-economic resources are naturally available without scarcity in the lecture context."
+    if "unlimited in supply" in lowered or "gifted by nature" in lowered or "abundant" in lowered:
+        return "A free or non-economic good is naturally available without scarcity in the lecture context."
     if "testable" in lowered or "tested against facts" in lowered or "verifiable" in lowered:
         return "A positive statement is fact-based and can be tested or verified."
     if "value judgment" in lowered or "opinion" in lowered or "normative" in lowered:
         return "A normative statement expresses a value judgment or opinion."
     if "scarce" in lowered or "limited in supply" in lowered or "opportunity cost" in lowered:
         return "An economic good is scarce, so using it involves opportunity cost."
-    if "unlimited in supply" in lowered or "gifted by nature" in lowered or "abundant" in lowered:
-        return "A free or non-economic good is naturally available without scarcity in the lecture context."
     if "public good" in lowered or "shared" in lowered:
         return "A public good can be shared, but it is not the same as a free good."
     if "dissatisfaction" in lowered or "harm" in lowered or "pollution" in lowered or "garbage" in lowered:
@@ -3009,8 +3032,18 @@ def build_verified_cheat_sheet_from_cards(concept_note_cards: list[dict]) -> lis
             continue
         seen.add(key)
 
-        first_def = (card.get("key_definitions") or [{}])[0]
-        definition = _normalise_ws(first_def.get("definition", "") if isinstance(first_def, dict) else str(first_def))
+        key_definitions = [
+            item for item in (card.get("key_definitions") or [])
+            if isinstance(item, dict) and _normalise_ws(item.get("definition", ""))
+        ]
+        matching_def = next(
+            (
+                item for item in key_definitions
+                if _normalise_ws(item.get("term", "")).lower() == key
+            ),
+            None,
+        )
+        definition = _normalise_ws(matching_def.get("definition", "") if matching_def else "")
         summary = _normalise_ws(card.get("summary", ""))
         core_idea = _quick_recall_cue(definition or summary)
         structured_trap = card.get("exam_trap") or {}
@@ -3028,7 +3061,7 @@ def build_verified_cheat_sheet_from_cards(concept_note_cards: list[dict]) -> lis
             "term": term,
             "core_idea": core_idea,
             "exam_trap": exam_trap,
-            "quick_recall": _quick_recall_under_ten_words(card),
+            "quick_recall": _quick_recall_cue(definition or summary),
             "citations": [source] if source else [],
             "confidence": round(float(card.get("confidence") or 0.0), 2),
             "revision_priority": round(float(card.get("confidence") or 0.0), 2),

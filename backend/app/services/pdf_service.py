@@ -41,6 +41,7 @@ _client = OpenAI(api_key=settings.OPENAI_API_KEY) if settings.OPENAI_API_KEY els
 _PDF_TRANSCRIPT_ONLY_RULE = (
     "Only use information from the transcript provided. "
     "Do not add background knowledge, textbook content, or information not present in the transcript. "
+    "Never invent details, definitions, examples, or relationships that are not explicitly supported by the transcript. "
     "If the transcript is about a specific subject, only generate content about what was actually taught in this specific lecture."
 )
 
@@ -235,6 +236,26 @@ def _concept_cards_to_pdf_sections(concept_note_cards: list[dict]) -> list[dict]
         title = card.get("concept_name") or ""
         if not title or title.startswith("__"):
             continue
+        summary = str(card.get("summary") or "").strip()
+        raw_definitions = card.get("key_definitions") or []
+        examples = card.get("examples") or []
+        all_text = (
+            summary
+            + " "
+            + " ".join(
+                str(item.get("definition") or "").strip()
+                for item in raw_definitions
+                if isinstance(item, dict)
+            )
+            + " "
+            + " ".join(str(example).strip() for example in examples if str(example).strip())
+        ).strip()
+        if len(all_text.split()) < 15:
+            print(f"[pdf] skipping thin section: {title}")
+            continue
+        if not raw_definitions and not examples and len(summary.split()) < 18:
+            print(f"[pdf] skipping low-evidence section: {title}")
+            continue
         citations = [{
             "label": f"{card.get('source_start')} - {card.get('source_end')}",
             "start_seconds": None,
@@ -242,7 +263,7 @@ def _concept_cards_to_pdf_sections(concept_note_cards: list[dict]) -> list[dict]
         }] if card.get("source_start") and card.get("source_end") else []
         definitions = [
             f"{item.get('term')}: {item.get('definition')}"
-            for item in (card.get("key_definitions") or [])
+            for item in raw_definitions
             if isinstance(item, dict) and (item.get("term") or item.get("definition"))
         ]
         distinction_obj = card.get("key_distinction") or {}
@@ -257,7 +278,6 @@ def _concept_cards_to_pdf_sections(concept_note_cards: list[dict]) -> list[dict]
         exam_traps = []
         if isinstance(trap_obj, dict) and trap_obj:
             exam_traps = [f"Students think {trap_obj.get('misconception', '')}; actually {trap_obj.get('correct', '')}"]
-        examples = card.get("examples") or []
         section = {
             "title": title,
             "lead_sentence": (definitions or [card.get("summary", "")])[0],
@@ -289,6 +309,23 @@ def _concept_cards_to_pdf_sections(concept_note_cards: list[dict]) -> list[dict]
         section.update(_section_render_profile(section))
         sections.append(section)
     return sections
+
+
+def _has_placeholder_timestamps(cards: list[dict]) -> bool:
+    placeholders = {"", "00:00", "00:00:00"}
+    visible_cards = [
+        card for card in (cards or [])
+        if isinstance(card, dict) and not str(card.get("concept_name", "")).startswith("__")
+    ]
+    if not visible_cards:
+        return False
+    bad = 0
+    for card in visible_cards:
+        start = str(card.get("source_start") or "").strip()
+        end = str(card.get("source_end") or "").strip()
+        if start in placeholders or end in placeholders:
+            bad += 1
+    return bad > 0
 
 
 def _build_versus_items(title: str, distinctions: list[str]) -> list[dict]:
@@ -792,6 +829,94 @@ def _call_glossary(transcript: str, topic: str | None, n_terms: int = 8) -> list
         return []
 
 
+def _call_glossary_from_cards(concept_note_cards: list[dict], topic: str | None, n_terms: int = 8) -> list[dict]:
+    visible_cards = [
+        card for card in (concept_note_cards or [])
+        if isinstance(card, dict) and not str(card.get("concept_name", "")).startswith("__")
+    ]
+    if not visible_cards:
+        return []
+
+    out = []
+    seen = set()
+    for card in visible_cards:
+        term = str(card.get("concept_name") or "").strip()
+        key = term.lower()
+        if not term or key in seen:
+            continue
+        key_definitions = [
+            item for item in (card.get("key_definitions") or [])
+            if isinstance(item, dict) and str(item.get("definition") or "").strip()
+        ]
+        if not key_definitions:
+            continue
+        matching = next(
+            (
+                item for item in key_definitions
+                if str(item.get("term") or "").strip().lower() == key
+            ),
+            None,
+        )
+        if not matching:
+            continue
+        definition = str(matching.get("definition") or "").strip()
+        key = term.lower()
+        if not term or not definition or key in seen:
+            continue
+        seen.add(key)
+        out.append({"term": term, "definition": definition})
+        if len(out) >= n_terms:
+            break
+    return out
+
+
+def _fallback_conceptual_map_from_sections(sections: list[str]) -> list[dict]:
+    out = []
+    seen = set()
+
+    def add_connection(left: str, relation: str, right: str) -> None:
+        left_clean = str(left or "").strip()
+        right_clean = str(right or "").strip()
+        relation_clean = str(relation or "").strip()
+        if not left_clean or not right_clean or not relation_clean:
+            return
+        if left_clean.lower() == right_clean.lower():
+            return
+        text = f"{left_clean} -> {relation_clean} -> {right_clean}"
+        normalized = re.sub(r"\s+", " ", text).strip().lower()
+        if normalized in seen:
+            return
+        seen.add(normalized)
+        out.append({"connection": text})
+
+    titles = []
+    for section in sections or []:
+        lines = [line.strip() for line in str(section or "").splitlines() if line.strip()]
+        if not lines:
+            continue
+        title = lines[0]
+        body = " ".join(lines[1:]).lower()
+        titles.append(title)
+        if "scarce" in body and "opportunity cost" in body:
+            add_connection(title, "involves", "Opportunity Cost")
+        if "unlimited in supply" in body or "free goods" in body:
+            add_connection(title, "are", "Free Goods")
+        if "inputs used to produce" in body or "inputs for producing" in body:
+            add_connection(title, "are inputs for", "Goods and Services")
+
+    for title in titles:
+        parts = re.split(r"\s+vs\.?\s+", title, flags=re.I)
+        if len(parts) == 2:
+            add_connection(parts[0], "contrasts with", parts[1])
+
+    if "Economic Goods" in titles and "Non-economic Goods" in titles:
+        add_connection("Economic Goods", "are scarce unlike", "Non-economic Goods")
+    if "Non-economic Goods" in titles and "Non-economic Resources" in titles:
+        add_connection("Non-economic Goods", "are unlimited like", "Non-economic Resources")
+
+    return out
+
+
 def _call_takeaways(transcript: str, summary: str, topic: str | None) -> list[str]:
     if not _client:
         return []
@@ -936,7 +1061,7 @@ def _call_study_roadmap(
 
 
 def _call_conceptual_map(section_summaries: list[str]) -> list[dict]:
-    """GPT-4o synthesis: finds cross-cutting threads connecting multiple sections."""
+    """GPT-4o synthesis: returns distinct concept-to-concept lecture connections."""
     if not _client:
         return []
     combined = "\n\n".join([f"Section {i + 1}: {s}" for i, s in enumerate(section_summaries)])
@@ -954,8 +1079,8 @@ def _call_conceptual_map(section_summaries: list[str]) -> list[dict]:
                 "role": "user",
                 "content": (
                     f"SECTIONS:\n{combined}\n\n"
-                    f"Identify 3 to 5 conceptual threads that CONNECT multiple sections. "
-                    "Each thread is 2-3 sentences showing how ideas in different sections relate. "
+                    "Create a conceptual map showing how the concepts in this lecture connect to each other. "
+                    "For each connection describe the relationship in one sentence.\n\n"
                     "Do not summarise individual sections — find the cross-cutting ideas. "
                     "Each entry needs a short heading (max 4 words) and the connecting paragraph.\n"
                     'Return JSON: {"connections": [{"heading": "...", "paragraph": "..."}]}'
@@ -973,6 +1098,63 @@ def _call_conceptual_map(section_summaries: list[str]) -> list[dict]:
         return json.loads(resp.choices[0].message.content).get("connections", [])
     except Exception:
         return []
+
+
+def _call_conceptual_map_connections(section_summaries: list[str]) -> list[dict]:
+    """GPT-4o synthesis: returns distinct concept-to-concept lecture connections."""
+    if not _client:
+        return []
+    combined = "\n\n".join([f"Section {i + 1}: {s}" for i, s in enumerate(section_summaries)])
+    resp = _client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "You synthesise academic knowledge, finding meaningful concept-to-concept links inside one lecture. "
+                    f"{_PDF_TRANSCRIPT_ONLY_RULE}"
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"SECTIONS:\n{combined}\n\n"
+                    "Create a conceptual map showing how the concepts in this lecture connect to each other. "
+                    "For each connection describe the relationship in one sentence.\n\n"
+                    "Format as a list of connections:\n"
+                    "  CONCEPT A -> RELATIONSHIP -> CONCEPT B\n\n"
+                    "Example format:\n"
+                    "  Economic Goods -> are scarce unlike -> Free Goods\n"
+                    "  Free Goods -> can be converted to -> Economic Goods\n"
+                    "  Economic Bad -> is opposite of -> Economic Good\n\n"
+                    "Only show connections that are genuinely meaningful. "
+                    "Do not repeat the same connection multiple times. "
+                    "Do not show a concept connecting to itself.\n"
+                    'Return JSON: {"connections": ["CONCEPT A -> RELATIONSHIP -> CONCEPT B", "..."]}'
+                ),
+            },
+        ],
+        temperature=0.2,
+        max_tokens=700,
+        response_format={"type": "json_object"},
+    )
+    log_cost("pdf_conceptual_map", "gpt-4o",
+             input_tokens=resp.usage.prompt_tokens,
+             output_tokens=resp.usage.completion_tokens)
+    try:
+        connections = json.loads(resp.choices[0].message.content).get("connections", [])
+    except Exception:
+        return []
+    out = []
+    seen = set()
+    for connection in connections or []:
+        text = str(connection or "").strip()
+        normalized = re.sub(r"\s+", " ", text).strip().lower()
+        if not text or normalized in seen:
+            continue
+        seen.add(normalized)
+        out.append({"connection": text})
+    return out
 
 
 
@@ -1127,7 +1309,7 @@ def _render_pdf(html_content: str, title_short: str, watermark: bool = False) ->
                     "text-align:center;padding:0 22mm;"
                     "box-sizing:border-box;"
                     "'>Page <span class='pageNumber'></span> "
-                    "of <span class='totalPages'></span> ? Neurativo</div>"
+                    "of <span class='totalPages'></span> &middot; Neurativo</div>"
                 )
                 if watermark:
                     footer = (
@@ -1146,7 +1328,7 @@ def _render_pdf(html_content: str, title_short: str, watermark: bool = False) ->
                         "<span style='font-size:7pt;font-weight:600;color:#7c3aed;"
                         "background:#f5f3ff;padding:2px 8px;border-radius:4px;"
                         "border:1px solid #ddd8fe;'>"
-                        "Neurativo Free ? upgrade for the full report"
+                        "Neurativo Free - upgrade for the full report"
                         "</span>"
                         "</div>"
                     )
@@ -1337,7 +1519,7 @@ async def generate_lecture_pdf(
             if isinstance(c, dict)
             and not str(c.get("concept_name", "")).startswith("__")
         ]
-        if len(visible_saved) >= 3:
+        if len(visible_saved) >= 3 and not _has_placeholder_timestamps(visible_saved):
             concept_note_cards = saved_cards
             print(f"[pdf] using {len(visible_saved)} saved concept cards")
         else:
@@ -1474,7 +1656,7 @@ async def generate_lecture_pdf(
 
         tasks: list = []
         tasks.append(asyncio.to_thread(_call_executive_summary, cleaned_transcript, title, topic))
-        tasks.append(asyncio.to_thread(_call_glossary, grounded_summary or cleaned_transcript, topic, 18 if n_sections >= 3 else 10))
+        tasks.append(asyncio.to_thread(_call_glossary_from_cards, concept_note_cards, topic, 18 if n_sections >= 3 else 10))
         tasks.append(asyncio.to_thread(_call_takeaways, cleaned_transcript, grounded_summary or summary, topic))
         tasks.append(asyncio.to_thread(_call_quick_review, cleaned_transcript, grounded_summary or summary, topic, n_questions))
 
@@ -1484,9 +1666,9 @@ async def generate_lecture_pdf(
         adaptive_study_weighting = build_adaptive_study_weighting(adaptive_intelligence)
         deterministic_conceptual_map = build_relationship_concept_map(concept_graph)
 
-        has_map = n_sections >= 3 and not deterministic_conceptual_map
+        has_map = n_sections >= 3
         if has_map:
-            tasks.append(asyncio.to_thread(_call_conceptual_map, raw_sections))
+            tasks.append(asyncio.to_thread(_call_conceptual_map_connections, raw_sections))
 
         tasks.append(asyncio.to_thread(
             _call_study_roadmap,
@@ -1586,7 +1768,7 @@ async def generate_lecture_pdf(
 
         glossary: list[dict] = results[ri] if not isinstance(results[ri], Exception) else []
         ri += 1
-        glossary = _merge_glossary(_glossary_from_concept_sections(concept_sections), glossary, limit=24)
+        glossary = glossary[:24]
         if glossary:
             try:
                 glossary = await asyncio.to_thread(_call_mnemonics, glossary)
@@ -1598,11 +1780,13 @@ async def generate_lecture_pdf(
         quick_review: list[dict] = results[ri] if not isinstance(results[ri], Exception) else []
         ri += 1
 
-        conceptual_map: list[dict] = deterministic_conceptual_map
+        conceptual_map: list[dict] = []
         if has_map:
             r = results[ri]
             ri += 1
             conceptual_map = r if not isinstance(r, Exception) else []
+        if not conceptual_map:
+            conceptual_map = _fallback_conceptual_map_from_sections(raw_sections) or deterministic_conceptual_map
 
         r = results[ri]
         ri += 1

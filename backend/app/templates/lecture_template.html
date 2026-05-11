@@ -1189,7 +1189,7 @@
         .cheat-head .meta { font-family: var(--sans); font-size: 7.5pt; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-3); }
         .cheat-grid {
             display: grid;
-            grid-template-columns: 1.05fr 1.7fr 1.35fr 0.9fr;
+            grid-template-columns: 1.05fr 1.65fr 1.2fr 1.15fr;
             gap: 0;
             border-top: var(--hairline);
             border-left: var(--hairline);
@@ -1251,6 +1251,12 @@
             font-weight: 600;
             color: var(--ink);
             font-size: 8pt;
+            white-space: normal !important;
+            overflow: visible !important;
+            max-width: none !important;
+            text-overflow: clip !important;
+            word-break: normal !important;
+            overflow-wrap: anywhere;
         }
         .cheat-grid .cell .cite {
             display: block;
@@ -1292,11 +1298,12 @@
         /* Final PDF text-layer override. The :not(#id) selector deliberately
            carries ID specificity so no heading/card class can reintroduce
            non-zero spacing or ligatures and scramble copied PDF text. */
+        html,
         body,
-        body *:not(#neurativo-pdf-text-reset),
-        h1, h2, h3, h4, h5, h6, p, span, div, li, td, th, a, strong, em,
+        body *,
         body *::before,
-        body *::after {
+        body *::after,
+        h1, h2, h3, h4, h5, h6, p, span, div, td, th {
             letter-spacing: 0 !important;
             word-spacing: 0 !important;
             font-variant-ligatures: none !important;
@@ -1728,7 +1735,7 @@
         {% if conn.heading %}
         <div class="connection-heading">{{ conn.heading }}</div>
         {% endif %}
-        <p>{{ conn.paragraph }}</p>
+        <p>{{ conn.connection or conn.paragraph }}</p>
     </div>
     {% endfor %}
     {% endif %}
