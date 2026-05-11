@@ -1089,9 +1089,27 @@
         .pull .attr { display: block; font-family: var(--sans); font-style: normal; font-size: 8pt; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-3); margin-top: 3mm; }
 
         /* ─── 13. CONCEPTUAL MAP ────────────────────────────────── */
-        .connection-block { border-left: 2pt solid var(--ink-5); padding: 3mm 5mm; margin-bottom: 4mm; page-break-inside: avoid; }
-        .connection-heading { font-variant: small-caps; font-size: 8.5pt; font-weight: 600; color: var(--ink-3); margin-bottom: 1.5mm; letter-spacing: 0.3px; }
-        .connection-block p { font-size: 9.5pt; color: var(--ink-2); margin: 0; line-height: 1.7; }
+        .connection-block {
+            border-left: 2pt solid var(--accent-rule);
+            padding: 3mm 5mm;
+            margin-bottom: 5mm;
+            page-break-inside: avoid;
+        }
+        .connection-heading {
+            font-family: var(--sans);
+            font-size: 6.8pt;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.18em;
+            color: var(--accent-text);
+            margin-bottom: 1.5mm;
+        }
+        .connection-block p {
+            font-size: 9.5pt;
+            color: var(--ink-2);
+            margin: 0;
+            line-height: 1.75;
+        }
 
         /* ─── 14. KEY TAKEAWAYS ─────────────────────────────────── */
         .takeaway-list { list-style: none; padding: 0; margin: 0; }
@@ -1938,7 +1956,7 @@
         {% if conn.heading %}
         <div class="connection-heading">{{ conn.heading }}</div>
         {% endif %}
-        <p>{{ conn.connection or conn.paragraph }}</p>
+        <p>{{ conn.paragraph or conn.connection or conn.paragraph }}</p>
     </div>
     {% endfor %}
     {% endif %}

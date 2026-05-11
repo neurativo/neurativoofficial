@@ -899,7 +899,7 @@ def _fallback_conceptual_map_from_sections(sections: list[str]) -> list[dict]:
         if normalized in seen:
             return
         seen.add(normalized)
-        out.append({"connection": text})
+        out.append({"heading": "CONNECTION", "paragraph": text})
 
     titles = []
     for section in sections or []:
@@ -1119,7 +1119,6 @@ def _call_conceptual_map(section_summaries: list[str]) -> list[dict]:
 
 
 def _call_conceptual_map_connections(section_summaries: list[str]) -> list[dict]:
-    """GPT-4o synthesis: returns distinct concept-to-concept lecture connections."""
     if not _client:
         return []
     combined = "\n\n".join([f"Section {i + 1}: {s}" for i, s in enumerate(section_summaries)])
@@ -1129,7 +1128,7 @@ def _call_conceptual_map_connections(section_summaries: list[str]) -> list[dict]
             {
                 "role": "system",
                 "content": (
-                    "You synthesise academic knowledge, finding meaningful concept-to-concept links inside one lecture. "
+                    "You synthesise academic knowledge, finding the ideas that bridge across lecture sections. "
                     f"{_PDF_TRANSCRIPT_ONLY_RULE}"
                 ),
             },
@@ -1138,22 +1137,26 @@ def _call_conceptual_map_connections(section_summaries: list[str]) -> list[dict]
                 "content": (
                     f"SECTIONS:\n{combined}\n\n"
                     "Create a conceptual map showing how the concepts in this lecture connect to each other. "
-                    "For each connection describe the relationship in one sentence.\n\n"
-                    "Format as a list of connections:\n"
-                    "  CONCEPT A -> RELATIONSHIP -> CONCEPT B\n\n"
-                    "Example format:\n"
-                    "  Economic Goods -> are scarce unlike -> Free Goods\n"
-                    "  Free Goods -> can be converted to -> Economic Goods\n"
-                    "  Economic Bad -> is opposite of -> Economic Good\n\n"
-                    "Only show connections that are genuinely meaningful. "
-                    "Do not repeat the same connection multiple times. "
-                    "Do not show a concept connecting to itself.\n"
-                    'Return JSON: {"connections": ["CONCEPT A -> RELATIONSHIP -> CONCEPT B", "..."]}'
+                    "Write it as a sequence of labelled prose blocks — not arrows, not bullet points, not a list of connections.\n\n"
+                    "Each block has:\n"
+                    "- \"heading\": a short ALL-CAPS label showing the role this cluster plays in the lecture "
+                    "(e.g. 'FOUNDATION', 'CORE LAW', 'FROM ROTATION TO AC', 'BACKEND STACK', 'BRIDGE TO QUANTUM'). "
+                    "Max 4 words. Must describe the conceptual role, not just repeat a section title.\n"
+                    "- \"paragraph\": 2-3 sentences explaining how the concepts in this cluster connect to each other "
+                    "AND how this cluster connects to the next one. Written as flowing prose, present tense. "
+                    "Name the actual concepts explicitly. Show the dependency or relationship.\n\n"
+                    "Rules:\n"
+                    "- 4 to 7 blocks total depending on lecture length\n"
+                    "- Each block covers a natural cluster of related sections\n"
+                    "- The blocks must form a narrative chain — each one leads into the next\n"
+                    "- Never write generic blocks like 'Introduction' or 'Summary'\n"
+                    "- Only use concepts explicitly present in the sections above\n\n"
+                    'Return JSON: {"connections": [{"heading": "FOUNDATION", "paragraph": "..."}, ...]}'
                 ),
             },
         ],
-        temperature=0.2,
-        max_tokens=700,
+        temperature=0.4,
+        max_tokens=1000,
         response_format={"type": "json_object"},
     )
     log_cost("pdf_conceptual_map", "gpt-4o",
@@ -1165,13 +1168,16 @@ def _call_conceptual_map_connections(section_summaries: list[str]) -> list[dict]
         return []
     out = []
     seen = set()
-    for connection in connections or []:
-        text = str(connection or "").strip()
-        normalized = re.sub(r"\s+", " ", text).strip().lower()
-        if not text or normalized in seen:
+    for conn in connections or []:
+        heading = str(conn.get("heading") or "").strip().upper()
+        paragraph = str(conn.get("paragraph") or "").strip()
+        if not heading or not paragraph:
             continue
-        seen.add(normalized)
-        out.append({"connection": text})
+        key = heading.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({"heading": heading, "paragraph": paragraph})
     return out
 
 
