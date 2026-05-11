@@ -1015,25 +1015,22 @@ def _call_study_roadmap(
     section_titles: list[str],
     transcript: str = "",
 ) -> dict:
-    """GPT-4o: recommends prerequisite concepts and next topics for this lecture.
-    Uses the actual transcript so forward references (e.g. 'we'll cover unit 8 next')
-    are surfaced as explicit next-step recommendations."""
     if not _client:
-        return {"next_topics": [], "prerequisites": []}
+        return {"days": [], "reminders": [], "next_topics": [], "prerequisites": []}
     topic_hint = f"Topic: {topic}. " if topic else ""
     titles_str = ", ".join(section_titles) if section_titles else "N/A"
-    # Include a slice of the transcript so GPT can extract forward references
     transcript_excerpt = transcript[:4000].strip() if transcript else ""
+    n_sections = len(section_titles)
+    n_days = 3 if n_sections <= 6 else 5 if n_sections <= 14 else 7
     resp = _client.chat.completions.create(
         model="gpt-4o",
         messages=[
             {
                 "role": "system",
                 "content": (
-                    "You are an expert curriculum designer who maps academic learning paths. "
-                    "You only use information from the transcript provided — never from general knowledge about the subject. "
-                    "If the professor explicitly mentions future topics, unit numbers, or follow-up lessons, "
-                    "those must appear as the first entries in next_topics. "
+                    "You are an expert study planner. You create concrete day-by-day study schedules "
+                    "based only on the sections actually covered in this lecture. "
+                    "Never recommend external resources or topics not present in the transcript. "
                     f"{_PDF_TRANSCRIPT_ONLY_RULE}"
                 ),
             },
@@ -1043,20 +1040,27 @@ def _call_study_roadmap(
                     "Note: The transcript may contain mixed languages. Extract meaning from all languages present. Respond in English.\n\n"
                     f"TRANSCRIPT (excerpt):\n{transcript_excerpt}\n\n"
                     f"Lecture title: \"{title}\"\n"
-                    f"{topic_hint}Sections covered: {titles_str}\n\n"
-                    "Based ONLY on the lecture transcript provided above, return a JSON object with exactly two fields:\n"
-                    "- \"next_topics\": array of 3-5 objects, each with \"topic\" (name) and "
-                    "\"reason\" (one sentence). If the professor mentioned specific units, topics, "
-                    "or subjects to study next, list those first. Do not recommend topics that were "
-                    "not mentioned or clearly implied by this specific lecture.\n"
-                    "- \"prerequisites\": array of 2-3 objects, each with \"concept\" (name) and "
-                    "\"reason\" (one sentence explaining why knowing it helps with this lecture).\n"
-                    "Be specific to this lecture's content. Do not be generic."
+                    f"{topic_hint}Sections covered ({n_sections} total): {titles_str}\n\n"
+                    f"Create a {n_days}-day study plan for this lecture. Distribute the sections across the days logically — "
+                    "group related sections together, put foundational concepts on day 1, advanced or synthesis topics last.\n\n"
+                    "For each day provide:\n"
+                    "- \"day\": day number as integer\n"
+                    "- \"label\": a short evocative label for what this day covers (max 5 words, e.g. 'Foundations & Core Laws')\n"
+                    "- \"chapters\": the section titles covered this day as an array of strings\n"
+                    "- \"task\": one concrete hands-on task the student should do after reading (e.g. 'Write your own decorator from scratch', 'Redraw the transformer diagram from memory'). Be specific to the actual content.\n\n"
+                    "Also provide:\n"
+                    "- \"reminders\": array of 4-6 short sharp reminders or warnings the lecturer gave. "
+                    "Extract these directly from the transcript — things like rules, warnings, common mistakes the lecturer flagged. "
+                    "Each reminder is one sentence max 20 words.\n"
+                    "- \"next_topics\": array of 3 objects with \"topic\" and \"reason\", based on what the lecturer said comes next\n"
+                    "- \"prerequisites\": array of 2 objects with \"concept\" and \"reason\"\n\n"
+                    'Return JSON: {"days": [{"day": 1, "label": "...", "chapters": ["..."], "task": "..."}], '
+                    '"reminders": ["...", ...], "next_topics": [...], "prerequisites": [...]}'
                 ),
             },
         ],
         temperature=0.3,
-        max_tokens=700,
+        max_tokens=1200,
         response_format={"type": "json_object"},
     )
     log_cost("pdf_study_roadmap", "gpt-4o",
@@ -1065,11 +1069,13 @@ def _call_study_roadmap(
     try:
         data = json.loads(resp.choices[0].message.content)
         return {
+            "days": data.get("days", []),
+            "reminders": data.get("reminders", []),
             "next_topics":   data.get("next_topics", []),
             "prerequisites": data.get("prerequisites", []),
         }
     except Exception:
-        return {"next_topics": [], "prerequisites": []}
+        return {"days": [], "reminders": [], "next_topics": [], "prerequisites": []}
 
 
 def _call_conceptual_map(section_summaries: list[str]) -> list[dict]:
@@ -1461,7 +1467,7 @@ async def _generate_lite_pdf(
         "takeaways":            [],
         "quick_review":         [],
         "conceptual_map":       [],
-        "study_roadmap":        {"next_topics": [], "prerequisites": []},
+        "study_roadmap":        {"days": [], "reminders": [], "next_topics": [], "prerequisites": []},
         "summary_html":         "",
         "compression_ratio":    0.0,
         "visual_frames":        [],
@@ -1802,7 +1808,7 @@ async def generate_lecture_pdf(
 
         r = results[ri]
         ri += 1
-        study_roadmap: dict = r if not isinstance(r, Exception) else {"next_topics": [], "prerequisites": []}
+        study_roadmap: dict = r if not isinstance(r, Exception) else {"days": [], "reminders": [], "next_topics": [], "prerequisites": []}
 
         r = results[ri]
         ri += 1
@@ -1868,7 +1874,12 @@ async def generate_lecture_pdf(
         glossary = sanitized_artifacts["glossary"]
         quick_review = sanitized_artifacts["quick_review"]
         takeaways = sanitized_artifacts["takeaways"] or _fallback_takeaways(grounded_summary or summary, enriched_sections)
-        study_roadmap = sanitized_artifacts["study_roadmap"]
+        study_roadmap = {
+            "days": study_roadmap.get("days", []),
+            "reminders": study_roadmap.get("reminders", []),
+            "next_topics": sanitized_artifacts["study_roadmap"].get("next_topics", []),
+            "prerequisites": sanitized_artifacts["study_roadmap"].get("prerequisites", []),
+        }
         glossary, takeaways, quick_review = _prioritize_revision_outputs(
             glossary,
             takeaways,
@@ -1897,6 +1908,19 @@ async def generate_lecture_pdf(
             + sum(len(c.get("paragraph", "").split()) for c in conceptual_map)
             + sum(len((t.get("topic", "") + " " + t.get("reason", "")).split()) for t in study_roadmap.get("next_topics", []))
             + sum(len((p.get("concept", "") + " " + p.get("reason", "")).split()) for p in study_roadmap.get("prerequisites", []))
+            + sum(
+                len(
+                    (
+                        str(day.get("label", ""))
+                        + " "
+                        + " ".join(day.get("chapters", []) or [])
+                        + " "
+                        + str(day.get("task", ""))
+                    ).split()
+                )
+                for day in study_roadmap.get("days", [])
+            )
+            + sum(len(str(reminder).split()) for reminder in study_roadmap.get("reminders", []))
             + sum(
                 len(
                     (

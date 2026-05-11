@@ -1407,6 +1407,99 @@
           color: #166534;
           border-color: #bbf7d0;
         }
+        .study-plan-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(72mm, 1fr));
+            gap: 3mm;
+            margin-bottom: 6mm;
+        }
+        .study-day-card {
+            border: 0.5pt solid var(--ink-5);
+            border-top: 2pt solid var(--accent-rule);
+            border-radius: 5px;
+            padding: 3.5mm 4mm;
+            page-break-inside: avoid;
+            background: linear-gradient(180deg, var(--accent-lt), #fff 70%);
+        }
+        .study-day-header {
+            display: flex;
+            align-items: baseline;
+            gap: 3mm;
+            margin-bottom: 2.5mm;
+        }
+        .study-day-num {
+            font-family: var(--sans);
+            font-size: 6.8pt;
+            font-weight: 700;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: var(--accent-text);
+            white-space: nowrap;
+        }
+        .study-day-label {
+            font-family: var(--serif);
+            font-size: 10pt;
+            color: var(--ink);
+            font-weight: 600;
+            line-height: 1.2;
+        }
+        .study-day-chapters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 3px;
+            margin-bottom: 2.5mm;
+        }
+        .study-chapter-pill {
+            font-size: 7.2pt;
+            color: var(--ink-3);
+            background: var(--ink-7);
+            border: 0.4pt solid var(--ink-5);
+            border-radius: 99px;
+            padding: 1px 6px;
+            line-height: 1.4;
+        }
+        .study-day-task {
+            font-size: 8.2pt;
+            color: var(--ink-2);
+            font-style: italic;
+            line-height: 1.45;
+            padding-top: 2mm;
+            border-top: 0.4pt solid var(--ink-6);
+        }
+        .study-reminders {
+            border: 0.5pt solid var(--ink-5);
+            border-radius: 5px;
+            padding: 4mm 5mm;
+            margin-bottom: 5mm;
+            background: var(--paper-2);
+        }
+        .study-reminders-label {
+            font-size: 7pt;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.16em;
+            color: var(--ink-3);
+            margin-bottom: 2.5mm;
+        }
+        .study-reminders-list {
+            margin: 0;
+            padding-left: 4mm;
+            list-style: none;
+        }
+        .study-reminders-list li {
+            font-size: 8.5pt;
+            color: var(--ink-2);
+            line-height: 1.6;
+            margin-bottom: 1.5mm;
+            padding-left: 3mm;
+            position: relative;
+        }
+        .study-reminders-list li::before {
+            content: "–";
+            position: absolute;
+            left: 0;
+            color: var(--ink-4);
+        }
     </style>
 </head>
 
@@ -2017,14 +2110,49 @@
     <!-- ══════════════════════════════════════
          LEARNING PATH
     ══════════════════════════════════════ -->
-    {% if study_roadmap and (study_roadmap.prerequisites or study_roadmap.next_topics) %}
+    {% if study_roadmap and (study_roadmap.days or study_roadmap.next_topics or study_roadmap.prerequisites) %}
     <div class="eyebrow-row pb-before">
-        <span class="eyebrow-label">AI Study Aid</span>
+        <span class="eyebrow-label">Exam Game Plan</span>
     </div>
     <hr class="eyebrow-rule">
-    <h2>Your Learning Path</h2>
+    <h2>How to Use This Report</h2>
 
-    <div class="roadmap-grid">
+    {% if study_roadmap.days %}
+    <div class="study-plan-grid">
+        {% for day in study_roadmap.days %}
+        <div class="study-day-card">
+            <div class="study-day-header">
+                <div class="study-day-num">DAY {{ day.day }}</div>
+                <div class="study-day-label">{{ day.label }}</div>
+            </div>
+            {% if day.chapters %}
+            <div class="study-day-chapters">
+                {% for ch in day.chapters %}
+                <span class="study-chapter-pill">{{ ch }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% if day.task %}
+            <div class="study-day-task">→ {{ day.task }}</div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if study_roadmap.reminders %}
+    <div class="study-reminders">
+        <div class="study-reminders-label">Lecturer's Reminders</div>
+        <ul class="study-reminders-list">
+            {% for reminder in study_roadmap.reminders %}
+            <li>{{ reminder }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    {% if study_roadmap.next_topics or study_roadmap.prerequisites %}
+    <div class="roadmap-grid" style="margin-top: 5mm;">
         {% if study_roadmap.prerequisites %}
         <div>
             <div class="roadmap-col-heading roadmap-before">Before this lecture</div>
@@ -2038,7 +2166,6 @@
             </ul>
         </div>
         {% endif %}
-
         {% if study_roadmap.next_topics %}
         <div>
             <div class="roadmap-col-heading roadmap-next">What to study next</div>
@@ -2053,6 +2180,7 @@
         </div>
         {% endif %}
     </div>
+    {% endif %}
     {% endif %}
 
 </body>
