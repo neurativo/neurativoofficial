@@ -91,6 +91,54 @@ def _get_domain_color(topic: str | None) -> str:
     return _DOMAIN_COLORS.get(topic.lower(), _DEFAULT_COLOR)
 
 
+def _get_cover_stats(topic: str | None, enriched_sections: list[dict], concept_note_cards: list[dict], quick_review: list[dict]) -> dict:
+    """Returns the 3rd and 4th cover tile stats based on domain and content."""
+    n_sections = len([s for s in enriched_sections if s.get("title") and not str(s.get("title", "")).startswith("__")])
+
+    # Count exam traps across all sections
+    n_traps = sum(
+        1 for s in enriched_sections
+        if s.get("exam_traps")
+    )
+
+    # Count code blocks / equations / key concepts depending on domain
+    topic_lower = (topic or "").lower()
+
+    if topic_lower in ("computer science", "software", "engineering", "programming"):
+        # Count sections that have code examples
+        n_code = sum(1 for s in enriched_sections if any(
+            "def " in str(e) or "class " in str(e) or "()" in str(e) or "import " in str(e)
+            for e in (s.get("examples") or [])
+        ))
+        stat3 = {"k": "Sections", "v": str(n_sections), "u": "In this report"}
+        stat4 = {"k": "Code Patterns", "v": str(max(n_code, n_traps)), "u": "Must-know idioms"}
+    elif topic_lower in ("physics", "mathematics", "chemistry", "engineering"):
+        # Count sections that have equations
+        n_eq = sum(1 for s in enriched_sections if any(
+            "=" in str(e) or "∫" in str(e) or "Δ" in str(e) or "²" in str(e)
+            for e in (s.get("examples") or []) + (s.get("definitions") or [])
+        ))
+        stat3 = {"k": "Sections", "v": str(n_sections), "u": "In this report"}
+        stat4 = {"k": "Key Equations", "v": str(max(n_eq, n_traps)), "u": "Must-memorise"}
+    elif topic_lower in ("economics", "business", "finance"):
+        # Count exam traps — economics PDFs highlight mark targets
+        n_cards = len([c for c in (concept_note_cards or []) if isinstance(c, dict) and not str(c.get("concept_name", "")).startswith("__")])
+        stat3 = {"k": "Sections", "v": str(n_sections), "u": "In this report"}
+        stat4 = {"k": "Exam Traps", "v": str(n_traps) if n_traps else str(n_cards), "u": "Flagged by lecturer"}
+    elif topic_lower in ("medicine", "nursing", "pharmacy"):
+        n_cards = len([c for c in (concept_note_cards or []) if isinstance(c, dict) and not str(c.get("concept_name", "")).startswith("__")])
+        stat3 = {"k": "Sections", "v": str(n_sections), "u": "In this report"}
+        stat4 = {"k": "Clinical Terms", "v": str(n_cards), "u": "In this report"}
+    elif topic_lower in ("law", "legal"):
+        stat3 = {"k": "Sections", "v": str(n_sections), "u": "In this report"}
+        stat4 = {"k": "Exam Traps", "v": str(n_traps), "u": "Flagged by lecturer"}
+    else:
+        stat3 = {"k": "Sections", "v": str(n_sections), "u": "In this report"}
+        stat4 = {"k": "Exam Traps", "v": str(n_traps) if n_traps else str(len(quick_review)), "u": "Flagged by lecturer"}
+
+    return {"stat3": stat3, "stat4": stat4}
+
+
 # ── Adaptive question count (Bloom's taxonomy scaling) ────────────────────────
 _DIFFICULTIES = ["Recall", "Understanding", "Application"]
 
@@ -1464,6 +1512,8 @@ async def _generate_lite_pdf(
         "language":             language.upper(),
         "topic":                topic,
         "reading_time_minutes": max(1, word_count // 238),
+        "cover_stat3":          {"k": "Sections", "v": str(total_sections_actual or n_sections), "u": "In this report"},
+        "cover_stat4":          {"k": "Reading", "v": str(max(1, word_count // 238)), "u": "Minutes estimated"},
         "section_label":        section_label,
         "review_label":         review_label,
         "glossary_label":       glossary_label,
@@ -1968,6 +2018,7 @@ async def generate_lecture_pdf(
         template = env.get_template("lecture_template.html")
         total_concepts = sum(len(s.get("concepts", [])) for s in enriched_sections)
         qa_pairs = len(quick_review)
+        cover_stats = _get_cover_stats(topic, enriched_sections, concept_note_cards, quick_review)
         context = {
             "title": title,
             "created_at": created_at,
@@ -1980,6 +2031,8 @@ async def generate_lecture_pdf(
             "language": language.upper(),
             "topic": topic,
             "reading_time_minutes": reading_time_minutes,
+            "cover_stat3": cover_stats["stat3"],
+            "cover_stat4": cover_stats["stat4"],
             "summary_confidence": lecture_summary_confidence(grounded_notes),
             "section_label": section_label,
             "review_label": review_label,
