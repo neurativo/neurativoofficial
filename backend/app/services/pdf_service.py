@@ -163,6 +163,14 @@ def _truncate_words(text: str, limit: int) -> str:
     return " ".join(words[:limit]).rstrip(" .,;:") + "..."
 
 
+def _exam_trap_text(value) -> str:
+    if isinstance(value, dict):
+        misconception = str(value.get("misconception") or "").strip()
+        correct = str(value.get("correct") or "").strip()
+        return " ".join(part for part in (misconception, correct) if part).strip()
+    return str(value or "").strip()
+
+
 def _content_word_count(section: dict) -> int:
     return len(
         (
@@ -176,7 +184,7 @@ def _content_word_count(section: dict) -> int:
             + " "
             + " ".join(section.get("examples") or [])
             + " "
-            + " ".join(section.get("exam_traps") or [])
+            + " ".join(_exam_trap_text(item) for item in (section.get("exam_traps") or []))
         ).split()
     )
 
@@ -190,7 +198,7 @@ def _compact_inline_items(section: dict) -> list[dict]:
     if section.get("examples"):
         items.append({"label": "Example", "text": _truncate_words(section["examples"][0], 16), "kind": "example"})
     if section.get("exam_traps"):
-        items.append({"label": "Exam Trap", "text": _truncate_words(section["exam_traps"][0], 16), "kind": "exam-trap"})
+        items.append({"label": "Exam Trap", "text": _truncate_words(_exam_trap_text(section["exam_traps"][0]), 16), "kind": "exam-trap"})
     return items[:4]
 
 
@@ -221,7 +229,6 @@ def _section_render_profile(section: dict) -> dict:
         "show_definition_box": bool(section.get("definitions")) and not inline_mode,
         "show_distinction_box": bool(section.get("distinctions")) and not inline_mode,
         "show_examples_block": bool(section.get("examples")) and not inline_mode,
-        "show_exam_trap_box": bool(section.get("exam_traps")) and not inline_mode,
         "chapter_density": "dense" if word_count >= 170 else "compact" if compact_mode else "balanced",
         "toc_title": toc_title,
         "estimated_pages": estimated_pages,
@@ -276,8 +283,15 @@ def _concept_cards_to_pdf_sections(concept_note_cards: list[dict]) -> list[dict]
             ]
         trap_obj = card.get("exam_trap") or {}
         exam_traps = []
+        exam_trap_structured = False
         if isinstance(trap_obj, dict) and trap_obj:
-            exam_traps = [f"Students think {trap_obj.get('misconception', '')}; actually {trap_obj.get('correct', '')}"]
+            misconception = str(trap_obj.get("misconception") or "").strip()
+            correct = str(trap_obj.get("correct") or "").strip()
+            if misconception and correct:
+                exam_traps = [{"misconception": misconception, "correct": correct}]
+                exam_trap_structured = True
+        elif isinstance(trap_obj, str) and trap_obj.strip():
+            exam_traps = [trap_obj.strip()]
         section = {
             "title": title,
             "lead_sentence": (definitions or [card.get("summary", "")])[0],
@@ -305,6 +319,7 @@ def _concept_cards_to_pdf_sections(concept_note_cards: list[dict]) -> list[dict]
             "citations": citations,
             "confidence": card.get("confidence") or 0.0,
             "verification_status": card.get("verification_status") or "supported",
+            "exam_trap_structured": exam_trap_structured,
         }
         section.update(_section_render_profile(section))
         sections.append(section)
@@ -737,10 +752,7 @@ def _call_enrich_section(
                     "professor refined it, use the most complete transcript-supported version.\n"
                     "- \"key_distinction\": The most important contrast taught in this section, "
                     "for example positive vs normative or economic vs non-economic goods. Return null if absent.\n"
-                    "- \"exam_trap\": A transcript-supported warning, trick, correction, or misconception. "
-                    "Populate this whenever the section includes signals like trick, they will ask, "
-                    "comes in paper, don't confuse, common mistake, students think, wrong, do you agree, "
-                    "not really, careful here, or a student misconception being corrected. Return null only if absent.\n"
+                    "- \"exam_trap\": When the section contains a misconception correction, trick warning, or student error pattern, return an object with two fields: \"misconception\" (what students wrongly think, starting with 'Students think...') and \"correct\" (the actual truth, starting with 'Actually...'). The format must always be exactly: misconception = 'Students think X' and correct = 'Actually Y'. Return null only if genuinely absent.\n"
                     "- \"analogy\": A 2-3 sentence real-world analogy that makes this concept click. "
                     "Use 'Think of...' or 'Imagine...' framing. Only generate if a natural analogy "
                     "exists for this specific content. Return null if no natural analogy exists.\n"

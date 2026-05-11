@@ -1311,6 +1311,39 @@
             font-feature-settings: "liga" 0, "calt" 0 !important;
             text-rendering: geometricPrecision !important;
         }
+        .exam-trap-block {
+          margin: 3mm 0 2mm;
+          padding: 3mm 4mm;
+          background: #fffbeb;
+          border: 0.5pt solid #fde68a;
+          border-left: 2.5pt solid #f59e0b;
+          border-radius: 5px;
+          page-break-inside: avoid;
+        }
+        .exam-trap-label {
+          font-size: 6.8pt;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.14em;
+          color: #b45309;
+          margin-bottom: 1.5mm;
+        }
+        .exam-trap-body {
+          display: flex;
+          flex-direction: column;
+          gap: 1mm;
+        }
+        .exam-trap-wrong {
+          font-size: 8.7pt;
+          color: #92400e;
+          font-weight: 600;
+          line-height: 1.5;
+        }
+        .exam-trap-correct {
+          font-size: 8.7pt;
+          color: #065f46;
+          line-height: 1.5;
+        }
     </style>
 </head>
 
@@ -1580,17 +1613,6 @@
             </ul>
             {% endif %}
 
-            {% if sec.concepts %}
-            <div class="concepts-wrap">
-                <div class="concepts-label">Key Concepts</div>
-                <div class="concepts-pills">
-                    {% for c in sec.concepts %}
-                    <span class="concept-pill">{{ c }}</span>
-                    {% endfor %}
-                </div>
-            </div>
-            {% endif %}
-
             {% if sec.show_definition_box %}
             <div class="edu-box">
                 <div class="edu-box-label">Key Definitions</div>
@@ -1631,12 +1653,44 @@
             {% endif %}
             {% endif %}
 
-            {% if sec.show_examples_block %}
+            {% if sec.exam_traps %}
+            {% for trap in sec.exam_traps %}
+            {% if trap is mapping and trap.misconception %}
+            <div class="exam-trap-block">
+              <div class="exam-trap-label">EXAM TRAP</div>
+              <div class="exam-trap-body">
+                <span class="exam-trap-wrong">{{ trap.misconception }}</span>
+                <span class="exam-trap-correct">{{ trap.correct }}</span>
+              </div>
+            </div>
+            {% else %}
+            <div class="exam-trap-block">
+              <div class="exam-trap-label">EXAM TRAP</div>
+              <div class="exam-trap-body">
+                <span class="exam-trap-wrong">{{ trap }}</span>
+              </div>
+            </div>
+            {% endif %}
+            {% endfor %}
+            {% endif %}
+
+            {% if sec.examples %}
             <div class="examples-wrap">
                 <div class="examples-label">Examples</div>
                 {% for e in sec.examples %}
                 <div class="example-row"><span class="example-arrow">→</span>{{ e }}</div>
                 {% endfor %}
+            </div>
+            {% endif %}
+
+            {% if sec.concepts %}
+            <div class="concepts-wrap">
+                <div class="concepts-label">Key Concepts</div>
+                <div class="concepts-pills">
+                    {% for c in sec.concepts %}
+                    <span class="concept-pill">{{ c }}</span>
+                    {% endfor %}
+                </div>
             </div>
             {% endif %}
 
@@ -1670,17 +1724,6 @@
                     </div>
                 </div>
                 {% endfor %}
-            </div>
-            {% endif %}
-
-            {% if sec.show_exam_trap_box %}
-            <div class="edu-box">
-                <div class="edu-box-label">Exam Traps</div>
-                <ul class="edu-box-list">
-                    {% for item in sec.exam_traps %}
-                    <li>{{ item }}</li>
-                    {% endfor %}
-                </ul>
             </div>
             {% endif %}
 
