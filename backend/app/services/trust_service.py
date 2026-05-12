@@ -3059,14 +3059,28 @@ def build_verified_cheat_sheet_from_cards(concept_note_cards: list[dict]) -> lis
                 }
                 exam_trap = f"Students think {misconception} — actually {correct}".strip()
         elif isinstance(structured_trap, str) and _normalise_ws(structured_trap):
-            fallback_correct = _normalise_ws(definition or summary)
-            misconception = f"Students think: {_normalise_ws(structured_trap)}"
-            if fallback_correct and misconception.lower() != fallback_correct.lower():
-                exam_trap_structured = {
-                    "misconception": misconception,
-                    "correct": fallback_correct,
-                }
-                exam_trap = f"{misconception} — actually {fallback_correct}".strip()
+            trap_text = _normalise_ws(structured_trap)
+            # Try to split self-contained "Students think X; actually Y" style strings
+            _split_m = re.search(
+                r"^(.{10,}?)\s*[;.]\s*(?:actually|but|however|in fact|the truth is|correct(?:ly)?[:,]?)\s*(.{10,})$",
+                trap_text,
+                flags=re.IGNORECASE,
+            )
+            if _split_m:
+                _misc = _split_m.group(1).strip().rstrip(".,;")
+                _corr = _split_m.group(2).strip()
+                if _misc.lower() != _corr.lower():
+                    exam_trap_structured = {"misconception": _misc, "correct": _corr}
+                    exam_trap = f"{_misc} — actually {_corr}".strip()
+            else:
+                fallback_correct = _normalise_ws(definition or summary)
+                misconception = trap_text if trap_text.lower().startswith("students") else f"Students think: {trap_text}"
+                if fallback_correct and misconception.lower() != fallback_correct.lower():
+                    exam_trap_structured = {
+                        "misconception": misconception,
+                        "correct": fallback_correct,
+                    }
+                    exam_trap = f"{misconception} — actually {fallback_correct}".strip()
         source = {
             "label": f"{card.get('source_start')} - {card.get('source_end')}",
             "start_seconds": _timestamp_to_seconds(card.get("source_start")),

@@ -233,10 +233,27 @@ def _fallback_structured_exam_trap(raw_trap, *, summary: str = "", distinction_t
     trap_text = str(raw_trap or "").strip()
     if len(trap_text) <= 10:
         return None
+
+    # Try to split self-contained "Students think X; actually Y" style strings
+    split_match = re.search(
+        r"^(.{10,}?)\s*[;.]\s*(?:actually|but|however|in fact|the truth is|correct(?:ly)?[:,]?)\s*(.{10,})$",
+        trap_text,
+        flags=re.IGNORECASE,
+    )
+    if split_match:
+        misconception = split_match.group(1).strip().rstrip(".,;")
+        correct = split_match.group(2).strip()
+        if misconception.lower() != correct.lower():
+            return {"misconception": misconception, "correct": correct}
+
+    # Original fallback: use summary or distinction as the correct answer
     correct = str(distinction_text or "").strip() or str(summary or "").strip()
     if not correct:
         return None
-    misconception = f"Students think: {trap_text}"
+    # Ensure correct is not just a repeat of the trap
+    if correct.lower().strip() == trap_text.lower().strip():
+        return None
+    misconception = trap_text if trap_text.lower().startswith("students") else f"Students think: {trap_text}"
     if misconception.lower() == correct.lower():
         return None
     return {"misconception": misconception, "correct": correct}
@@ -1958,6 +1975,9 @@ async def generate_lecture_pdf(
                 section.update(_section_render_profile(section))
             if not section.get("bullets") and enr.get("bullets"):
                 section["bullets"] = enr["bullets"]
+
+        _trap_count = sum(1 for s in enriched_sections if s.get("exam_trap_structured"))
+        print(f"[pdf] enriched_sections with exam_trap_structured: {_trap_count}/{len(enriched_sections)}")
 
         if exec_summary and transcript:
             top_terms = _top_terms(transcript[:8000], n=5)
