@@ -338,6 +338,9 @@ def _concept_cards_to_pdf_sections(concept_note_cards: list[dict]) -> list[dict]
         if not title or title.startswith("__"):
             continue
         summary = str(card.get("summary") or "").strip()
+        summary = re.sub(r'\bright\b,?\s*', '', summary)
+        summary = re.sub(r'\blamai\b,?\s*', '', summary, flags=re.IGNORECASE)
+        summary = re.sub(r'\s+', ' ', summary).strip()
         raw_definitions = card.get("key_definitions") or []
         examples = card.get("examples") or []
         all_text = (
@@ -375,16 +378,28 @@ def _concept_cards_to_pdf_sections(concept_note_cards: list[dict]) -> list[dict]
             distinctions = [
                 " vs ".join([str(a.get("name", "")).strip(), str(b.get("name", "")).strip()]).strip(" vs ")
             ]
-        trap_obj = card.get("exam_trap") or {}
+        _vs = _build_versus_items(title, distinctions)
+        print(f"[cards_debug] {card.get('concept_name')}: distinctions={distinctions} versus_items={_vs}")
+        trap_obj = card.get("exam_trap")
         exam_traps = []
         exam_trap_structured = None
-        structured_trap = _normalise_structured_exam_trap(trap_obj)
-        if structured_trap:
-            exam_traps = [structured_trap]
-            exam_trap_structured = structured_trap
+        if isinstance(trap_obj, dict) and trap_obj:
+            structured_trap = _normalise_structured_exam_trap(trap_obj)
+            if structured_trap:
+                exam_traps = [structured_trap]
+                exam_trap_structured = structured_trap
+            else:
+                fallback_trap = _fallback_structured_exam_trap(
+                    str(trap_obj),
+                    summary=summary,
+                    distinction_text=(distinctions or [""])[0],
+                )
+                if fallback_trap:
+                    exam_traps = [fallback_trap]
+                    exam_trap_structured = fallback_trap
         elif isinstance(trap_obj, str) and trap_obj.strip():
             fallback_trap = _fallback_structured_exam_trap(
-                trap_obj,
+                trap_obj.strip(),
                 summary=summary,
                 distinction_text=(distinctions or [""])[0],
             )
@@ -392,7 +407,15 @@ def _concept_cards_to_pdf_sections(concept_note_cards: list[dict]) -> list[dict]
                 exam_traps = [fallback_trap]
                 exam_trap_structured = fallback_trap
             else:
-                exam_traps = [trap_obj.strip()]
+                # Last resort: raw string as misconception, summary as correct
+                trap_clean = trap_obj.strip()
+                summary_clean = summary.strip()
+                if trap_clean and summary_clean and trap_clean.lower() != summary_clean.lower():
+                    exam_trap_structured = {
+                        "misconception": trap_clean[:200],
+                        "correct": summary_clean[:200],
+                    }
+                    exam_traps = [exam_trap_structured]
         raw_lead = (definitions or [card.get("summary", "")])[0]
         lead_sentence = re.sub(r'[^\x00-\x7F]', '', str(raw_lead or "")).strip()
         section = {
@@ -1796,6 +1819,10 @@ async def generate_lecture_pdf(
             raw_sections = _extract_summary_sections_loose(summary)
         n_sections = len(raw_sections)
         n_questions = _question_count(duration_sec)
+        if n_questions == 0 and word_count >= 500:
+            estimated_minutes = word_count // 130
+            n_questions = _question_count(estimated_minutes * 60)
+            print(f"[pdf] n_questions fallback from word_count: {n_questions} (est {estimated_minutes}min)")
 
         if IS_LITE:
             section_limit = 2 if IS_FREE else 4
@@ -1939,7 +1966,10 @@ async def generate_lecture_pdf(
             print("[pdf] glossary from cards empty — falling back to transcript glossary")
             try:
                 glossary = await asyncio.to_thread(
-                    _call_glossary, grounded_summary or summary, topic, 12
+                    _call_glossary,
+                    cleaned_transcript or grounded_summary or summary,
+                    topic,
+                    16,
                 )
             except Exception as _e:
                 print(f"[pdf] glossary fallback error: {_e}")
@@ -2020,7 +2050,7 @@ async def generate_lecture_pdf(
                 except Exception as e:
                     print(f"[pdf] exec_summary retry error (non-fatal): {e}")
 
-        if takeaways and not _has_grounded_overlap(" ".join(takeaways), transcript, minimum=3):
+        if takeaways and not _has_grounded_overlap(" ".join(takeaways), transcript, minimum=1):
             print(f"[pdf] takeaways failed transcript-overlap validation; using fallback.")
             takeaways = _fallback_takeaways(grounded_summary or summary, enriched_sections)
         elif not takeaways:
