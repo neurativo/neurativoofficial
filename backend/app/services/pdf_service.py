@@ -1578,6 +1578,14 @@ async def _generate_lite_pdf(
         "preview_now_features": preview_now_features,
         "preview_upgrade_features": preview_upgrade_features,
         "preview_sections":     sections_data[:2],
+        "toc_entries":          [],
+        "verified_cheat_sheet": [],
+        "revision_focus":       [],
+        "summary_confidence":   0.0,
+        "concept_graph":        {},
+        "adaptive_intelligence": {},
+        "adaptive_study_weighting": {},
+        "cheat_sheet_chapter_count": 0,
     }
 
     html_content = template.render(**context)
@@ -1821,6 +1829,7 @@ async def generate_lecture_pdf(
                     "examples": note.get("examples") or [],
                     "definitions": note.get("key_definitions") or [],
                     "distinctions": note.get("important_distinctions") or [],
+                    "versus_items": [],
                     "exam_traps": note.get("exam_traps") or [],
                     "subsections": note.get("subsections") or [],
                     "subtopic_sections": note.get("subtopic_sections") or [],
@@ -1846,6 +1855,7 @@ async def generate_lecture_pdf(
                     "examples": note.get("examples") or [],
                     "definitions": [],
                     "distinctions": [],
+                    "versus_items": [],
                     "exam_traps": [],
                     "subsections": [],
                     "subtopic_sections": [],
@@ -1872,6 +1882,7 @@ async def generate_lecture_pdf(
                     "examples": [],
                     "definitions": [],
                     "distinctions": [],
+                    "versus_items": [],
                     "exam_traps": [],
                     "subsections": [],
                     "subtopic_sections": [],
@@ -2062,7 +2073,7 @@ async def generate_lecture_pdf(
 
         def _truncate_words(s: str, n: int) -> str:
             words = str(s).split()
-            return (" ".join(words[:n]) + "?") if len(words) > n else str(s)
+            return (" ".join(words[:n]) + "…") if len(words) > n else str(s)
 
         env.filters["truncate_words"] = _truncate_words
         template = env.get_template("lecture_template.html")
@@ -2113,7 +2124,7 @@ async def generate_lecture_pdf(
             "accent_color": _get_domain_color(topic),
         }
         html_content = template.render(**context)
-        title_short = title[:50] + ("?" if len(title) > 50 else "")
+        title_short = title[:50] + ("…" if len(title) > 50 else "")
         pdf_bytes = await asyncio.to_thread(_render_pdf, html_content, title_short, False)
         return pdf_bytes
     except Exception as exc:
