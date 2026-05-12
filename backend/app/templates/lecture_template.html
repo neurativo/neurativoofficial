@@ -1806,8 +1806,8 @@
 
             {% if sec.exam_trap_structured and sec.exam_trap_structured.misconception and sec.exam_trap_structured.correct and sec.exam_trap_structured.misconception != sec.exam_trap_structured.correct %}
             <div class="exam-trap-block">
-              <span class="trap-wrong">✗ Students think: {{ sec.exam_trap_structured.misconception }}</span>
-              <span class="trap-correct">✓ Actually: {{ sec.exam_trap_structured.correct }}</span>
+              <span class="trap-wrong">✗ {{ sec.exam_trap_structured.misconception }}</span>
+              <span class="trap-correct">✓ {{ sec.exam_trap_structured.correct }}</span>
             </div>
             {% elif sec.exam_traps %}
             <div class="exam-trap-block">

@@ -3046,20 +3046,20 @@ def build_verified_cheat_sheet_from_cards(concept_note_cards: list[dict]) -> lis
         definition = _normalise_ws(matching_def.get("definition", "") if matching_def else "")
         summary = _normalise_ws(card.get("summary", ""))
         core_idea = _quick_recall_cue(definition or summary)
-        structured_trap = card.get("exam_trap") or {}
+        raw_trap_obj = card.get("exam_trap")
         exam_trap = ""
         exam_trap_structured = None
-        if isinstance(structured_trap, dict) and structured_trap:
-            misconception = _normalise_ws(structured_trap.get("misconception", ""))
-            correct = _normalise_ws(structured_trap.get("correct", ""))
+        if isinstance(raw_trap_obj, dict) and raw_trap_obj:
+            misconception = _normalise_ws(raw_trap_obj.get("misconception", ""))
+            correct = _normalise_ws(raw_trap_obj.get("correct", ""))
             if misconception and correct and misconception.lower() != correct.lower():
                 exam_trap_structured = {
                     "misconception": misconception,
                     "correct": correct,
                 }
-                exam_trap = f"Students think {misconception} — actually {correct}".strip()
-        elif isinstance(structured_trap, str) and _normalise_ws(structured_trap):
-            trap_text = _normalise_ws(structured_trap)
+                exam_trap = f"{misconception} — actually {correct}".strip()
+        elif isinstance(raw_trap_obj, str) and _normalise_ws(raw_trap_obj):
+            trap_text = _normalise_ws(raw_trap_obj)
             # Try to split self-contained "Students think X; actually Y" style strings
             _split_m = re.search(
                 r"^(.{10,}?)\s*[;.]\s*(?:actually|but|however|in fact|the truth is|correct(?:ly)?[:,]?)\s*(.{10,})$",
@@ -3073,14 +3073,27 @@ def build_verified_cheat_sheet_from_cards(concept_note_cards: list[dict]) -> lis
                     exam_trap_structured = {"misconception": _misc, "correct": _corr}
                     exam_trap = f"{_misc} — actually {_corr}".strip()
             else:
+                # Only use fallback if trap is meaningfully different from summary (< 60% word overlap)
+                trap_words = set(trap_text.lower().split())
+                summary_words = set(_normalise_ws(summary).lower().split())
+                overlap = (
+                    len(trap_words & summary_words) / max(len(trap_words), 1)
+                    if trap_words and summary_words else 1.0
+                )
                 fallback_correct = _normalise_ws(definition or summary)
-                misconception = trap_text if trap_text.lower().startswith("students") else f"Students think: {trap_text}"
-                if fallback_correct and misconception.lower() != fallback_correct.lower():
-                    exam_trap_structured = {
-                        "misconception": misconception,
-                        "correct": fallback_correct,
-                    }
-                    exam_trap = f"{misconception} — actually {fallback_correct}".strip()
+                if overlap < 0.6 and fallback_correct and trap_text.lower() != fallback_correct.lower():
+                    if trap_text.lower().startswith("students think"):
+                        misconception = trap_text
+                    elif trap_text.lower().startswith("students"):
+                        misconception = trap_text
+                    else:
+                        misconception = f"Students often think: {trap_text}"
+                    if misconception.lower() != fallback_correct.lower():
+                        exam_trap_structured = {
+                            "misconception": misconception,
+                            "correct": fallback_correct,
+                        }
+                        exam_trap = f"{misconception} — actually {fallback_correct}".strip()
         source = {
             "label": f"{card.get('source_start')} - {card.get('source_end')}",
             "start_seconds": _timestamp_to_seconds(card.get("source_start")),

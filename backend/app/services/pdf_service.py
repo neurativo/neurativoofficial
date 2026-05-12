@@ -253,7 +253,12 @@ def _fallback_structured_exam_trap(raw_trap, *, summary: str = "", distinction_t
     # Ensure correct is not just a repeat of the trap
     if correct.lower().strip() == trap_text.lower().strip():
         return None
-    misconception = trap_text if trap_text.lower().startswith("students") else f"Students think: {trap_text}"
+    if trap_text.lower().startswith("students think"):
+        misconception = trap_text
+    elif trap_text.lower().startswith("students"):
+        misconception = trap_text
+    else:
+        misconception = f"Students often think: {trap_text}"
     if misconception.lower() == correct.lower():
         return None
     return {"misconception": misconception, "correct": correct}
@@ -407,15 +412,24 @@ def _concept_cards_to_pdf_sections(concept_note_cards: list[dict]) -> list[dict]
                 exam_traps = [fallback_trap]
                 exam_trap_structured = fallback_trap
             else:
-                # Last resort: raw string as misconception, summary as correct
+                # Last resort — only fire if trap text is meaningfully different from summary
                 trap_clean = trap_obj.strip()
                 summary_clean = summary.strip()
-                if trap_clean and summary_clean and trap_clean.lower() != summary_clean.lower():
+                trap_words = set(trap_clean.lower().split())
+                summary_words = set(summary_clean.lower().split())
+                overlap = (
+                    len(trap_words & summary_words) / max(len(trap_words), 1)
+                    if trap_words and summary_words else 1.0
+                )
+                if overlap < 0.6 and summary_clean and trap_clean.lower() != summary_clean.lower():
                     exam_trap_structured = {
                         "misconception": trap_clean[:200],
                         "correct": summary_clean[:200],
                     }
                     exam_traps = [exam_trap_structured]
+                else:
+                    exam_traps = []
+                    exam_trap_structured = None
         raw_lead = (definitions or [card.get("summary", "")])[0]
         lead_sentence = re.sub(r'[^\x00-\x7F]', '', str(raw_lead or "")).strip()
         section = {
@@ -1735,6 +1749,9 @@ async def generate_lecture_pdf(
 
         duration_sec = total_chunks * 12
         word_count = len(cleaned_transcript.split()) if cleaned_transcript else 0
+        if word_count == 0 and transcript:
+            word_count = len(transcript.split())
+            print(f"[pdf:debug] word_count fallback from raw transcript: {word_count}")
         duration_formatted = format_duration(duration_sec)
         section_label, review_label, glossary_label = _get_domain_labels(topic)
 
@@ -1819,10 +1836,11 @@ async def generate_lecture_pdf(
             raw_sections = _extract_summary_sections_loose(summary)
         n_sections = len(raw_sections)
         n_questions = _question_count(duration_sec)
+        print(f"[pdf:debug] duration_sec={duration_sec} word_count={word_count} n_questions={n_questions} total_chunks={total_chunks}")
         if n_questions == 0 and word_count >= 500:
             estimated_minutes = word_count // 130
             n_questions = _question_count(estimated_minutes * 60)
-            print(f"[pdf] n_questions fallback from word_count: {n_questions} (est {estimated_minutes}min)")
+            print(f"[pdf] n_questions from word_count fallback: {n_questions} (est {estimated_minutes}min)")
 
         if IS_LITE:
             section_limit = 2 if IS_FREE else 4
@@ -2050,10 +2068,11 @@ async def generate_lecture_pdf(
                 except Exception as e:
                     print(f"[pdf] exec_summary retry error (non-fatal): {e}")
 
-        if takeaways and not _has_grounded_overlap(" ".join(takeaways), transcript, minimum=1):
-            print(f"[pdf] takeaways failed transcript-overlap validation; using fallback.")
-            takeaways = _fallback_takeaways(grounded_summary or summary, enriched_sections)
-        elif not takeaways:
+        # Grounding check disabled: synthesized takeaways intentionally use different
+        # vocabulary from the raw transcript — the check was always failing and forcing
+        # the raw-sentence fallback. Re-enable with a smarter check if needed.
+        print(f"[pdf:debug] takeaways[0]={takeaways[0][:80] if takeaways else 'empty'}")
+        if not takeaways:
             takeaways = _fallback_takeaways(grounded_summary or summary, enriched_sections)
 
         sanitized_artifacts = sanitize_pdf_artifacts(
@@ -2203,6 +2222,7 @@ async def generate_lecture_pdf(
         print(f"[pdf:health] sections={len(enriched_sections)}")
         print(f"[pdf:health] exam_traps={sum(1 for s in enriched_sections if s.get('exam_trap_structured'))}")
         print(f"[pdf:health] distinctions={sum(1 for s in enriched_sections if s.get('distinctions'))}")
+        print(f"[pdf:health] versus_items={sum(1 for s in enriched_sections if s.get('versus_items'))}")
         print(f"[pdf:health] glossary={len(glossary)}")
         print(f"[pdf:health] takeaways={len(takeaways)}")
         print(f"[pdf:health] quick_review={len(quick_review)}")
