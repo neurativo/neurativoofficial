@@ -320,8 +320,8 @@ def _section_render_profile(section: dict) -> dict:
         "inline_mode": inline_mode,
         "inline_items": inline_items,
         "show_subtopic_stack": show_subtopic_stack,
-        "show_definition_box": bool(section.get("definitions")) and not inline_mode,
-        "show_distinction_box": bool(section.get("distinctions")) and not inline_mode,
+        "show_definition_box": bool(section.get("definitions")),
+        "show_distinction_box": bool(section.get("distinctions")),
         "show_examples_block": bool(section.get("examples")) and not inline_mode,
         "chapter_density": "dense" if word_count >= 170 else "compact" if compact_mode else "balanced",
         "toc_title": toc_title,
@@ -393,9 +393,11 @@ def _concept_cards_to_pdf_sections(concept_note_cards: list[dict]) -> list[dict]
                 exam_trap_structured = fallback_trap
             else:
                 exam_traps = [trap_obj.strip()]
+        raw_lead = (definitions or [card.get("summary", "")])[0]
+        lead_sentence = re.sub(r'[^\x00-\x7F]', '', str(raw_lead or "")).strip()
         section = {
             "title": title,
-            "lead_sentence": (definitions or [card.get("summary", "")])[0],
+            "lead_sentence": lead_sentence,
             "prose": "",
             "bullets": [],
             "concepts": [title],
@@ -674,7 +676,7 @@ def _fallback_takeaways(summary: str, sections: list[dict]) -> list[str]:
     takeaways = []
     for sec in sections:
         sentence = (sec.get("remember") or sec.get("lead_sentence") or sec.get("prose") or "").strip()
-        if sentence:
+        if sentence and len(sentence.split()) >= 8:
             takeaways.append(sentence)
         if len(takeaways) == 5:
             break
@@ -683,7 +685,7 @@ def _fallback_takeaways(summary: str, sections: list[dict]) -> list[str]:
 
     for para in re.split(r"\n\s*\n", summary or ""):
         cleaned = " ".join(para.split()).strip()
-        if cleaned:
+        if cleaned and len(cleaned.split()) >= 8:
             takeaways.append(cleaned)
         if len(takeaways) == 5:
             break
@@ -978,6 +980,13 @@ def _call_glossary_from_cards(concept_note_cards: list[dict], topic: str | None,
             None,
         )
         if not matching:
+            # Fallback: use first definition item with a non-empty definition field
+            matching = next(
+                (item for item in key_definitions
+                 if str(item.get("definition") or "").strip()),
+                None,
+            )
+        if not matching:
             continue
         definition = str(matching.get("definition") or "").strip()
         key = term.lower()
@@ -1053,14 +1062,21 @@ def _call_takeaways(transcript: str, summary: str, topic: str | None) -> list[st
                 "content": (
                     "Note: The transcript may contain mixed languages. Extract meaning from all languages present. Respond in English.\n\n"
                     f"SUMMARY:\n{summary[:3000]}\n\n"
-                    f"List exactly 5 key takeaways from this lecture.{hint} "
-                    "Each takeaway is one complete, actionable sentence starting with a verb or concept. "
+                    f"Write exactly 5 exam-ready takeaways from this lecture.{hint} "
+                    "Rules:\n"
+                    "1. Each takeaway must be a synthesized insight, NOT a quote from the transcript\n"
+                    "2. Start each with an action verb or the concept name\n"
+                    "3. Include what makes this concept tricky or exam-relevant\n"
+                    "4. One sentence max, under 25 words\n"
+                    "5. A student should be able to use this as a revision flashcard\n"
+                    "Bad example: 'Microeconomics is where you focus on a small part of the economy'\n"
+                    "Good example: 'Microeconomics covers individual units — any question mentioning one firm, product, or household is micro'\n"
                     'Return JSON: {"takeaways": ["...", ...]}'
                 ),
             }
         ],
         temperature=0.3,
-        max_tokens=450,
+        max_tokens=600,
         response_format={"type": "json_object"},
     )
     log_cost("pdf_takeaways", "gpt-4o-mini",
@@ -1419,6 +1435,8 @@ def _render_pdf(html_content: str, title_short: str, watermark: bool = False) ->
                 "--no-sandbox",
                 "--disable-setuid-sandbox",
                 "--disable-dev-shm-usage",
+                "--font-render-hinting=none",
+                "--disable-font-subpixel-positioning",
             ],
         )
         try:
@@ -1917,6 +1935,15 @@ async def generate_lecture_pdf(
 
         glossary: list[dict] = results[ri] if not isinstance(results[ri], Exception) else []
         ri += 1
+        if not glossary:
+            print("[pdf] glossary from cards empty — falling back to transcript glossary")
+            try:
+                glossary = await asyncio.to_thread(
+                    _call_glossary, grounded_summary or summary, topic, 12
+                )
+            except Exception as _e:
+                print(f"[pdf] glossary fallback error: {_e}")
+                glossary = []
         glossary = glossary[:24]
         if glossary:
             try:
@@ -2143,6 +2170,12 @@ async def generate_lecture_pdf(
             "key_stats": key_stats[:4],
             "accent_color": _get_domain_color(topic),
         }
+        print(f"[pdf:health] sections={len(enriched_sections)}")
+        print(f"[pdf:health] exam_traps={sum(1 for s in enriched_sections if s.get('exam_trap_structured'))}")
+        print(f"[pdf:health] distinctions={sum(1 for s in enriched_sections if s.get('distinctions'))}")
+        print(f"[pdf:health] glossary={len(glossary)}")
+        print(f"[pdf:health] takeaways={len(takeaways)}")
+        print(f"[pdf:health] quick_review={len(quick_review)}")
         html_content = template.render(**context)
         title_short = title[:50] + ("…" if len(title) > 50 else "")
         pdf_bytes = await asyncio.to_thread(_render_pdf, html_content, title_short, False)

@@ -690,7 +690,7 @@
 
         /* Lead sentence (when no analogy) */
         .ls-lead {
-            font-family: var(--serif);
+            font-family: var(--sans);
             font-size: 11.5pt;
             font-weight: 500;
             color: var(--ink);
@@ -1827,7 +1827,7 @@
                 </div>
             </div>
             {% elif sec.lead_sentence %}
-            <p class="ls-lead">{{ sec.lead_sentence }}</p>
+            <p class="ls-lead" style="font-family:var(--sans);letter-spacing:0!important;font-variant-ligatures:none!important;">{{ sec.lead_sentence }}</p>
             {% endif %}
 
             {% if sec.prose %}
@@ -1882,15 +1882,6 @@
                 </ul>
             </div>
             {% endif %}
-            {% endif %}
-
-            {% if sec.examples %}
-            <div class="examples-wrap">
-                <div class="examples-label">Examples</div>
-                {% for e in sec.examples %}
-                <div class="example-row"><span class="example-arrow">→</span>{{ e }}</div>
-                {% endfor %}
-            </div>
             {% endif %}
 
             {% if sec.concepts %}
