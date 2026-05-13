@@ -388,18 +388,22 @@ def _concept_cards_to_pdf_sections(concept_note_cards: list[dict]) -> list[dict]
             for item in raw_definitions
             if isinstance(item, dict) and (item.get("term") or item.get("definition"))
         ]
-        distinction_obj = card.get("key_distinction") or {}
+        distinction_obj = card.get("key_distinction")
         distinctions = []
         if isinstance(distinction_obj, dict) and distinction_obj:
             a = distinction_obj.get("concept_a") or {}
             b = distinction_obj.get("concept_b") or {}
-            a_name = str(a.get("name", "") or "").strip()
-            b_name = str(b.get("name", "") or "").strip()
+            a_name = str(a.get("name") or "").strip()
+            b_name = str(b.get("name") or "").strip()
             vs_str = " vs ".join(filter(None, [a_name, b_name]))
             if vs_str:
                 distinctions = [vs_str]
+            elif distinction_obj.get("description"):
+                distinctions = [str(distinction_obj["description"]).strip()]
+        elif isinstance(distinction_obj, str) and distinction_obj.strip():
+            distinctions = [distinction_obj.strip()]
         _vs = _build_versus_items(title, distinctions)
-        print(f"[dist_debug] {card.get('concept_name')}: distinctions={distinctions} versus_items={_vs}")
+        print(f"[dist_debug] {card.get('concept_name')}: key_distinction={repr(card.get('key_distinction'))} → distinctions={distinctions}")
         trap_obj = card.get("exam_trap")
         exam_traps = []
         exam_trap_structured = None
@@ -1115,17 +1119,20 @@ def _call_takeaways(transcript: str, summary: str, topic: str | None) -> list[st
             {
                 "role": "user",
                 "content": (
-                    f"CONCEPT SIGNALS:\n{summary[:3000]}\n\n"
-                    "Based on these concept signals, write 5 exam-ready takeaways "
-                    "a student should remember before their exam.\n"
-                    "Rules:\n"
-                    "1. Write in your own words — do NOT copy the signals above\n"
-                    "2. Each takeaway = one exam-relevant insight under 20 words\n"
-                    "3. Include what makes each concept tricky or commonly confused\n"
+                    f"EXAM SIGNALS FROM THIS LECTURE:\n{summary}\n\n"
+                    "Write 5 exam-ready takeaways. Each takeaway should:\n"
+                    "1. Be written in your own words — NOT copied from above\n"
+                    "2. Convert each COMMON ERROR + CORRECT pair into one "
+                    "actionable insight a student must remember\n"
+                    "3. Be under 20 words\n"
                     "4. Start with the concept name\n"
-                    "5. Make it actionable — what should the student DO or REMEMBER\n\n"
-                    "Bad: 'Microeconomics is where you focus on a small part of the economy'\n"
-                    "Good: 'Microeconomics — any question about one firm, product, or household is micro, not macro'\n\n"
+                    "5. Focus on what the examiner will trick students on\n\n"
+                    "Example input:\n"
+                    "  CONCEPT: Positive Statements\n"
+                    "  COMMON ERROR: Students think positive statements must be correct\n"
+                    "  CORRECT: They just need to be verifiable\n"
+                    "Example output:\n"
+                    "  'Positive Statements — verifiable facts, not necessarily correct'\n\n"
                     f"Topic: {topic or 'general'}\n"
                     'Return JSON: {"takeaways": ["...", ...]}'
                 ),
@@ -1687,19 +1694,22 @@ async def _generate_lite_pdf(
 
 
 def _build_takeaway_context(sections: list[dict]) -> str:
-    """Build a structured signal string from enriched sections for takeaway synthesis."""
-    lines = []
+    """Build exam-trap-focused signal string for takeaway synthesis."""
+    blocks = []
     for sec in sections:
         title = sec.get("title", "")
         trap = sec.get("exam_trap_structured")
-        remember = sec.get("remember", "")
-        if title:
-            lines.append(f"CONCEPT: {title}")
+        if not title:
+            continue
         if trap and trap.get("misconception") and trap.get("correct"):
-            lines.append(f"  TRAP: {trap['misconception']} → {trap['correct']}")
-        if remember:
-            lines.append(f"  KEY: {remember}")
-    return "\n".join(lines)
+            blocks.append(
+                f"CONCEPT: {title}\n"
+                f"  COMMON ERROR: {trap['misconception']}\n"
+                f"  CORRECT: {trap['correct']}"
+            )
+        else:
+            blocks.append(f"CONCEPT: {title}")
+    return "\n\n".join(blocks)
 
 
 # ── Main async entry point ────────────────────────────────────────────────────
@@ -1903,8 +1913,13 @@ async def generate_lecture_pdf(
         tasks: list = []
         tasks.append(asyncio.to_thread(_call_executive_summary, cleaned_transcript, title, topic))
         tasks.append(asyncio.to_thread(_call_glossary_from_cards, concept_note_cards, topic, 18 if n_sections >= 3 else 10))
-        print(f"[pdf:debug] queuing quick_review with n_questions={n_questions} word_count={word_count}")
-        tasks.append(asyncio.to_thread(_call_quick_review, cleaned_transcript, grounded_summary or summary, topic, n_questions))
+        qr_summary = (
+            grounded_summary
+            if grounded_summary and len(grounded_summary) >= 1000
+            else cleaned_transcript[:6000]
+        )
+        print(f"[pdf:debug] queuing quick_review with n_questions={n_questions} word_count={word_count} qr_summary_len={len(qr_summary)}")
+        tasks.append(asyncio.to_thread(_call_quick_review, cleaned_transcript, qr_summary, topic, n_questions))
 
         concept_entities = build_concept_entities(concept_sections, claim_registry)
         concept_graph = build_concept_relationship_graph(concept_entities, claim_registry)
