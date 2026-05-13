@@ -2204,10 +2204,12 @@
                 {% endif %}
             </div>
             <div class="cell">{{ row.core_idea }}</div>
-            <div class="cell trap-cell">
+            <div class="cell trap-cell" style="page-break-inside: avoid;">
                 {% if row.exam_trap_structured and row.exam_trap_structured.misconception and row.exam_trap_structured.correct and row.exam_trap_structured.misconception != row.exam_trap_structured.correct %}
+                <div style="page-break-inside: avoid;">
                 <span style="color:#92400e;font-weight:600;display:block;margin-bottom:1mm;">✗ {{ row.exam_trap_structured.misconception }}</span>
                 <span style="color:#065f46;display:block;">✓ {{ row.exam_trap_structured.correct }}</span>
+                </div>
                 {% else %}
                 —
                 {% endif %}

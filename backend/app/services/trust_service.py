@@ -3170,7 +3170,32 @@ def build_verified_cheat_sheet_from_cards(concept_note_cards: list[dict]) -> lis
         )
         definition = _normalise_ws(matching_def.get("definition", "") if matching_def else "")
         summary = _normalise_ws(card.get("summary", ""))
-        core_idea = _quick_recall_cue(definition or summary)
+        # Core Idea: first complete sentence — readable prose, up to 20 words
+        _core_source = definition or summary
+        _sentences = re.split(r'(?<=[.!?])\s+', _core_source.strip())
+        _first = _sentences[0].strip().rstrip('.') if _sentences else _core_source
+        _words = _first.split()
+        core_idea = (' '.join(_words[:20]).rstrip(' .,;') + ('…' if len(_words) > 20 else '')) if _words else _core_source
+
+        # Strip mid-sentence verbal fillers from core_idea
+        _mid_fillers = [
+            r',\s*right\s*,',
+            r',\s*okay\s*,',
+            r',\s*you know\s*,',
+            r',\s*I mean\s*,',
+            r',\s*like\s*,(?!\s*\w+\s+(?:a|an|the)\s)',
+            r',\s*so\s*,',
+        ]
+        for _pat in _mid_fillers:
+            core_idea = re.sub(_pat, ',', core_idea, flags=re.IGNORECASE)
+        core_idea = re.sub(r'\s+', ' ', core_idea).strip()
+
+        # Quick Recall: compressed ≤10 word memory hook via _quick_recall_cue
+        quick_recall_text = _quick_recall_cue(definition or summary)
+        for _pat in _mid_fillers:
+            quick_recall_text = re.sub(_pat, ',', quick_recall_text, flags=re.IGNORECASE)
+        quick_recall_text = re.sub(r'\s+', ' ', quick_recall_text).strip()
+
         raw_trap_obj = card.get("exam_trap")
         exam_trap = ""
         exam_trap_structured = None
@@ -3229,7 +3254,7 @@ def build_verified_cheat_sheet_from_cards(concept_note_cards: list[dict]) -> lis
             "core_idea": core_idea,
             "exam_trap": exam_trap,
             "exam_trap_structured": exam_trap_structured,
-            "quick_recall": _quick_recall_cue(definition or summary),
+            "quick_recall": quick_recall_text,
             "citations": [source] if source else [],
             "confidence": round(float(card.get("confidence") or 0.0), 2),
             "revision_priority": round(float(card.get("confidence") or 0.0), 2),
