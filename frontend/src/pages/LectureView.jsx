@@ -1121,7 +1121,13 @@ export default function LectureView() {
         setQaHistory(h => [...h, { role: 'user', text: q }]);
         setQaLoading(true);
         try {
-            const res = await api.post(`/api/v1/ask/${id}`, { question: q });
+            const res = await api.post(`/api/v1/ask/${id}`, {
+                question: q,
+                history: qaHistory.slice(-6).map(m => ({
+                    role: m.role === 'user' ? 'user' : 'assistant',
+                    content: m.text,
+                })),
+            });
             setQaHistory(h => [...h, { role: 'assistant', text: res.data.answer }]);
         } catch {
             setQaHistory(h => [...h, { role: 'assistant', text: 'Failed to get answer. Please try again.' }]);
@@ -1426,7 +1432,7 @@ export default function LectureView() {
                                             <div key={i}>
                                                 <div className={`lv-qa-msg ${m.role === 'user' ? 'lv-qa-user' : 'lv-qa-assistant'}`}>
                                                     {m.role === 'assistant'
-                                                        ? <QAAnswer text={m.text} topic={lecture?.topic} />
+                                                        ? <QAAnswer dark={isDark} text={m.text} topic={lecture?.topic} />
                                                         : m.text
                                                     }
                                                 </div>

@@ -299,6 +299,7 @@ def should_trigger_section(pending_chunks: list) -> tuple:
 
 class QuestionRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=2000)
+    history: list[dict] | None = None
 
 class StartSessionBody(BaseModel):
     topic: str | None = Field(None, max_length=50)
@@ -1600,7 +1601,7 @@ def ask_question_auth(request: Request, lecture_id: str, body: QuestionRequest, 
         raise HTTPException(status_code=403, detail={"error": "feature_locked", "feature": "qa"})
     try:
         topic = get_lecture_topic(lecture_id)
-        answer = answer_lecture_question(lecture_id, body.question, topic=topic)
+        answer = answer_lecture_question(lecture_id, body.question, topic=topic, history=body.history)
     except Exception:
         raise HTTPException(status_code=500, detail="Failed to answer question")
     return {"lecture_id": lecture_id, "question": body.question, "answer": answer}

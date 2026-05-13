@@ -41,7 +41,7 @@ _STOPWORDS = {
 }
 
 
-def answer_lecture_question(lecture_id: str, question: str, topic: str | None = None) -> str:
+def answer_lecture_question(lecture_id: str, question: str, topic: str | None = None, history: list[dict] | None = None) -> str:
     transcript = get_lecture_transcript(lecture_id)
     if not transcript:
         raise HTTPException(status_code=404, detail="Transcript empty or not found")
@@ -76,11 +76,16 @@ def answer_lecture_question(lecture_id: str, question: str, topic: str | None = 
             raise HTTPException(status_code=500, detail="OpenAI client not initialized")
 
         try:
-            query_variants = _expand_query(question)
-            all_queries = [question] + query_variants
+            # Only expand complex questions (>6 words) — short factual
+            # questions don't benefit from paraphrasing and pay extra GPT cost
+            if len(question.split()) > 6:
+                query_variants = _expand_query(question)
+                all_queries = [question] + query_variants
+            else:
+                all_queries = [question]
             query_embeddings = get_embeddings(all_queries)
         except Exception as exp_err:
-            print(f"[NRQA] Query expansion/embedding failed, falling back to single vector: {exp_err}")
+            print(f"[NRQA] Query expansion/embedding failed, falling back: {exp_err}")
             query_embeddings = get_embeddings([question])
 
         scored_docs = _score_docs(docs, doc_embeddings, query_embeddings, question)
@@ -134,14 +139,21 @@ def answer_lecture_question(lecture_id: str, question: str, topic: str | None = 
             "do not guess or use outside knowledge."
         )
 
+        conversation = [{"role": "system", "content": system_prompt}]
+        # Inject last 3 turns of history for follow-up question context
+        for turn in (history or [])[-3:]:
+            if turn.get("role") in ("user", "assistant") and turn.get("content"):
+                conversation.append({"role": turn["role"], "content": turn["content"]})
+        conversation.append({
+            "role": "user",
+            "content": f"Lecture excerpts:\n{context}\n\nQuestion: {question}",
+        })
+
         response = openai_service.client.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Lecture excerpts:\n{context}\n\nQuestion: {question}"},
-            ],
+            messages=conversation,
             temperature=0.3,
-            max_tokens=600,
+            max_tokens=900,
         )
 
         log_cost(
@@ -408,17 +420,28 @@ def _visual_frame_text(frame: dict) -> str:
 
 
 def _ensure_source_grounded(answer: str, relevant_docs: list[dict]) -> str:
-    context_text = "\n".join(doc["text"] for doc in relevant_docs)
+    context_text = " ".join(doc["text"] for doc in relevant_docs).lower()
     source_match = re.search(r"^SOURCE:\s*(.+)$", answer, flags=re.MULTILINE)
-    if source_match:
-        source_value = source_match.group(1).strip()
-        normalized = source_value.strip('"').strip("'").strip()
-        if normalized and normalized in context_text:
-            return answer
 
+    if source_match:
+        source_value = source_match.group(1).strip().strip('"').strip("'")
+        if source_value and len(source_value.split()) >= 3:
+            # Fuzzy check: if 60%+ of source words appear in context, accept it
+            source_words = set(re.findall(r'[a-z]{3,}', source_value.lower()))
+            if source_words:
+                matches = sum(1 for w in source_words if w in context_text)
+                if matches / len(source_words) >= 0.6:
+                    return answer
+
+    # Source missing or failed fuzzy check — find best excerpt
     fallback = _best_source_excerpt(relevant_docs)
     if source_match:
-        return re.sub(r"^SOURCE:\s*.+$", f'SOURCE: "{fallback}"', answer, flags=re.MULTILINE)
+        return re.sub(
+            r"^SOURCE:\s*.+$",
+            f'SOURCE: "{fallback}"',
+            answer,
+            flags=re.MULTILINE,
+        )
     return answer.rstrip() + f'\nSOURCE: "{fallback}"'
 
 
