@@ -391,15 +391,29 @@ def _concept_cards_to_pdf_sections(concept_note_cards: list[dict]) -> list[dict]
         distinction_obj = card.get("key_distinction")
         distinctions = []
         if isinstance(distinction_obj, dict) and distinction_obj:
-            a = distinction_obj.get("concept_a") or {}
-            b = distinction_obj.get("concept_b") or {}
-            a_name = str(a.get("name") or "").strip()
-            b_name = str(b.get("name") or "").strip()
-            vs_str = " vs ".join(filter(None, [a_name, b_name]))
-            if vs_str:
-                distinctions = [vs_str]
-            elif distinction_obj.get("description"):
-                distinctions = [str(distinction_obj["description"]).strip()]
+            if "concept_a" in distinction_obj or "concept_b" in distinction_obj:
+                # Branch 1: standard concept_a / concept_b format
+                a = distinction_obj.get("concept_a") or {}
+                b = distinction_obj.get("concept_b") or {}
+                a_name = str(a.get("name") or "").strip()
+                b_name = str(b.get("name") or "").strip()
+                vs_str = " vs ".join(filter(None, [a_name, b_name]))
+                if vs_str:
+                    distinctions = [vs_str]
+                elif distinction_obj.get("description"):
+                    distinctions = [str(distinction_obj["description"]).strip()]
+            else:
+                # Branch 2: flat key-value format e.g. {"economic": "...", "non-economic": "..."}
+                skip_keys = {"description", "detail", "note"}
+                keys = [k for k in distinction_obj if k not in skip_keys]
+                values = [str(distinction_obj[k]).strip() for k in keys if str(distinction_obj.get(k) or "").strip()]
+                if len(keys) >= 2 and len(values) >= 2:
+                    label = f"{keys[0].replace('_', ' ').title()}: {values[0]} | {keys[1].replace('_', ' ').title()}: {values[1]}"
+                    distinctions = [label]
+                elif values:
+                    distinctions = [values[0]]
+                elif distinction_obj.get("description"):
+                    distinctions = [str(distinction_obj["description"]).strip()]
         elif isinstance(distinction_obj, str) and distinction_obj.strip():
             distinctions = [distinction_obj.strip()]
         _vs = _build_versus_items(title, distinctions)
@@ -985,8 +999,9 @@ def _call_glossary(transcript: str, topic: str | None, n_terms: int = 8) -> list
                 "content": (
                     "Note: The transcript may contain mixed languages. Extract meaning from all languages present. Respond in English.\n\n"
                     # transcript arg is the grounded_summary (full-lecture coverage) — use all of it
-                    f"LECTURE CONTENT:\n{transcript[:9000]}\n\n"
-                    f"Extract up to {n_terms} distinct academic or technical terms introduced or defined in this lecture.{hint} "
+                    f"LECTURE CONTENT:\n{transcript[:14000]}\n\n"
+                    f"Extract ALL distinct academic or technical terms explicitly named or defined in this lecture (up to {n_terms}).{hint} "
+                    "Extract EVERY named concept, framework, and domain-specific term the professor introduced or defined — err on the side of inclusion. "
                     "Prefer every lecture-defined term over generic textbook terms. For economics lectures, include each "
                     "distinct economics term the professor introduced, including positive/normative statements, economic/non-economic goods, "
                     "free goods, public goods, utility, disutility, opportunity cost, scarcity, and economic/non-economic resources when present. "
@@ -1139,7 +1154,7 @@ def _call_takeaways(transcript: str, summary: str, topic: str | None) -> list[st
             }
         ],
         temperature=0.3,
-        max_tokens=700,
+        max_tokens=1000,
         response_format={"type": "json_object"},
     )
     log_cost("pdf_takeaways", "gpt-4o-mini",
@@ -1945,7 +1960,9 @@ async def generate_lecture_pdf(
             for i, raw_sec in enumerate(raw_sections):
                 tasks.append(asyncio.to_thread(_call_enrich_section, raw_sec, i, n_sections, topic, language))
 
+        print(f"[pdf:debug] tasks count before gather={len(tasks)}")
         results = await asyncio.gather(*tasks, return_exceptions=True)
+        print(f"[pdf:debug] results count after gather={len(results)}")
         ri = 0
         exec_summary = results[ri] if not isinstance(results[ri], Exception) else ""
         ri += 1
@@ -2120,6 +2137,17 @@ async def generate_lecture_pdf(
         except Exception as _e:
             print(f"[pdf] takeaways call error: {_e}")
             takeaways = []
+        # Fallback: fill from exam traps if GPT returned < 3 takeaways
+        if len(takeaways) < 3:
+            print(f"[pdf] takeaways only {len(takeaways)} — filling from exam traps")
+            for sec in enriched_sections:
+                if len(takeaways) >= 5:
+                    break
+                trap = sec.get("exam_trap_structured")
+                if isinstance(trap, dict) and trap.get("misconception") and trap.get("correct"):
+                    label = f"{sec.get('title', 'Concept')}: {trap['correct']}"
+                    if label not in takeaways:
+                        takeaways.append(label)
 
         if exec_summary and transcript:
             top_terms = _top_terms(transcript[:8000], n=5)
