@@ -1126,51 +1126,30 @@ def _fallback_conceptual_map_from_sections(sections: list[str]) -> list[dict]:
     return out
 
 
-def _call_takeaways(transcript: str, summary: str, topic: str | None) -> list[str]:
-    if not _client:
-        return []
-    hint = f" Domain: {topic}." if topic else ""
-    resp = _client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {
-                "role": "system",
-                "content": _PDF_TRANSCRIPT_ONLY_RULE,
-            },
-            {
-                "role": "user",
-                "content": (
-                    f"EXAM SIGNALS FROM THIS LECTURE:\n{summary}\n\n"
-                    "Write 5 exam-ready takeaways. Each takeaway should:\n"
-                    "1. Be written in your own words — NOT copied from above\n"
-                    "2. Convert each COMMON ERROR + CORRECT pair into one "
-                    "actionable insight a student must remember\n"
-                    "3. Be under 20 words\n"
-                    "4. Start with the concept name\n"
-                    "5. Focus on what the examiner will trick students on\n\n"
-                    "Example input:\n"
-                    "  CONCEPT: Positive Statements\n"
-                    "  COMMON ERROR: Students think positive statements must be correct\n"
-                    "  CORRECT: They just need to be verifiable\n"
-                    "Example output:\n"
-                    "  'Positive Statements — verifiable facts, not necessarily correct'\n\n"
-                    f"Topic: {topic or 'general'}\n"
-                    'Return JSON: {"takeaways": ["...", ...]}'
-                ),
-            }
-        ],
-        temperature=0.3,
-        max_tokens=1000,
-        response_format={"type": "json_object"},
-    )
-    log_cost("pdf_takeaways", "gpt-4o-mini",
-             input_tokens=resp.usage.prompt_tokens,
-             output_tokens=resp.usage.completion_tokens)
-    try:
-        raw = json.loads(resp.choices[0].message.content).get("takeaways", [])
-        return [str(t).strip() for t in raw if str(t).strip()]
-    except Exception:
-        return []
+def _build_takeaways_deterministic(
+    enriched_sections: list[dict],
+    topic: str | None = None,
+) -> list[str]:
+    """Build exam takeaways deterministically from enriched section data — no GPT call."""
+    takeaways = []
+    for sec in enriched_sections:
+        trap = sec.get("exam_trap_structured")
+        title = sec.get("title", "Concept")
+        if trap and trap.get("correct") and trap.get("misconception"):
+            correct = str(trap["correct"]).strip().rstrip(".")
+            takeaways.append(f"{title} — {correct}")
+        elif sec.get("remember"):
+            remember = str(sec["remember"]).strip().rstrip(".")
+            takeaways.append(f"{title} — {remember}")
+        elif sec.get("lead_sentence"):
+            lead = str(sec["lead_sentence"]).strip().rstrip(".")
+            words = lead.split()
+            if len(words) >= 6:
+                short = " ".join(words[:20]).rstrip(".,;")
+                takeaways.append(f"{title} — {short}")
+        if len(takeaways) >= 5:
+            break
+    return takeaways[:5]
 
 
 def _call_quick_review(
@@ -1183,10 +1162,6 @@ def _call_quick_review(
     if not _client or n_questions == 0:
         return []
     print(f"[pdf:debug] quick_review: transcript_len={len(transcript)} summary_len={len(summary)}")
-    hint = f" Domain: {topic}." if topic else ""
-    diff_list = "\n".join(
-        [f"Q{i + 1}: {_DIFFICULTIES[i % 3]}" for i in range(n_questions)]
-    )
     resp = _client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
@@ -1198,12 +1173,22 @@ def _call_quick_review(
                 "role": "user",
                 "content": (
                     "Note: The transcript may contain mixed languages. Extract meaning from all languages present. Respond in English.\n\n"
-                    f"TRANSCRIPT:\n{transcript[:5000]}\nSUMMARY:\n{summary[:4000]}\n\n"
-                    f"Generate {n_questions} exam-style questions.{hint}\n"
-                    f"Difficulty assignments (Bloom's taxonomy):\n{diff_list}\n\n"
-                    "Recall = factual. Understanding = conceptual explanation. Application = applying to scenario.\n"
-                    "Each answer is 2-3 sentences. Keep the assigned difficulty exactly.\n"
-                    'Return JSON: {"questions": [{"question": "...", "answer": "...", "difficulty": "..."}]}'
+                    f"TRANSCRIPT:\n{transcript[:6000]}\n\n"
+                    f"Generate exactly {n_questions} exam-style questions "
+                    f"for a {topic or 'general'} lecture.\n\n"
+                    "Mix difficulty levels across the questions:\n"
+                    "- Some recall (factual definitions)\n"
+                    "- Some understanding (explain why/how)\n"
+                    "- Some application (apply to a scenario)\n\n"
+                    "For each question:\n"
+                    "- question: clear exam-style question\n"
+                    "- answer: 2-3 sentence answer\n"
+                    "- difficulty: one of Recall / Understanding / Application\n\n"
+                    "Rules:\n"
+                    "- Only use content from the transcript above\n"
+                    "- Make questions varied — no two on the same concept\n"
+                    f"- Return exactly {n_questions} questions, no more, no less\n\n"
+                    f'Return JSON: {{"questions": [{{"question": "...", "answer": "...", "difficulty": "..."}}]}}'
                 ),
             }
         ],
@@ -1214,16 +1199,24 @@ def _call_quick_review(
     log_cost("pdf_quick_review", "gpt-4o-mini",
              input_tokens=resp.usage.prompt_tokens,
              output_tokens=resp.usage.completion_tokens)
-    raw_content = resp.choices[0].message.content
-    print(f"[pdf:debug] quick_review raw length={len(raw_content)}")
     try:
-        parsed = json.loads(raw_content)
-        questions = parsed.get("questions", [])
+        raw_content = resp.choices[0].message.content
+        print(f"[pdf:debug] quick_review raw length={len(raw_content)}")
+        clean = re.sub(r"```json|```", "", raw_content).strip()
+        data = json.loads(clean)
+        questions = data.get("questions", [])
         print(f"[pdf:debug] quick_review parsed questions={len(questions)}")
+        questions = [
+            q for q in questions
+            if isinstance(q, dict) and q.get("question") and q.get("answer")
+        ]
+        for q in questions:
+            if not q.get("difficulty"):
+                q["difficulty"] = "Recall"
+        return questions
     except Exception as e:
-        print(f"[pdf:debug] quick_review JSON error: {e}")
-        questions = []
-    return questions
+        print(f"[pdf:debug] quick_review parse error: {e}")
+        return []
 
 
 def _call_study_roadmap(
@@ -1721,23 +1714,6 @@ async def _generate_lite_pdf(
     return await asyncio.to_thread(_render_pdf, html_content, title_short, watermark)
 
 
-def _build_takeaway_context(sections: list[dict]) -> str:
-    """Build exam-trap-focused signal string for takeaway synthesis."""
-    blocks = []
-    for sec in sections:
-        title = sec.get("title", "")
-        trap = sec.get("exam_trap_structured")
-        if not title:
-            continue
-        if trap and trap.get("misconception") and trap.get("correct"):
-            blocks.append(
-                f"CONCEPT: {title}\n"
-                f"  COMMON ERROR: {trap['misconception']}\n"
-                f"  CORRECT: {trap['correct']}"
-            )
-        else:
-            blocks.append(f"CONCEPT: {title}")
-    return "\n\n".join(blocks)
 
 
 # ── Main async entry point ────────────────────────────────────────────────────
@@ -2138,30 +2114,11 @@ async def generate_lecture_pdf(
         _trap_count = sum(1 for s in enriched_sections if s.get("exam_trap_structured"))
         print(f"[pdf] enriched_sections with exam_trap_structured: {_trap_count}/{len(enriched_sections)}")
 
-        # Takeaways run after enriched_sections is fully built so the context
-        # includes structured trap/remember signals rather than raw lecture text
-        try:
-            takeaways = await asyncio.to_thread(
-                _call_takeaways,
-                cleaned_transcript,
-                _build_takeaway_context(enriched_sections),
-                topic,
-            )
-        except Exception as _e:
-            print(f"[pdf] takeaways call error: {_e}")
-            takeaways = []
-        # Fallback: fill from exam traps if GPT returned < 3 takeaways
-        if len(takeaways) < 3:
-            print(f"[pdf:debug] takeaways fallback triggered: have {len(takeaways)}, filling from {len(enriched_sections)} sections")
-            for sec in enriched_sections:
-                trap = sec.get("exam_trap_structured")
-                print(f"[pdf:debug] fallback sec={sec.get('title')} trap={bool(trap)}")
-                if isinstance(trap, dict) and trap.get("misconception") and trap.get("correct"):
-                    t = f"{sec.get('title', 'Concept')} — {trap['correct']}"
-                    if t not in takeaways:
-                        takeaways.append(t)
-                if len(takeaways) >= 5:
-                    break
+        # Takeaways built deterministically from enriched section data — no GPT call
+        takeaways = _build_takeaways_deterministic(enriched_sections, topic)
+        print(f"[pdf:health] takeaways={len(takeaways)}")
+        if not takeaways:
+            takeaways = _fallback_takeaways(grounded_summary or summary, enriched_sections)
 
         if exec_summary and transcript:
             top_terms = _top_terms(transcript[:8000], n=5)
