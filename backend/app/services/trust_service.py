@@ -2135,10 +2135,20 @@ For each concept in the inventory generate a card:
 
   exam_trap:
     Only if inventory exam_trap is not null.
-    Must quote or closely paraphrase the professor.
-    Format:
-      misconception: what students think (from transcript)
-      correct: what professor said is correct
+    Must be an object with TWO fields that MUST be genuinely different:
+      misconception: What students commonly get WRONG about this concept.
+        Must be a FALSE or incomplete belief. Must NOT be the correct answer.
+        Start with 'Students often think...' or 'A common mistake is...'
+        Example: 'Students often think free goods means goods given for free by the government'
+      correct: The actual correct understanding that directly contradicts
+        the misconception above.
+        Example: 'Free goods means goods unlimited in supply regardless of price'
+    CRITICAL RULES:
+    - misconception and correct MUST contradict each other
+    - misconception must describe a WRONG belief, not the right answer
+    - NEVER set both fields to the same text or meaning
+    - NEVER use the concept definition as the misconception
+    - If no genuine misconception exists for this concept, set exam_trap to null
     null if not applicable.
 
   examples:
@@ -2569,7 +2579,7 @@ def build_summary_cards_from_transcript(transcript: str, lecture_id: str | None 
             "Transcript:\n" + cleaned_for_cards + "\n\nConcept inventory:\n" + json.dumps(inventory, ensure_ascii=False),
             "summary_card_generation",
             max_tokens=8000,
-            temperature=0,
+            temperature=0.4,
         )
     except Exception as exc:
         print(f"[cards] GPT call failed: {exc}")

@@ -1810,9 +1810,17 @@
               <span class="trap-correct">✓ {{ sec.exam_trap_structured.correct }}</span>
             </div>
             {% elif sec.exam_traps %}
+            {% set trap = sec.exam_traps[0] %}
+            {% if trap is mapping and trap.misconception and trap.correct %}
             <div class="exam-trap-block">
-              <span class="trap-wrong">{{ sec.exam_traps[0] }}</span>
+              <span class="trap-wrong">✗ {{ trap.misconception }}</span>
+              <span class="trap-correct">✓ {{ trap.correct }}</span>
             </div>
+            {% elif trap is string and trap %}
+            <div class="exam-trap-block">
+              <span class="trap-wrong">✗ {{ trap }}</span>
+            </div>
+            {% endif %}
             {% endif %}
 
             {% if sec.analogy %}

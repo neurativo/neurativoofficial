@@ -224,8 +224,21 @@ def _normalise_structured_exam_trap(value) -> dict | None:
     correct = str(value.get("correct") or "").strip()
     if not misconception or not correct:
         return None
+    # Exact match
     if misconception.lower() == correct.lower():
         return None
+    # Substring containment — one is a shorter version of the other
+    m_lower = misconception.lower()
+    c_lower = correct.lower()
+    if m_lower in c_lower or c_lower in m_lower:
+        return None
+    # Word overlap > 65% — essentially the same sentence reworded
+    m_words = set(re.findall(r'[a-z]{3,}', m_lower))
+    c_words = set(re.findall(r'[a-z]{3,}', c_lower))
+    if m_words and c_words:
+        overlap = len(m_words & c_words) / max(len(m_words), len(c_words))
+        if overlap > 0.65:
+            return None
     return {"misconception": misconception, "correct": correct}
 
 
@@ -1841,6 +1854,9 @@ async def generate_lecture_pdf(
             estimated_minutes = word_count // 130
             n_questions = _question_count(estimated_minutes * 60)
             print(f"[pdf] n_questions from word_count fallback: {n_questions} (est {estimated_minutes}min)")
+        if n_questions == 0 and word_count >= 300:
+            n_questions = 5
+            print(f"[pdf] n_questions hard minimum applied")
 
         if IS_LITE:
             section_limit = 2 if IS_FREE else 4
