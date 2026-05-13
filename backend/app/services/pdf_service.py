@@ -49,12 +49,31 @@ _PDF_TRANSCRIPT_ONLY_RULE = (
 
 # ── Domain-aware labels ───────────────────────────────────────────────────────
 _DOMAIN_LABELS = {
-    "medicine":         ("Clinical Breakdown",   "Board Exam Prep",   "Clinical Terms"),
-    "law":              ("Legal Analysis",        "Case Practice",     "Legal Glossary"),
-    "computer science": ("Technical Deep-Dive",   "Coding Concepts",   "Technical Glossary"),
-    "physics":          ("Derivations & Proofs",  "Problem Practice",  "Formulary"),
-    "mathematics":      ("Derivations & Proofs",  "Problem Practice",  "Formulary"),
-    "history":          ("Historical Narrative",  "Source Review",     "Historical Terms"),
+    "medicine":         ("Clinical Breakdown",     "Board Exam Prep",      "Clinical Terms"),
+    "nursing":          ("Clinical Breakdown",     "Board Exam Prep",      "Clinical Terms"),
+    "pharmacy":         ("Clinical Breakdown",     "Board Exam Prep",      "Clinical Terms"),
+    "law":              ("Legal Analysis",          "Case Practice",        "Legal Glossary"),
+    "legal":            ("Legal Analysis",          "Case Practice",        "Legal Glossary"),
+    "computer science": ("Technical Deep-Dive",    "Coding Concepts",      "Technical Glossary"),
+    "software":         ("Technical Deep-Dive",    "Coding Concepts",      "Technical Glossary"),
+    "programming":      ("Technical Deep-Dive",    "Coding Concepts",      "Technical Glossary"),
+    "engineering":      ("Technical Deep-Dive",    "Problem Practice",     "Technical Glossary"),
+    "physics":          ("Derivations & Proofs",   "Problem Practice",     "Formulary"),
+    "mathematics":      ("Derivations & Proofs",   "Problem Practice",     "Formulary"),
+    "statistics":       ("Derivations & Proofs",   "Problem Practice",     "Formulary"),
+    "chemistry":        ("Derivations & Proofs",   "Problem Practice",     "Formulary"),
+    "biology":          ("Concept Breakdown",      "Self-Test",            "Biology Terms"),
+    "history":          ("Historical Narrative",   "Source Review",        "Historical Terms"),
+    "geography":        ("Concept Breakdown",      "Self-Test",            "Key Terms"),
+    "business":         ("Case Analysis",          "Business Practice",    "Business Terms"),
+    "finance":          ("Case Analysis",          "Problem Practice",     "Finance Terms"),
+    "accounting":       ("Case Analysis",          "Problem Practice",     "Accounting Terms"),
+    "economics":        ("Case Analysis",          "Problem Practice",     "Economics Terms"),
+    "psychology":       ("Concept Breakdown",      "Self-Test",            "Psychology Terms"),
+    "sociology":        ("Concept Breakdown",      "Self-Test",            "Sociology Terms"),
+    "philosophy":       ("Argument Analysis",      "Critical Review",      "Philosophy Terms"),
+    "literature":       ("Textual Analysis",       "Critical Review",      "Literary Terms"),
+    "languages":        ("Language Breakdown",     "Practice Exercises",   "Vocabulary"),
 }
 _DEFAULT_LABELS = ("Section Breakdown", "Self-Test", "Key Terms")
 
@@ -73,14 +92,25 @@ _DOMAIN_COLORS = {
     "legal":            "#1E3A5F",
     "computer science": "#4F46E5",
     "software":         "#4F46E5",
+    "programming":      "#4F46E5",
     "engineering":      "#4F46E5",
     "physics":          "#0D9488",
     "mathematics":      "#0D9488",
     "chemistry":        "#0D9488",
+    "biology":          "#16A34A",
+    "statistics":       "#0D9488",
     "history":          "#92400E",
     "social sciences":  "#92400E",
+    "geography":        "#92400E",
     "business":         "#059669",
     "economics":        "#059669",
+    "finance":          "#059669",
+    "accounting":       "#059669",
+    "psychology":       "#7C3AED",
+    "sociology":        "#7C3AED",
+    "philosophy":       "#6B7280",
+    "literature":       "#B45309",
+    "languages":        "#0369A1",
 }
 _DEFAULT_COLOR = "#2563EB"
 
@@ -356,8 +386,16 @@ def _concept_cards_to_pdf_sections(concept_note_cards: list[dict]) -> list[dict]
         if not title or title.startswith("__"):
             continue
         summary = str(card.get("summary") or "").strip()
-        summary = re.sub(r'\bright\b,?\s*', '', summary)
-        summary = re.sub(r'\blamai\b,?\s*', '', summary, flags=re.IGNORECASE)
+        filler_patterns = [
+            r'\blamai\b,?\s*',
+            r'\bokay\s+right\b,?\s*',
+            r'\bright\s*\?\s*',
+            r',\s*right\s*,',
+            r'\bright\s*\.\s*(?=[A-Z])',
+            r'\bso\s+right\b(?!\s+(?:shift|click|side|angle|hand|arrow|triangle|now))',
+        ]
+        for pattern in filler_patterns:
+            summary = re.sub(pattern, ' ', summary, flags=re.IGNORECASE)
         summary = re.sub(r'\s+', ' ', summary).strip()
         raw_definitions = card.get("key_definitions") or []
         examples = card.get("examples") or []
@@ -417,7 +455,7 @@ def _concept_cards_to_pdf_sections(concept_note_cards: list[dict]) -> list[dict]
         elif isinstance(distinction_obj, str) and distinction_obj.strip():
             distinctions = [distinction_obj.strip()]
         _vs = _build_versus_items(title, distinctions)
-        print(f"[dist_debug] {card.get('concept_name')}: key_distinction={repr(card.get('key_distinction'))} → distinctions={distinctions}")
+        if os.getenv("PDF_DEBUG"): print(f"[dist_debug] {card.get('concept_name')}: key_distinction={repr(card.get('key_distinction'))} → distinctions={distinctions}")
         trap_obj = card.get("exam_trap")
         exam_traps = []
         exam_trap_structured = None
@@ -468,13 +506,17 @@ def _concept_cards_to_pdf_sections(concept_note_cards: list[dict]) -> list[dict]
         # When there are no definitions, use the full summary as prose so the
         # card body doesn't render empty (lead_sentence alone is too thin)
         prose = summary if not definitions and summary != lead_sentence else ""
+        code_examples = [e for e in examples if _looks_like_code(str(e))]
+        prose_examples = [e for e in examples if not _looks_like_code(str(e))]
         section = {
             "title": title,
             "lead_sentence": lead_sentence,
             "prose": prose,
             "bullets": [],
             "concepts": [title],
-            "examples": examples,
+            "examples": prose_examples,
+            "code_examples": code_examples,
+            "prose_examples": prose_examples,
             "definitions": definitions,
             "distinctions": distinctions,
             "versus_items": _build_versus_items(title, distinctions),
@@ -521,17 +563,45 @@ def _has_placeholder_timestamps(cards: list[dict]) -> bool:
 
 def _build_versus_items(title: str, distinctions: list[str]) -> list[dict]:
     text = " ".join([title or ""] + (distinctions or []))
+    distinction = (distinctions or [""])[0]
+
+    # Pattern 1: X vs Y / X versus Y
     match = re.search(r"\b([A-Z][A-Za-z\s-]{2,40})\s+(?:vs\.?|versus)\s+([A-Z][A-Za-z\s-]{2,40})\b", text)
     if match:
-        return [{"left": match.group(1).strip(), "right": match.group(2).strip(), "detail": (distinctions or [""])[0]}]
-    distinction = (distinctions or [""])[0]
-    while_match = re.search(r"(.{3,80}?)\s+(?:while|whereas|but|unlike)\s+(.{3,100})", distinction, flags=re.I)
+        return [{"left": match.group(1).strip(), "right": match.group(2).strip(), "detail": distinction}]
+
+    # Pattern 2: Pipe-separated "Label: Value | Label: Value"
+    pipe_match = re.search(r"([^|:]+?):\s*([^|]+?)\s*\|\s*([^|:]+?):\s*(.+)", distinction)
+    if pipe_match:
+        return [{
+            "left_label": pipe_match.group(1).strip(),
+            "left": pipe_match.group(2).strip(),
+            "right_label": pipe_match.group(3).strip(),
+            "right": pipe_match.group(4).strip(),
+        }]
+
+    # Pattern 3: X while/whereas/but/unlike Y (5+ chars per side)
+    while_match = re.search(r"(.{5,80}?)\s+(?:while|whereas|but|unlike)\s+(.{5,100})", distinction, flags=re.I)
     if while_match:
         return [{
             "left": while_match.group(1).strip(" .,:;"),
             "right": while_match.group(2).strip(" .,:;"),
             "detail": distinction,
         }]
+
+    # Pattern 4: "X is ... Y is ..." dual-subject
+    dual_match = re.search(
+        r"([A-Z][A-Za-z\s]{2,30})\s+is\s+(.{5,60}?)[,;.]\s+(?:while\s+)?([A-Z][A-Za-z\s]{2,30})\s+is\s+(.{5,60})",
+        distinction,
+        flags=re.I,
+    )
+    if dual_match:
+        return [{
+            "left": f"{dual_match.group(1).strip()} is {dual_match.group(2).strip()}",
+            "right": f"{dual_match.group(3).strip()} is {dual_match.group(4).strip()}",
+            "detail": distinction,
+        }]
+
     return []
 
 
@@ -961,17 +1031,21 @@ def _call_enrich_section(
     lead, rest = _extract_lead_sentence(prose)
     concepts = data.get("concepts") or []
     examples = data.get("examples") or []
-    print(f"[enrich_section] s{idx + 1}/{total}: title={data.get('title')!r} concepts={concepts} examples={examples}")
+    if os.getenv("PDF_DEBUG"): print(f"[enrich_section] s{idx + 1}/{total}: title={data.get('title')!r} concepts={concepts} examples={examples}")
     structured_trap = _normalise_structured_exam_trap(data.get("exam_trap"))
-    print(f"[enrich_section] s{idx + 1}/{total}: structured_exam_trap={'yes' if structured_trap else 'no'}")
+    if os.getenv("PDF_DEBUG"): print(f"[enrich_section] s{idx + 1}/{total}: structured_exam_trap={'yes' if structured_trap else 'no'}")
     exam_traps = [structured_trap] if structured_trap else []
+    code_examples = [e for e in examples if _looks_like_code(str(e))]
+    prose_examples = [e for e in examples if not _looks_like_code(str(e))]
     return {
         "title":         data.get("title", f"Section {idx + 1}"),
         "lead_sentence": lead,
         "prose":         rest,
         "bullets":       data.get("bullets") or [],
         "concepts":      concepts,
-        "examples":      examples,
+        "examples":      prose_examples,
+        "code_examples": code_examples,
+        "prose_examples": prose_examples,
         "definitions":   [data.get("definition")] if data.get("definition") else [],
         "distinctions":  [data.get("key_distinction")] if data.get("key_distinction") else [],
         "exam_traps":    exam_traps,
@@ -1050,27 +1124,44 @@ def _call_glossary_from_cards(concept_note_cards: list[dict], topic: str | None,
             item for item in (card.get("key_definitions") or [])
             if isinstance(item, dict) and str(item.get("definition") or "").strip()
         ]
-        if not key_definitions:
-            continue
-        matching = next(
-            (
-                item for item in key_definitions
-                if str(item.get("term") or "").strip().lower() == key
-            ),
-            None,
-        )
-        if not matching:
-            # Fallback: use first definition item with a non-empty definition field
+        matching = None
+        if key_definitions:
+            # Strategy 1: Exact case-insensitive match on term field
             matching = next(
                 (item for item in key_definitions
-                 if str(item.get("definition") or "").strip()),
+                 if str(item.get("term") or "").strip().lower() == key),
                 None,
             )
-        if not matching:
-            continue
-        definition = str(matching.get("definition") or "").strip()
-        key = term.lower()
-        if not term or not definition or key in seen:
+            # Strategy 2: Prefix match (first 8 chars)
+            if not matching:
+                def_term = key
+                matching = next(
+                    (item for item in key_definitions
+                     if (
+                         len(def_term) >= 4
+                         and (
+                             str(item.get("term") or "").strip().lower().startswith(def_term[:8])
+                             or def_term.startswith(str(item.get("term") or "").strip().lower()[:8])
+                         )
+                     )),
+                    None,
+                )
+            # Strategy 3: First definition item with non-empty definition
+            if not matching:
+                matching = next(
+                    (item for item in key_definitions
+                     if str(item.get("definition") or "").strip()),
+                    None,
+                )
+        definition = str(matching.get("definition") or "").strip() if matching else ""
+        # Strategy 4: Fall back to first sentence of card summary
+        if not definition or len(definition.split()) < 4:
+            card_summary = str(card.get("summary") or "").strip()
+            if card_summary:
+                first_sent = re.split(r'(?<=[.!?])\s+', card_summary)[0]
+                if len(first_sent.split()) >= 6:
+                    definition = first_sent
+        if not term or not definition or len(definition.split()) < 4 or key in seen:
             continue
         seen.add(key)
         out.append({"term": term, "definition": definition})
@@ -1135,16 +1226,38 @@ def _build_takeaways_deterministic(
     for sec in enriched_sections:
         trap = sec.get("exam_trap_structured")
         title = sec.get("title", "Concept")
+        title_lower = title.lower().rstrip(".,;: ")
+
+        def _strip_title_prefix(text: str) -> str:
+            """Remove redundant title prefix if text already begins with the section title."""
+            text = text.strip()
+            text = re.sub(r'^[—\-\s,:;]+', '', text)
+            if text.lower().startswith(title_lower):
+                remainder = text[len(title_lower):].strip()
+                remainder = re.sub(r'^[—\-\s,:;]+', '', remainder)
+                remainder = re.sub(r'^(?:is|are|was|were)\s+', '', remainder, flags=re.IGNORECASE)
+                if len(remainder.split()) >= 3:
+                    return remainder.strip()
+            return text.strip()
+
         if trap and trap.get("correct") and trap.get("misconception"):
-            correct = str(trap["correct"]).strip().rstrip(".")
-            takeaways.append(f"{title} — {correct}")
+            correct = _strip_title_prefix(str(trap["correct"]).strip().rstrip("."))
+            if len(correct.split()) >= 4:
+                takeaways.append(f"{title} — {correct}")
         elif sec.get("remember"):
-            remember = str(sec["remember"]).strip().rstrip(".")
-            takeaways.append(f"{title} — {remember}")
+            remember = _strip_title_prefix(str(sec["remember"]).strip().rstrip("."))
+            if len(remember.split()) >= 4:
+                takeaways.append(f"{title} — {remember}")
         elif sec.get("lead_sentence"):
-            lead = str(sec["lead_sentence"]).strip().rstrip(".")
+            lead = _strip_title_prefix(str(sec["lead_sentence"]).strip().rstrip("."))
             words = lead.split()
-            if len(words) >= 6:
+            if len(words) >= 5:
+                short = " ".join(words[:20]).rstrip(".,;")
+                takeaways.append(f"{title} — {short}")
+        elif sec.get("distinctions"):
+            dist = _strip_title_prefix(str(sec["distinctions"][0]).strip().rstrip("."))
+            words = dist.split()
+            if len(words) >= 5:
                 short = " ".join(words[:20]).rstrip(".,;")
                 takeaways.append(f"{title} — {short}")
         if len(takeaways) >= 5:
@@ -1158,10 +1271,10 @@ def _call_quick_review(
     topic: str | None,
     n_questions: int,
 ) -> list[dict]:
-    print(f"[pdf:debug] _call_quick_review ENTERED n_questions={n_questions} has_client={bool(_client)}")
+    if os.getenv("PDF_DEBUG"): print(f"[pdf:debug] _call_quick_review ENTERED n_questions={n_questions} has_client={bool(_client)}")
     if not _client or n_questions == 0:
         return []
-    print(f"[pdf:debug] quick_review: transcript_len={len(transcript)} summary_len={len(summary)}")
+    if os.getenv("PDF_DEBUG"): print(f"[pdf:debug] quick_review: transcript_len={len(transcript)} summary_len={len(summary)}")
     resp = _client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
@@ -1201,11 +1314,11 @@ def _call_quick_review(
              output_tokens=resp.usage.completion_tokens)
     try:
         raw_content = resp.choices[0].message.content
-        print(f"[pdf:debug] quick_review raw length={len(raw_content)}")
+        if os.getenv("PDF_DEBUG"): print(f"[pdf:debug] quick_review raw length={len(raw_content)}")
         clean = re.sub(r"```json|```", "", raw_content).strip()
         data = json.loads(clean)
         questions = data.get("questions", [])
-        print(f"[pdf:debug] quick_review parsed questions={len(questions)}")
+        if os.getenv("PDF_DEBUG"): print(f"[pdf:debug] quick_review parsed questions={len(questions)}")
         questions = [
             q for q in questions
             if isinstance(q, dict) and q.get("question") and q.get("answer")
@@ -1215,7 +1328,7 @@ def _call_quick_review(
                 q["difficulty"] = "Recall"
         return questions
     except Exception as e:
-        print(f"[pdf:debug] quick_review parse error: {e}")
+        if os.getenv("PDF_DEBUG"): print(f"[pdf:debug] quick_review parse error: {e}")
         return []
 
 
@@ -1684,7 +1797,7 @@ async def _generate_lite_pdf(
         "review_label":         review_label,
         "glossary_label":       glossary_label,
         "executive_summary":    executive_summary,
-        "cover_summary_preview": (executive_summary[:220].rsplit(" ", 1)[0] + "...") if executive_summary and len(executive_summary) > 220 else executive_summary,
+        "cover_summary_preview": _build_cover_deck(executive_summary),
         "enriched_sections":    sections_data,
         "glossary":             [],
         "takeaways":            [],
@@ -1716,6 +1829,104 @@ async def _generate_lite_pdf(
     return await asyncio.to_thread(_render_pdf, html_content, title_short, watermark)
 
 
+
+
+def _looks_like_code(text: str) -> bool:
+    """Heuristic: return True if text looks like a code snippet."""
+    signals = [
+        r'\bdef\s+\w+\s*\(',          # Python function def
+        r'\bclass\s+\w+',             # class definition
+        r'\bimport\s+\w+',            # import statement
+        r'\breturn\s+',               # return statement
+        r'[{}\[\]]\s*$',             # ends with brace/bracket
+        r'^\s{4,}',                   # indented 4+ spaces
+        r'//\s+\w+',                  # // comment
+        r'/\*[\s\S]*?\*/',            # /* block comment */
+        r'\bfor\s*\(',               # for loop
+        r'\bwhile\s*\(',             # while loop
+        r'[=!<>]{2}',                # == != <= >= operators
+        r'\b(?:int|str|bool|float|var|let|const)\s+\w+', # typed var
+        r'O\([nN\d\s\+\*]+\)',       # Big-O notation
+    ]
+    return sum(1 for pat in signals if re.search(pat, text, re.MULTILINE)) >= 2
+
+
+def _call_enrich_batch_amr(sections: list[dict], topic: str | None) -> list[dict]:
+    """Single GPT-4o-mini call to enrich up to 8 sections with analogy/mistake/remember fields."""
+    if not _client or not sections:
+        return [{} for _ in sections]
+    batch = sections[:8]
+    topic_hint = f" Domain: {topic}." if topic else ""
+    section_texts = []
+    for i, sec in enumerate(batch):
+        title = sec.get("title", f"Section {i + 1}")
+        prose = sec.get("prose") or sec.get("lead_sentence") or ""
+        section_texts.append(f"{i + 1}. Title: {title}\nContent: {prose[:300]}")
+    prompt = (
+        "Note: The transcript may contain mixed languages. Respond in English.\n\n"
+        f"For each lecture section below, generate three fields:{topic_hint}\n"
+        "- analogy: a real-world analogy that makes the concept intuitive (1-2 sentences)\n"
+        "- mistake: the most common student mistake or misconception about this concept (1 sentence)\n"
+        "- remember: the single most important thing to remember for exams (1 sentence)\n\n"
+        "Only use information that could be reasonably inferred from the section content. "
+        "Never invent unrelated examples.\n\n"
+        "Sections:\n" + "\n\n".join(section_texts) + "\n\n"
+        f'Return JSON: {{"sections": [{{"analogy": "...", "mistake": "...", "remember": "..."}}]}}\n'
+        f"Return exactly {len(batch)} objects in the sections array."
+    )
+    try:
+        resp = _client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": _PDF_TRANSCRIPT_ONLY_RULE},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.3,
+            max_tokens=900,
+            response_format={"type": "json_object"},
+        )
+        log_cost("pdf_enrich_amr", "gpt-4o-mini",
+                 input_tokens=resp.usage.prompt_tokens,
+                 output_tokens=resp.usage.completion_tokens)
+        data = json.loads(resp.choices[0].message.content)
+        enrichments = data.get("sections", [])
+        result = [{} for _ in sections]
+        for i, enr in enumerate(enrichments[:len(batch)]):
+            result[i] = enr if isinstance(enr, dict) else {}
+        return result
+    except Exception as e:
+        print(f"[pdf] AMR enrichment error (non-fatal): {e}")
+        return [{} for _ in sections]
+
+
+def _build_cover_deck(exec_summary: str) -> str:
+    """Return a cover preview string using complete sentences, up to ~280 chars."""
+    if not exec_summary:
+        return ""
+    paragraphs = [p.strip() for p in exec_summary.split("\n\n") if p.strip()]
+    first_para = paragraphs[0] if paragraphs else exec_summary.strip()
+    if len(first_para) <= 280:
+        return first_para
+    sentences = re.split(r'(?<=[.!?])\s+', first_para)
+    accumulated = ""
+    for sent in sentences:
+        candidate = (accumulated + " " + sent).strip() if accumulated else sent
+        if len(candidate) <= 280:
+            accumulated = candidate
+        else:
+            break
+    if accumulated:
+        return accumulated
+    # Final fallback: truncate at word boundary
+    words = first_para.split()
+    result = ""
+    for w in words:
+        candidate = (result + " " + w).strip() if result else w
+        if len(candidate) <= 280:
+            result = candidate
+        else:
+            break
+    return (result + "…") if result else first_para[:280]
 
 
 # ── Main async entry point ────────────────────────────────────────────────────
@@ -1804,7 +2015,7 @@ async def generate_lecture_pdf(
         word_count = len(cleaned_transcript.split()) if cleaned_transcript else 0
         if word_count == 0 and transcript:
             word_count = len(transcript.split())
-            print(f"[pdf:debug] word_count fallback from raw transcript: {word_count}")
+            if os.getenv("PDF_DEBUG"): print(f"[pdf:debug] word_count fallback from raw transcript: {word_count}")
         duration_formatted = format_duration(duration_sec)
         section_label, review_label, glossary_label = _get_domain_labels(topic)
 
@@ -1889,7 +2100,7 @@ async def generate_lecture_pdf(
             raw_sections = _extract_summary_sections_loose(summary)
         n_sections = len(raw_sections)
         n_questions = _question_count(duration_sec)
-        print(f"[pdf:debug] duration_sec={duration_sec} word_count={word_count} n_questions={n_questions} total_chunks={total_chunks}")
+        if os.getenv("PDF_DEBUG"): print(f"[pdf:debug] duration_sec={duration_sec} word_count={word_count} n_questions={n_questions} total_chunks={total_chunks}")
         if n_questions == 0 and word_count >= 500:
             estimated_minutes = word_count // 130
             n_questions = _question_count(estimated_minutes * 60)
@@ -1924,7 +2135,7 @@ async def generate_lecture_pdf(
             if grounded_summary and len(grounded_summary) >= 1000
             else cleaned_transcript[:6000]
         )
-        print(f"[pdf:debug] queuing quick_review with n_questions={n_questions} word_count={word_count} qr_summary_len={len(qr_summary)}")
+        if os.getenv("PDF_DEBUG"): print(f"[pdf:debug] queuing quick_review with n_questions={n_questions} word_count={word_count} qr_summary_len={len(qr_summary)}")
         tasks.append(asyncio.to_thread(_call_quick_review, cleaned_transcript, qr_summary, topic, n_questions))
 
         concept_entities = build_concept_entities(concept_sections, claim_registry)
@@ -1951,11 +2162,12 @@ async def generate_lecture_pdf(
             for i, raw_sec in enumerate(raw_sections):
                 tasks.append(asyncio.to_thread(_call_enrich_section, raw_sec, i, n_sections, topic, language))
 
-        print(f"[pdf:debug] task_count={len(tasks)}")
+        if os.getenv("PDF_DEBUG"): print(f"[pdf:debug] task_count={len(tasks)}")
         results = await asyncio.gather(*tasks, return_exceptions=True)
-        print(f"[pdf:debug] results count after gather={len(results)}")
-        for _i, _r in enumerate(results):
-            print(f"[pdf:debug] results[{_i}] type={type(_r).__name__} is_exc={isinstance(_r, Exception)}")
+        if os.getenv("PDF_DEBUG"): print(f"[pdf:debug] results count after gather={len(results)}")
+        if os.getenv("PDF_DEBUG"):
+            for _i, _r in enumerate(results):
+                print(f"[pdf:debug] results[{_i}] type={type(_r).__name__} is_exc={isinstance(_r, Exception)}")
         ri = 0
         exec_summary = results[ri] if not isinstance(results[ri], Exception) else ""
         ri += 1
@@ -1965,13 +2177,16 @@ async def generate_lecture_pdf(
             enriched_sections = _concept_cards_to_pdf_sections(concept_note_cards)
         elif concept_sections:
             for note in concept_sections:
+                _examples = note.get("examples") or []
                 section = {
                     "title": note.get("title") or "Summary",
                     "lead_sentence": note.get("core_explanation") or "",
                     "prose": "",
                     "bullets": [],
                     "concepts": note.get("concepts") or [],
-                    "examples": note.get("examples") or [],
+                    "examples": [e for e in _examples if not _looks_like_code(str(e))],
+                    "code_examples": [e for e in _examples if _looks_like_code(str(e))],
+                    "prose_examples": [e for e in _examples if not _looks_like_code(str(e))],
                     "definitions": note.get("key_definitions") or [],
                     "distinctions": note.get("important_distinctions") or [],
                     "versus_items": [],
@@ -1991,13 +2206,16 @@ async def generate_lecture_pdf(
                 enriched_sections.append(section)
         elif grounded_notes:
             for note in grounded_notes:
+                _examples = note.get("examples") or []
                 section = {
                     "title": note.get("title") or "Summary",
                     "lead_sentence": note.get("lead_sentence") or "",
                     "prose": note.get("prose") or "",
                     "bullets": note.get("highlights") or [],
                     "concepts": note.get("concepts") or [],
-                    "examples": note.get("examples") or [],
+                    "examples": [e for e in _examples if not _looks_like_code(str(e))],
+                    "code_examples": [e for e in _examples if _looks_like_code(str(e))],
+                    "prose_examples": [e for e in _examples if not _looks_like_code(str(e))],
                     "definitions": [],
                     "distinctions": [],
                     "versus_items": [],
@@ -2025,6 +2243,8 @@ async def generate_lecture_pdf(
                     "bullets": [],
                     "concepts": [],
                     "examples": [],
+                    "code_examples": [],
+                    "prose_examples": [],
                     "definitions": [],
                     "distinctions": [],
                     "versus_items": [],
@@ -2109,6 +2329,10 @@ async def generate_lecture_pdf(
                 if enr.get(field):
                     section[field] = list(dict.fromkeys((section.get(field) or []) + (enr.get(field) or [])))
                     section.update(_section_render_profile(section))
+            # Sync code/prose examples after merging
+            all_examples = section.get("examples") or []
+            section["code_examples"] = [e for e in all_examples if _looks_like_code(str(e))]
+            section["prose_examples"] = [e for e in all_examples if not _looks_like_code(str(e))]
             if not section.get("prose") and enr.get("prose"):
                 section["prose"] = enr["prose"]
                 section.update(_section_render_profile(section))
@@ -2118,6 +2342,16 @@ async def generate_lecture_pdf(
         _trap_count = sum(1 for s in enriched_sections if s.get("exam_trap_structured"))
         print(f"[pdf] enriched_sections with exam_trap_structured: {_trap_count}/{len(enriched_sections)}")
 
+        # AMR enrichment: fill missing analogy/mistake/remember fields in batch
+        if enriched_sections:
+            amr_enrichments = await asyncio.to_thread(_call_enrich_batch_amr, enriched_sections, topic)
+            for i, enr in enumerate(amr_enrichments):
+                sec = enriched_sections[i]
+                for field in ("analogy", "mistake", "remember"):
+                    if enr.get(field) and not sec.get(field):
+                        sec[field] = enr[field]
+            print(f"[pdf] AMR enrichment complete: {len(enriched_sections)} sections")
+
         # Takeaways built deterministically from enriched section data — no GPT call
         takeaways = _build_takeaways_deterministic(enriched_sections, topic)
         print(f"[pdf:health] takeaways={len(takeaways)}")
@@ -2125,23 +2359,23 @@ async def generate_lecture_pdf(
             takeaways = _fallback_takeaways(grounded_summary or summary, enriched_sections)
 
         if exec_summary and transcript:
-            top_terms = _top_terms(transcript[:8000], n=5)
-            summary_lower = exec_summary.lower()
-            matched = sum(1 for t in top_terms if t in summary_lower)
-            if matched < 3:
-                print(f"[pdf] exec_summary validation: only {matched}/5 transcript terms found ({top_terms}). Regenerating with strict prompt.")
-                try:
-                    exec_summary = await asyncio.to_thread(_call_executive_summary, cleaned_transcript, title, topic, True)
-                    matched_retry = sum(1 for t in top_terms if t in exec_summary.lower())
-                    if matched_retry < 3:
-                        print(f"[pdf] exec_summary still failed after strict retry ({matched_retry}/5). Keeping retry output but flagging lecture_id={lecture_id} for review.")
-                except Exception as e:
-                    print(f"[pdf] exec_summary retry error (non-fatal): {e}")
+            all_words = re.findall(r'\b[a-zA-Z]{6,}\b', transcript[:8000].lower())
+            word_freq = Counter(all_words)
+            content_terms = [w for w, c in word_freq.most_common(20) if c >= 3][:5]
+            if content_terms:
+                summary_lower = exec_summary.lower()
+                matched = sum(1 for t in content_terms if t in summary_lower)
+                if matched == 0:
+                    print(f"[pdf] exec_summary validation: 0/{len(content_terms)} content terms found ({content_terms}). Regenerating.")
+                    try:
+                        exec_summary = await asyncio.to_thread(_call_executive_summary, cleaned_transcript, title, topic, True)
+                    except Exception as e:
+                        print(f"[pdf] exec_summary retry error (non-fatal): {e}")
 
         # Grounding check disabled: synthesized takeaways intentionally use different
         # vocabulary from the raw transcript — the check was always failing and forcing
         # the raw-sentence fallback. Re-enable with a smarter check if needed.
-        print(f"[pdf:debug] takeaways[0]={takeaways[0][:80] if takeaways else 'empty'}")
+        if os.getenv("PDF_DEBUG"): print(f"[pdf:debug] takeaways[0]={takeaways[0][:80] if takeaways else 'empty'}")
         if not takeaways:
             takeaways = _fallback_takeaways(grounded_summary or summary, enriched_sections)
 
@@ -2274,7 +2508,7 @@ async def generate_lecture_pdf(
             "review_label": review_label,
             "glossary_label": glossary_label,
             "executive_summary": exec_summary,
-            "cover_summary_preview": (exec_summary[:220].rsplit(" ", 1)[0] + "...") if exec_summary and len(exec_summary) > 220 else exec_summary,
+            "cover_summary_preview": _build_cover_deck(exec_summary),
             "enriched_sections": enriched_sections,
             "glossary": glossary,
             "takeaways": takeaways,

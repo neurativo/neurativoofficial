@@ -758,6 +758,46 @@
         .example-row { font-size: 8.7pt; color: #334155; margin-bottom: 1.1mm; line-height: 1.45; }
         .example-arrow { color: #1d9e75; font-weight: 600; margin-right: 4px; }
 
+        /* Code block */
+        .code-block {
+            margin: 3mm 0 2mm;
+            border: 0.5pt solid #e5e7eb;
+            border-radius: 5px;
+            overflow: hidden;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 8.5pt;
+        }
+        .code-lang {
+            background: #1e293b;
+            color: #94a3b8;
+            font-size: 7pt;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            padding: 1.5mm 3mm;
+        }
+        .code-block pre {
+            margin: 0;
+            display: flex;
+            background: #f8fafc;
+        }
+        .code-block .gutter {
+            padding: 2mm 2.5mm;
+            background: #f1f5f9;
+            color: #94a3b8;
+            font-size: 7.5pt;
+            line-height: 1.6;
+            text-align: right;
+            user-select: none;
+            min-width: 6mm;
+        }
+        .code-block .src {
+            padding: 2mm 3mm;
+            color: #0f172a;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
         /* Analogy two-column box */
         .analogy-box {
             display: grid;
@@ -1823,6 +1863,16 @@
             {% endif %}
             {% endif %}
 
+            {% if sec.code_examples %}
+            {% for code in sec.code_examples %}
+            <div class="code-block">
+                <div class="code-lang">{{ topic | upper if topic else "CODE" }}</div>
+                <pre><div class="gutter">{% for line in code.split('\n') %}{{ loop.index }}
+{% endfor %}</div><div class="src">{{ code }}</div></pre>
+            </div>
+            {% endfor %}
+            {% endif %}
+
             {% if sec.analogy %}
             <div class="analogy-box">
                 <div class="analogy-left">
@@ -1868,15 +1918,15 @@
             {% for item in sec.versus_items[:1] %}
             <div class="versus-grid">
                 <div class="versus-cell">
-                    <div class="versus-label">Left Side</div>
+                    <div class="versus-label">{% if item.left_label %}{{ item.left_label }}{% else %}Left Side{% endif %}</div>
                     <div class="versus-text">{{ item.left }}</div>
                 </div>
                 <div class="versus-cell">
-                    <div class="versus-label">Right Side</div>
+                    <div class="versus-label">{% if item.right_label %}{{ item.right_label }}{% else %}Right Side{% endif %}</div>
                     <div class="versus-text">{{ item.right }}</div>
                 </div>
             </div>
-            {% if item.detail %}
+            {% if item.detail and not item.left_label %}
             <p>{{ item.detail }}</p>
             {% endif %}
             {% endfor %}
@@ -1886,7 +1936,12 @@
                 <ul class="edu-box-list">
                     {% for item in sec.distinctions %}
                     {% if item and item|string|trim %}
+                    {% if " | " in item|string %}
+                    {% set parts = item|string.split(" | ") %}
+                    {% for part in parts %}{% if part | trim %}<li>{{ part | trim }}</li>{% endif %}{% endfor %}
+                    {% else %}
                     <li>{{ item }}</li>
+                    {% endif %}
                     {% endif %}
                     {% endfor %}
                 </ul>

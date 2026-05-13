@@ -2798,29 +2798,74 @@ def _quick_recall_cue(text: str) -> str:
     lowered = cleaned.lower()
     if not lowered:
         return ""
+    sentences = _split_sentences(cleaned)
+
+    def _cap_sentence(s: str, limit: int = 24) -> str:
+        words = s.split()
+        if len(words) > limit:
+            s = " ".join(words[:limit]).rstrip(" ,;:") + "."
+        elif s and s[-1] not in ".!?":
+            s += "."
+        return s
+
+    # 1. vs/versus/whereas — use first complete sentence (≤20 words)
+    if any(kw in lowered for kw in ("vs ", " versus ", "whereas")):
+        for sent in sentences:
+            words = sent.split()
+            if 4 <= len(words) <= 20:
+                return _cap_sentence(sent)
+
+    # 2. Definition markers — take matching sentence
+    def_markers = ("is defined as", "refers to", " means ", "is called", "is a ")
+    for marker in def_markers:
+        if marker in lowered:
+            for sent in sentences:
+                if marker in sent.lower():
+                    return _cap_sentence(sent)
+
+    # 3. Exam trap markers — find corrective sentence
+    trap_markers = ("students often think", "common mistake", "do not confuse", "don't confuse", "misconception")
+    for marker in trap_markers:
+        if marker in lowered:
+            for sent in sentences:
+                if any(m in sent.lower() for m in trap_markers):
+                    return _cap_sentence(sent)
+
+    # 4. CS signals — find complexity sentence
+    cs_markers = ("time complexity", "big o", "o(n)", "o(log", "o(1)", "algorithm", "runtime")
+    if any(kw in lowered for kw in cs_markers):
+        for sent in sentences:
+            sent_low = sent.lower()
+            if any(kw in sent_low for kw in cs_markers):
+                return _cap_sentence(sent)
+
+    # 5. Formula signals — find equation sentence
+    if re.search(r'[=²∫Δαβ∑]|O\([^)]+\)', cleaned):
+        for sent in sentences:
+            if re.search(r'[=²∫Δαβ∑]|O\([^)]+\)', sent):
+                return _cap_sentence(sent)
+
+    # 6. Economics domain patterns (preserved)
     if "resources" in lowered and ("unlimited in supply" in lowered or "gifted by nature" in lowered or "abundant" in lowered):
         return "Non-economic resources are naturally available without scarcity in the lecture context."
     if "unlimited in supply" in lowered or "gifted by nature" in lowered or "abundant" in lowered:
         return "A free or non-economic good is naturally available without scarcity in the lecture context."
     if "testable" in lowered or "tested against facts" in lowered or "verifiable" in lowered:
         return "A positive statement is fact-based and can be tested or verified."
-    if "value judgment" in lowered or "opinion" in lowered or "normative" in lowered:
+    if "value judgment" in lowered or "normative" in lowered:
         return "A normative statement expresses a value judgment or opinion."
     if "scarce" in lowered or "limited in supply" in lowered or "opportunity cost" in lowered:
         return "An economic good is scarce, so using it involves opportunity cost."
-    if "public good" in lowered or "shared" in lowered:
+    if "public good" in lowered or ("shared" in lowered and "good" in lowered):
         return "A public good can be shared, but it is not the same as a free good."
-    if "dissatisfaction" in lowered or "harm" in lowered or "pollution" in lowered or "garbage" in lowered:
+    if "dissatisfaction" in lowered or "pollution" in lowered or "garbage" in lowered:
         return "An economic bad creates disutility rather than satisfaction."
-    if "human intervention" in lowered or "convert" in lowered or "conversion" in lowered:
+    if "human intervention" in lowered or "conversion" in lowered:
         return "Human intervention can convert a non-economic good into an economic good."
-    sentence = _split_sentences(cleaned)[0] if _split_sentences(cleaned) else cleaned
-    words = sentence.split()
-    if len(words) > 24:
-        sentence = " ".join(words[:24]).rstrip(" ,;:") + "."
-    elif sentence and sentence[-1] not in ".!?":
-        sentence += "."
-    return sentence
+
+    # 7. Universal fallback: first sentence, max 24 words
+    first = sentences[0] if sentences else cleaned
+    return _cap_sentence(first)
 
 
 def _quick_recall_under_ten_words(card: dict) -> str:
