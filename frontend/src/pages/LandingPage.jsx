@@ -426,6 +426,7 @@ const CSS = `
 
   /* ── MOBILE ── */
   @media (max-width: 768px) {
+    .lp { overflow-x: hidden; }
     .lp-nav { padding: 0 20px; position: relative; }
     .lp-nav-center { display: none; }
     .lp-hamburger { display: block; }
@@ -435,7 +436,7 @@ const CSS = `
     .lp-h1 { font-size: 36px; letter-spacing: -1.2px; }
     .lp-hero-sub { font-size: 15px; }
     .lp-hero-btns { flex-direction: column; align-items: stretch; width: 100%; max-width: 320px; }
-    .lp-btn-dark-md, .lp-btn-ghost-md { justify-content: center; }
+    .lp-btn-dark-md, .lp-btn-ghost-md { justify-content: center; min-height: 44px; }
 
     .lp-mockup-wrap { display: none; }
 
@@ -446,11 +447,13 @@ const CSS = `
     .lp-stat:nth-child(4) { border-top: 1px solid #f0ede8; border-right: none; }
 
     .lp-sec { padding: 0 24px 60px; }
+    .lp-sec-h2 { font-size: 28px; letter-spacing: -0.8px; }
     .lp-feat-grid { grid-template-columns: 1fr; gap: 0; }
     .lp-feat-cell:not(:last-child) { border-bottom: 1px solid #f0ede8; }
     .lp-steps { grid-template-columns: 1fr; }
     .lp-pricing { grid-template-columns: 1fr; }
     .lp-plan-feat { order: -1; }
+    .lp-credits-grid { grid-template-columns: 1fr 1fr; }
     .lp-testi-grid { grid-template-columns: 1fr; }
 
     .lp-cta-wrap { padding: 0 24px 60px; }
@@ -458,29 +461,64 @@ const CSS = `
     .lp-cta-h2 { font-size: 26px; letter-spacing: -0.8px; }
 
     .lp-footer { grid-template-columns: 1fr; text-align: center; justify-items: center; padding: 28px 24px; gap: 16px; }
+    .lp-footer-lnks { justify-content: center; flex-wrap: wrap; gap: 16px; }
     .lp-footer-copy { text-align: center; }
+
+    .lp-faq-q { font-size: 13.5px; padding: 16px 18px; }
   }
 
   @media (max-width: 480px) {
     .lp-nav { padding: 0 16px; }
     .lp-hero { padding: 56px 16px 48px; }
-    .lp-h1 { font-size: 30px; letter-spacing: -1px; }
+    .lp-h1 { font-size: 28px; letter-spacing: -0.8px; }
     .lp-hero-sub { font-size: 14px; }
     .lp-hero-eyebrow { font-size: 10px; }
+    .lp-btn-dark-md, .lp-btn-ghost-md { font-size: 13.5px; }
+
     .lp-stats-wrap { padding: 0 16px 48px; }
+    .lp-stat { padding: 20px 14px; }
+    .lp-stat-n { font-size: 28px; }
+
     .lp-sec { padding: 0 16px 48px; }
-    .lp-sec-h2 { font-size: 22px; }
+    .lp-sec-h2 { font-size: 22px; letter-spacing: -0.5px; }
     .lp-sec-sub { font-size: 13px; }
+
+    .lp-feat-cell { padding: 22px 18px; }
+    .lp-step { padding: 22px 18px; }
+
+    .lp-credits-grid { grid-template-columns: 1fr; }
+    .lp-credit-pack { padding: 14px 16px; }
+
     .lp-nast-wrap { padding: 0 16px 48px; }
+    .lp-nast-inner { padding: 28px 20px; gap: 24px; }
+    .lp-nast-h2 { font-size: 20px; }
+
     .lp-cta-wrap { padding: 0 16px 48px; }
-    .lp-cta { padding: 32px 20px; border-radius: 18px; }
-    .lp-cta-h2 { font-size: 22px; }
+    .lp-cta { padding: 32px 20px; border-radius: 14px; }
+    .lp-cta-h2 { font-size: 20px; letter-spacing: -0.5px; }
+
+    .lp-about-quote-text { font-size: 20px; }
+    .lp-about-col { padding: 20px; }
+
     .lp-footer { padding: 24px 16px; }
-    .lp-pricing { gap: 12px; }
-    .lp-plan, .lp-plan-feat { padding: 24px 20px; }
+    .lp-pricing { gap: 10px; }
+    .lp-plan, .lp-plan-feat { padding: 22px 18px; }
     .lp-mobile-menu { padding: 12px 16px 16px; }
     .lp-testi-grid { gap: 10px; }
     .lp-testi-card { padding: 18px; }
+
+    .lp-faq-q { font-size: 13px; padding: 14px 16px; }
+    .lp-faq-a { padding: 0 16px 14px; font-size: 12.5px; }
+  }
+
+  @media (max-width: 360px) {
+    .lp-h1 { font-size: 24px; letter-spacing: -0.5px; }
+    .lp-hero { padding: 48px 14px 40px; }
+    .lp-sec { padding: 0 14px 40px; }
+    .lp-sec-h2 { font-size: 20px; }
+    .lp-nast-inner { padding: 24px 16px; }
+    .lp-cta { padding: 28px 16px; }
+    .lp-cta-h2 { font-size: 18px; }
   }
 
   /* ═══════════════════════════════════════
@@ -534,6 +572,7 @@ const CSS = `
     .dark .lp-stat:nth-child(3) { border-top-color: var(--color-border); }
     .dark .lp-stat:nth-child(4) { border-top-color: var(--color-border); }
     .dark .lp-feat-cell:not(:last-child) { border-bottom-color: var(--color-border); }
+    .dark .lp-sec-h2 { color: var(--color-text); }
   }
 
   .dark .lp-sec-eye { color: var(--color-muted); }
