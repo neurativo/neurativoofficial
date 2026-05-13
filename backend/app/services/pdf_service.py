@@ -1453,12 +1453,14 @@ _STOPWORDS = {
     "and", "but", "for", "not", "you", "they", "what", "which", "who",
     "when", "where", "how", "all", "each", "some", "such", "more", "most",
     "then", "than", "only", "its", "our", "their", "your", "his", "her",
+    "right", "unit", "note", "okay", "going", "back", "well", "even",
+    "here", "want", "need", "take", "give", "make", "tell", "look", "think",
 }
 
 
 def _top_terms(text: str, n: int = 5) -> list[str]:
-    """Returns n most frequent non-stopword tokens (>=4 chars) from text."""
-    words = re.findall(r'[a-z]{4,}', text.lower())
+    """Returns n most frequent non-stopword tokens (>=5 chars) from text."""
+    words = re.findall(r'[a-z]{5,}', text.lower())
     counts = Counter(w for w in words if w not in _STOPWORDS)
     return [term for term, _ in counts.most_common(n)]
 

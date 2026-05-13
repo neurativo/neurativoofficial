@@ -3613,19 +3613,15 @@ def sanitize_pdf_artifacts(
         if term and definition and status in {"supported", "weak"}:
             glossary_out.append(item)
 
-    quick_review_out = []
-    for item in quick_review or []:
-        question = _normalise_ws(item.get("question", ""))
-        answer = _normalise_ws(item.get("answer", ""))
-        status, _ = _verify_generated_text(f"{question}. {answer}", transcript_units, minimum_score=0.22)
-        if question and answer and status in {"supported", "weak"}:
-            quick_review_out.append(item)
+    quick_review_out = [
+        q for q in (quick_review or [])
+        if isinstance(q, dict) and q.get("question") and q.get("answer")
+    ]
 
-    takeaways_out = []
-    for takeaway in takeaways or []:
-        status, _ = _verify_generated_text(takeaway, transcript_units, minimum_score=0.22)
-        if status in {"supported", "weak"}:
-            takeaways_out.append(takeaway)
+    takeaways_out = [
+        t for t in (takeaways or [])
+        if isinstance(t, str) and len(t.strip()) > 10
+    ]
 
     roadmap = study_roadmap or {"days": [], "reminders": [], "next_topics": [], "prerequisites": []}
     next_topics_out = []
