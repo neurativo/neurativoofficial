@@ -134,7 +134,7 @@ def _build_prompt(
         "" if language == "en"
         else f" The transcript is in {language}. Write all output in the same language."
     )
-    word_budget = min(800, max(400, 200 + word_count // 15))
+    word_budget = min(1800, max(1000, 400 + word_count // 10))
 
     system = (
         f"You are Neurativo, an elite academic AI for students from undergrad to PhD level.{topic_hint}"
