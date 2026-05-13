@@ -397,7 +397,7 @@ def _concept_cards_to_pdf_sections(concept_note_cards: list[dict]) -> list[dict]
                 " vs ".join([str(a.get("name", "")).strip(), str(b.get("name", "")).strip()]).strip(" vs ")
             ]
         _vs = _build_versus_items(title, distinctions)
-        print(f"[cards_debug] {card.get('concept_name')}: distinctions={distinctions} versus_items={_vs}")
+        print(f"[dist_debug] {card.get('concept_name')}: distinctions={distinctions} versus_items={_vs}")
         trap_obj = card.get("exam_trap")
         exam_traps = []
         exam_trap_structured = None
@@ -443,12 +443,15 @@ def _concept_cards_to_pdf_sections(concept_note_cards: list[dict]) -> list[dict]
                 else:
                     exam_traps = []
                     exam_trap_structured = None
-        raw_lead = (definitions or [card.get("summary", "")])[0]
+        raw_lead = (definitions or [summary])[0] if (definitions or summary) else ""
         lead_sentence = re.sub(r'[^\x00-\x7F]', '', str(raw_lead or "")).strip()
+        # When there are no definitions, use the full summary as prose so the
+        # card body doesn't render empty (lead_sentence alone is too thin)
+        prose = summary if not definitions and summary != lead_sentence else ""
         section = {
             "title": title,
             "lead_sentence": lead_sentence,
-            "prose": "",
+            "prose": prose,
             "bullets": [],
             "concepts": [title],
             "examples": examples,
@@ -1111,22 +1114,25 @@ def _call_takeaways(transcript: str, summary: str, topic: str | None) -> list[st
                 "role": "user",
                 "content": (
                     "Note: The transcript may contain mixed languages. Extract meaning from all languages present. Respond in English.\n\n"
-                    f"SUMMARY:\n{summary[:3000]}\n\n"
-                    f"Write exactly 5 exam-ready takeaways from this lecture.{hint} "
+                    f"LECTURE NOTES:\n{summary[:3000]}\n\n"
+                    "The above are raw lecture notes. Your job is to synthesize them "
+                    "into 5 exam-ready revision takeaways.\n"
                     "Rules:\n"
-                    "1. Each takeaway must be a synthesized insight, NOT a quote from the transcript\n"
-                    "2. Start each with an action verb or the concept name\n"
-                    "3. Include what makes this concept tricky or exam-relevant\n"
-                    "4. One sentence max, under 25 words\n"
-                    "5. A student should be able to use this as a revision flashcard\n"
-                    "Bad example: 'Microeconomics is where you focus on a small part of the economy'\n"
-                    "Good example: 'Microeconomics covers individual units — any question mentioning one firm, product, or household is micro'\n"
+                    "1. DO NOT copy sentences from the notes above\n"
+                    "2. Each takeaway must be a NEW sentence in your own words\n"
+                    "3. Focus on what makes each concept EXAM-RELEVANT\n"
+                    "4. Include the KEY DISTINCTION or COMMON MISTAKE where applicable\n"
+                    "5. Max 20 words per takeaway\n"
+                    "6. Start each with the concept name\n\n"
+                    "Bad: 'Microeconomics is where you focus on a small part of the economy'\n"
+                    "Good: 'Microeconomics — any question about one firm, product, or household is micro, not macro'\n\n"
+                    f"Topic: {topic or 'general'}\n"
                     'Return JSON: {"takeaways": ["...", ...]}'
                 ),
             }
         ],
         temperature=0.3,
-        max_tokens=600,
+        max_tokens=700,
         response_format={"type": "json_object"},
     )
     log_cost("pdf_takeaways", "gpt-4o-mini",
@@ -1144,6 +1150,7 @@ def _call_quick_review(
     topic: str | None,
     n_questions: int,
 ) -> list[dict]:
+    print(f"[pdf:debug] _call_quick_review called: n_questions={n_questions} has_client={bool(_client)}")
     if not _client or n_questions == 0:
         return []
     hint = f" Domain: {topic}." if topic else ""
@@ -2238,6 +2245,7 @@ async def generate_lecture_pdf(
         print(f"[pdf:health] sections={len(enriched_sections)}")
         print(f"[pdf:health] exam_traps={sum(1 for s in enriched_sections if s.get('exam_trap_structured'))}")
         print(f"[pdf:health] distinctions={sum(1 for s in enriched_sections if s.get('distinctions'))}")
+        print(f"[pdf:health] show_distinction_boxes={sum(1 for s in enriched_sections if s.get('show_distinction_box'))}")
         print(f"[pdf:health] versus_items={sum(1 for s in enriched_sections if s.get('versus_items'))}")
         print(f"[pdf:health] glossary={len(glossary)}")
         print(f"[pdf:health] takeaways={len(takeaways)}")
