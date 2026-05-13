@@ -1005,6 +1005,12 @@ def _call_glossary(transcript: str, topic: str | None, n_terms: int = 8) -> list
                     "Prefer every lecture-defined term over generic textbook terms. For economics lectures, include each "
                     "distinct economics term the professor introduced, including positive/normative statements, economic/non-economic goods, "
                     "free goods, public goods, utility, disutility, opportunity cost, scarcity, and economic/non-economic resources when present. "
+                    "IMPORTANT: Also extract terms the lecturer DEFINES or EXPLAINS using informal language. "
+                    "If the lecturer says 'what we call X is Y' or 'X means Y' or 'X is where you...' — extract X as a term. "
+                    "For economics lectures, extract every concept introduced by name including: microeconomics, macroeconomics, "
+                    "positive statements, normative statements, economic goods, non-economic goods, free goods, economic bads, "
+                    "utility, disutility, scarcity, opportunity cost, economic resources, non-economic resources. "
+                    "Return ALL of these if they appear in the lecture content. "
                     "Definitions must match what the professor said and must never contradict explicit lecture statements. "
                     "If the lecture says public goods are limited in supply, do not define them as unlimited. "
                     "For each term provide one exam-ready sentence a student can memorise. "
@@ -1161,7 +1167,8 @@ def _call_takeaways(transcript: str, summary: str, topic: str | None) -> list[st
              input_tokens=resp.usage.prompt_tokens,
              output_tokens=resp.usage.completion_tokens)
     try:
-        return json.loads(resp.choices[0].message.content).get("takeaways", [])
+        raw = json.loads(resp.choices[0].message.content).get("takeaways", [])
+        return [str(t).strip() for t in raw if str(t).strip()]
     except Exception:
         return []
 
@@ -1201,16 +1208,22 @@ def _call_quick_review(
             }
         ],
         temperature=0.4,
-        max_tokens=1400,
+        max_tokens=2000,
         response_format={"type": "json_object"},
     )
     log_cost("pdf_quick_review", "gpt-4o-mini",
              input_tokens=resp.usage.prompt_tokens,
              output_tokens=resp.usage.completion_tokens)
+    raw_content = resp.choices[0].message.content
+    print(f"[pdf:debug] quick_review raw length={len(raw_content)}")
     try:
-        return json.loads(resp.choices[0].message.content).get("questions", [])
-    except Exception:
-        return []
+        parsed = json.loads(raw_content)
+        questions = parsed.get("questions", [])
+        print(f"[pdf:debug] quick_review parsed questions={len(questions)}")
+    except Exception as e:
+        print(f"[pdf:debug] quick_review JSON error: {e}")
+        questions = []
+    return questions
 
 
 def _call_study_roadmap(
@@ -2059,7 +2072,7 @@ async def generate_lecture_pdf(
                     _call_glossary,
                     cleaned_transcript or grounded_summary or summary,
                     topic,
-                    16,
+                    20,
                 )
             except Exception as _e:
                 print(f"[pdf] glossary fallback error: {_e}")
@@ -2139,15 +2152,16 @@ async def generate_lecture_pdf(
             takeaways = []
         # Fallback: fill from exam traps if GPT returned < 3 takeaways
         if len(takeaways) < 3:
-            print(f"[pdf] takeaways only {len(takeaways)} — filling from exam traps")
+            print(f"[pdf:debug] takeaways fallback triggered: have {len(takeaways)}, filling from {len(enriched_sections)} sections")
             for sec in enriched_sections:
+                trap = sec.get("exam_trap_structured")
+                print(f"[pdf:debug] fallback sec={sec.get('title')} trap={bool(trap)}")
+                if isinstance(trap, dict) and trap.get("misconception") and trap.get("correct"):
+                    t = f"{sec.get('title', 'Concept')} — {trap['correct']}"
+                    if t not in takeaways:
+                        takeaways.append(t)
                 if len(takeaways) >= 5:
                     break
-                trap = sec.get("exam_trap_structured")
-                if isinstance(trap, dict) and trap.get("misconception") and trap.get("correct"):
-                    label = f"{sec.get('title', 'Concept')}: {trap['correct']}"
-                    if label not in takeaways:
-                        takeaways.append(label)
 
         if exec_summary and transcript:
             top_terms = _top_terms(transcript[:8000], n=5)
