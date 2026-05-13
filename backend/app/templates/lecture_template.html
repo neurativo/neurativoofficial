@@ -1885,7 +1885,9 @@
                 <div class="edu-box-label">Important Distinctions</div>
                 <ul class="edu-box-list">
                     {% for item in sec.distinctions %}
+                    {% if item and item|string|trim %}
                     <li>{{ item }}</li>
+                    {% endif %}
                     {% endfor %}
                 </ul>
             </div>

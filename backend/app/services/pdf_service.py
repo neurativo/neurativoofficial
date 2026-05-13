@@ -393,9 +393,11 @@ def _concept_cards_to_pdf_sections(concept_note_cards: list[dict]) -> list[dict]
         if isinstance(distinction_obj, dict) and distinction_obj:
             a = distinction_obj.get("concept_a") or {}
             b = distinction_obj.get("concept_b") or {}
-            distinctions = [
-                " vs ".join([str(a.get("name", "")).strip(), str(b.get("name", "")).strip()]).strip(" vs ")
-            ]
+            a_name = str(a.get("name", "") or "").strip()
+            b_name = str(b.get("name", "") or "").strip()
+            vs_str = " vs ".join(filter(None, [a_name, b_name]))
+            if vs_str:
+                distinctions = [vs_str]
         _vs = _build_versus_items(title, distinctions)
         print(f"[dist_debug] {card.get('concept_name')}: distinctions={distinctions} versus_items={_vs}")
         trap_obj = card.get("exam_trap")
@@ -1113,17 +1115,15 @@ def _call_takeaways(transcript: str, summary: str, topic: str | None) -> list[st
             {
                 "role": "user",
                 "content": (
-                    "Note: The transcript may contain mixed languages. Extract meaning from all languages present. Respond in English.\n\n"
-                    f"LECTURE NOTES:\n{summary[:3000]}\n\n"
-                    "The above are raw lecture notes. Your job is to synthesize them "
-                    "into 5 exam-ready revision takeaways.\n"
+                    f"CONCEPT SIGNALS:\n{summary[:3000]}\n\n"
+                    "Based on these concept signals, write 5 exam-ready takeaways "
+                    "a student should remember before their exam.\n"
                     "Rules:\n"
-                    "1. DO NOT copy sentences from the notes above\n"
-                    "2. Each takeaway must be a NEW sentence in your own words\n"
-                    "3. Focus on what makes each concept EXAM-RELEVANT\n"
-                    "4. Include the KEY DISTINCTION or COMMON MISTAKE where applicable\n"
-                    "5. Max 20 words per takeaway\n"
-                    "6. Start each with the concept name\n\n"
+                    "1. Write in your own words — do NOT copy the signals above\n"
+                    "2. Each takeaway = one exam-relevant insight under 20 words\n"
+                    "3. Include what makes each concept tricky or commonly confused\n"
+                    "4. Start with the concept name\n"
+                    "5. Make it actionable — what should the student DO or REMEMBER\n\n"
                     "Bad: 'Microeconomics is where you focus on a small part of the economy'\n"
                     "Good: 'Microeconomics — any question about one firm, product, or household is micro, not macro'\n\n"
                     f"Topic: {topic or 'general'}\n"
@@ -1150,9 +1150,10 @@ def _call_quick_review(
     topic: str | None,
     n_questions: int,
 ) -> list[dict]:
-    print(f"[pdf:debug] _call_quick_review called: n_questions={n_questions} has_client={bool(_client)}")
+    print(f"[pdf:debug] _call_quick_review ENTERED n_questions={n_questions} has_client={bool(_client)}")
     if not _client or n_questions == 0:
         return []
+    print(f"[pdf:debug] quick_review: transcript_len={len(transcript)} summary_len={len(summary)}")
     hint = f" Domain: {topic}." if topic else ""
     diff_list = "\n".join(
         [f"Q{i + 1}: {_DIFFICULTIES[i % 3]}" for i in range(n_questions)]
@@ -1685,6 +1686,22 @@ async def _generate_lite_pdf(
     return await asyncio.to_thread(_render_pdf, html_content, title_short, watermark)
 
 
+def _build_takeaway_context(sections: list[dict]) -> str:
+    """Build a structured signal string from enriched sections for takeaway synthesis."""
+    lines = []
+    for sec in sections:
+        title = sec.get("title", "")
+        trap = sec.get("exam_trap_structured")
+        remember = sec.get("remember", "")
+        if title:
+            lines.append(f"CONCEPT: {title}")
+        if trap and trap.get("misconception") and trap.get("correct"):
+            lines.append(f"  TRAP: {trap['misconception']} → {trap['correct']}")
+        if remember:
+            lines.append(f"  KEY: {remember}")
+    return "\n".join(lines)
+
+
 # ── Main async entry point ────────────────────────────────────────────────────
 
 async def generate_lecture_pdf(
@@ -1886,7 +1903,7 @@ async def generate_lecture_pdf(
         tasks: list = []
         tasks.append(asyncio.to_thread(_call_executive_summary, cleaned_transcript, title, topic))
         tasks.append(asyncio.to_thread(_call_glossary_from_cards, concept_note_cards, topic, 18 if n_sections >= 3 else 10))
-        tasks.append(asyncio.to_thread(_call_takeaways, cleaned_transcript, grounded_summary or summary, topic))
+        print(f"[pdf:debug] queuing quick_review with n_questions={n_questions} word_count={word_count}")
         tasks.append(asyncio.to_thread(_call_quick_review, cleaned_transcript, grounded_summary or summary, topic, n_questions))
 
         concept_entities = build_concept_entities(concept_sections, claim_registry)
@@ -2022,8 +2039,7 @@ async def generate_lecture_pdf(
             except Exception as e:
                 print(f"mnemonics pass error (non-fatal): {e}")
 
-        takeaways: list[str] = results[ri] if not isinstance(results[ri], Exception) else []
-        ri += 1
+        takeaways: list[str] = []  # filled after enriched_sections is built
         quick_review: list[dict] = results[ri] if not isinstance(results[ri], Exception) else []
         ri += 1
 
@@ -2076,6 +2092,19 @@ async def generate_lecture_pdf(
 
         _trap_count = sum(1 for s in enriched_sections if s.get("exam_trap_structured"))
         print(f"[pdf] enriched_sections with exam_trap_structured: {_trap_count}/{len(enriched_sections)}")
+
+        # Takeaways run after enriched_sections is fully built so the context
+        # includes structured trap/remember signals rather than raw lecture text
+        try:
+            takeaways = await asyncio.to_thread(
+                _call_takeaways,
+                cleaned_transcript,
+                _build_takeaway_context(enriched_sections),
+                topic,
+            )
+        except Exception as _e:
+            print(f"[pdf] takeaways call error: {_e}")
+            takeaways = []
 
         if exec_summary and transcript:
             top_terms = _top_terms(transcript[:8000], n=5)
