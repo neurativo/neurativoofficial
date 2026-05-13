@@ -1949,9 +1949,11 @@ async def generate_lecture_pdf(
             for i, raw_sec in enumerate(raw_sections):
                 tasks.append(asyncio.to_thread(_call_enrich_section, raw_sec, i, n_sections, topic, language))
 
-        print(f"[pdf:debug] tasks count before gather={len(tasks)}")
+        print(f"[pdf:debug] task_count={len(tasks)}")
         results = await asyncio.gather(*tasks, return_exceptions=True)
         print(f"[pdf:debug] results count after gather={len(results)}")
+        for _i, _r in enumerate(results):
+            print(f"[pdf:debug] results[{_i}] type={type(_r).__name__} is_exc={isinstance(_r, Exception)}")
         ri = 0
         exec_summary = results[ri] if not isinstance(results[ri], Exception) else ""
         ri += 1
@@ -2151,7 +2153,12 @@ async def generate_lecture_pdf(
         )
         glossary = sanitized_artifacts["glossary"]
         quick_review = sanitized_artifacts["quick_review"]
-        takeaways = sanitized_artifacts["takeaways"] or _fallback_takeaways(grounded_summary or summary, enriched_sections)
+        sanitized_takeaways = sanitized_artifacts["takeaways"]
+        # Deterministic takeaways are already grounded — only replace if sanitizer kept at least as many
+        if len(sanitized_takeaways) >= len(takeaways):
+            takeaways = sanitized_takeaways
+        if not takeaways:
+            takeaways = _fallback_takeaways(grounded_summary or summary, enriched_sections)
         study_roadmap = {
             "days": sanitized_artifacts["study_roadmap"].get("days", []),
             "reminders": sanitized_artifacts["study_roadmap"].get("reminders", []),
