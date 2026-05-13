@@ -2071,26 +2071,45 @@ function App({ user }) {
                                             const isNew = idx === newSectionIdx;
                                             return (
                                                 <div key={idx}
-                                                    className="summary-card-enter overflow-hidden"
+                                                    className="summary-card-enter"
                                                     style={{
-                                                        border: '0.5px solid #e2e8f0',
-                                                        borderRadius: isNew ? '0 12px 12px 0' : '12px',
-                                                        boxShadow: isNew ? 'inset 3px 0 0 #2563eb' : 'none',
-                                                        transition: 'box-shadow 600ms ease, border-radius 600ms ease',
+                                                        border: '1px solid #e2e8f0',
+                                                        borderLeft: isNew ? '3px solid #2563eb' : '1px solid #e2e8f0',
+                                                        borderRadius: 12,
+                                                        overflow: 'hidden',
+                                                        transition: 'border 600ms ease',
+                                                        background: '#ffffff',
                                                     }}>
 
                                                     {/* Card header */}
-                                                    <div className="px-3 py-2 bg-[#fafaf9] border-b border-[#f0ede8] flex items-center gap-2">
-                                                        <span className="text-[11px] font-mono text-[#a3a3a3] shrink-0 select-none">
+                                                    <div style={{
+                                                        padding: '9px 13px 8px',
+                                                        background: '#fafaf9',
+                                                        borderBottom: '1px solid #f0ede8',
+                                                        display: 'flex', alignItems: 'center', gap: 8,
+                                                    }}>
+                                                        <span style={{
+                                                            fontFamily: "'JetBrains Mono', monospace",
+                                                            fontSize: 10, color: '#a3a3a3',
+                                                            flexShrink: 0, userSelect: 'none',
+                                                        }}>
                                                             {String(idx + 1).padStart(2, '0')}
                                                         </span>
-                                                        <span className="flex-1 text-[12px] font-medium text-[#1a1a1a] leading-tight min-w-0 truncate">
+                                                        <span style={{
+                                                            flex: 1, fontSize: 13, fontWeight: 600,
+                                                            color: '#1a1a1a', lineHeight: 1.3,
+                                                            letterSpacing: '-0.2px',
+                                                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                                        }}>
                                                             {sec.title}
                                                         </span>
                                                         {isNew && (
-                                                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 shrink-0 select-none">
-                                                                new
-                                                            </span>
+                                                            <span style={{
+                                                                fontSize: 9, fontWeight: 700,
+                                                                padding: '2px 6px', borderRadius: 999,
+                                                                background: '#dcfce7', color: '#15803d',
+                                                                letterSpacing: '0.3px', flexShrink: 0,
+                                                            }}>NEW</span>
                                                         )}
                                                         <button
                                                             onClick={() => handleCopySection(
@@ -2098,68 +2117,81 @@ function App({ user }) {
                                                                 idx
                                                             )}
                                                             title="Copy section"
-                                                            className="w-5 h-5 flex items-center justify-center text-[#a3a3a3] hover:text-[#1a1a1a] rounded transition-colors shrink-0">
-                                                            {copiedSectionIdx === idx ? (
-                                                                <svg className="w-3 h-3 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                                                                </svg>
-                                                            ) : (
-                                                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                                                </svg>
-                                                            )}
+                                                            style={{
+                                                                width: 22, height: 22, display: 'flex',
+                                                                alignItems: 'center', justifyContent: 'center',
+                                                                background: 'none', border: 'none', cursor: 'pointer',
+                                                                color: '#a3a3a3', borderRadius: 5, flexShrink: 0,
+                                                                transition: 'color 0.12s', padding: 0,
+                                                            }}>
+                                                            {copiedSectionIdx === idx
+                                                                ? <svg style={{ width: 12, height: 12, color: '#22c55e' }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7"/></svg>
+                                                                : <svg style={{ width: 12, height: 12 }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                                                            }
                                                         </button>
                                                     </div>
 
                                                     {/* Card body */}
-                                                    <div className="px-3 py-3">
-                                                        {/* Lead sentence — most important line */}
+                                                    <div style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+
+                                                        {/* Lead sentence */}
                                                         {sec.lead_sentence && (
-                                                            <p className="text-[13px] font-medium text-[#1a1a1a] leading-[1.6] mb-2">
+                                                            <p style={{ fontSize: 13, fontWeight: 500, color: '#1a1a1a',
+                                                                lineHeight: 1.65, margin: 0 }}>
                                                                 {sec.lead_sentence}
                                                             </p>
                                                         )}
 
-                                                        {/* Highlight block */}
+                                                        {/* Highlights */}
                                                         {sec.highlights.length > 0 && (
-                                                            <div className="mb-2.5"
-                                                                style={{ borderLeft: '3px solid #F59E0B', background: '#FAEEDA', borderRadius: '0 6px 6px 0', padding: '8px 12px' }}>
+                                                            <div style={{
+                                                                borderLeft: '3px solid #f59e0b',
+                                                                background: '#fffbeb',
+                                                                borderRadius: '0 7px 7px 0',
+                                                                padding: '7px 10px',
+                                                            }}>
                                                                 {sec.highlights.map((h, hi) => (
-                                                                    <p key={hi} className="text-[12px] italic leading-relaxed" style={{ color: '#633806' }}>{h}</p>
+                                                                    <p key={hi} style={{
+                                                                        fontSize: 12, color: '#92400e',
+                                                                        lineHeight: 1.6, fontStyle: 'italic', margin: 0,
+                                                                    }}>{h}</p>
                                                                 ))}
                                                             </div>
                                                         )}
 
                                                         {/* Prose */}
                                                         {sec.prose && (
-                                                            <p className="text-[12px] text-[#6b6b6b] leading-[1.7] mb-2.5">
+                                                            <p style={{ fontSize: 12, color: '#6b6b6b', lineHeight: 1.7, margin: 0 }}>
                                                                 {sec.prose}
                                                             </p>
                                                         )}
 
-                                                        {/* Concept pills */}
+                                                        {/* Concepts */}
                                                         {sec.concepts.length > 0 && (
-                                                            <div className="mb-2">
-                                                                <p className="text-[9px] font-semibold text-[#a3a3a3] uppercase tracking-wider mb-1.5">Key concepts</p>
-                                                                <div className="concepts-row">
-                                                                    {sec.concepts.map((c, ci) => (
-                                                                        <span key={ci} className="concept-pill">{c}</span>
-                                                                    ))}
-                                                                </div>
+                                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                                                                {sec.concepts.map((c, ci) => (
+                                                                    <span key={ci} style={{
+                                                                        fontSize: 11, padding: '2px 8px',
+                                                                        background: '#f3f0ff',
+                                                                        border: '1px solid #e9d5ff',
+                                                                        borderRadius: 5, color: '#7c3aed', fontWeight: 500,
+                                                                    }}>{c}</span>
+                                                                ))}
                                                             </div>
                                                         )}
 
-                                                        {/* Example list */}
+                                                        {/* Examples */}
                                                         {sec.examples.length > 0 && (
-                                                            <div>
-                                                                <p className="text-[9px] font-semibold text-[#a3a3a3] uppercase tracking-wider mb-1.5">Examples</p>
-                                                                <div className="pl-2.5" style={{ borderLeft: '2px solid #5DCAA5' }}>
-                                                                    {sec.examples.map((ex, ei) => (
-                                                                        <p key={ei} className="text-[11px] text-[#6b6b6b] leading-relaxed">
-                                                                            <span style={{ color: '#1D9E75' }}>→ </span>{ex}
-                                                                        </p>
-                                                                    ))}
-                                                                </div>
+                                                            <div style={{ borderLeft: '2px solid #5dcaa5', paddingLeft: 10 }}>
+                                                                {sec.examples.map((ex, ei) => (
+                                                                    <p key={ei} style={{
+                                                                        fontSize: 12, color: '#6b6b6b',
+                                                                        lineHeight: 1.55, margin: '0 0 2px',
+                                                                    }}>
+                                                                        <span style={{ color: '#1d9e75', fontWeight: 600, marginRight: 4 }}>→</span>
+                                                                        {ex}
+                                                                    </p>
+                                                                ))}
                                                             </div>
                                                         )}
                                                     </div>

@@ -329,6 +329,7 @@ function parseSummary(text) {
 }
 
 function SummaryCard({ section, accent, index, total, topic }) {
+    const isDark = useIsDark();
     const a = accent || ACCENTS_LIGHT[0];
     const core = section.core_explanation || section.lead_sentence || '';
     const prose = section.prose || '';
@@ -337,66 +338,184 @@ function SummaryCard({ section, accent, index, total, topic }) {
     const traps = section.exam_traps || [];
     const examples = section.examples || [];
     const concepts = section.concepts || [];
+    const highlights = section.highlights || [];
+
     return (
-        <div className="lv-sum-card summary-card-enter" style={{ borderLeft: `3px solid ${a.border}` }}>
-            <div className="lv-sum-meta">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                    <div className="lv-sum-title" style={{ color: a.title, margin: 0 }}>{section.title}</div>
-                    {section.verification_status === 'supported' && (
-                        <span className="lv-sum-badge">Transcript-grounded</span>
-                    )}
+        <div className="lv-sum-card summary-card-enter"
+            style={{ borderLeft: `3px solid ${a.border}`, padding: 0, overflow: 'hidden' }}>
+
+            {/* Header */}
+            <div style={{
+                padding: '10px 14px 9px',
+                borderBottom: '1px solid var(--color-border)',
+                background: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.018)',
+                display: 'flex', alignItems: 'center', gap: 8,
+            }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                        fontSize: 14, fontWeight: 700, color: a.title,
+                        letterSpacing: '-0.2px', lineHeight: 1.3,
+                        display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap',
+                    }}>
+                        {section.title}
+                        {section.verification_status === 'supported' && (
+                            <span style={{
+                                fontSize: 9, fontWeight: 600, padding: '2px 6px',
+                                background: isDark ? 'rgba(16,185,129,0.12)' : '#f0fdf4',
+                                border: isDark ? '1px solid rgba(16,185,129,0.25)' : '1px solid #bbf7d0',
+                                borderRadius: 999, color: isDark ? '#6ee7b7' : '#15803d',
+                                letterSpacing: '0.3px', fontFamily: 'inherit',
+                            }}>grounded</span>
+                        )}
+                    </div>
                 </div>
                 {total > 1 && (
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: 'var(--color-muted)', flexShrink: 0, paddingLeft: 8 }}>
-                        {index + 1}/{total}
-                    </span>
+                    <span style={{
+                        fontFamily: "'JetBrains Mono', monospace",
+                        fontSize: 10, color: 'var(--color-muted)', flexShrink: 0,
+                    }}>{index + 1}/{total}</span>
                 )}
             </div>
-            {(section.highlights || []).map((h, i) => (
-                <div key={i} className="lv-sum-highlight" style={{ background: a.bg, borderLeftColor: a.border }}>{renderDomainContent(h, topic) || h}</div>
-            ))}
-            {core && <div className="lv-sum-lead">{renderDomainContent(core, topic) || core}</div>}
-            {prose && <div className="lv-sum-prose">{renderDomainContent(prose, topic) || prose}</div>}
-            {concepts.length > 0 && (
-                <div className="lv-sum-concepts">
-                    {concepts.map((c, i) => (
-                        <span key={i} className="lv-sum-concept" style={{ borderColor: a.border, color: a.title }}>{renderDomainContent(c, topic) || c}</span>
-                    ))}
-                </div>
-            )}
-            {definitions.length > 0 && (
-                <div className="lv-sum-group">
-                    <div className="lv-sum-group-label">Key Definitions</div>
-                    <div className="lv-sum-group-list">
-                        {definitions.map((item, i) => <div key={i} className="lv-sum-group-item">{renderDomainContent(item, topic) || item}</div>)}
+
+            <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 9 }}>
+
+                {/* Highlights */}
+                {highlights.length > 0 && highlights.map((h, i) => (
+                    <div key={i} style={{
+                        background: isDark ? `${a.bg}22` : a.bg,
+                        borderLeft: `2px solid ${a.border}`,
+                        borderRadius: '0 7px 7px 0',
+                        padding: '7px 10px',
+                        fontSize: 12, color: a.title,
+                        lineHeight: 1.6, fontStyle: 'italic',
+                    }}>
+                        {renderDomainContent(h, topic) || h}
                     </div>
-                </div>
-            )}
-            {distinctions.length > 0 && (
-                <div className="lv-sum-group">
-                    <div className="lv-sum-group-label">Important Distinctions</div>
-                    <div className="lv-sum-group-list">
-                        {distinctions.map((item, i) => <div key={i} className="lv-sum-group-item">{renderDomainContent(item, topic) || item}</div>)}
+                ))}
+
+                {/* Lead + prose */}
+                {core && (
+                    <div style={{ fontSize: 13, color: 'var(--color-sec)', lineHeight: 1.65 }}>
+                        {renderDomainContent(core, topic) || core}
                     </div>
-                </div>
-            )}
-            {traps.length > 0 && (
-                <div className="lv-sum-group">
-                    <div className="lv-sum-group-label">Exam Traps</div>
-                    <div className="lv-sum-group-list">
-                        {traps.map((item, i) => <div key={i} className="lv-sum-group-item">{renderDomainContent(item, topic) || item}</div>)}
+                )}
+                {prose && (
+                    <div style={{ fontSize: 12, color: 'var(--color-muted)', lineHeight: 1.65 }}>
+                        {renderDomainContent(prose, topic) || prose}
                     </div>
-                </div>
-            )}
-            {examples.length > 0 && (
-                <div className="lv-sum-examples">
-                    {examples.map((e, i) => <div key={i} className="lv-sum-example">{renderDomainContent(e, topic) || e}</div>)}
-                </div>
-            )}
+                )}
+
+                {/* Concepts */}
+                {concepts.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                        {concepts.map((c, i) => (
+                            <span key={i} style={{
+                                fontSize: 11, padding: '2px 8px',
+                                background: isDark ? `${a.bg}33` : a.bg,
+                                border: `1px solid ${a.border}`,
+                                borderRadius: 5, color: a.title, fontWeight: 500,
+                            }}>{renderDomainContent(c, topic) || c}</span>
+                        ))}
+                    </div>
+                )}
+
+                {/* Distinctions */}
+                {distinctions.length > 0 && (
+                    <div>
+                        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.8px',
+                            textTransform: 'uppercase', color: 'var(--color-muted)', marginBottom: 5 }}>
+                            Key Distinctions
+                        </div>
+                        {distinctions.map((item, i) => (
+                            <div key={i} style={{
+                                fontSize: 12, color: 'var(--color-sec)', lineHeight: 1.55,
+                                padding: '6px 9px', marginBottom: 4,
+                                background: isDark ? 'rgba(255,255,255,0.03)' : 'var(--color-bg)',
+                                border: '1px solid var(--color-border)', borderRadius: 7,
+                            }}>
+                                {renderDomainContent(item, topic) || item}
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                {/* Exam Traps */}
+                {traps.length > 0 && (
+                    <div style={{
+                        background: isDark ? 'rgba(245,158,11,0.08)' : '#fffbeb',
+                        border: isDark ? '1px solid rgba(245,158,11,0.2)' : '1px solid #fde68a',
+                        borderLeft: '3px solid #f59e0b',
+                        borderRadius: 8, padding: '8px 11px',
+                    }}>
+                        <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.8px',
+                            textTransform: 'uppercase',
+                            color: isDark ? '#fbbf24' : '#b45309',
+                            marginBottom: 5, display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <span>⚠</span> Exam Traps
+                        </div>
+                        {traps.map((item, i) => (
+                            <div key={i} style={{ fontSize: 12, color: isDark ? '#fcd34d' : '#78350f',
+                                lineHeight: 1.55, marginBottom: i < traps.length - 1 ? 4 : 0 }}>
+                                {renderDomainContent(item, topic) || item}
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                {/* Examples */}
+                {examples.length > 0 && (
+                    <div style={{ borderLeft: '2px solid #5dcaa5', paddingLeft: 10 }}>
+                        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.8px',
+                            textTransform: 'uppercase', color: 'var(--color-muted)', marginBottom: 4 }}>
+                            Examples
+                        </div>
+                        {examples.map((e, i) => (
+                            <div key={i} style={{ fontSize: 12, color: 'var(--color-sec)',
+                                lineHeight: 1.55, marginBottom: 2 }}>
+                                <span style={{ color: '#1d9e75', fontWeight: 600, marginRight: 4 }}>→</span>
+                                {renderDomainContent(e, topic) || e}
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                {/* Definitions */}
+                {definitions.length > 0 && (
+                    <div>
+                        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.8px',
+                            textTransform: 'uppercase', color: 'var(--color-muted)', marginBottom: 5 }}>
+                            Key Definitions
+                        </div>
+                        {definitions.map((item, i) => (
+                            <div key={i} style={{ fontSize: 12, color: 'var(--color-sec)',
+                                lineHeight: 1.55, marginBottom: 4,
+                                padding: '5px 9px',
+                                background: isDark ? 'rgba(255,255,255,0.03)' : 'var(--color-bg)',
+                                border: '1px solid var(--color-border)', borderRadius: 7,
+                            }}>
+                                {renderDomainContent(typeof item === 'string' ? item : `${item.term || ''}: ${item.definition || ''}`, topic)}
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+            </div>
+
+            {/* Citations footer */}
             {section.citations?.length > 0 && (
-                <div className="lv-sum-citations">
+                <div style={{
+                    padding: '6px 14px',
+                    borderTop: '1px solid var(--color-border)',
+                    display: 'flex', gap: 5, flexWrap: 'wrap',
+                }}>
                     {section.citations.map((cite, i) => (
-                        <span key={i} className="lv-sum-citation">Source {cite.label}</span>
+                        <span key={i} style={{
+                            fontSize: 10, color: 'var(--color-muted)',
+                            fontFamily: "'JetBrains Mono', monospace",
+                            background: 'var(--color-bg)',
+                            border: '1px solid var(--color-border)',
+                            borderRadius: 999, padding: '2px 7px',
+                        }}>{cite.label}</span>
                     ))}
                 </div>
             )}
@@ -405,95 +524,294 @@ function SummaryCard({ section, accent, index, total, topic }) {
 }
 
 function ConceptNoteCard({ card, accent, index, total, topic }) {
+    const isDark = useIsDark();
     const a = accent || ACCENTS_LIGHT[0];
     const definitions = Array.isArray(card?.key_definitions) ? card.key_definitions : [];
     const examples = Array.isArray(card?.examples) ? card.examples : [];
     const trap = card?.exam_trap || null;
     const distinction = card?.key_distinction || null;
-    const sourceLabel = card?.source_start && card?.source_end ? `${card.source_start} – ${card.source_end}` : '';
-    const conceptA = distinction?.concept_a || null;
-    const conceptB = distinction?.concept_b || null;
+    const analogy = card?.analogy || null;
+    const remember = card?.remember || null;
+    const mistake = card?.mistake || null;
+    const sourceLabel = card?.source_start && card?.source_end
+        ? `${card.source_start} – ${card.source_end}` : '';
+
+    // Resolve distinction into left/right sides
+    let distLeft = null, distRight = null, distLeftLabel = null, distRightLabel = null;
+    if (distinction) {
+        if (distinction.concept_a || distinction.concept_b) {
+            const aSide = distinction.concept_a || {};
+            const bSide = distinction.concept_b || {};
+            distLeftLabel = aSide.name || 'A';
+            distRightLabel = bSide.name || 'B';
+            distLeft = (aSide.characteristics || []).join(' · ') || aSide.description || '';
+            distRight = (bSide.characteristics || []).join(' · ') || bSide.description || '';
+        } else if (typeof distinction === 'object') {
+            const keys = Object.keys(distinction).filter(k => !['description', 'detail', 'note'].includes(k));
+            if (keys.length >= 2) {
+                distLeftLabel = keys[0].replace(/_/g, ' ');
+                distRightLabel = keys[1].replace(/_/g, ' ');
+                distLeft = String(distinction[keys[0]] || '');
+                distRight = String(distinction[keys[1]] || '');
+            }
+        } else if (typeof distinction === 'string' && distinction.includes(' | ')) {
+            const parts = distinction.split(' | ');
+            const lm = parts[0].match(/^([^:]+):\s*(.+)$/);
+            const rm = parts[1]?.match(/^([^:]+):\s*(.+)$/);
+            if (lm && rm) {
+                distLeftLabel = lm[1].trim();
+                distRightLabel = rm[1].trim();
+                distLeft = lm[2].trim();
+                distRight = rm[2].trim();
+            }
+        }
+    }
+
+    // Resolve exam trap
+    let trapMisconception = null, trapCorrect = null;
+    if (trap) {
+        if (typeof trap === 'object' && trap.misconception && trap.correct
+            && trap.misconception.toLowerCase() !== trap.correct.toLowerCase()) {
+            trapMisconception = trap.misconception;
+            trapCorrect = trap.correct;
+        } else if (typeof trap === 'string' && trap.trim()) {
+            trapMisconception = trap.trim();
+        }
+    }
+
+    const hasTwoColBottom = remember || mistake;
+
     return (
-        <div className="lv-sum-card summary-card-enter" style={{ borderLeft: `3px solid ${a.border}` }}>
-            <div className="lv-sum-meta">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                    <div className="lv-sum-title" style={{ color: a.title, margin: 0, fontSize: 16 }}>
-                        {(card.concept_name || "")
-                            .split(" ")
-                            .map(w => w.charAt(0).toUpperCase() + w.slice(1))
-                            .join(" ")}
+        <div className="lv-sum-card summary-card-enter"
+            style={{ borderLeft: `3px solid ${a.border}`, padding: 0, overflow: 'hidden' }}>
+
+            {/* Header */}
+            <div style={{
+                padding: '12px 14px 10px',
+                borderBottom: '1px solid var(--color-border)',
+                background: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.018)',
+                display: 'flex', alignItems: 'flex-start', gap: 8,
+            }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                        fontSize: 15, fontWeight: 700, color: a.title,
+                        letterSpacing: '-0.3px', lineHeight: 1.25,
+                        marginBottom: card.summary ? 6 : 0,
+                    }}>
+                        {card.concept_name || ''}
                     </div>
+                    {card.summary && (
+                        <div style={{ fontSize: 13, color: 'var(--color-sec)', lineHeight: 1.65 }}>
+                            {renderDomainContent(card.summary, topic) || card.summary}
+                        </div>
+                    )}
                 </div>
                 {total > 1 && (
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: 'var(--color-muted)', flexShrink: 0, paddingLeft: 8 }}>
-                        {index + 1}/{total}
-                    </span>
+                    <span style={{
+                        fontFamily: "'JetBrains Mono', monospace",
+                        fontSize: 10, color: 'var(--color-muted)',
+                        flexShrink: 0, paddingTop: 2,
+                    }}>{index + 1}/{total}</span>
                 )}
             </div>
 
-            {card.summary && (
-                <div className="lv-sum-lead">{renderDomainContent(card.summary, topic) || card.summary}</div>
-            )}
+            {/* Body */}
+            <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
 
-            {conceptA && conceptB && (
-                <div className="lv-sum-group">
-                    <div className="lv-sum-group-label">Key Distinction</div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 10, alignItems: 'stretch' }}>
-                        <div className="lv-sum-group-item">
-                            <strong>{renderDomainContent(conceptA.name, topic) || conceptA.name}</strong>
-                            {(conceptA.characteristics || []).length > 0 && (
-                                <ul style={{ margin: '8px 0 0', paddingLeft: 18 }}>
-                                    {conceptA.characteristics.map((item, i) => <li key={i}>{renderDomainContent(item, topic) || item}</li>)}
-                                </ul>
-                            )}
-                        </div>
-                        <div style={{ alignSelf: 'center', fontSize: 11, fontWeight: 700, color: 'var(--color-muted)' }}>VS</div>
-                        <div className="lv-sum-group-item">
-                            <strong>{renderDomainContent(conceptB.name, topic) || conceptB.name}</strong>
-                            {(conceptB.characteristics || []).length > 0 && (
-                                <ul style={{ margin: '8px 0 0', paddingLeft: 18 }}>
-                                    {conceptB.characteristics.map((item, i) => <li key={i}>{renderDomainContent(item, topic) || item}</li>)}
-                                </ul>
-                            )}
+                {/* Distinction — two-column versus */}
+                {distLeft && distRight && (
+                    <div>
+                        <div style={{
+                            fontSize: 9, fontWeight: 700, letterSpacing: '0.8px',
+                            textTransform: 'uppercase', color: 'var(--color-muted)', marginBottom: 6,
+                        }}>Key Distinction</div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 8, alignItems: 'stretch' }}>
+                            <div style={{
+                                padding: '8px 10px',
+                                background: isDark ? 'rgba(255,255,255,0.04)' : '#f8fafc',
+                                border: '1px solid var(--color-border)',
+                                borderRadius: 8, fontSize: 12, lineHeight: 1.5,
+                                color: 'var(--color-sec)',
+                            }}>
+                                {distLeftLabel && (
+                                    <div style={{ fontSize: 10, fontWeight: 700, color: a.title,
+                                        textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>
+                                        {distLeftLabel}
+                                    </div>
+                                )}
+                                {renderDomainContent(distLeft, topic) || distLeft}
+                            </div>
+                            <div style={{ alignSelf: 'center', fontSize: 10, fontWeight: 800,
+                                color: 'var(--color-muted)', padding: '0 2px' }}>VS</div>
+                            <div style={{
+                                padding: '8px 10px',
+                                background: isDark ? 'rgba(255,255,255,0.04)' : '#f8fafc',
+                                border: '1px solid var(--color-border)',
+                                borderRadius: 8, fontSize: 12, lineHeight: 1.5,
+                                color: 'var(--color-sec)',
+                            }}>
+                                {distRightLabel && (
+                                    <div style={{ fontSize: 10, fontWeight: 700, color: a.title,
+                                        textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>
+                                        {distRightLabel}
+                                    </div>
+                                )}
+                                {renderDomainContent(distRight, topic) || distRight}
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )}
 
-            {trap && (
-                <div className="lv-sum-highlight" style={{ background: '#fef3c7', borderLeftColor: '#f59e0b', color: '#78350f' }}>
-                    <strong>EXAM TRAP</strong>
-                    <div><strong>Students think: </strong>{renderDomainContent(trap.misconception, topic) || trap.misconception}</div>
-                    <div><strong>Actually: </strong>{renderDomainContent(trap.correct, topic) || trap.correct}</div>
-                </div>
-            )}
-
-            {examples.length > 0 && (
-                <div className="lv-sum-group">
-                    <div className="lv-sum-group-label">Professor's Examples</div>
-                    <ul className="lv-sum-group-list" style={{ paddingLeft: 18, margin: 0 }}>
-                        {examples.map((item, i) => (
-                            <li key={i} style={{ fontSize: 12, color: 'var(--color-sec)', lineHeight: 1.6 }}>{renderDomainContent(item, topic) || item}</li>
-                        ))}
-                    </ul>
-                </div>
-            )}
-
-            {definitions.length > 0 && (
-                <div className="lv-sum-group">
-                    <div className="lv-sum-group-label">Key Definitions</div>
-                    {definitions.map((item, i) => (
-                        <div key={i} className="lv-sum-group-item">
-                            {item.term && <strong>{renderDomainContent(item.term, topic) || item.term}: </strong>}
-                            {renderDomainContent(item.definition, topic) || item.definition}
+                {/* Exam Trap */}
+                {(trapMisconception || trapCorrect) && (
+                    <div style={{
+                        background: isDark ? 'rgba(245,158,11,0.08)' : '#fffbeb',
+                        border: isDark ? '1px solid rgba(245,158,11,0.2)' : '1px solid #fde68a',
+                        borderLeft: '3px solid #f59e0b',
+                        borderRadius: 8, padding: '9px 11px',
+                    }}>
+                        <div style={{
+                            fontSize: 9, fontWeight: 800, letterSpacing: '0.8px',
+                            textTransform: 'uppercase',
+                            color: isDark ? '#fbbf24' : '#b45309',
+                            marginBottom: 6, display: 'flex', alignItems: 'center', gap: 5,
+                        }}>
+                            <span>⚠</span> Exam Trap
                         </div>
-                    ))}
-                </div>
-            )}
+                        {trapMisconception && (
+                            <div style={{ fontSize: 12, color: isDark ? '#fcd34d' : '#92400e',
+                                fontWeight: 600, lineHeight: 1.55, marginBottom: trapCorrect ? 5 : 0 }}>
+                                ✗ {renderDomainContent(trapMisconception, topic) || trapMisconception}
+                            </div>
+                        )}
+                        {trapCorrect && (
+                            <div style={{ fontSize: 12, color: isDark ? '#6ee7b7' : '#065f46', lineHeight: 1.55 }}>
+                                ✓ {renderDomainContent(trapCorrect, topic) || trapCorrect}
+                            </div>
+                        )}
+                    </div>
+                )}
 
+                {/* Analogy */}
+                {analogy && (
+                    <div style={{
+                        background: isDark ? 'rgba(16,185,129,0.06)' : '#f0fdf4',
+                        border: isDark ? '1px solid rgba(16,185,129,0.15)' : '1px solid #bbf7d0',
+                        borderRadius: 8, padding: '8px 11px',
+                    }}>
+                        <div style={{
+                            fontSize: 9, fontWeight: 700, letterSpacing: '0.8px',
+                            textTransform: 'uppercase',
+                            color: isDark ? '#6ee7b7' : '#15803d', marginBottom: 4,
+                        }}>Real-World Analogy</div>
+                        <div style={{ fontSize: 12, color: isDark ? '#a7f3d0' : '#166534',
+                            lineHeight: 1.6, fontStyle: 'italic' }}>
+                            {renderDomainContent(analogy, topic) || analogy}
+                        </div>
+                    </div>
+                )}
+
+                {/* Examples */}
+                {examples.length > 0 && (
+                    <div>
+                        <div style={{
+                            fontSize: 9, fontWeight: 700, letterSpacing: '0.8px',
+                            textTransform: 'uppercase', color: 'var(--color-muted)', marginBottom: 5,
+                        }}>Professor's Examples</div>
+                        <div style={{ borderLeft: '2px solid #5dcaa5', paddingLeft: 10,
+                            display: 'flex', flexDirection: 'column', gap: 3 }}>
+                            {examples.map((item, i) => (
+                                <div key={i} style={{ fontSize: 12, color: 'var(--color-sec)', lineHeight: 1.55 }}>
+                                    <span style={{ color: '#1d9e75', fontWeight: 600, marginRight: 4 }}>→</span>
+                                    {renderDomainContent(item, topic) || item}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Key Definitions */}
+                {definitions.length > 0 && (
+                    <div>
+                        <div style={{
+                            fontSize: 9, fontWeight: 700, letterSpacing: '0.8px',
+                            textTransform: 'uppercase', color: 'var(--color-muted)', marginBottom: 5,
+                        }}>Key Definitions</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                            {definitions.map((item, i) => (
+                                <div key={i} style={{
+                                    fontSize: 12, color: 'var(--color-sec)', lineHeight: 1.55,
+                                    padding: '6px 9px',
+                                    background: isDark ? 'rgba(255,255,255,0.03)' : 'var(--color-bg)',
+                                    border: '1px solid var(--color-border)', borderRadius: 7,
+                                }}>
+                                    {item.term && (
+                                        <span style={{ fontWeight: 600, color: 'var(--color-text)', marginRight: 4 }}>
+                                            {renderDomainContent(item.term, topic) || item.term}:
+                                        </span>
+                                    )}
+                                    {renderDomainContent(item.definition, topic) || item.definition}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Remember + Mistake — two-column bottom row */}
+                {hasTwoColBottom && (
+                    <div style={{ display: 'grid', gridTemplateColumns: mistake && remember ? '1fr 1fr' : '1fr', gap: 8 }}>
+                        {remember && (
+                            <div style={{
+                                padding: '8px 10px',
+                                background: isDark ? 'rgba(16,185,129,0.05)' : '#f0fdf4',
+                                border: isDark ? '1px solid rgba(16,185,129,0.12)' : '1px solid #bbf7d0',
+                                borderRadius: 8,
+                            }}>
+                                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.8px',
+                                    textTransform: 'uppercase',
+                                    color: isDark ? '#6ee7b7' : '#15803d', marginBottom: 4 }}>Remember</div>
+                                <div style={{ fontSize: 11, color: isDark ? '#a7f3d0' : '#166534', lineHeight: 1.55 }}>
+                                    {renderDomainContent(remember, topic) || remember}
+                                </div>
+                            </div>
+                        )}
+                        {mistake && (
+                            <div style={{
+                                padding: '8px 10px',
+                                background: isDark ? 'rgba(245,158,11,0.05)' : '#fffbeb',
+                                border: isDark ? '1px solid rgba(245,158,11,0.12)' : '1px solid #fde68a',
+                                borderRadius: 8,
+                            }}>
+                                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.8px',
+                                    textTransform: 'uppercase',
+                                    color: isDark ? '#fbbf24' : '#b45309', marginBottom: 4 }}>Common Mistake</div>
+                                <div style={{ fontSize: 11, color: isDark ? '#fcd34d' : '#78350f', lineHeight: 1.55 }}>
+                                    {renderDomainContent(mistake, topic) || mistake}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+            </div>
+
+            {/* Footer: source timestamp */}
             {sourceLabel && (
-                <div className="lv-sum-citations">
-                    <span className="lv-sum-citation">{sourceLabel}</span>
+                <div style={{
+                    padding: '6px 14px',
+                    borderTop: '1px solid var(--color-border)',
+                    display: 'flex', alignItems: 'center', gap: 5,
+                }}>
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+                        style={{ color: 'var(--color-muted)', flexShrink: 0 }}>
+                        <circle cx="12" cy="12" r="10"/>
+                        <polyline points="12 6 12 12 16 14"/>
+                    </svg>
+                    <span style={{ fontSize: 10, color: 'var(--color-muted)',
+                        fontFamily: "'JetBrains Mono', monospace" }}>
+                        {sourceLabel}
+                    </span>
                 </div>
             )}
         </div>
