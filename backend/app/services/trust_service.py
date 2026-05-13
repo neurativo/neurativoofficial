@@ -3179,6 +3179,8 @@ def build_verified_cheat_sheet_from_cards(concept_note_cards: list[dict]) -> lis
 
         # Strip mid-sentence verbal fillers from core_idea
         _mid_fillers = [
+            r',\s*right\s*,\s*are\s+the\s+',   # catches ", right, are the X" repetition
+            r'\bright\s*,\s*are\s+the\s+',       # catches "right, are the X" without leading comma
             r',\s*right\s*,',
             r',\s*okay\s*,',
             r',\s*you know\s*,',
@@ -3187,14 +3189,48 @@ def build_verified_cheat_sheet_from_cards(concept_note_cards: list[dict]) -> lis
             r',\s*so\s*,',
         ]
         for _pat in _mid_fillers:
-            core_idea = re.sub(_pat, ',', core_idea, flags=re.IGNORECASE)
+            core_idea = re.sub(_pat, ' ', core_idea, flags=re.IGNORECASE)
         core_idea = re.sub(r'\s+', ' ', core_idea).strip()
 
-        # Quick Recall: compressed ≤10 word memory hook via _quick_recall_cue
-        quick_recall_text = _quick_recall_cue(definition or summary)
+        # Quick Recall: sharpest memory hook — prioritise exam trap correct
+        # field over raw definition to avoid being identical to Core Idea
+        _trap_obj = card.get("exam_trap")
+        _trap_correct = None
+        if isinstance(_trap_obj, dict):
+            _trap_correct = _normalise_ws(_trap_obj.get("correct", ""))
+
+        if _trap_correct and len(_trap_correct.split()) >= 4:
+            # Use exam trap correct field — already the exam-ready version
+            _tc_words = _trap_correct.split()
+            quick_recall_text = ' '.join(_tc_words[:12]).rstrip(' .,;')
+            if len(_tc_words) > 12:
+                quick_recall_text += '.'
+            elif quick_recall_text and quick_recall_text[-1] not in '.!?':
+                quick_recall_text += '.'
+        elif card.get("remember") and len(str(card.get("remember", "")).split()) >= 4:
+            # Use remember field — explicitly a memory hook
+            _rem = _normalise_ws(str(card["remember"]))
+            _rem_words = _rem.split()
+            quick_recall_text = ' '.join(_rem_words[:12]).rstrip(' .,;')
+            if quick_recall_text and quick_recall_text[-1] not in '.!?':
+                quick_recall_text += '.'
+        else:
+            # Fallback: compress summary to ≤10 words
+            quick_recall_text = _quick_recall_cue(definition or summary)
+
+        # Strip mid-sentence fillers from quick_recall too
         for _pat in _mid_fillers:
-            quick_recall_text = re.sub(_pat, ',', quick_recall_text, flags=re.IGNORECASE)
+            quick_recall_text = re.sub(_pat, ' ', quick_recall_text, flags=re.IGNORECASE)
         quick_recall_text = re.sub(r'\s+', ' ', quick_recall_text).strip()
+
+        # Final deduplication guard — if still identical to core_idea,
+        # take a different slice of the source text
+        if quick_recall_text.lower().rstrip('.') == core_idea.lower().rstrip('.'):
+            _words = (definition or summary).split()
+            if len(_words) > 8:
+                quick_recall_text = ' '.join(_words[4:12]).rstrip(' .,;') + '.'
+            else:
+                quick_recall_text = ' '.join(_words[:8]).rstrip(' .,;') + '.'
 
         raw_trap_obj = card.get("exam_trap")
         exam_trap = ""
