@@ -527,7 +527,25 @@ function ConceptNoteCard({ card, accent, index, total, topic }) {
     const isDark = useIsDark();
     const a = accent || ACCENTS_LIGHT[0];
     const definitions = Array.isArray(card?.key_definitions) ? card.key_definitions : [];
-    const examples = Array.isArray(card?.examples) ? card.examples : [];
+    const rawExamples = Array.isArray(card?.examples) ? card.examples : [];
+    const examples = rawExamples
+        .map(ex => {
+            let text = String(ex || '').trim();
+            text = text.replace(
+                /^(words like|for example|let's say|okay|so|and|or|like|you know|i mean|right|well|maybe|even|things like|for instance|such as|say)[,\s]*/i,
+                ''
+            ).trim();
+            return text;
+        })
+        .filter(ex => ex.split(/\s+/).length >= 4)
+        .filter((ex, i, arr) => {
+            const key = ex.toLowerCase().split(/\s+/).slice(0, 5).join(' ');
+            return arr.findIndex(e =>
+                e.toLowerCase().split(/\s+/).slice(0, 5).join(' ') === key
+            ) === i;
+        })
+        .map(ex => ex.charAt(0).toUpperCase() + ex.slice(1))
+        .slice(0, 4);
     const trap = card?.exam_trap || null;
     const distinction = card?.key_distinction || null;
     const analogy = card?.analogy || null;

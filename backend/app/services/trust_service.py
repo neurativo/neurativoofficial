@@ -2152,10 +2152,19 @@ For each concept in the inventory generate a card:
     null if not applicable.
 
   examples:
-    Copy directly from transcript.
-    Preserve professor's exact wording.
-    Include every example the professor gave, not just one.
-    Empty array if none in transcript.
+    Include the professor's examples but consolidate intelligently:
+    1. Keep distinct, genuinely different examples as separate items (max 4)
+    2. If the professor listed multiple fragments of the SAME illustration
+       (e.g. rattling off several normative statement examples one after
+       another), merge them into ONE clean representative example
+    3. Remove verbal filler fragments: 'words like, for example, should',
+       'let's say,', 'okay,', 'you know,' — replace with clean versions
+       like 'Words like "should" or "unfair"'
+    4. Each example must be a complete, standalone, meaningful item
+    5. Strip sentence fragments under 5 words
+    6. If 8 fragments all illustrate the same concept, return 1-2 clean
+       consolidated examples, not 8 raw fragments
+    Empty array if no real examples exist in transcript.
 
   key_definitions:
     Each definition must be the professor's own 
@@ -2506,6 +2515,63 @@ Return only JSON array. No other text."""
     return out[:concept_cap]
 
 
+def _clean_examples(examples: list[str]) -> list[str]:
+    """
+    Post-process examples to remove transcript noise:
+    - Strip leading filler phrases
+    - Remove fragments under 4 words
+    - Deduplicate by first-5-word key
+    - Cap at 4 examples
+    """
+    if not examples:
+        return []
+
+    filler_patterns = [
+        r'^words like,?\s*',
+        r'^for example,?\s*',
+        r"^let'?s say,?\s*",
+        r'^okay,?\s*',
+        r'^so,?\s*',
+        r'^and,?\s*',
+        r'^or,?\s*',
+        r'^like,?\s*',
+        r'^you know,?\s*',
+        r'^i mean,?\s*',
+        r'^right,?\s*',
+        r'^well,?\s*',
+        r'^maybe,?\s*',
+        r'^even,?\s*',
+        r'^things like,?\s*',
+        r'^for instance,?\s*',
+        r'^such as,?\s*',
+        r'^say,?\s*',
+    ]
+
+    cleaned = []
+    seen_keys = set()
+
+    for ex in examples:
+        text = str(ex or '').strip()
+        if not text:
+            continue
+        # Strip leading filler
+        for pattern in filler_patterns:
+            text = re.sub(pattern, '', text, flags=re.IGNORECASE).strip()
+        # Skip if too short
+        if len(text.split()) < 4:
+            continue
+        # Deduplicate by first 5 words
+        key = ' '.join(text.lower().split()[:5])
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        # Capitalise first letter
+        text = text[0].upper() + text[1:]
+        cleaned.append(text)
+
+    return cleaned[:4]
+
+
 def _normalise_generated_card(card: dict, inventory_item: dict) -> dict:
     concept_name = _normalise_ws(card.get("concept_name", "")) or inventory_item["name"]
     source_start = _normalise_ws(str(card.get("source_start") or inventory_item.get("start_time") or ""))
@@ -2517,7 +2583,11 @@ def _normalise_generated_card(card: dict, inventory_item: dict) -> dict:
         "summary": _normalise_ws(card.get("summary", "")),
         "key_distinction": card.get("key_distinction") or None,
         "exam_trap": card.get("exam_trap") or None,
-        "examples": [_normalise_ws(str(item)) for item in examples if _normalise_ws(str(item))],
+        "examples": _clean_examples([
+            _normalise_ws(str(item))
+            for item in examples
+            if _normalise_ws(str(item))
+        ]),
         "key_definitions": [
             {
                 "term": _normalise_ws(str(item.get("term", ""))),
