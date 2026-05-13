@@ -926,7 +926,12 @@ def _call_executive_summary(transcript: str, title: str, topic: str | None, stri
                     "Only use information from this transcript. "
                     "Do not add any external knowledge, context, or content from any other source. "
                     "If something is not in the transcript, do not include it. "
-                    "Write dense, precise prose. Use present tense ('The lecture examines...'). No bullet points. "
+                    "Write in direct academic prose as if these are the student's own notes. "
+                    "Use active declarative sentences: 'Microeconomics focuses on...' not "
+                    "'The lecture examines...' or 'The lecturer explains...'. "
+                    "Never use reported speech constructions like 'The lecturer then explains' "
+                    "or 'The lecture emphasizes'. Write the content directly as facts the student "
+                    "should know. No bullet points. "
                     f"{_PDF_TRANSCRIPT_ONLY_RULE}"
                 ),
             },
@@ -938,7 +943,8 @@ def _call_executive_summary(transcript: str, title: str, topic: str | None, stri
                     # end captures conclusions, takeaways, and forward references.
                     f"TRANSCRIPT (beginning):\n{transcript[:5000]}\n\n"
                     + (f"TRANSCRIPT (conclusion):\n{transcript[-3000:]}\n\n" if len(transcript) > 8000 else "")
-                    + f"Write a 3-paragraph executive summary of the lecture titled \"{title}\".{hint} "
+                    + f"Write a 3-paragraph summary of \"{title}\" as direct study notes.{hint} "
+                    "State concepts directly — not what the lecturer said, but what the concepts are. "
                     "Each paragraph is 3-4 sentences. Separate paragraphs with a blank line. "
                     f"Return only the summary text, no preamble.{strict_rule}"
                 ),
