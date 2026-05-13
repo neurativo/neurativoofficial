@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from './lib/api';
 import { useClerk } from '@clerk/react';
 import QAAnswer from './components/QAAnswer';
+import { renderDomainContent } from './lib/renderDomainContent.jsx';
 
 const LANGUAGE_NAMES = {
     en: 'English', ar: 'Arabic',  zh: 'Chinese',    fr: 'French',
@@ -2138,7 +2139,7 @@ function App({ user }) {
                                                         {sec.lead_sentence && (
                                                             <p style={{ fontSize: 13, fontWeight: 500, color: '#1a1a1a',
                                                                 lineHeight: 1.65, margin: 0 }}>
-                                                                {sec.lead_sentence}
+                                                                {renderDomainContent(sec.lead_sentence, detectedTopic) || sec.lead_sentence}
                                                             </p>
                                                         )}
 
@@ -2154,7 +2155,7 @@ function App({ user }) {
                                                                     <p key={hi} style={{
                                                                         fontSize: 12, color: '#92400e',
                                                                         lineHeight: 1.6, fontStyle: 'italic', margin: 0,
-                                                                    }}>{h}</p>
+                                                                    }}>{renderDomainContent(h, detectedTopic) || h}</p>
                                                                 ))}
                                                             </div>
                                                         )}
@@ -2162,7 +2163,7 @@ function App({ user }) {
                                                         {/* Prose */}
                                                         {sec.prose && (
                                                             <p style={{ fontSize: 12, color: '#6b6b6b', lineHeight: 1.7, margin: 0 }}>
-                                                                {sec.prose}
+                                                                {renderDomainContent(sec.prose, detectedTopic) || sec.prose}
                                                             </p>
                                                         )}
 
@@ -2189,7 +2190,7 @@ function App({ user }) {
                                                                         lineHeight: 1.55, margin: '0 0 2px',
                                                                     }}>
                                                                         <span style={{ color: '#1d9e75', fontWeight: 600, marginRight: 4 }}>→</span>
-                                                                        {ex}
+                                                                        {renderDomainContent(ex, detectedTopic) || ex}
                                                                     </p>
                                                                 ))}
                                                             </div>

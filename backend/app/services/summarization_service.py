@@ -175,14 +175,16 @@ def _format_guidance(topic: str | None) -> str:
     )))
     if is_math:
         hints.append(
-            "Use LaTeX for all mathematical expressions: "
-            "inline with $...$ (e.g. $E = mc^2$, $O(n \\log n)$) and "
-            "display equations on their own line with $$...$$."
+            "Use LaTeX for ALL mathematical expressions — never write them as plain text. "
+            "Inline: $...$ (e.g. $E = mc^2$, $O(n \\log n)$, $\\Theta(n^2)$, $\\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}$). "
+            "Display (own line): $$...$$. "
+            "This applies to formulas, complexity notation, Greek letters, integrals, and fractions."
         )
     if is_code:
         hints.append(
-            "Use fenced code blocks with a language tag for any code, "
-            "pseudocode, or algorithmic notation (e.g. ```python ... ```)."
+            "Use fenced code blocks with a language tag for ALL code, pseudocode, "
+            "algorithmic notation, command-line examples, and terminal output "
+            "(e.g. ```python\\n...\\n```, ```bash\\n...\\n```, ```pseudocode\\n...\\n```)."
         )
     return (" " + " ".join(hints)) if hints else ""
 
@@ -227,7 +229,7 @@ def generate_micro_summary(text: str, language: str = "en", topic: str | None = 
                             "into 2-4 extremely concise bullet points. "
                             "Only include points explicitly stated in the text. "
                             "Do not add background knowledge or context the speaker did not provide."
-                            + fmt + lang_note
+                            + _DEPTH_INSTRUCTION + fmt + lang_note
                         )
                     },
                     {"role": "user", "content": text}

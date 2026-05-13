@@ -5,8 +5,25 @@ import 'katex/dist/katex.min.css';
 import hljs from 'highlight.js';
 import 'highlight.js/styles/github.css';
 
-const MATH_TOPICS = new Set(['mathematics', 'physics', 'engineering', 'chemistry']);
-const CODE_TOPICS = new Set(['computer science', 'engineering']);
+function isMathTopic(topic) {
+    if (!topic) return false;
+    const t = topic.toLowerCase();
+    return ['math', 'physic', 'chem', 'engineer', 'quant', 'statistic',
+            'biolog', 'econom', 'signal', 'circuit', 'thermodynam', 'mechan']
+        .some(k => t.includes(k));
+}
+
+function isCodeTopic(topic) {
+    if (!topic) return false;
+    const t = topic.toLowerCase();
+    return ['computer', 'software', 'programm', 'algorithm',
+            'data structure', 'machine learn', 'neural', 'deep learn', 'engineer']
+        .some(k => t.includes(k));
+}
+
+function hasFencedCode(text) {
+    return /```[\s\S]*?```/.test(text);
+}
 
 /**
  * Renders a block of text with domain-appropriate formatting:
@@ -18,18 +35,17 @@ const CODE_TOPICS = new Set(['computer science', 'engineering']);
  */
 export function renderDomainContent(text, topic) {
     if (!text) return null;
-    const normalTopic = topic?.toLowerCase() || '';
 
     let parts = [text];
 
-    if (CODE_TOPICS.has(normalTopic)) {
+    if (isCodeTopic(topic) || hasFencedCode(text)) {
         parts = parts.flatMap(part => {
             if (typeof part !== 'string') return [part];
             return renderCodeBlocks(part);
         });
     }
 
-    if (MATH_TOPICS.has(normalTopic)) {
+    if (isMathTopic(topic)) {
         parts = parts.flatMap(part => {
             if (typeof part !== 'string') return [part];
             return renderMath(part);
@@ -76,8 +92,30 @@ function renderCodeBlocks(text) {
     return parts.length ? parts : [text];
 }
 
+function useIsDark() {
+    const [dark, setDark] = React.useState(
+        () => document.documentElement.classList.contains('dark')
+    );
+    React.useEffect(() => {
+        const obs = new MutationObserver(() =>
+            setDark(document.documentElement.classList.contains('dark'))
+        );
+        obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+        return () => obs.disconnect();
+    }, []);
+    return dark;
+}
+
 function CodeBlock({ lang, highlighted, raw }) {
     const [copied, setCopied] = React.useState(false);
+    const dark = useIsDark();
+
+    const blockBg    = dark ? '#1e1e2e' : '#f6f8fa';
+    const headerBg   = dark ? '#16162a' : '#f0ede8';
+    const borderColor = dark ? '#313150' : '#e8e4de';
+    const langColor  = dark ? '#6e7191' : '#a3a3a3';
+    const copyColor  = copied ? '#22c55e' : (dark ? '#a3a3b8' : '#6b6b6b');
+    const copyBg     = dark ? '#1a1a2e' : '#ffffff';
 
     function copy() {
         navigator.clipboard.writeText(raw).then(() => {
@@ -87,9 +125,9 @@ function CodeBlock({ lang, highlighted, raw }) {
     }
 
     return (
-        <div style={{ position: 'relative', margin: '10px 0', borderRadius: 10, overflow: 'hidden', background: '#f6f8fa', border: '1px solid #e8e4de' }}>
+        <div style={{ position: 'relative', margin: '10px 0', borderRadius: 10, overflow: 'hidden', background: blockBg, border: `1px solid ${borderColor}` }}>
             {lang && (
-                <div style={{ padding: '4px 12px', fontSize: 11, color: '#a3a3a3', borderBottom: '1px solid #e8e4de', background: '#f0ede8', fontFamily: 'monospace' }}>
+                <div style={{ padding: '4px 12px', fontSize: 11, color: langColor, borderBottom: `1px solid ${borderColor}`, background: headerBg, fontFamily: 'monospace' }}>
                     {lang}
                 </div>
             )}
@@ -101,8 +139,8 @@ function CodeBlock({ lang, highlighted, raw }) {
                 style={{
                     position: 'absolute', top: lang ? 28 : 6, right: 8,
                     padding: '2px 8px', fontSize: 11, borderRadius: 6,
-                    background: '#ffffff', border: '1px solid #e8e4de',
-                    cursor: 'pointer', color: copied ? '#16a34a' : '#6b6b6b',
+                    background: copyBg, border: `1px solid ${borderColor}`,
+                    cursor: 'pointer', color: copyColor,
                     fontFamily: 'Inter, sans-serif',
                 }}
             >
