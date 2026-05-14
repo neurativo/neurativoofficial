@@ -1,5 +1,6 @@
 User-agent: *
 Allow: /
+Allow: /share/
 Disallow: /app
 Disallow: /record
 Disallow: /lecture/

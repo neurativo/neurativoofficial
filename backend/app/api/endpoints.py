@@ -6,7 +6,7 @@ import os
 import re
 
 from fastapi import APIRouter, BackgroundTasks, UploadFile, File, Form, HTTPException, Depends, Request, Query
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import Response, StreamingResponse, HTMLResponse
 from pydantic import BaseModel, Field
 import numpy as np
 from openai import OpenAI
@@ -1686,6 +1686,75 @@ def get_shared_lecture(request: Request, token: str):
     except Exception:
         pass
     return enrich_lecture_payload(lecture, section_rows=get_lecture_sections(lecture["id"]))
+
+
+@router.get("/share/{token}/preview")
+@limiter.limit("60/minute")
+def share_preview(request: Request, token: str):
+    """
+    Returns HTML with populated OG/Twitter meta tags for crawlers and link-unfurlers.
+    Real browsers are instantly redirected to the React SPA via meta refresh.
+    This makes every shared lecture indexable with unique title + description.
+    """
+    lecture = get_lecture_by_share_token(token)
+    if not lecture:
+        raise HTTPException(status_code=404, detail="Shared lecture not found")
+    if lecture.get("expired"):
+        raise HTTPException(status_code=410, detail="Share link has expired")
+
+    title = (lecture.get("title") or "Lecture Notes").strip()
+    topic = lecture.get("topic") or ""
+    summary_raw = lecture.get("master_summary") or lecture.get("summary") or ""
+    description = re.sub(r'#+\s*', '', summary_raw)   # strip markdown headings
+    description = re.sub(r'\s+', ' ', description).strip()[:160].rstrip('.,;')
+    if not description:
+        description = f'AI-generated lecture notes for "{title}"'
+        if topic:
+            description += f" ({topic})"
+        description += " — transcript, section summaries, and key concepts via Neurativo."
+
+    share_url = f"https://www.neurativo.com/share/{token}"
+    og_image = "https://www.neurativo.com/og.png"
+    page_title = f"{title} — Neurativo Lecture Notes"
+    # Escape user-supplied strings to prevent XSS in meta content
+    def _esc(s: str) -> str:
+        return s.replace('&', '&amp;').replace('"', '&quot;').replace('<', '&lt;').replace('>', '&gt;')
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{_esc(page_title)}</title>
+  <meta name="description" content="{_esc(description)}">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="{_esc(share_url)}">
+
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Neurativo">
+  <meta property="og:url" content="{_esc(share_url)}">
+  <meta property="og:title" content="{_esc(page_title)}">
+  <meta property="og:description" content="{_esc(description)}">
+  <meta property="og:image" content="{og_image}">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="500">
+  <meta property="og:image:height" content="500">
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:site" content="@neurativo">
+  <meta name="twitter:title" content="{_esc(page_title)}">
+  <meta name="twitter:description" content="{_esc(description)}">
+  <meta name="twitter:image" content="{og_image}">
+
+  <meta http-equiv="refresh" content="0;url={_esc(share_url)}">
+</head>
+<body>
+  <h1>{_esc(title)}</h1>
+  <p>{_esc(description)}</p>
+  <p><a href="{_esc(share_url)}">View full lecture notes on Neurativo</a></p>
+</body>
+</html>"""
+    return HTMLResponse(content=html)
 
 
 @router.delete("/lectures/{lecture_id}")
