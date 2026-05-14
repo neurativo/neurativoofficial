@@ -521,9 +521,9 @@ def _note_curriculum_signature(note: dict) -> dict:
 def _status_from_score(score: float, contradicted: bool) -> str:
     if contradicted:
         return "contradicted"
-    if score >= 0.72:
+    if score >= 0.55:
         return "supported"
-    if score >= 0.42:
+    if score >= 0.22:
         return "weak"
     return "unsupported"
 
@@ -3693,13 +3693,17 @@ def sanitize_generated_content_bundle(transcript: str, content: dict, summary: s
     allowed_terms = _registry_terms(grounded_notes)
 
     glossary_out = []
+    _transcript_lower = transcript.lower()
     for item in content.get("glossary") or []:
         term = _normalise_ws(item.get("term", ""))
         definition = _normalise_ws(item.get("definition", ""))
         if not term or not definition:
             print(f"[sanitize] glossary '{term[:30]}' -> dropped (missing term or definition)")
             continue
-        if term.lower() not in allowed_terms and term.lower() not in _tokenise(transcript):
+        # Only drop if no significant word from the term appears anywhere in the transcript
+        _term_words = [w for w in term.lower().split() if len(w) > 3]
+        _term_in_transcript = any(w in _transcript_lower for w in _term_words)
+        if not _term_in_transcript and term.lower() not in allowed_terms:
             print(f"[sanitize] glossary '{term[:30]}' -> dropped (term not grounded in allowed terms/transcript)")
             continue
         status, _ = _verify_generated_text(f"{term}. {definition}", transcript_units, minimum_score=0.3)
@@ -3764,6 +3768,9 @@ def sanitize_generated_content_bundle(transcript: str, content: dict, summary: s
         else:
             print(f"[sanitize] quiz '{question[:50]}' -> dropped ({status})")
 
+    print(f"[sanitize] quiz: {len(content.get('quiz') or [])} → {len(quiz_out)}")
+    print(f"[sanitize] flashcards: {len(content.get('flashcards') or [])} → {len(flashcards_out)}")
+    print(f"[sanitize] glossary: {len(content.get('glossary') or [])} → {len(glossary_out)}")
     return {
         **content,
         "flashcards": flashcards_out,
