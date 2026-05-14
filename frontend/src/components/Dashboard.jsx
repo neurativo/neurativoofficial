@@ -452,7 +452,7 @@ export default function Dashboard({ user }) {
 
     const handleSignOut = async () => {
         await signOut();
-        navigate('/auth');
+        navigate('/');
     };
 
     useEffect(() => {

@@ -1501,7 +1501,7 @@ function App({ user }) {
                         {/* User avatar */}
                         {user && (
                             <button
-                                onClick={async () => { await signOut(); navigate('/auth'); }}
+                                onClick={async () => { await signOut(); navigate('/'); }}
                                 title={`Signed in as ${user.email} — click to sign out`}
                                 className="w-7 h-7 rounded-full bg-[#1a1a1a] text-[#fafaf9] text-[11px] font-bold flex items-center justify-center hover:opacity-80 transition-opacity ml-1"
                             >

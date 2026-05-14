@@ -12,14 +12,6 @@
     <priority>1.0</priority>
   </url>
 
-  <!-- Pricing — high-value standalone keyword target -->
-  <url>
-    <loc>https://www.neurativo.com/pricing</loc>
-    <lastmod>2026-05-07</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-  </url>
-
   <!-- Legal pages -->
   <url>
     <loc>https://www.neurativo.com/terms</loc>
