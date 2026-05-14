@@ -63,10 +63,20 @@ const CSS = `
 
   /* Right panel */
   .lv-right { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-  .lv-tabs { display: flex; border-bottom: 1px solid ${C.border}; padding: 0 20px; flex-shrink: 0; }
-  .lv-tab { padding: 14px 14px 12px; font-size: 13px; font-weight: 500; color: ${C.muted}; background: none; border: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color 0.12s, border-color 0.12s; font-family: inherit; }
+  .lv-tabs { display: flex; border-bottom: 1px solid ${C.border}; padding: 0 16px; flex-shrink: 0; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .lv-tabs::-webkit-scrollbar { display: none; }
+  .lv-tab { display: inline-flex; align-items: center; gap: 4px; padding: 13px 11px 11px; font-size: 13px; font-weight: 500; color: ${C.muted}; background: none; border: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color 0.12s, border-color 0.12s; font-family: inherit; white-space: nowrap; flex-shrink: 0; }
   .lv-tab.active { color: ${C.text}; border-bottom-color: ${C.text}; }
+  .lv-tab-icon { width: 13px; height: 13px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; opacity: 0.65; }
+  .lv-tab.active .lv-tab-icon { opacity: 1; }
   .lv-tab-body { flex: 1; overflow-y: auto; padding: 20px; }
+
+  /* Transcript search */
+  .lv-transcript-search { padding: 8px 16px 4px; flex-shrink: 0; }
+  .lv-search-input { width: 100%; padding: 6px 10px; border: 1px solid ${C.border}; border-radius: 7px; font-size: 12px; color: ${C.text}; background: ${C.bg}; outline: none; font-family: inherit; transition: border-color .15s; }
+  .lv-search-input:focus { border-color: ${C.borderHov}; }
+  .lv-search-input::placeholder { color: ${C.muted}; }
+  .lv-seg-highlight { background: #fef08a; border-radius: 2px; }
 
   /* Summary cards */
   .lv-sum-card { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 12px; padding: 16px; margin-bottom: 10px; }
@@ -180,13 +190,21 @@ const CSS = `
     .lv-btn-text { display: none; }
     .lv-btn-ghost { padding: 6px 9px; min-width: 32px; justify-content: center; }
     .lv-panel-header { padding: 12px 14px 10px; }
-    .lv-tabs { padding: 0 12px; }
-    .lv-tab { padding: 12px 10px 10px; font-size: 12px; }
+    .lv-tabs { padding: 0 8px; }
+    .lv-tab { padding: 12px 9px 10px; font-size: 12px; gap: 3px; }
+    .lv-tab-icon { width: 12px; height: 12px; }
     .lv-tab-body { padding: 14px; }
     .lv-qa-bar { padding: 10px 12px; gap: 6px; }
     .lv-qa-input { padding: 9px 10px; font-size: 13px; }
     .lv-qa-send { padding: 9px 12px; font-size: 13px; }
     .lv-stat-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+    .lv-transcript-search { padding: 6px 14px 2px; }
+  }
+  @media (max-width: 360px) {
+    .lv-tab-label { display: none; }
+    .lv-tab { padding: 13px 10px; gap: 0; }
+    .lv-tab-icon { width: 15px; height: 15px; opacity: 0.8; }
+    .lv-tab.active .lv-tab-icon { opacity: 1; }
   }
 
   /* Smart Explain */
@@ -1015,6 +1033,9 @@ export default function LectureView() {
     const [fcIdx, setFcIdx]         = useState(0);
     const [fcFlipped, setFcFlipped] = useState(false);
     const [quizAnswers, setQuizAnswers] = useState({});
+    const [transcriptSearch, setTranscriptSearch] = useState('');
+    const [cardSearch, setCardSearch] = useState('');
+    const [glossarySearch, setGlossarySearch] = useState('');
     const bodyRef = useRef(null);
     const dragHandleRef = React.useRef(null);
     const dragCleanupRef = React.useRef(null);
@@ -1055,7 +1076,7 @@ export default function LectureView() {
                 .then(res => setStats(res.data))
                 .catch(() => {});
         }
-        if (activeTab === 'visuals' && id && visualFrames === null) {
+        if (activeTab === 'stats' && id && visualFrames === null) {
             api.get(`/api/v1/lectures/${id}/visual-frames`)
                 .then(res => setVisualFrames(res.data.frames || []))
                 .catch(() => setVisualFrames([]));
@@ -1206,6 +1227,15 @@ export default function LectureView() {
         ? (lecture.title.length > 40 ? lecture.title.slice(0, 40) + '…' : lecture.title)
         : 'Lecture';
 
+    const TABS = [
+        { id: 'summary', label: 'Notes', icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg> },
+        { id: 'ask', label: 'Ask', icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> },
+        { id: 'flashcards', label: 'Cards', icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg> },
+        { id: 'quiz', label: 'Quiz', icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> },
+        { id: 'glossary', label: 'Terms', icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg> },
+        { id: 'stats', label: 'Stats', icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> },
+    ];
+
     if (loading) {
         return (
             <>
@@ -1326,24 +1356,57 @@ export default function LectureView() {
                             )}
                             {lecture?.language && <span className="lv-pill lv-pill-lang">{LANG_NAMES[lecture.language] || lecture.language.toUpperCase()}</span>}
                         </div>
+                        {segments.length > 4 && (
+                            <div className="lv-transcript-search">
+                                <input
+                                    className="lv-search-input"
+                                    type="search"
+                                    placeholder="Search transcript…"
+                                    value={transcriptSearch}
+                                    onChange={e => setTranscriptSearch(e.target.value)}
+                                />
+                            </div>
+                        )}
                         {segments.length === 0
                             ? <div className="lv-empty-panel">No transcript available</div>
-                            : (
-                                <div className="lv-transcript-list">
-                                    {segments.map((text, i) => {
-                                        const isLast = i === segments.length - 1;
-                                        return (
-                                            <div key={i} className={`lv-segment lv-chunk-enter${isLast ? ' lv-seg-live' : ''}`}>
-                                                <span className="lv-seg-num">
-                                                    {fmtTs(i * 12)}<br />
-                                                    <span style={{ opacity: 0.6 }}>–{fmtTs((i + 1) * 12)}</span>
-                                                </span>
-                                                <span className="lv-seg-text">{text}</span>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            )
+                            : (() => {
+                                const q = transcriptSearch.trim().toLowerCase();
+                                const filtered = q
+                                    ? segments.map((text, i) => ({ text, i })).filter(({ text }) => text.toLowerCase().includes(q))
+                                    : segments.map((text, i) => ({ text, i }));
+                                if (q && filtered.length === 0) {
+                                    return <div className="lv-empty-panel">No matches</div>;
+                                }
+                                return (
+                                    <div className="lv-transcript-list">
+                                        {filtered.map(({ text, i }) => {
+                                            const isLast = i === segments.length - 1;
+                                            let display;
+                                            if (q) {
+                                                const idx = text.toLowerCase().indexOf(q);
+                                                display = (
+                                                    <span className="lv-seg-text">
+                                                        {text.slice(0, idx)}
+                                                        <mark className="lv-seg-highlight">{text.slice(idx, idx + q.length)}</mark>
+                                                        {text.slice(idx + q.length)}
+                                                    </span>
+                                                );
+                                            } else {
+                                                display = <span className="lv-seg-text">{text}</span>;
+                                            }
+                                            return (
+                                                <div key={i} className={`lv-segment lv-chunk-enter${isLast && !q ? ' lv-seg-live' : ''}`}>
+                                                    <span className="lv-seg-num">
+                                                        {fmtTs(i * 12)}<br />
+                                                        <span style={{ opacity: 0.6 }}>–{fmtTs((i + 1) * 12)}</span>
+                                                    </span>
+                                                    {display}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                );
+                            })()
                         }
                     </div>
 
@@ -1359,30 +1422,35 @@ export default function LectureView() {
                     {/* Right: tabbed panel */}
                     <div className="lv-right">
                         <div className="lv-tabs">
-                            {['summary', 'ask', 'stats', 'visuals'].map(tab => (
+                            {TABS.map(tab => (
                                 <button
-                                    key={tab}
-                                    className={`lv-tab${activeTab === tab ? ' active' : ''}`}
-                                    onClick={() => setActiveTab(tab)}
+                                    key={tab.id}
+                                    className={`lv-tab${activeTab === tab.id ? ' active' : ''}`}
+                                    onClick={() => setActiveTab(tab.id)}
                                 >
-                                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                                    {tab === 'summary' && summaryStatus === 'recomputing' && (
-                                        <span style={{ fontSize: 11, color: 'var(--color-muted)', fontStyle: 'italic', fontWeight: 400, marginLeft: 5 }}>· Refining…</span>
-                                    )}
+                                    <span className="lv-tab-icon">{tab.icon}</span>
+                                    <span className="lv-tab-label">
+                                        {tab.label}
+                                        {tab.id === 'summary' && summaryStatus === 'recomputing' && (
+                                            <span style={{ fontSize: 10, color: 'var(--color-muted)', fontStyle: 'italic', fontWeight: 400, marginLeft: 4 }}>·</span>
+                                        )}
+                                    </span>
                                 </button>
                             ))}
-                            <button className={`lv-tab ${activeTab === 'flashcards' ? 'active' : ''}`} onClick={() => setActiveTab('flashcards')}>Flashcards</button>
-                            <button className={`lv-tab ${activeTab === 'quiz' ? 'active' : ''}`} onClick={() => setActiveTab('quiz')}>Quiz</button>
-                            <button className={`lv-tab ${activeTab === 'glossary' ? 'active' : ''}`} onClick={() => setActiveTab('glossary')}>Glossary</button>
                         </div>
 
-                        {/* Summary */}
+                        {/* Notes (Summary) */}
                         {activeTab === 'summary' && (
                             <div className="lv-tab-body">
-                                {(conceptNoteCards.length > 0 || conceptSections.length > 0 || groundedSections.length > 0) && (
-                                    <p className="lv-trust-note">
-                                        Concept notes are rebuilt from subject-matter content only. Lecture logistics and examples are filtered out as card titles, while AI study tools remain separate.
-                                    </p>
+                                {conceptNoteCards.length > 3 && (
+                                    <input
+                                        className="lv-search-input"
+                                        type="search"
+                                        placeholder="Filter concepts…"
+                                        value={cardSearch}
+                                        onChange={e => setCardSearch(e.target.value)}
+                                        style={{ marginBottom: 14 }}
+                                    />
                                 )}
                                 {(conceptNoteCards.length === 0 && summarySections.length === 0)
                                     ? <div style={{ fontSize: 13, color: C.muted, textAlign: 'center', paddingTop: 40 }}>
@@ -1390,30 +1458,54 @@ export default function LectureView() {
                                             ? 'Summary is still being prepared'
                                             : 'Summary not yet generated'}
                                     </div>
-                                    : (
-                                        <>
-                                            {conceptNoteCards.length > 0
-                                                ? conceptNoteCards.map((card, i) => {
-                                                    const palette = isDark ? ACCENTS_DARK : ACCENTS_LIGHT;
-                                                    return <ConceptNoteCard key={i} card={card} accent={palette[i % palette.length]} index={i} total={conceptNoteCards.length} topic={lecture?.topic} />;
-                                                })
-                                                : summarySections.map((s, i) => {
-                                                    const palette = isDark ? ACCENTS_DARK : ACCENTS_LIGHT;
-                                                    return <SummaryCard key={i} section={s} accent={palette[i % palette.length]} index={i} total={summarySections.length} topic={lecture?.topic} />;
-                                                })}
-                                            {aiStudyAids.length > 0 && (
-                                                <div className="lv-aid-panel">
-                                                    <div className="lv-aid-title">AI Study Aids</div>
-                                                    <div className="lv-aid-copy">Generated practice tools are kept separate from grounded notes.</div>
-                                                    <div className="lv-aid-chips">
-                                                        {aiStudyAids.map((item, i) => (
-                                                            <span key={i} className="lv-aid-chip">{item.label} {item.count ? `· ${item.count}` : ''}</span>
-                                                        ))}
+                                    : (() => {
+                                        const q = cardSearch.trim().toLowerCase();
+                                        const palette = isDark ? ACCENTS_DARK : ACCENTS_LIGHT;
+                                        if (conceptNoteCards.length > 0) {
+                                            const filtered = q
+                                                ? conceptNoteCards.filter(c => (c.concept_name || '').toLowerCase().includes(q) || (c.summary || '').toLowerCase().includes(q))
+                                                : conceptNoteCards;
+                                            return (
+                                                <>
+                                                    {filtered.length === 0
+                                                        ? <div style={{ fontSize: 13, color: C.muted, textAlign: 'center', paddingTop: 24 }}>No concepts match</div>
+                                                        : filtered.map((card, i) => (
+                                                            <ConceptNoteCard key={i} card={card} accent={palette[i % palette.length]} index={i} total={filtered.length} topic={lecture?.topic} />
+                                                        ))
+                                                    }
+                                                    {aiStudyAids.length > 0 && (
+                                                        <div className="lv-aid-panel">
+                                                            <div className="lv-aid-title">AI Study Aids</div>
+                                                            <div className="lv-aid-copy">Generated practice tools are kept separate from grounded notes.</div>
+                                                            <div className="lv-aid-chips">
+                                                                {aiStudyAids.map((item, i) => (
+                                                                    <span key={i} className="lv-aid-chip">{item.label} {item.count ? `· ${item.count}` : ''}</span>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </>
+                                            );
+                                        }
+                                        return (
+                                            <>
+                                                {summarySections.map((s, i) => (
+                                                    <SummaryCard key={i} section={s} accent={palette[i % palette.length]} index={i} total={summarySections.length} topic={lecture?.topic} />
+                                                ))}
+                                                {aiStudyAids.length > 0 && (
+                                                    <div className="lv-aid-panel">
+                                                        <div className="lv-aid-title">AI Study Aids</div>
+                                                        <div className="lv-aid-copy">Generated practice tools are kept separate from grounded notes.</div>
+                                                        <div className="lv-aid-chips">
+                                                            {aiStudyAids.map((item, i) => (
+                                                                <span key={i} className="lv-aid-chip">{item.label} {item.count ? `· ${item.count}` : ''}</span>
+                                                            ))}
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            )}
-                                        </>
-                                    )
+                                                )}
+                                            </>
+                                        );
+                                    })()
                                 }
                             </div>
                         )}
@@ -1600,144 +1692,38 @@ export default function LectureView() {
                             );
                         })()}
 
-                        {/* Glossary */}
+                        {/* Terms (Glossary) */}
                         {activeTab === 'glossary' && (() => {
                             const terms = lecture?.glossary || [];
                             if (!terms.length) return <div className="lv-empty-panel">No glossary yet</div>;
                             const sorted = [...terms].sort((a, b) => (a.term || '').localeCompare(b.term || ''));
+                            const q = glossarySearch.trim().toLowerCase();
+                            const filtered = q
+                                ? sorted.filter(g => (g.term || '').toLowerCase().includes(q) || (g.definition || '').toLowerCase().includes(q))
+                                : sorted;
                             return (
                                 <div className="lv-tab-body">
-                                    {sorted.map((g, i) => (
-                                        <div key={i} className="lv-gloss-row">
-                                            <div className="lv-gloss-term">{g.term}</div>
-                                            <div className="lv-gloss-def">{g.definition}</div>
-                                        </div>
-                                    ))}
+                                    <input
+                                        className="lv-search-input"
+                                        type="search"
+                                        placeholder="Search terms…"
+                                        value={glossarySearch}
+                                        onChange={e => setGlossarySearch(e.target.value)}
+                                        style={{ marginBottom: 10 }}
+                                    />
+                                    {filtered.length === 0
+                                        ? <div style={{ fontSize: 13, color: 'var(--color-muted)', textAlign: 'center', paddingTop: 16 }}>No terms match</div>
+                                        : filtered.map((g, i) => (
+                                            <div key={i} className="lv-gloss-row">
+                                                <div className="lv-gloss-term">{g.term}</div>
+                                                <div className="lv-gloss-def">{g.definition}</div>
+                                            </div>
+                                        ))
+                                    }
                                 </div>
                             );
                         })()}
 
-                        {/* Visuals */}
-                        {activeTab === 'visuals' && (
-                            <div className="lv-tab-body">
-                                {visualFrames === null ? (
-                                    <div style={{ fontSize: 13, color: C.muted }}>Loading…</div>
-                                ) : visualFrames.length === 0 ? (
-                                    <div style={{ fontSize: 13, color: C.muted, textAlign: 'center', paddingTop: 32 }}>
-                                        No visual capture data for this lecture.
-                                    </div>
-                                ) : (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                                        {visualFrames.map((frame, i) => {
-                                            const vd = frame.visual_data || {};
-                                            const contentType = vd.content_type || 'unknown';
-                                            const source = frame.source || 'screen';
-                                            const typeColors = isDark ? {
-                                                slide: { bg: '#0f1e38', color: '#93c5fd' },
-                                                code: { bg: '#0a2218', color: '#6ee7b7' },
-                                                diagram: { bg: '#1e1338', color: '#c4b5fd' },
-                                                equation: { bg: '#291508', color: '#fdba74' },
-                                                default: { bg: '#1e1e1e', color: '#a0a0a0' },
-                                            } : {
-                                                slide: { bg: '#eff6ff', color: '#2563eb' },
-                                                code: { bg: '#f0fdf4', color: '#16a34a' },
-                                                diagram: { bg: '#faf5ff', color: '#7c3aed' },
-                                                equation: { bg: '#fff7ed', color: '#c2410c' },
-                                                default: { bg: '#f8fafc', color: '#475569' },
-                                            };
-                                            const tc = typeColors[contentType] || typeColors.default;
-                                            const sourceBadge = source === 'board'
-                                                ? isDark ? { bg: '#0a2218', color: '#6ee7b7', label: 'Board' } : { bg: '#f0fdf4', color: '#15803d', label: 'Board' }
-                                                : isDark ? { bg: '#0f1e38', color: '#93c5fd', label: 'Screen' } : { bg: '#eff6ff', color: '#1d4ed8', label: 'Screen' };
-                                            return (
-                                                <div key={i} style={{
-                                                    border: `1px solid ${C.border}`,
-                                                    borderRadius: 10,
-                                                    padding: '12px 14px',
-                                                    background: C.card,
-                                                    display: 'flex',
-                                                    flexDirection: 'column',
-                                                    gap: 6,
-                                                }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                                        <span style={{
-                                                            fontFamily: 'monospace',
-                                                            fontSize: 12,
-                                                            color: C.muted,
-                                                            minWidth: 40,
-                                                        }}>
-                                                            {fmtTs(frame.timestamp_seconds)}
-                                                        </span>
-                                                        <span style={{
-                                                            fontSize: 10,
-                                                            fontWeight: 600,
-                                                            letterSpacing: '0.4px',
-                                                            textTransform: 'uppercase',
-                                                            padding: '2px 7px',
-                                                            borderRadius: 5,
-                                                            background: tc.bg,
-                                                            color: tc.color,
-                                                        }}>
-                                                            {contentType}
-                                                        </span>
-                                                        <span style={{
-                                                            fontSize: 10,
-                                                            fontWeight: 600,
-                                                            letterSpacing: '0.4px',
-                                                            padding: '2px 7px',
-                                                            borderRadius: 5,
-                                                            background: sourceBadge.bg,
-                                                            color: sourceBadge.color,
-                                                        }}>
-                                                            {sourceBadge.label}
-                                                        </span>
-                                                    </div>
-                                                    {vd.title && (
-                                                        <div style={{ fontSize: 14, fontWeight: 500, color: C.text }}>
-                                                            {vd.title}
-                                                        </div>
-                                                    )}
-                                                    {vd.text_content && (
-                                                        <div style={{ fontSize: 12, color: C.sec, lineHeight: 1.6 }}>
-                                                            {vd.text_content}
-                                                        </div>
-                                                    )}
-                                                    {vd.equations && vd.equations.length > 0 && (
-                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                                            {vd.equations.map((eq, j) => (
-                                                                <div key={j} style={{
-                                                                    fontFamily: 'monospace',
-                                                                    fontSize: 12,
-                                                                    color: isDark ? '#93c5fd' : '#2563eb',
-                                                                    background: isDark ? '#0f1e38' : '#eff6ff',
-                                                                    padding: '4px 8px',
-                                                                    borderRadius: 5,
-                                                                }}>
-                                                                    {eq}
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    )}
-                                                    {vd.diagrams && vd.diagrams.length > 0 && (
-                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                                                            {vd.diagrams.map((d, j) => (
-                                                                <div key={j} style={{
-                                                                    fontSize: 12,
-                                                                    color: '#64748b',
-                                                                    fontStyle: 'italic',
-                                                                }}>
-                                                                    {d}
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                )}
-                            </div>
-                        )}
                     </div>
                 </div>
             </div>
