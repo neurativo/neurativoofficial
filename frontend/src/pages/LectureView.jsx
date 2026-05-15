@@ -158,11 +158,17 @@ const CSS = `
   .lv-qa-dot:nth-child(3) { animation-delay: 0.3s; }
 
   /* Stats */
-  .lv-stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .lv-stat-card { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 10px; padding: 16px; }
-  .lv-stat-label { font-size: 11px; color: ${C.muted}; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px; }
-  .lv-stat-val { font-size: 20px; font-weight: 600; color: ${C.text}; letter-spacing: -0.5px; }
-  .lv-stat-sub { font-size: 12px; color: ${C.muted}; margin-top: 2px; }
+  .lv-stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .lv-stat-full { grid-column: 1 / -1; }
+  .lv-stat-card { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 14px; padding: 14px 16px; transition: box-shadow 0.15s; }
+  .lv-stat-card:hover { box-shadow: 0 2px 10px rgba(0,0,0,0.07); }
+  .dark .lv-stat-card:hover { box-shadow: 0 2px 14px rgba(0,0,0,0.3); }
+  .lv-stat-icon { width: 30px; height: 30px; border-radius: 9px; background: ${C.bg}; border: 1px solid ${C.border}; display: flex; align-items: center; justify-content: center; margin-bottom: 10px; color: ${C.muted}; }
+  .lv-stat-label { font-size: 10px; color: ${C.muted}; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; margin-bottom: 4px; }
+  .lv-stat-val { font-size: 22px; font-weight: 700; color: ${C.text}; letter-spacing: -0.8px; line-height: 1.1; }
+  .lv-stat-sub { font-size: 11px; color: ${C.muted}; margin-top: 3px; }
+  .lv-stat-topic-row { display: flex; align-items: center; gap: 8px; }
+  .lv-stat-divider { height: 1px; background: ${C.border}; margin: 4px 0; }
 
   /* Pills */
   .lv-pill { font-size: 11px; padding: 2px 8px; border-radius: 5px; white-space: nowrap; }
@@ -191,30 +197,36 @@ const CSS = `
   .lv-loading { display: flex; align-items: center; justify-content: center; height: 100%; font-size: 13px; color: ${C.muted}; }
 
   /* Share modal */
-  .lv-share-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 16px; }
-  .lv-share-box { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 14px; width: 100%; max-width: 400px; padding: 24px; box-shadow: 0 8px 32px rgba(0,0,0,0.18); }
-  .lv-share-title { font-size: 15px; font-weight: 600; color: ${C.text}; margin: 0 0 20px; letter-spacing: -0.3px; }
-  .lv-share-label { font-size: 11px; font-weight: 600; color: ${C.muted}; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
-  .lv-share-toggle { display: flex; border: 1px solid ${C.border}; border-radius: 9px; overflow: hidden; margin-bottom: 18px; }
-  .lv-share-opt { flex: 1; padding: 8px 10px; font-size: 12px; font-weight: 500; background: none; border: none; cursor: pointer; color: ${C.muted}; font-family: inherit; transition: background 0.12s, color 0.12s; text-align: center; }
-  .lv-share-opt.active { background: ${C.dark}; color: #fafaf9; }
-  .lv-share-expiry { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 18px; }
-  .lv-share-exp-btn { padding: 5px 11px; font-size: 12px; font-weight: 500; border: 1px solid ${C.border}; border-radius: 7px; background: none; cursor: pointer; color: ${C.sec}; font-family: inherit; transition: all 0.12s; }
+  .lv-share-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 16px; animation: lv-chunk-in 0.15s ease; }
+  .lv-share-box { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 20px; width: 100%; max-width: 420px; padding: 0; box-shadow: 0 12px 48px rgba(0,0,0,0.22); overflow: hidden; animation: lv-card-in 0.2s ease; }
+  .lv-share-header { padding: 20px 20px 16px; border-bottom: 1px solid ${C.border}; display: flex; align-items: center; gap: 10px; }
+  .lv-share-header-icon { width: 36px; height: 36px; border-radius: 10px; background: ${C.bg}; border: 1px solid ${C.border}; display: flex; align-items: center; justify-content: center; color: ${C.sec}; flex-shrink: 0; }
+  .lv-share-title { flex: 1; font-size: 15px; font-weight: 600; color: ${C.text}; letter-spacing: -0.3px; margin: 0; }
+  .lv-share-close { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; background: none; border: none; cursor: pointer; color: ${C.muted}; border-radius: 8px; transition: background 0.12s, color 0.12s; flex-shrink: 0; }
+  .lv-share-close:hover { background: ${C.bg}; color: ${C.text}; }
+  .lv-share-body { padding: 20px; display: flex; flex-direction: column; gap: 18px; }
+  .lv-share-section { display: flex; flex-direction: column; gap: 8px; }
+  .lv-share-label { font-size: 10px; font-weight: 700; color: ${C.muted}; text-transform: uppercase; letter-spacing: 0.6px; }
+  .lv-share-toggle { display: flex; gap: 6px; }
+  .lv-share-opt { flex: 1; padding: 8px 10px; font-size: 12px; font-weight: 500; background: ${C.bg}; border: 1px solid ${C.border}; border-radius: 10px; cursor: pointer; color: ${C.sec}; font-family: inherit; transition: all 0.12s; text-align: center; }
+  .lv-share-opt.active { background: ${C.dark}; color: #fafaf9; border-color: transparent; }
+  .lv-share-mode-note { font-size: 11px; color: ${C.muted}; line-height: 1.55; }
+  .lv-share-expiry { display: flex; gap: 6px; flex-wrap: wrap; }
+  .lv-share-exp-btn { padding: 5px 12px; font-size: 12px; font-weight: 500; border: 1px solid ${C.border}; border-radius: 8px; background: ${C.bg}; cursor: pointer; color: ${C.sec}; font-family: inherit; transition: all 0.12s; }
   .lv-share-exp-btn.active { border-color: ${C.dark}; background: ${C.dark}; color: #fafaf9; }
-  .lv-share-url-row { display: flex; gap: 7px; margin-bottom: 18px; }
-  .lv-share-url { flex: 1; padding: 8px 11px; background: ${C.bg}; border: 1px solid ${C.border}; border-radius: 8px; font-size: 11px; color: ${C.muted}; font-family: monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .lv-share-copy { padding: 8px 14px; background: ${C.dark}; color: #fafaf9; border: none; border-radius: 8px; font-size: 12px; font-weight: 500; cursor: pointer; font-family: inherit; white-space: nowrap; }
-  .lv-share-copy:hover { opacity: 0.85; }
-  .lv-share-qr { display: flex; justify-content: center; margin-bottom: 18px; }
-  .lv-share-qr img { border-radius: 8px; border: 1px solid ${C.border}; }
-  .lv-share-actions { display: flex; gap: 8px; justify-content: space-between; align-items: center; }
-  .lv-share-revoke { font-size: 12px; color: #ef4444; background: none; border: 1px solid #ef444433; border-radius: 8px; padding: 8px 14px; cursor: pointer; font-family: inherit; transition: background 0.12s; }
-  .lv-share-revoke:hover { background: #ef44440f; }
-  .lv-share-gen { padding: 9px 20px; background: ${C.dark}; color: #fafaf9; border: none; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; }
+  .lv-share-gen { width: 100%; padding: 11px 0; background: ${C.dark}; color: #fafaf9; border: none; border-radius: 12px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; transition: opacity 0.15s; letter-spacing: -0.1px; }
   .lv-share-gen:hover { opacity: 0.85; }
-  .lv-share-gen:disabled { opacity: 0.45; cursor: default; }
-  .lv-share-close { position: absolute; top: 16px; right: 16px; background: none; border: none; cursor: pointer; color: ${C.muted}; padding: 4px; }
-  .lv-share-mode-note { font-size: 11px; color: ${C.muted}; margin-bottom: 18px; line-height: 1.5; }
+  .lv-share-gen:disabled { opacity: 0.4; cursor: default; }
+  .lv-share-url-box { background: ${C.bg}; border: 1px solid ${C.border}; border-radius: 12px; padding: 10px 14px; display: flex; align-items: center; gap: 10px; }
+  .lv-share-url { flex: 1; font-size: 11px; color: ${C.muted}; font-family: 'JetBrains Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lv-share-copy { flex-shrink: 0; display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; background: ${C.card}; border: 1px solid ${C.border}; border-radius: 8px; font-size: 11px; font-weight: 600; color: ${C.text}; cursor: pointer; font-family: inherit; transition: border-color 0.12s; white-space: nowrap; }
+  .lv-share-copy:hover { border-color: ${C.borderHov}; }
+  .lv-share-qr { display: flex; justify-content: center; }
+  .lv-share-qr img { border-radius: 12px; border: 1px solid ${C.border}; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+  .lv-share-footer { padding: 14px 20px; border-top: 1px solid ${C.border}; display: flex; align-items: center; justify-content: space-between; }
+  .lv-share-expiry-note { font-size: 11px; color: ${C.muted}; }
+  .lv-share-revoke { font-size: 12px; color: #ef4444; background: none; border: 1px solid rgba(239,68,68,0.25); border-radius: 8px; padding: 6px 12px; cursor: pointer; font-family: inherit; transition: background 0.12s; }
+  .lv-share-revoke:hover { background: rgba(239,68,68,0.06); }
 
   /* Mobile */
   @media (max-width: 680px) {
@@ -953,66 +965,98 @@ function ShareModal({ lectureId, initialToken, onClose, addToast }) {
 
     return (
         <div className="lv-share-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-            <div className="lv-share-box" style={{ position: 'relative' }}>
-                <button className="lv-share-close" onClick={onClose} aria-label="Close">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                </button>
+            <div className="lv-share-box">
 
-                <div className="lv-share-title">Share lecture</div>
-
-                {/* Mode toggle */}
-                <div className="lv-share-label">Content</div>
-                <div className="lv-share-toggle" style={{ marginBottom: 6 }}>
-                    <button className={`lv-share-opt${mode === 'full' ? ' active' : ''}`} onClick={() => setMode('full')}>Full (transcript + summary)</button>
-                    <button className={`lv-share-opt${mode === 'summary_only' ? ' active' : ''}`} onClick={() => setMode('summary_only')}>Summary only</button>
-                </div>
-                <div className="lv-share-mode-note">
-                    {mode === 'summary_only' ? 'Viewers will see the summary and key concepts — transcript is hidden.' : 'Viewers can read the full transcript and summary.'}
-                </div>
-
-                {/* Expiry */}
-                <div className="lv-share-label">Expires</div>
-                <div className="lv-share-expiry">
-                    {EXPIRY_OPTIONS.map(opt => (
-                        <button
-                            key={opt.label}
-                            className={`lv-share-exp-btn${expiryDays === opt.value ? ' active' : ''}`}
-                            onClick={() => setExpiryDays(opt.value)}
-                        >{opt.label}</button>
-                    ))}
+                {/* Header */}
+                <div className="lv-share-header">
+                    <div className="lv-share-header-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+                            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+                        </svg>
+                    </div>
+                    <div className="lv-share-title">Share lecture</div>
+                    <button className="lv-share-close" onClick={onClose} aria-label="Close">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
+                    </button>
                 </div>
 
-                {/* Generate button */}
-                <button className="lv-share-gen" onClick={generate} disabled={generating} style={{ width: '100%', marginBottom: 18 }}>
-                    {generating ? 'Generating…' : shareUrl ? 'Update link' : 'Generate link'}
-                </button>
+                <div className="lv-share-body">
+                    {/* Content mode */}
+                    <div className="lv-share-section">
+                        <div className="lv-share-label">Content</div>
+                        <div className="lv-share-toggle">
+                            <button className={`lv-share-opt${mode === 'full' ? ' active' : ''}`} onClick={() => setMode('full')}>Full</button>
+                            <button className={`lv-share-opt${mode === 'summary_only' ? ' active' : ''}`} onClick={() => setMode('summary_only')}>Summary only</button>
+                        </div>
+                        <div className="lv-share-mode-note">
+                            {mode === 'summary_only'
+                                ? 'Viewers see notes and concepts — transcript is hidden.'
+                                : 'Viewers can read the full transcript and summary.'}
+                        </div>
+                    </div>
 
-                {/* URL + copy */}
+                    {/* Expiry */}
+                    <div className="lv-share-section">
+                        <div className="lv-share-label">Link expiry</div>
+                        <div className="lv-share-expiry">
+                            {EXPIRY_OPTIONS.map(opt => (
+                                <button key={opt.label}
+                                    className={`lv-share-exp-btn${expiryDays === opt.value ? ' active' : ''}`}
+                                    onClick={() => setExpiryDays(opt.value)}>
+                                    {opt.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Generate */}
+                    <button className="lv-share-gen" onClick={generate} disabled={generating}>
+                        {generating
+                            ? <span style={{ opacity: 0.7 }}>Generating…</span>
+                            : shareUrl ? 'Update link' : 'Generate link'
+                        }
+                    </button>
+
+                    {/* URL + copy + QR */}
+                    {shareUrl && (
+                        <>
+                            <div className="lv-share-section">
+                                <div className="lv-share-label">Shareable link</div>
+                                <div className="lv-share-url-box">
+                                    <div className="lv-share-url" title={shareUrl}>{shareUrl}</div>
+                                    <button className="lv-share-copy" onClick={copyLink}>
+                                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                                            <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                                        </svg>
+                                        Copy
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="lv-share-qr">
+                                <img
+                                    src={`https://api.qrserver.com/v1/create-qr-code/?size=148x148&data=${encodeURIComponent(shareUrl)}&bgcolor=ffffff&color=1a1a1a&margin=8`}
+                                    alt="QR code"
+                                    width={148}
+                                    height={148}
+                                />
+                            </div>
+                        </>
+                    )}
+                </div>
+
+                {/* Footer with revoke */}
                 {shareUrl && (
-                    <>
-                        <div className="lv-share-url-row">
-                            <div className="lv-share-url" title={shareUrl}>{shareUrl}</div>
-                            <button className="lv-share-copy" onClick={copyLink}>Copy</button>
-                        </div>
-                        {/* QR code */}
-                        <div className="lv-share-qr">
-                            <img
-                                src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(shareUrl)}&bgcolor=ffffff&color=1a1a1a&margin=6`}
-                                alt="QR code"
-                                width={140}
-                                height={140}
-                            />
-                        </div>
-                        {/* Revoke */}
-                        <div className="lv-share-actions">
-                            <button className="lv-share-revoke" onClick={revoke} disabled={revoking}>
-                                {revoking ? 'Revoking…' : 'Revoke link'}
-                            </button>
-                            <span style={{ fontSize: 11, color: 'var(--color-muted)' }}>
-                                {expiryDays ? `Expires in ${expiryDays}d` : 'No expiry'}
-                            </span>
-                        </div>
-                    </>
+                    <div className="lv-share-footer">
+                        <button className="lv-share-revoke" onClick={revoke} disabled={revoking}>
+                            {revoking ? 'Revoking…' : 'Revoke link'}
+                        </button>
+                        <span className="lv-share-expiry-note">
+                            {expiryDays ? `Expires in ${expiryDays}d` : 'No expiry set'}
+                        </span>
+                    </div>
                 )}
             </div>
         </div>
@@ -1618,62 +1662,114 @@ export default function LectureView() {
                                     ? <div style={{ fontSize: 13, color: C.muted }}>Loading…</div>
                                     : (
                                         <div className="lv-stat-grid">
-                                            <div className="lv-stat-card">
-                                                <div className="lv-stat-label">Words</div>
-                                                <div className="lv-stat-val">{(stats.word_count || 0).toLocaleString()}</div>
+                                            {/* Duration — full width hero */}
+                                            <div className="lv-stat-card lv-stat-full" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                                                <div className="lv-stat-icon" style={{ marginBottom: 0 }}>
+                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                                                </div>
+                                                <div>
+                                                    <div className="lv-stat-label">Duration</div>
+                                                    <div className="lv-stat-val" style={{ fontSize: 26 }}>{fmtDur(stats.total_duration_seconds)}</div>
+                                                </div>
+                                                {stats.word_count > 0 && (
+                                                    <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
+                                                        <div className="lv-stat-label">Words</div>
+                                                        <div className="lv-stat-val">{(stats.word_count || 0).toLocaleString()}</div>
+                                                    </div>
+                                                )}
                                             </div>
+
+                                            {/* Chunks */}
                                             <div className="lv-stat-card">
-                                                <div className="lv-stat-label">Duration</div>
-                                                <div className="lv-stat-val">{fmtDur(stats.total_duration_seconds)}</div>
-                                            </div>
-                                            <div className="lv-stat-card">
+                                                <div className="lv-stat-icon">
+                                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                                                </div>
                                                 <div className="lv-stat-label">Chunks</div>
                                                 <div className="lv-stat-val">{stats.total_chunks || 0}</div>
                                                 <div className="lv-stat-sub">12s segments</div>
                                             </div>
+
+                                            {/* Sections */}
                                             <div className="lv-stat-card">
-                                                <div className="lv-stat-label">Compression</div>
-                                                <div className="lv-stat-val">{stats.compression_ratio || '—'}</div>
-                                                <div className="lv-stat-sub">summary / transcript</div>
-                                            </div>
-                                            <div className="lv-stat-card">
-                                                <div className="lv-stat-label">Language</div>
-                                                <div className="lv-stat-val" style={{ fontSize: 16 }}>{LANG_NAMES[stats.language] || (stats.language || '').toUpperCase()}</div>
-                                            </div>
-                                            <div className="lv-stat-card">
+                                                <div className="lv-stat-icon">
+                                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                                                </div>
                                                 <div className="lv-stat-label">Sections</div>
                                                 <div className="lv-stat-val">{summarySections.length || '—'}</div>
                                                 <div className="lv-stat-sub">summarized</div>
                                             </div>
+
+                                            {/* Concepts */}
                                             <div className="lv-stat-card">
-                                                <div className="lv-stat-label">Topics</div>
+                                                <div className="lv-stat-icon">
+                                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                                                </div>
+                                                <div className="lv-stat-label">Concepts</div>
                                                 <div className="lv-stat-val">{topicCount || '—'}</div>
-                                                <div className="lv-stat-sub">key concepts</div>
+                                                <div className="lv-stat-sub">key cards</div>
                                             </div>
+
+                                            {/* Compression */}
+                                            <div className="lv-stat-card">
+                                                <div className="lv-stat-icon">
+                                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+                                                </div>
+                                                <div className="lv-stat-label">Compression</div>
+                                                <div className="lv-stat-val" style={{ fontSize: 17 }}>{stats.compression_ratio || '—'}</div>
+                                                <div className="lv-stat-sub">summary ratio</div>
+                                            </div>
+
+                                            {/* Language */}
+                                            <div className="lv-stat-card">
+                                                <div className="lv-stat-icon">
+                                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                                                </div>
+                                                <div className="lv-stat-label">Language</div>
+                                                <div className="lv-stat-val" style={{ fontSize: 15 }}>{LANG_NAMES[stats.language] || (stats.language || '—').toUpperCase()}</div>
+                                            </div>
+
+                                            {/* Share views — conditional */}
                                             {lecture?.share_views > 0 && (
                                                 <div className="lv-stat-card">
+                                                    <div className="lv-stat-icon">
+                                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                                                    </div>
                                                     <div className="lv-stat-label">Share views</div>
                                                     <div className="lv-stat-val">{lecture.share_views}</div>
                                                 </div>
                                             )}
+
+                                            {/* Visual frames — conditional */}
                                             {visualFrames && visualFrames.length > 0 && (() => {
                                                 const screenCount = visualFrames.filter(f => (f.source || 'screen') === 'screen').length;
                                                 const boardCount  = visualFrames.filter(f => f.source === 'board').length;
                                                 return (
                                                     <div className="lv-stat-card">
+                                                        <div className="lv-stat-icon">
+                                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                                                        </div>
                                                         <div className="lv-stat-label">Visual frames</div>
                                                         <div className="lv-stat-val">{visualFrames.length}</div>
                                                         <div className="lv-stat-sub">
                                                             {screenCount > 0 && boardCount > 0
                                                                 ? `${screenCount} screen · ${boardCount} board`
-                                                                : screenCount > 0
-                                                                    ? `${screenCount} screen`
-                                                                    : `${boardCount} board`
+                                                                : screenCount > 0 ? `${screenCount} screen` : `${boardCount} board`
                                                             }
                                                         </div>
                                                     </div>
                                                 );
                                             })()}
+
+                                            {/* Domain / topic */}
+                                            {lecture?.topic && (
+                                                <div className="lv-stat-card lv-stat-full">
+                                                    <div className="lv-stat-label" style={{ marginBottom: 8 }}>Domain</div>
+                                                    <div className="lv-stat-topic-row">
+                                                        <span className="lv-pill lv-pill-topic" style={{ fontSize: 12, padding: '3px 10px' }}>{lecture.topic}</span>
+                                                        {lecture?.language && <span className="lv-pill lv-pill-lang" style={{ fontSize: 12, padding: '3px 10px' }}>{LANG_NAMES[lecture.language] || lecture.language.toUpperCase()}</span>}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     )
                                 }

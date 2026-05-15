@@ -2,15 +2,15 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../lib/api';
 
 const STAGES = [
-    { pct:  8, msg: 'Compiling lecture report...' },
-    { pct: 18, msg: 'Analysing transcript...' },
-    { pct: 30, msg: 'Building section summaries...' },
-    { pct: 44, msg: 'Generating executive summary...' },
-    { pct: 57, msg: 'Enriching glossary...' },
-    { pct: 68, msg: 'Preparing Q&A review...' },
-    { pct: 78, msg: 'Rendering PDF layout...' },
-    { pct: 88, msg: 'Applying cover page...' },
-    { pct: 97, msg: 'Finalising document...' },
+    { pct:  8, msg: 'Compiling lecture report',   icon: '📋' },
+    { pct: 18, msg: 'Analysing transcript',        icon: '🔍' },
+    { pct: 30, msg: 'Building section summaries',  icon: '📝' },
+    { pct: 44, msg: 'Generating executive summary',icon: '✨' },
+    { pct: 57, msg: 'Enriching glossary',          icon: '📖' },
+    { pct: 68, msg: 'Preparing Q&A review',        icon: '💬' },
+    { pct: 78, msg: 'Rendering PDF layout',        icon: '🎨' },
+    { pct: 88, msg: 'Applying cover page',         icon: '🖼️' },
+    { pct: 97, msg: 'Finalising document',         icon: '⚡' },
 ];
 
 export default function ExportModal({ lectureId, onClose, onStart }) {
@@ -79,24 +79,26 @@ export default function ExportModal({ lectureId, onClose, onStart }) {
     const isSuccess = phase === 'success';
     const isError   = phase === 'error';
 
+    const currentStageIdx = STAGES.findIndex(s => s.pct === progress);
+
     return (
         <div
             style={{
                 position: 'fixed', inset: 0, zIndex: 100,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 padding: 24,
-                background: 'rgba(10,10,10,0.45)',
-                backdropFilter: 'blur(8px)',
-                WebkitBackdropFilter: 'blur(8px)',
+                background: 'rgba(10,10,10,0.5)',
+                backdropFilter: 'blur(10px)',
+                WebkitBackdropFilter: 'blur(10px)',
                 animation: 'em-fade 0.18s ease',
             }}
             onClick={() => !isLoading && onClose()}
         >
             <style>{`
                 @keyframes em-fade { from { opacity:0; } to { opacity:1; } }
-                @keyframes em-up   { from { opacity:0; transform:translateY(10px) scale(0.98); } to { opacity:1; transform:translateY(0) scale(1); } }
+                @keyframes em-up   { from { opacity:0; transform:translateY(12px) scale(0.97); } to { opacity:1; transform:translateY(0) scale(1); } }
                 @keyframes em-spin { to { transform: rotate(360deg); } }
-                @keyframes em-bar  { from { width:0; } to { width:100%; } }
+                @keyframes em-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(99,102,241,0.35); } 50% { box-shadow: 0 0 0 6px rgba(99,102,241,0); } }
             `}</style>
 
             <div
@@ -104,129 +106,152 @@ export default function ExportModal({ lectureId, onClose, onStart }) {
                 style={{
                     background: 'var(--color-card)',
                     border: '1px solid var(--color-border)',
-                    borderRadius: 20,
-                    padding: '36px 32px 28px',
+                    borderRadius: 22,
                     width: '100%',
-                    maxWidth: 360,
+                    maxWidth: 380,
                     animation: 'em-up 0.22s ease',
                     fontFamily: 'Inter, sans-serif',
+                    overflow: 'hidden',
+                    boxShadow: '0 24px 64px rgba(0,0,0,0.22)',
                 }}
             >
-                {/* Icon */}
-                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 20 }}>
+                {/* Header */}
+                <div style={{ padding: '24px 24px 0', textAlign: 'center' }}>
                     <div style={{
-                        width: 56, height: 56, borderRadius: 16,
+                        width: 56, height: 56, borderRadius: 16, margin: '0 auto 16px',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        background: isSuccess ? '#f0fdf4' : isError ? 'rgba(239,68,68,0.1)' : 'var(--color-bg)',
-                        border: `1px solid ${isSuccess ? '#bbf7d0' : isError ? 'rgba(239,68,68,0.3)' : 'var(--color-border)'}`,
-                        transition: 'background 0.3s, border-color 0.3s',
+                        background: isSuccess ? '#f0fdf4' : isError ? 'rgba(239,68,68,0.08)' : 'var(--color-bg)',
+                        border: `1px solid ${isSuccess ? '#bbf7d0' : isError ? 'rgba(239,68,68,0.25)' : 'var(--color-border)'}`,
+                        transition: 'all 0.4s',
+                        animation: isLoading ? 'em-pulse 2s infinite' : 'none',
                     }}>
                         {isLoading && (
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1a1a1a" strokeWidth="2" strokeLinecap="round"
-                                style={{ animation: 'em-spin 1.1s linear infinite', transformOrigin: 'center' }}>
-                                <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-text)" strokeWidth="2" strokeLinecap="round"
+                                style={{ animation: 'em-spin 1.1s linear infinite' }}>
+                                <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
                             </svg>
                         )}
                         {isSuccess && (
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M5 13l4 4L19 7" />
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M5 13l4 4L19 7"/>
                             </svg>
                         )}
                         {isError && (
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round">
                                 <circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12"/><circle cx="12" cy="16" r="0.5" fill="#ef4444"/>
                             </svg>
                         )}
                     </div>
+
+                    <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--color-text)', letterSpacing: '-0.4px', marginBottom: 4 }}>
+                        {isSuccess ? 'Report Ready' : isError ? 'Export Failed' : 'Building Your Report'}
+                    </div>
+                    <div style={{ fontSize: 13, color: 'var(--color-muted)', lineHeight: 1.5, marginBottom: 20 }}>
+                        {isSuccess ? 'Your PDF is downloading…' : status}
+                    </div>
                 </div>
 
-                {/* Title */}
-                <h3 style={{ fontSize: 17, fontWeight: 600, color: 'var(--color-text)', textAlign: 'center', letterSpacing: '-0.4px', margin: '0 0 4px' }}>
-                    {isSuccess ? 'Export Ready' : isError ? 'Export Failed' : 'Generating PDF'}
-                </h3>
-                <p style={{ fontSize: 13, color: 'var(--color-muted)', textAlign: 'center', margin: '0 0 24px', lineHeight: 1.5 }}>
-                    {status}
-                </p>
-
                 {/* Progress bar */}
-                {isLoading && (
-                    <div style={{ marginBottom: 8 }}>
+                {(isLoading || isSuccess) && (
+                    <div style={{ padding: '0 24px', marginBottom: 20 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                            <span style={{ fontSize: 11, color: 'var(--color-muted)', fontWeight: 500 }}>Progress</span>
-                            <span style={{ fontSize: 12, color: 'var(--color-text)', fontWeight: 600, fontFamily: 'monospace' }}>{progress}%</span>
+                            <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Progress</span>
+                            <span style={{ fontSize: 11, color: 'var(--color-text)', fontWeight: 600, fontFamily: 'monospace' }}>
+                                {isSuccess ? '100' : progress}%
+                            </span>
                         </div>
-                        <div style={{ width: '100%', background: 'var(--color-border)', height: 5, borderRadius: 99, overflow: 'hidden' }}>
+                        <div style={{ width: '100%', background: 'var(--color-border)', height: 4, borderRadius: 99, overflow: 'hidden' }}>
                             <div style={{
-                                height: '100%', background: 'var(--color-dark)', borderRadius: 99,
-                                width: `${progress}%`, transition: 'width 0.7s ease-out',
-                            }} />
+                                height: '100%', borderRadius: 99,
+                                background: isSuccess ? '#22c55e' : 'var(--color-dark)',
+                                width: isSuccess ? '100%' : `${progress}%`,
+                                transition: 'width 0.7s ease-out',
+                            }}/>
                         </div>
                     </div>
                 )}
 
-                {/* Success bar */}
-                {isSuccess && (
-                    <div style={{ marginBottom: 8 }}>
-                        <div style={{ width: '100%', background: '#dcfce7', height: 5, borderRadius: 99, overflow: 'hidden' }}>
-                            <div style={{ height: '100%', background: '#22c55e', width: '100%', borderRadius: 99 }} />
-                        </div>
-                        <p style={{ fontSize: 12, color: 'var(--color-sec)', textAlign: 'center', marginTop: 12 }}>
-                            Downloading…
-                        </p>
-                    </div>
-                )}
-
-                {/* Error detail + buttons */}
-                {isError && (
-                    <div>
-                        {errorMsg && (
-                            <div style={{
-                                background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 10,
-                                padding: '10px 12px', fontSize: 12, color: '#f87171',
-                                fontFamily: 'monospace', wordBreak: 'break-all', marginBottom: 16,
-                            }}>
-                                {errorMsg}
-                            </div>
-                        )}
-                        <div style={{ display: 'flex', gap: 8 }}>
-                            <button
-                                onClick={runExport}
-                                style={{
-                                    flex: 1, padding: '10px 0', background: 'var(--color-dark)', color: 'var(--color-dark-fg)',
-                                    border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 500,
-                                    cursor: 'pointer', fontFamily: 'Inter, sans-serif',
-                                }}
-                            >
-                                Try Again
-                            </button>
-                            <button
-                                onClick={onClose}
-                                style={{
-                                    flex: 1, padding: '10px 0', background: 'var(--color-bg)', color: 'var(--color-text)',
-                                    border: '1px solid var(--color-border)', borderRadius: 10, fontSize: 13,
-                                    cursor: 'pointer', fontFamily: 'Inter, sans-serif',
-                                }}
-                            >
-                                Cancel
-                            </button>
-                        </div>
-                    </div>
-                )}
-
-                {/* Cancel while loading */}
+                {/* Stage list */}
                 {isLoading && (
+                    <div style={{
+                        margin: '0 24px 20px',
+                        background: 'var(--color-bg)',
+                        border: '1px solid var(--color-border)',
+                        borderRadius: 14,
+                        overflow: 'hidden',
+                    }}>
+                        {STAGES.map((s, i) => {
+                            const isCurrent = s.pct === progress;
+                            const isDone = s.pct < progress;
+                            return (
+                                <div key={i} style={{
+                                    display: 'flex', alignItems: 'center', gap: 10,
+                                    padding: '8px 12px',
+                                    borderBottom: i < STAGES.length - 1 ? '1px solid var(--color-border)' : 'none',
+                                    background: isCurrent ? 'var(--color-card)' : 'transparent',
+                                    transition: 'background 0.3s',
+                                }}>
+                                    <div style={{
+                                        width: 22, height: 22, borderRadius: 7, flexShrink: 0,
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        fontSize: 11,
+                                        background: isDone ? 'rgba(34,197,94,0.12)' : isCurrent ? 'var(--color-border)' : 'transparent',
+                                        border: isDone ? '1px solid rgba(34,197,94,0.3)' : isCurrent ? '1px solid var(--color-border)' : 'none',
+                                    }}>
+                                        {isDone
+                                            ? <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="3" strokeLinecap="round"><path d="M5 13l4 4L19 7"/></svg>
+                                            : isCurrent
+                                                ? <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--color-muted)" strokeWidth="2" strokeLinecap="round" style={{ animation: 'em-spin 1.1s linear infinite' }}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                                                : <span style={{ fontSize: 9, opacity: 0.35 }}>{s.icon}</span>
+                                        }
+                                    </div>
+                                    <span style={{
+                                        fontSize: 12,
+                                        color: isDone ? 'var(--color-muted)' : isCurrent ? 'var(--color-text)' : 'var(--color-muted)',
+                                        fontWeight: isCurrent ? 500 : 400,
+                                        opacity: (!isDone && !isCurrent) ? 0.5 : 1,
+                                        transition: 'all 0.3s',
+                                    }}>{s.msg}</span>
+                                    {isCurrent && (
+                                        <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--color-muted)', fontFamily: 'monospace' }}>{s.pct}%</span>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+
+                {/* Error detail */}
+                {isError && errorMsg && (
+                    <div style={{ margin: '0 24px 16px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 10, padding: '10px 12px', fontSize: 12, color: '#f87171', fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                        {errorMsg}
+                    </div>
+                )}
+
+                {/* Footer actions */}
+                <div style={{ padding: '0 24px 24px', display: 'flex', gap: 8 }}>
+                    {isError && (
+                        <button onClick={runExport} style={{ flex: 1, padding: '11px 0', background: 'var(--color-dark)', color: 'var(--color-dark-fg)', border: 'none', borderRadius: 12, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
+                            Try Again
+                        </button>
+                    )}
                     <button
                         onClick={onClose}
+                        disabled={isLoading}
                         style={{
-                            display: 'block', width: '100%', marginTop: 14,
-                            padding: '8px 0', background: 'none', border: 'none',
-                            fontSize: 12, color: '#a3a3a3', cursor: 'pointer',
+                            flex: isError ? 1 : undefined, width: isError ? undefined : '100%',
+                            padding: '11px 0', background: isError ? 'var(--color-bg)' : 'none',
+                            border: isError ? '1px solid var(--color-border)' : 'none',
+                            borderRadius: 12, fontSize: isLoading ? 12 : 13,
+                            color: isLoading ? 'var(--color-muted)' : 'var(--color-text)',
+                            cursor: isLoading ? 'default' : 'pointer',
                             fontFamily: 'Inter, sans-serif',
+                            opacity: isLoading ? 0.5 : 1,
                         }}
                     >
-                        Cancel
+                        {isLoading ? 'Please wait…' : isError ? 'Cancel' : 'Close'}
                     </button>
-                )}
+                </div>
             </div>
         </div>
     );
