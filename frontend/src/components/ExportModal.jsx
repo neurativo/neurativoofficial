@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { CheckCircle2, AlertCircle, Loader2, Check } from 'lucide-react';
 import api from '../lib/api';
 
 const STAGES = [
@@ -125,22 +126,9 @@ export default function ExportModal({ lectureId, onClose, onStart }) {
                         transition: 'all 0.4s',
                         animation: isLoading ? 'em-pulse 2s infinite' : 'none',
                     }}>
-                        {isLoading && (
-                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-text)" strokeWidth="2" strokeLinecap="round"
-                                style={{ animation: 'em-spin 1.1s linear infinite' }}>
-                                <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-                            </svg>
-                        )}
-                        {isSuccess && (
-                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M5 13l4 4L19 7"/>
-                            </svg>
-                        )}
-                        {isError && (
-                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round">
-                                <circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12"/><circle cx="12" cy="16" r="0.5" fill="#ef4444"/>
-                            </svg>
-                        )}
+                        {isLoading && <Loader2 size={22} color="var(--color-text)" style={{ animation: 'em-spin 1.1s linear infinite' }} />}
+                        {isSuccess && <CheckCircle2 size={22} color="#22c55e" />}
+                        {isError   && <AlertCircle  size={22} color="#ef4444" />}
                     </div>
 
                     <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--color-text)', letterSpacing: '-0.4px', marginBottom: 4 }}>
@@ -199,9 +187,9 @@ export default function ExportModal({ lectureId, onClose, onStart }) {
                                         border: isDone ? '1px solid rgba(34,197,94,0.3)' : isCurrent ? '1px solid var(--color-border)' : 'none',
                                     }}>
                                         {isDone
-                                            ? <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="3" strokeLinecap="round"><path d="M5 13l4 4L19 7"/></svg>
+                                            ? <Check size={10} color="#22c55e" strokeWidth={3} />
                                             : isCurrent
-                                                ? <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--color-muted)" strokeWidth="2" strokeLinecap="round" style={{ animation: 'em-spin 1.1s linear infinite' }}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                                                ? <Loader2 size={10} color="var(--color-muted)" style={{ animation: 'em-spin 1.1s linear infinite' }} />
                                                 : <span style={{ fontSize: 9, opacity: 0.35 }}>{s.icon}</span>
                                         }
                                     </div>
