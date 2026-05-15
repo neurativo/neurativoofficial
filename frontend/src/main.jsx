@@ -57,13 +57,24 @@ function SessionHeartbeat() {
     return null;
 }
 
-// ─── Section redirect — /features, /pricing etc → landing page + scroll ─────
+// ─── Section pages — /features, /pricing etc → full landing page + scroll ────
+// Renders the actual LandingPage so Google indexes real content at each URL.
+// Scrolls to the matching section after mount (instant, no flash).
 function SectionRedirect({ sectionId }) {
-    const navigate = useNavigate();
+    const { isLoaded, user: clerkUser } = useUser();
+    const user = isLoaded && clerkUser
+        ? { id: clerkUser.id, email: clerkUser.primaryEmailAddress?.emailAddress }
+        : null;
     React.useEffect(() => {
-        navigate('/', { replace: true, state: { scrollTo: sectionId } });
-    }, []);
-    return null;
+        const tryScroll = () => {
+            const el = document.getElementById(sectionId);
+            if (el) el.scrollIntoView({ behavior: 'instant' });
+        };
+        tryScroll();
+        const t = setTimeout(tryScroll, 350);
+        return () => clearTimeout(t);
+    }, [sectionId]);
+    return <LandingPage user={user} />;
 }
 
 // ─── Route guard ────────────────────────────────────────────────────────────
