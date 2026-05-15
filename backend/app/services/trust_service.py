@@ -2185,6 +2185,11 @@ For each concept in the inventory generate a card:
     null if not applicable.
 
   examples:
+    PLAIN STRINGS ONLY. Each example must be a plain string.
+    NOT objects, NOT dicts, NOT structured JSON.
+    Just the raw example text the professor used, as a string.
+    Correct:   ["item = 'orange'", "print('hello ' + name)"]
+    WRONG:     [{"concept": "hello", "role": "example", ...}]
     Include the professor's examples but consolidate intelligently:
     1. Keep distinct, genuinely different examples as separate items (max 4)
     2. If the professor listed multiple fragments of the SAME illustration
@@ -2626,16 +2631,30 @@ def _normalise_generated_card(card: dict, inventory_item: dict) -> dict:
     source_start = _normalise_ws(str(card.get("source_start") or inventory_item.get("start_time") or ""))
     source_end = _normalise_ws(str(card.get("source_end") or inventory_item.get("end_time") or ""))
     definitions = card.get("key_definitions") if isinstance(card.get("key_definitions"), list) else []
-    examples = card.get("examples") if isinstance(card.get("examples"), list) else []
+    raw_examples = card.get("examples") if isinstance(card.get("examples"), list) else []
+    # Safety flatten: GPT sometimes returns structured dicts instead of plain strings.
+    # Extract the most useful text field from any dict examples.
+    flat_examples = []
+    for ex in raw_examples:
+        if isinstance(ex, str):
+            flat_examples.append(ex)
+        elif isinstance(ex, dict):
+            text = str(
+                ex.get("concept") or ex.get("example") or
+                ex.get("definition") or ex.get("transcript_evidence") or
+                ex.get("text") or ""
+            )
+            if text and len(text.split()) >= 2:
+                flat_examples.append(text)
     return {
         "concept_name": concept_name,
         "summary": _normalise_ws(card.get("summary", "")),
         "key_distinction": card.get("key_distinction") or None,
         "exam_trap": card.get("exam_trap") or None,
         "examples": _clean_examples([
-            _normalise_ws(str(item))
-            for item in examples
-            if _normalise_ws(str(item))
+            _normalise_ws(item)
+            for item in flat_examples
+            if _normalise_ws(item)
         ]),
         "key_definitions": [
             {
@@ -3942,7 +3961,22 @@ def enrich_lecture_payload(
         if strict_validation:
             raise
         validation_error = str(exc)
-        concept_note_cards = []
+        # Structure-only fallback: keep any card that has minimum required fields
+        # rather than wiping all cards due to e.g. a grounding score failure on
+        # cards with malformed examples. This preserves cards the user can see.
+        cards_before = len(concept_note_cards or [])
+        concept_note_cards = [
+            card for card in (concept_note_cards or [])
+            if isinstance(card, dict)
+            and card.get("concept_name")
+            and (card.get("summary") or card.get("key_definitions"))
+            and not str(card.get("concept_name", "")).startswith("__")
+        ]
+        print(
+            f"[cards] sanitize fallback input={cards_before} "
+            f"output={len(concept_note_cards)} "
+            f"(validation error: {validation_error})"
+        )
     claim_registry = build_claim_registry(grounded_notes)
     concept_entities = build_concept_entities(concept_sections, claim_registry)
     concept_graph = build_concept_relationship_graph(concept_entities, claim_registry)
