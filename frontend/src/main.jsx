@@ -26,6 +26,10 @@ import AdminAnnouncements from './pages/admin/AdminAnnouncements.jsx';
 import AdminTeams from './pages/admin/AdminTeams.jsx';
 import AdminTeamDetail from './pages/admin/AdminTeamDetail.jsx';
 import CreditsPage from './pages/CreditsPage.jsx';
+import FeaturesPage from './pages/FeaturesPage.jsx';
+import PricingPage from './pages/PricingPage.jsx';
+import FAQPage from './pages/FAQPage.jsx';
+import AboutPage from './pages/AboutPage.jsx';
 import { ToastProvider } from './components/Toast.jsx';
 import TeamsApp from './TeamsApp.jsx';
 import './index.css';
@@ -96,11 +100,11 @@ function Root() {
     return (
         <Routes>
             <Route path="/"               element={<LandingPage user={user} />} />
-            <Route path="/features"       element={<SectionRedirect sectionId="features" />} />
+            <Route path="/features"       element={<FeaturesPage />} />
             <Route path="/how-it-works"   element={<SectionRedirect sectionId="how-it-works" />} />
-            <Route path="/pricing"        element={<SectionRedirect sectionId="pricing" />} />
-            <Route path="/faq"            element={<SectionRedirect sectionId="faq" />} />
-            <Route path="/about"          element={<SectionRedirect sectionId="about" />} />
+            <Route path="/pricing"        element={<PricingPage />} />
+            <Route path="/faq"            element={<FAQPage />} />
+            <Route path="/about"          element={<AboutPage />} />
             <Route path="/share/:token"   element={<ShareView />} />
             <Route path="/terms"          element={<TermsOfService />} />
             <Route path="/privacy"        element={<PrivacyPolicy />} />
