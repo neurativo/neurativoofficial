@@ -4,7 +4,7 @@ import {
     ArrowLeft, Download, Share2, FileText, MessageCircle, CreditCard,
     HelpCircle, BookOpen, BarChart2, Clock, AlignLeft, Star, Minimize2,
     Globe, Eye, Monitor, Send, Shield, ChevronLeft, ChevronRight,
-    Shuffle, Copy, X, Zap, RefreshCw,
+    Shuffle, Copy, X,
 } from 'lucide-react';
 import api from '../lib/api';
 import { useToast } from '../components/Toast';
