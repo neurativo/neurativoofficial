@@ -78,27 +78,49 @@ const CSS = `
   .lv-search-input::placeholder { color: ${C.muted}; }
   .lv-seg-highlight { background: #fef08a; border-radius: 2px; }
 
-  /* Summary cards */
-  .lv-sum-card { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 12px; padding: 16px; margin-bottom: 10px; }
-  .lv-sum-title { font-size: 13px; font-weight: 600; color: ${C.text}; letter-spacing: -0.2px; margin-bottom: 8px; }
-  .lv-sum-lead { font-size: 13px; color: ${C.sec}; line-height: 1.65; margin-bottom: 8px; }
-  .lv-sum-prose { font-size: 12px; color: ${C.muted}; line-height: 1.65; margin-bottom: 8px; }
-  .lv-sum-highlights { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
-  .lv-sum-highlight { font-size: 12px; color: ${C.text}; background: #f8f6f3; border-left: 2px solid ${C.borderHov}; padding: 6px 10px; border-radius: 0 6px 6px 0; line-height: 1.5; }
-  .lv-sum-concepts { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
-  .lv-sum-concept { font-size: 11px; color: ${C.sec}; background: ${C.bg}; border: 1px solid ${C.border}; border-radius: 5px; padding: 2px 7px; }
-  .lv-sum-examples { display: flex; flex-direction: column; gap: 3px; }
-  .lv-sum-example { font-size: 12px; color: ${C.sec}; padding-left: 12px; position: relative; line-height: 1.5; }
-  .lv-sum-example::before { content: '→'; position: absolute; left: 0; color: ${C.muted}; }
+  /* Concept cards — modern borderless shadow design */
+  @keyframes lv-card-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  .lv-sum-card {
+    background: ${C.card}; border: 1px solid ${C.border}; border-radius: 16px;
+    margin-bottom: 12px; overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04);
+    animation: lv-card-in 0.22s ease both;
+    transition: box-shadow 0.2s;
+  }
+  .dark .lv-sum-card { box-shadow: 0 2px 12px rgba(0,0,0,0.35); }
+  .lv-sum-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.09), 0 8px 24px rgba(0,0,0,0.07); }
+  .dark .lv-sum-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+  /* Stagger animation for multiple cards */
+  .lv-sum-card:nth-child(1) { animation-delay: 0ms; }
+  .lv-sum-card:nth-child(2) { animation-delay: 40ms; }
+  .lv-sum-card:nth-child(3) { animation-delay: 80ms; }
+  .lv-sum-card:nth-child(4) { animation-delay: 120ms; }
+  .lv-sum-card:nth-child(n+5) { animation-delay: 160ms; }
 
-  .lv-sum-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
-  .lv-sum-badge { font-size: 10px; font-weight: 600; color: #166534; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 999px; padding: 3px 7px; }
-  .lv-sum-citations { margin-top: 10px; font-size: 10px; color: ${C.muted}; display: flex; flex-wrap: wrap; gap: 6px; }
-  .lv-sum-citation { padding: 2px 6px; border-radius: 999px; border: 1px solid ${C.border}; background: ${C.bg}; }
-  .lv-sum-group { margin-top: 12px; }
-  .lv-sum-group-label { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: ${C.muted}; margin-bottom: 6px; }
-  .lv-sum-group-list { display: flex; flex-direction: column; gap: 6px; }
-  .lv-sum-group-item { font-size: 12px; color: ${C.sec}; line-height: 1.6; padding: 8px 10px; border-radius: 10px; background: ${C.bg}; border: 1px solid ${C.border}; }
+  /* Card section row — used for each content block */
+  .lv-cs { border-top: 1px solid ${C.border}; padding: 12px 16px; }
+  /* Pill chip label inside sections */
+  .lv-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 9px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: ${C.muted}; background: rgba(0,0,0,0.05); border-radius: 99px; padding: 3px 9px; margin-bottom: 9px; }
+  .dark .lv-chip { background: rgba(255,255,255,0.08); }
+  .lv-chip-amber { color: #b45309; background: #fef3c7; }
+  .dark .lv-chip-amber { color: #fbbf24; background: rgba(245,158,11,0.15); }
+  .lv-chip-green { color: #15803d; background: #dcfce7; }
+  .dark .lv-chip-green { color: #6ee7b7; background: rgba(16,185,129,0.15); }
+
+  /* VS comparison grid */
+  .lv-vs-grid { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: stretch; }
+  .lv-vs-cell { padding: 9px 11px; border: 1px solid ${C.border}; border-radius: 10px; background: ${C.bg}; font-size: 12px; color: ${C.sec}; line-height: 1.55; }
+  .lv-vs-badge { align-self: center; display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; background: ${C.bg}; border: 1px solid ${C.border}; font-size: 8px; font-weight: 800; color: ${C.muted}; flex-shrink: 0; }
+  .lv-vs-label { font-size: 9px; font-weight: 700; color: var(--color-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 5px; }
+
+  /* Examples list */
+  .lv-ex-row { display: flex; align-items: baseline; gap: 7px; font-size: 12px; color: ${C.sec}; line-height: 1.6; margin-bottom: 4px; }
+  .lv-ex-arrow { color: #1d9e75; font-weight: 700; flex-shrink: 0; font-size: 11px; }
+
+  /* Two-col bottom row (remember / mistake) */
+  .lv-bottom-grid { display: grid; gap: 8px; }
+  .lv-bottom-cell { padding: 10px 12px; border-radius: 11px; font-size: 12px; line-height: 1.6; }
+
   .lv-trust-note { font-size: 12px; color: ${C.muted}; margin: 0 0 14px; line-height: 1.55; }
   .lv-aid-panel { margin-top: 16px; background: ${C.card}; border: 1px dashed ${C.borderHov}; border-radius: 12px; padding: 14px 16px; }
   .lv-aid-title { font-size: 12px; font-weight: 600; color: ${C.text}; margin-bottom: 6px; }
@@ -359,30 +381,33 @@ function SummaryCard({ section, accent, index, total, topic }) {
     const highlights = section.highlights || [];
 
     return (
-        <div className="lv-sum-card summary-card-enter"
-            style={{ borderLeft: `3px solid ${a.border}`, padding: 0, overflow: 'hidden' }}>
+        <div className="lv-sum-card">
 
-            {/* Header */}
+            {/* ── Header ── */}
             <div style={{
-                padding: '10px 14px 9px',
-                borderBottom: '1px solid var(--color-border)',
-                background: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.018)',
-                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '14px 16px 12px',
+                display: 'flex', alignItems: 'center', gap: 10,
             }}>
+                {/* Accent dot */}
+                <div style={{
+                    width: 8, height: 8, borderRadius: '50%',
+                    background: a.border, flexShrink: 0,
+                    boxShadow: `0 0 0 3px ${isDark ? a.bg + '55' : a.bg}`,
+                }} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{
-                        fontSize: 14, fontWeight: 700, color: a.title,
+                        fontSize: 13, fontWeight: 700, color: a.title,
                         letterSpacing: '-0.2px', lineHeight: 1.3,
                         display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap',
                     }}>
                         {section.title}
                         {section.verification_status === 'supported' && (
                             <span style={{
-                                fontSize: 9, fontWeight: 600, padding: '2px 6px',
+                                fontSize: 9, fontWeight: 600, padding: '2px 7px',
                                 background: isDark ? 'rgba(16,185,129,0.12)' : '#f0fdf4',
                                 border: isDark ? '1px solid rgba(16,185,129,0.25)' : '1px solid #bbf7d0',
                                 borderRadius: 999, color: isDark ? '#6ee7b7' : '#15803d',
-                                letterSpacing: '0.3px', fontFamily: 'inherit',
+                                letterSpacing: '0.3px',
                             }}>grounded</span>
                         )}
                     </div>
@@ -390,139 +415,139 @@ function SummaryCard({ section, accent, index, total, topic }) {
                 {total > 1 && (
                     <span style={{
                         fontFamily: "'JetBrains Mono', monospace",
-                        fontSize: 10, color: 'var(--color-muted)', flexShrink: 0,
+                        fontSize: 9, color: 'var(--color-muted)', flexShrink: 0,
+                        background: 'var(--color-bg)', border: '1px solid var(--color-border)',
+                        borderRadius: 6, padding: '2px 6px',
                     }}>{index + 1}/{total}</span>
                 )}
             </div>
 
-            <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 9 }}>
-
-                {/* Highlights */}
-                {highlights.length > 0 && highlights.map((h, i) => (
-                    <div key={i} style={{
-                        background: isDark ? `${a.bg}22` : a.bg,
-                        borderLeft: `2px solid ${a.border}`,
-                        borderRadius: '0 7px 7px 0',
-                        padding: '7px 10px',
+            {/* ── Highlights (accent quote) ── */}
+            {highlights.length > 0 && highlights.map((h, i) => (
+                <div key={i} className="lv-cs" style={{ borderTop: i === 0 ? '1px solid var(--color-border)' : 'none', paddingTop: i === 0 ? 12 : 4 }}>
+                    <div style={{
+                        background: isDark ? `${a.bg}33` : a.bg,
+                        borderLeft: `3px solid ${a.border}`,
+                        borderRadius: '0 8px 8px 0',
+                        padding: '8px 12px',
                         fontSize: 12, color: a.title,
-                        lineHeight: 1.6, fontStyle: 'italic',
+                        lineHeight: 1.65, fontStyle: 'italic',
                     }}>
                         {renderDomainContent(h, topic) || h}
                     </div>
-                ))}
+                </div>
+            ))}
 
-                {/* Lead + prose */}
-                {core && (
-                    <div style={{ fontSize: 13, color: 'var(--color-sec)', lineHeight: 1.65 }}>
-                        {renderDomainContent(core, topic) || core}
-                    </div>
-                )}
-                {prose && (
-                    <div style={{ fontSize: 12, color: 'var(--color-muted)', lineHeight: 1.65 }}>
-                        {renderDomainContent(prose, topic) || prose}
-                    </div>
-                )}
+            {/* ── Overview (lead + prose) ── */}
+            {(core || prose) && (
+                <div className="lv-cs">
+                    <div className="lv-chip">Overview</div>
+                    {core && (
+                        <div style={{ fontSize: 13, color: 'var(--color-sec)', lineHeight: 1.7, marginBottom: prose ? 6 : 0 }}>
+                            {renderDomainContent(core, topic) || core}
+                        </div>
+                    )}
+                    {prose && (
+                        <div style={{ fontSize: 12, color: 'var(--color-muted)', lineHeight: 1.65 }}>
+                            {renderDomainContent(prose, topic) || prose}
+                        </div>
+                    )}
+                </div>
+            )}
 
-                {/* Concepts */}
-                {concepts.length > 0 && (
+            {/* ── Key Concepts (tag cloud) ── */}
+            {concepts.length > 0 && (
+                <div className="lv-cs">
+                    <div className="lv-chip">Concepts</div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
                         {concepts.map((c, i) => (
                             <span key={i} style={{
-                                fontSize: 11, padding: '2px 8px',
-                                background: isDark ? `${a.bg}33` : a.bg,
+                                fontSize: 11, padding: '3px 9px',
+                                background: isDark ? `${a.bg}44` : a.bg,
                                 border: `1px solid ${a.border}`,
-                                borderRadius: 5, color: a.title, fontWeight: 500,
+                                borderRadius: 6, color: a.title, fontWeight: 500,
                             }}>{renderDomainContent(c, topic) || c}</span>
                         ))}
                     </div>
-                )}
+                </div>
+            )}
 
-                {/* Distinctions */}
-                {distinctions.length > 0 && (
-                    <div>
-                        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.8px',
-                            textTransform: 'uppercase', color: 'var(--color-muted)', marginBottom: 5 }}>
-                            Key Distinctions
-                        </div>
+            {/* ── Key Distinctions ── */}
+            {distinctions.length > 0 && (
+                <div className="lv-cs">
+                    <div className="lv-chip">Key Distinctions</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                         {distinctions.map((item, i) => (
                             <div key={i} style={{
-                                fontSize: 12, color: 'var(--color-sec)', lineHeight: 1.55,
-                                padding: '6px 9px', marginBottom: 4,
-                                background: isDark ? 'rgba(255,255,255,0.03)' : 'var(--color-bg)',
-                                border: '1px solid var(--color-border)', borderRadius: 7,
+                                fontSize: 12, color: 'var(--color-sec)', lineHeight: 1.6,
+                                padding: '7px 10px',
+                                background: 'var(--color-bg)',
+                                border: '1px solid var(--color-border)', borderRadius: 8,
                             }}>
                                 {renderDomainContent(item, topic) || item}
                             </div>
                         ))}
                     </div>
-                )}
+                </div>
+            )}
 
-                {/* Exam Traps */}
-                {traps.length > 0 && (
-                    <div style={{
-                        background: isDark ? 'rgba(245,158,11,0.08)' : '#fffbeb',
-                        border: isDark ? '1px solid rgba(245,158,11,0.2)' : '1px solid #fde68a',
-                        borderLeft: '3px solid #f59e0b',
-                        borderRadius: 8, padding: '8px 11px',
-                    }}>
-                        <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.8px',
-                            textTransform: 'uppercase',
-                            color: isDark ? '#fbbf24' : '#b45309',
-                            marginBottom: 5, display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <span>⚠</span> Exam Traps
-                        </div>
+            {/* ── Exam Traps ── */}
+            {traps.length > 0 && (
+                <div className="lv-cs" style={{
+                    background: isDark ? 'rgba(245,158,11,0.06)' : '#fffdf5',
+                }}>
+                    <div className="lv-chip lv-chip-amber">⚠ Exam Traps</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                         {traps.map((item, i) => (
-                            <div key={i} style={{ fontSize: 12, color: isDark ? '#fcd34d' : '#78350f',
-                                lineHeight: 1.55, marginBottom: i < traps.length - 1 ? 4 : 0 }}>
+                            <div key={i} style={{
+                                fontSize: 12, color: isDark ? '#fcd34d' : '#78350f',
+                                lineHeight: 1.6,
+                                display: 'flex', alignItems: 'baseline', gap: 6,
+                            }}>
+                                <span style={{ flexShrink: 0, fontSize: 10 }}>•</span>
                                 {renderDomainContent(item, topic) || item}
                             </div>
                         ))}
                     </div>
-                )}
+                </div>
+            )}
 
-                {/* Examples */}
-                {examples.length > 0 && (
-                    <div style={{ borderLeft: '2px solid #5dcaa5', paddingLeft: 10 }}>
-                        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.8px',
-                            textTransform: 'uppercase', color: 'var(--color-muted)', marginBottom: 4 }}>
-                            Examples
+            {/* ── Examples ── */}
+            {examples.length > 0 && (
+                <div className="lv-cs">
+                    <div className="lv-chip lv-chip-green">Examples</div>
+                    {examples.map((e, i) => (
+                        <div key={i} className="lv-ex-row">
+                            <span className="lv-ex-arrow">→</span>
+                            {renderDomainContent(e, topic) || e}
                         </div>
-                        {examples.map((e, i) => (
-                            <div key={i} style={{ fontSize: 12, color: 'var(--color-sec)',
-                                lineHeight: 1.55, marginBottom: 2 }}>
-                                <span style={{ color: '#1d9e75', fontWeight: 600, marginRight: 4 }}>→</span>
-                                {renderDomainContent(e, topic) || e}
-                            </div>
-                        ))}
-                    </div>
-                )}
+                    ))}
+                </div>
+            )}
 
-                {/* Definitions */}
-                {definitions.length > 0 && (
-                    <div>
-                        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.8px',
-                            textTransform: 'uppercase', color: 'var(--color-muted)', marginBottom: 5 }}>
-                            Key Definitions
-                        </div>
+            {/* ── Key Definitions ── */}
+            {definitions.length > 0 && (
+                <div className="lv-cs">
+                    <div className="lv-chip">Definitions</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                         {definitions.map((item, i) => (
-                            <div key={i} style={{ fontSize: 12, color: 'var(--color-sec)',
-                                lineHeight: 1.55, marginBottom: 4,
-                                padding: '5px 9px',
-                                background: isDark ? 'rgba(255,255,255,0.03)' : 'var(--color-bg)',
-                                border: '1px solid var(--color-border)', borderRadius: 7,
+                            <div key={i} style={{
+                                fontSize: 12, color: 'var(--color-sec)', lineHeight: 1.6,
+                                padding: '7px 10px',
+                                background: 'var(--color-bg)',
+                                border: '1px solid var(--color-border)', borderRadius: 8,
                             }}>
                                 {renderDomainContent(typeof item === 'string' ? item : `${item.term || ''}: ${item.definition || ''}`, topic)}
                             </div>
                         ))}
                     </div>
-                )}
+                </div>
+            )}
 
-            </div>
-
-            {/* Citations footer */}
+            {/* ── Citations footer ── */}
             {section.citations?.length > 0 && (
                 <div style={{
-                    padding: '6px 14px',
+                    padding: '8px 16px',
                     borderTop: '1px solid var(--color-border)',
                     display: 'flex', gap: 5, flexWrap: 'wrap',
                 }}>
@@ -615,23 +640,21 @@ function ConceptNoteCard({ card, accent, index, total, topic }) {
         }
     }
 
-    const hasTwoColBottom = remember || mistake;
-
     return (
-        <div className="lv-sum-card summary-card-enter"
-            style={{ borderLeft: `3px solid ${a.border}`, padding: 0, overflow: 'hidden' }}>
+        <div className="lv-sum-card">
 
-            {/* Header */}
-            <div style={{
-                padding: '12px 14px 10px',
-                borderBottom: '1px solid var(--color-border)',
-                background: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.018)',
-                display: 'flex', alignItems: 'flex-start', gap: 8,
-            }}>
+            {/* ── Header ── */}
+            <div style={{ padding: '14px 16px 12px', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                {/* Accent dot */}
+                <div style={{
+                    width: 8, height: 8, borderRadius: '50%',
+                    background: a.border, flexShrink: 0, marginTop: 4,
+                    boxShadow: `0 0 0 3px ${isDark ? a.bg + '55' : a.bg}`,
+                }} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{
-                        fontSize: 15, fontWeight: 700, color: a.title,
-                        letterSpacing: '-0.3px', lineHeight: 1.25,
+                        fontSize: 14, fontWeight: 700, color: a.title,
+                        letterSpacing: '-0.25px', lineHeight: 1.25,
                         marginBottom: card.summary ? 6 : 0,
                     }}>
                         {card.concept_name || ''}
@@ -645,198 +668,159 @@ function ConceptNoteCard({ card, accent, index, total, topic }) {
                 {total > 1 && (
                     <span style={{
                         fontFamily: "'JetBrains Mono', monospace",
-                        fontSize: 10, color: 'var(--color-muted)',
-                        flexShrink: 0, paddingTop: 2,
+                        fontSize: 9, color: 'var(--color-muted)',
+                        flexShrink: 0,
+                        background: 'var(--color-bg)', border: '1px solid var(--color-border)',
+                        borderRadius: 6, padding: '2px 6px',
                     }}>{index + 1}/{total}</span>
                 )}
             </div>
 
-            {/* Body */}
-            <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-
-                {/* Distinction — two-column versus */}
-                {distLeft && distRight && (
-                    <div>
-                        <div style={{
-                            fontSize: 9, fontWeight: 700, letterSpacing: '0.8px',
-                            textTransform: 'uppercase', color: 'var(--color-muted)', marginBottom: 6,
-                        }}>Key Distinction</div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 8, alignItems: 'stretch' }}>
-                            <div style={{
-                                padding: '8px 10px',
-                                background: isDark ? 'rgba(255,255,255,0.04)' : '#f8fafc',
-                                border: '1px solid var(--color-border)',
-                                borderRadius: 8, fontSize: 12, lineHeight: 1.5,
-                                color: 'var(--color-sec)',
-                            }}>
-                                {distLeftLabel && (
-                                    <div style={{ fontSize: 10, fontWeight: 700, color: a.title,
-                                        textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>
-                                        {distLeftLabel}
-                                    </div>
-                                )}
-                                {renderDomainContent(distLeft, topic) || distLeft}
-                            </div>
-                            <div style={{ alignSelf: 'center', fontSize: 10, fontWeight: 800,
-                                color: 'var(--color-muted)', padding: '0 2px' }}>VS</div>
-                            <div style={{
-                                padding: '8px 10px',
-                                background: isDark ? 'rgba(255,255,255,0.04)' : '#f8fafc',
-                                border: '1px solid var(--color-border)',
-                                borderRadius: 8, fontSize: 12, lineHeight: 1.5,
-                                color: 'var(--color-sec)',
-                            }}>
-                                {distRightLabel && (
-                                    <div style={{ fontSize: 10, fontWeight: 700, color: a.title,
-                                        textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>
-                                        {distRightLabel}
-                                    </div>
-                                )}
-                                {renderDomainContent(distRight, topic) || distRight}
-                            </div>
+            {/* ── Key Distinction (VS grid) ── */}
+            {distLeft && distRight && (
+                <div className="lv-cs">
+                    <div className="lv-chip">Key Distinction</div>
+                    <div className="lv-vs-grid">
+                        <div className="lv-vs-cell">
+                            {distLeftLabel && <div className="lv-vs-label" style={{ color: a.title }}>{distLeftLabel}</div>}
+                            {renderDomainContent(distLeft, topic) || distLeft}
+                        </div>
+                        <div className="lv-vs-badge">VS</div>
+                        <div className="lv-vs-cell">
+                            {distRightLabel && <div className="lv-vs-label" style={{ color: a.title }}>{distRightLabel}</div>}
+                            {renderDomainContent(distRight, topic) || distRight}
                         </div>
                     </div>
-                )}
+                </div>
+            )}
 
-                {/* Exam Trap */}
-                {(trapMisconception || trapCorrect) && (
-                    <div style={{
-                        background: isDark ? 'rgba(245,158,11,0.08)' : '#fffbeb',
-                        border: isDark ? '1px solid rgba(245,158,11,0.2)' : '1px solid #fde68a',
-                        borderLeft: '3px solid #f59e0b',
-                        borderRadius: 8, padding: '9px 11px',
-                    }}>
+            {/* ── Exam Trap ── */}
+            {(trapMisconception || trapCorrect) && (
+                <div className="lv-cs" style={{
+                    background: isDark ? 'rgba(245,158,11,0.06)' : '#fffdf5',
+                }}>
+                    <div className="lv-chip lv-chip-amber">⚠ Exam Trap</div>
+                    {trapMisconception && (
                         <div style={{
-                            fontSize: 9, fontWeight: 800, letterSpacing: '0.8px',
-                            textTransform: 'uppercase',
-                            color: isDark ? '#fbbf24' : '#b45309',
-                            marginBottom: 6, display: 'flex', alignItems: 'center', gap: 5,
+                            fontSize: 12, color: isDark ? '#fcd34d' : '#92400e',
+                            fontWeight: 600, lineHeight: 1.6,
+                            marginBottom: trapCorrect ? 6 : 0,
+                            display: 'flex', alignItems: 'baseline', gap: 5,
                         }}>
-                            <span>⚠</span> Exam Trap
+                            <span style={{ flexShrink: 0 }}>✗</span>
+                            {renderDomainContent(trapMisconception, topic) || trapMisconception}
                         </div>
-                        {trapMisconception && (
-                            <div style={{ fontSize: 12, color: isDark ? '#fcd34d' : '#92400e',
-                                fontWeight: 600, lineHeight: 1.55, marginBottom: trapCorrect ? 5 : 0 }}>
-                                ✗ {renderDomainContent(trapMisconception, topic) || trapMisconception}
-                            </div>
-                        )}
-                        {trapCorrect && (
-                            <div style={{ fontSize: 12, color: isDark ? '#6ee7b7' : '#065f46', lineHeight: 1.55 }}>
-                                ✓ {renderDomainContent(trapCorrect, topic) || trapCorrect}
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {/* Analogy */}
-                {analogy && (
-                    <div style={{
-                        background: isDark ? 'rgba(16,185,129,0.06)' : '#f0fdf4',
-                        border: isDark ? '1px solid rgba(16,185,129,0.15)' : '1px solid #bbf7d0',
-                        borderRadius: 8, padding: '8px 11px',
-                    }}>
+                    )}
+                    {trapCorrect && (
                         <div style={{
-                            fontSize: 9, fontWeight: 700, letterSpacing: '0.8px',
-                            textTransform: 'uppercase',
-                            color: isDark ? '#6ee7b7' : '#15803d', marginBottom: 4,
-                        }}>Real-World Analogy</div>
-                        <div style={{ fontSize: 12, color: isDark ? '#a7f3d0' : '#166534',
-                            lineHeight: 1.6, fontStyle: 'italic' }}>
-                            {renderDomainContent(analogy, topic) || analogy}
+                            fontSize: 12, color: isDark ? '#6ee7b7' : '#065f46', lineHeight: 1.6,
+                            display: 'flex', alignItems: 'baseline', gap: 5,
+                        }}>
+                            <span style={{ flexShrink: 0 }}>✓</span>
+                            {renderDomainContent(trapCorrect, topic) || trapCorrect}
                         </div>
-                    </div>
-                )}
+                    )}
+                </div>
+            )}
 
-                {/* Examples */}
-                {examples.length > 0 && (
-                    <div>
-                        <div style={{
-                            fontSize: 9, fontWeight: 700, letterSpacing: '0.8px',
-                            textTransform: 'uppercase', color: 'var(--color-muted)', marginBottom: 5,
-                        }}>Professor's Examples</div>
-                        <div style={{ borderLeft: '2px solid #5dcaa5', paddingLeft: 10,
-                            display: 'flex', flexDirection: 'column', gap: 3 }}>
-                            {examples.map((item, i) => (
-                                <div key={i} style={{ fontSize: 12, color: 'var(--color-sec)', lineHeight: 1.55 }}>
-                                    <span style={{ color: '#1d9e75', fontWeight: 600, marginRight: 4 }}>→</span>
-                                    {renderDomainContent(item, topic) || item}
-                                </div>
-                            ))}
+            {/* ── Analogy ── */}
+            {analogy && (
+                <div className="lv-cs" style={{
+                    background: isDark ? 'rgba(16,185,129,0.05)' : '#f6fef9',
+                }}>
+                    <div className="lv-chip lv-chip-green">Real-World Analogy</div>
+                    <div style={{ fontSize: 12, color: isDark ? '#a7f3d0' : '#166534',
+                        lineHeight: 1.65, fontStyle: 'italic' }}>
+                        {renderDomainContent(analogy, topic) || analogy}
+                    </div>
+                </div>
+            )}
+
+            {/* ── Examples ── */}
+            {examples.length > 0 && (
+                <div className="lv-cs">
+                    <div className="lv-chip lv-chip-green">Professor's Examples</div>
+                    {examples.map((item, i) => (
+                        <div key={i} className="lv-ex-row">
+                            <span className="lv-ex-arrow">→</span>
+                            {renderDomainContent(item, topic) || item}
                         </div>
-                    </div>
-                )}
+                    ))}
+                </div>
+            )}
 
-                {/* Key Definitions */}
-                {definitions.length > 0 && (
-                    <div>
-                        <div style={{
-                            fontSize: 9, fontWeight: 700, letterSpacing: '0.8px',
-                            textTransform: 'uppercase', color: 'var(--color-muted)', marginBottom: 5,
-                        }}>Key Definitions</div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                            {definitions.map((item, i) => (
-                                <div key={i} style={{
-                                    fontSize: 12, color: 'var(--color-sec)', lineHeight: 1.55,
-                                    padding: '6px 9px',
-                                    background: isDark ? 'rgba(255,255,255,0.03)' : 'var(--color-bg)',
-                                    border: '1px solid var(--color-border)', borderRadius: 7,
-                                }}>
-                                    {item.term && (
-                                        <span style={{ fontWeight: 600, color: 'var(--color-text)', marginRight: 4 }}>
-                                            {renderDomainContent(item.term, topic) || item.term}:
-                                        </span>
-                                    )}
-                                    {renderDomainContent(item.definition, topic) || item.definition}
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
-                {/* Remember + Mistake — two-column bottom row */}
-                {hasTwoColBottom && (
-                    <div style={{ display: 'grid', gridTemplateColumns: mistake && remember ? '1fr 1fr' : '1fr', gap: 8 }}>
-                        {remember && (
-                            <div style={{
-                                padding: '8px 10px',
-                                background: isDark ? 'rgba(16,185,129,0.05)' : '#f0fdf4',
-                                border: isDark ? '1px solid rgba(16,185,129,0.12)' : '1px solid #bbf7d0',
-                                borderRadius: 8,
+            {/* ── Key Definitions ── */}
+            {definitions.length > 0 && (
+                <div className="lv-cs">
+                    <div className="lv-chip">Definitions</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                        {definitions.map((item, i) => (
+                            <div key={i} style={{
+                                fontSize: 12, color: 'var(--color-sec)', lineHeight: 1.6,
+                                padding: '7px 10px',
+                                background: 'var(--color-bg)',
+                                border: '1px solid var(--color-border)', borderRadius: 8,
                             }}>
-                                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.8px',
+                                {item.term && (
+                                    <span style={{ fontWeight: 600, color: 'var(--color-text)', marginRight: 4 }}>
+                                        {renderDomainContent(item.term, topic) || item.term}:
+                                    </span>
+                                )}
+                                {renderDomainContent(item.definition, topic) || item.definition}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* ── Remember + Mistake ── */}
+            {(remember || mistake) && (
+                <div className="lv-cs">
+                    <div className="lv-bottom-grid" style={{
+                        gridTemplateColumns: remember && mistake ? '1fr 1fr' : '1fr',
+                    }}>
+                        {remember && (
+                            <div className="lv-bottom-cell" style={{
+                                background: isDark ? 'rgba(16,185,129,0.07)' : '#f0fdf4',
+                                border: isDark ? '1px solid rgba(16,185,129,0.15)' : '1px solid #bbf7d0',
+                            }}>
+                                <div style={{
+                                    fontSize: 9, fontWeight: 700, letterSpacing: '0.7px',
                                     textTransform: 'uppercase',
-                                    color: isDark ? '#6ee7b7' : '#15803d', marginBottom: 4 }}>Remember</div>
-                                <div style={{ fontSize: 11, color: isDark ? '#a7f3d0' : '#166534', lineHeight: 1.55 }}>
+                                    color: isDark ? '#6ee7b7' : '#15803d',
+                                    marginBottom: 5,
+                                }}>Remember</div>
+                                <div style={{ fontSize: 11, color: isDark ? '#a7f3d0' : '#166534', lineHeight: 1.6 }}>
                                     {renderDomainContent(remember, topic) || remember}
                                 </div>
                             </div>
                         )}
                         {mistake && (
-                            <div style={{
-                                padding: '8px 10px',
-                                background: isDark ? 'rgba(245,158,11,0.05)' : '#fffbeb',
-                                border: isDark ? '1px solid rgba(245,158,11,0.12)' : '1px solid #fde68a',
-                                borderRadius: 8,
+                            <div className="lv-bottom-cell" style={{
+                                background: isDark ? 'rgba(245,158,11,0.06)' : '#fffbeb',
+                                border: isDark ? '1px solid rgba(245,158,11,0.15)' : '1px solid #fde68a',
                             }}>
-                                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.8px',
+                                <div style={{
+                                    fontSize: 9, fontWeight: 700, letterSpacing: '0.7px',
                                     textTransform: 'uppercase',
-                                    color: isDark ? '#fbbf24' : '#b45309', marginBottom: 4 }}>Common Mistake</div>
-                                <div style={{ fontSize: 11, color: isDark ? '#fcd34d' : '#78350f', lineHeight: 1.55 }}>
+                                    color: isDark ? '#fbbf24' : '#b45309',
+                                    marginBottom: 5,
+                                }}>Common Mistake</div>
+                                <div style={{ fontSize: 11, color: isDark ? '#fcd34d' : '#78350f', lineHeight: 1.6 }}>
                                     {renderDomainContent(mistake, topic) || mistake}
                                 </div>
                             </div>
                         )}
                     </div>
-                )}
+                </div>
+            )}
 
-            </div>
-
-            {/* Footer: source timestamp */}
+            {/* ── Footer: source timestamp ── */}
             {sourceLabel && (
                 <div style={{
-                    padding: '6px 14px',
+                    padding: '8px 16px',
                     borderTop: '1px solid var(--color-border)',
-                    display: 'flex', alignItems: 'center', gap: 5,
+                    display: 'flex', alignItems: 'center', gap: 6,
                 }}>
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
                         stroke="currentColor" strokeWidth="2" strokeLinecap="round"
