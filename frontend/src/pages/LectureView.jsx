@@ -129,17 +129,33 @@ const CSS = `
   .lv-aid-chip { font-size: 11px; color: ${C.sec}; border: 1px solid ${C.border}; border-radius: 999px; padding: 4px 8px; background: ${C.bg}; }
 
   /* QA */
-  .lv-qa-messages { display: flex; flex-direction: column; gap: 12px; padding-bottom: 16px; }
-  .lv-qa-msg { padding: 10px 14px; border-radius: 10px; font-size: 13px; line-height: 1.6; max-width: 88%; }
-  .lv-qa-user { background: ${C.dark}; color: #fafaf9; align-self: flex-end; }
-  .lv-qa-assistant { background: ${C.card}; border: 1px solid ${C.border}; color: ${C.text}; align-self: flex-start; }
-  .lv-qa-bar { display: flex; gap: 8px; padding: 16px 20px; border-top: 1px solid ${C.border}; flex-shrink: 0; }
-  .lv-qa-input { flex: 1; padding: 9px 12px; border: 1px solid ${C.border}; border-radius: 9px; font-size: 13px; color: ${C.text}; background: ${C.card}; outline: none; transition: border-color 0.15s; font-family: inherit; }
-  .lv-qa-input:focus { border-color: #c0bdb8; }
+  .lv-qa-messages { display: flex; flex-direction: column; gap: 10px; padding-bottom: 16px; }
+  .lv-qa-msg { padding: 11px 14px; border-radius: 14px; font-size: 13px; line-height: 1.65; max-width: 86%; }
+  .lv-qa-user { background: ${C.dark}; color: #fafaf9; align-self: flex-end; border-bottom-right-radius: 4px; }
+  .lv-qa-assistant { background: ${C.card}; border: 1px solid ${C.border}; color: ${C.text}; align-self: flex-start; border-bottom-left-radius: 4px; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
+  .dark .lv-qa-assistant { box-shadow: 0 2px 8px rgba(0,0,0,0.25); }
+  .lv-qa-src { font-size: 10px; color: ${C.muted}; margin-top: 4px; padding-left: 2px; display: flex; align-items: center; gap: 4px; }
+  .lv-qa-bar { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid ${C.border}; flex-shrink: 0; background: ${C.card}; }
+  .lv-qa-input { flex: 1; padding: 10px 14px; border: 1px solid ${C.border}; border-radius: 24px; font-size: 13px; color: ${C.text}; background: ${C.bg}; outline: none; transition: border-color 0.15s, box-shadow 0.15s; font-family: inherit; }
+  .lv-qa-input:focus { border-color: ${C.borderHov}; box-shadow: 0 0 0 3px rgba(0,0,0,0.04); }
   .lv-qa-input::placeholder { color: ${C.muted}; }
-  .lv-qa-send { padding: 9px 16px; background: ${C.dark}; color: #fafaf9; border: none; border-radius: 9px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: opacity 0.15s; white-space: nowrap; }
-  .lv-qa-send:hover { opacity: 0.82; }
-  .lv-qa-send:disabled { opacity: 0.4; cursor: not-allowed; }
+  .lv-qa-send { width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: ${C.dark}; color: #fafaf9; border: none; border-radius: 50%; cursor: pointer; transition: opacity 0.15s, transform 0.1s; }
+  .lv-qa-send:hover { opacity: 0.85; transform: scale(1.05); }
+  .lv-qa-send:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+  /* Empty state */
+  .lv-qa-empty { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 48px 16px 16px; }
+  .lv-qa-empty-icon { width: 42px; height: 42px; border-radius: 12px; background: ${C.card}; border: 1px solid ${C.border}; display: flex; align-items: center; justify-content: center; color: ${C.muted}; }
+  .lv-qa-empty-text { font-size: 14px; font-weight: 500; color: ${C.text}; margin-bottom: 2px; }
+  .lv-qa-empty-sub { font-size: 12px; color: ${C.muted}; }
+  .lv-qa-chips { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 4px; }
+  .lv-qa-chip { font-size: 12px; color: ${C.sec}; border: 1px solid ${C.border}; border-radius: 999px; padding: 5px 12px; background: ${C.card}; cursor: pointer; transition: border-color 0.15s, color 0.15s; font-family: inherit; }
+  .lv-qa-chip:hover { border-color: ${C.borderHov}; color: ${C.text}; }
+  /* Typing dots */
+  @keyframes lv-dot { 0%,80%,100% { transform: scale(0.55); opacity: 0.4; } 40% { transform: scale(1); opacity: 1; } }
+  .lv-qa-typing { display: flex; align-items: center; gap: 4px; padding: 12px 14px; background: ${C.card}; border: 1px solid ${C.border}; border-radius: 14px; border-bottom-left-radius: 4px; align-self: flex-start; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
+  .lv-qa-dot { width: 6px; height: 6px; border-radius: 50%; background: ${C.muted}; animation: lv-dot 1.3s infinite; }
+  .lv-qa-dot:nth-child(2) { animation-delay: 0.15s; }
+  .lv-qa-dot:nth-child(3) { animation-delay: 0.3s; }
 
   /* Stats */
   .lv-stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -261,27 +277,56 @@ const CSS = `
   }
 
   /* Flashcards */
-  .lv-card-flip { perspective: 800px; height: 160px; cursor: pointer; margin-bottom: 12px; }
-  .lv-card-inner { position: relative; width: 100%; height: 100%; transition: transform 0.45s; transform-style: preserve-3d; }
+  .lv-fc-wrap { max-width: 500px; margin: 0 auto; }
+  .lv-fc-progress { height: 3px; background: var(--color-border); border-radius: 2px; margin-bottom: 18px; overflow: hidden; }
+  .lv-fc-progress-bar { height: 100%; background: var(--color-dark); border-radius: 2px; transition: width 0.35s ease; }
+  .lv-card-flip { perspective: 1000px; height: 210px; cursor: pointer; margin-bottom: 6px; user-select: none; }
+  .lv-card-inner { position: relative; width: 100%; height: 100%; transition: transform 0.48s cubic-bezier(0.4,0,0.2,1); transform-style: preserve-3d; }
   .lv-card-flip.flipped .lv-card-inner { transform: rotateY(180deg); }
-  .lv-card-face { position: absolute; inset: 0; border: 1px solid var(--color-border); border-radius: 12px; padding: 20px; background: var(--color-card); backface-visibility: hidden; display: flex; align-items: center; justify-content: center; font-size: 14px; line-height: 1.55; text-align: center; }
-  .lv-card-back { transform: rotateY(180deg); background: var(--color-dark); color: var(--color-dark-fg); }
-  .lv-fc-nav { display: flex; align-items: center; gap: 12px; justify-content: center; margin-top: 12px; }
-  .lv-fc-btn { padding: 6px 14px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-card); font-size: 12px; cursor: pointer; font-family: inherit; }
+  .lv-card-face { position: absolute; inset: 0; border: 1px solid var(--color-border); border-radius: 16px; padding: 20px; background: var(--color-card); backface-visibility: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,0.06), 0 6px 24px rgba(0,0,0,0.04); }
+  .dark .lv-card-face { box-shadow: 0 4px 20px rgba(0,0,0,0.35); }
+  .lv-fc-side-label { position: absolute; top: 12px; left: 16px; font-size: 9px; font-weight: 700; letter-spacing: 0.7em; text-transform: uppercase; color: var(--color-muted); }
+  .lv-card-text { font-size: 14px; line-height: 1.65; text-align: center; color: var(--color-text); }
+  .lv-card-back { transform: rotateY(180deg); background: var(--color-dark); border-color: transparent; }
+  .lv-card-back .lv-fc-side-label { color: rgba(255,255,255,0.35); }
+  .lv-card-back .lv-card-text { color: var(--color-dark-fg); }
+  .lv-fc-hint { text-align: center; font-size: 11px; color: var(--color-muted); margin-bottom: 16px; letter-spacing: 0.02em; }
+  .lv-fc-nav { display: flex; align-items: center; gap: 8px; justify-content: center; }
+  .lv-fc-btn { display: inline-flex; align-items: center; gap: 5px; padding: 7px 16px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-card); font-size: 12px; font-weight: 500; cursor: pointer; font-family: inherit; color: var(--color-text); transition: border-color 0.15s, background 0.15s; }
+  .lv-fc-btn:hover { border-color: var(--color-border-hov); background: var(--color-bg); }
+  .lv-fc-btn:disabled { opacity: 0.35; cursor: default; }
+  .lv-fc-count { font-size: 12px; color: var(--color-muted); font-family: 'JetBrains Mono', monospace; min-width: 44px; text-align: center; }
 
   /* Quiz */
-  .lv-quiz-q { background: var(--color-card); border: 1px solid var(--color-border); border-radius: 12px; padding: 16px; margin-bottom: 12px; }
-  .lv-quiz-qtext { font-size: 14px; font-weight: 500; margin-bottom: 12px; line-height: 1.55; }
-  .lv-quiz-opt { display: block; width: 100%; text-align: left; padding: 8px 12px; margin-bottom: 6px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-bg); font-size: 13px; cursor: pointer; font-family: inherit; transition: background .15s; }
-  .lv-quiz-opt:hover { background: var(--color-border); }
+  .lv-quiz-score { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: var(--color-card); border: 1px solid var(--color-border); border-radius: 12px; margin-bottom: 16px; font-size: 13px; color: var(--color-text); font-weight: 500; }
+  .lv-quiz-score-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .lv-quiz-q { background: var(--color-card); border: 1px solid var(--color-border); border-radius: 14px; padding: 16px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+  .lv-quiz-qrow { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 14px; }
+  .lv-quiz-num { flex-shrink: 0; width: 24px; height: 24px; border-radius: 7px; background: var(--color-bg); border: 1px solid var(--color-border); display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: var(--color-muted); font-family: 'JetBrains Mono', monospace; margin-top: 1px; }
+  .lv-quiz-qtext { font-size: 13px; font-weight: 500; line-height: 1.6; color: var(--color-text); flex: 1; }
+  .lv-quiz-opt { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 9px 12px; margin-bottom: 6px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-bg); font-size: 12px; cursor: pointer; font-family: inherit; color: var(--color-sec); transition: border-color 0.15s, background 0.15s; }
+  .lv-quiz-opt:not(:disabled):hover { border-color: var(--color-border-hov); background: var(--color-card); color: var(--color-text); }
+  .lv-quiz-opt-letter { flex-shrink: 0; width: 22px; height: 22px; border-radius: 6px; border: 1px solid var(--color-border); display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: var(--color-muted); transition: all 0.15s; background: var(--color-card); }
   .lv-quiz-opt.correct { background: #f0fdf4; border-color: #86efac; color: #15803d; }
+  .lv-quiz-opt.correct .lv-quiz-opt-letter { background: #86efac; border-color: #86efac; color: #14532d; }
   .lv-quiz-opt.wrong   { background: #fef2f2; border-color: #fecaca; color: #dc2626; }
-  .lv-quiz-expl { font-size: 12px; color: var(--color-sec); margin-top: 8px; padding: 8px 12px; background: var(--color-bg); border-radius: 8px; line-height: 1.55; }
+  .lv-quiz-opt.wrong .lv-quiz-opt-letter   { background: #fecaca; border-color: #fecaca; color: #7f1d1d; }
+  .dark .lv-quiz-opt.correct { background: rgba(16,185,129,0.08); border-color: rgba(16,185,129,0.3); color: #6ee7b7; }
+  .dark .lv-quiz-opt.correct .lv-quiz-opt-letter { background: rgba(16,185,129,0.2); border-color: rgba(16,185,129,0.4); color: #6ee7b7; }
+  .dark .lv-quiz-opt.wrong { background: rgba(239,68,68,0.08); border-color: rgba(239,68,68,0.3); color: #fca5a5; }
+  .dark .lv-quiz-opt.wrong .lv-quiz-opt-letter { background: rgba(239,68,68,0.2); border-color: rgba(239,68,68,0.4); color: #fca5a5; }
+  .lv-quiz-expl { display: flex; gap: 8px; font-size: 12px; color: var(--color-sec); margin-top: 8px; padding: 9px 12px; background: var(--color-bg); border-radius: 9px; line-height: 1.6; border: 1px solid var(--color-border); }
+  .lv-quiz-expl-icon { flex-shrink: 0; font-size: 13px; margin-top: 1px; }
 
   /* Glossary */
-  .lv-gloss-row { display: flex; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--color-border); font-size: 13px; }
-  .lv-gloss-term { font-weight: 600; min-width: 140px; flex-shrink: 0; color: var(--color-text); }
-  .lv-gloss-def  { color: var(--color-sec); line-height: 1.6; }
+  .lv-gloss-hdr { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+  .lv-gloss-count { font-size: 11px; font-weight: 600; color: var(--color-muted); background: var(--color-bg); border: 1px solid var(--color-border); border-radius: 999px; padding: 2px 8px; }
+  .lv-gloss-group-letter { font-size: 10px; font-weight: 800; letter-spacing: 0.1em; color: var(--color-muted); text-transform: uppercase; padding: 14px 0 5px; border-bottom: 1px solid var(--color-border); margin-bottom: 6px; }
+  .lv-gloss-row { display: flex; gap: 0; padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 10px; margin-bottom: 5px; font-size: 13px; background: var(--color-card); transition: box-shadow 0.15s; flex-direction: column; gap: 3px; }
+  .lv-gloss-row:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+  .dark .lv-gloss-row:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.3); }
+  .lv-gloss-term { font-weight: 600; font-size: 12px; color: var(--color-text); }
+  .lv-gloss-def  { color: var(--color-sec); line-height: 1.6; font-size: 12px; }
 `;
 
 // ─── Accent palette (cycles per card) ────────────────────────────────────────
@@ -1499,8 +1544,23 @@ export default function LectureView() {
                             <>
                                 <div className="lv-tab-body">
                                     {qaHistory.length === 0 && !qaLoading && (
-                                        <div style={{ fontSize: 13, color: C.muted, textAlign: 'center', paddingTop: 32 }}>
-                                            Ask anything about this lecture
+                                        <div className="lv-qa-empty">
+                                            <div className="lv-qa-empty-icon">
+                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                                                </svg>
+                                            </div>
+                                            <div>
+                                                <div className="lv-qa-empty-text">Ask about this lecture</div>
+                                                <div className="lv-qa-empty-sub">Grounded in your own transcript</div>
+                                            </div>
+                                            <div className="lv-qa-chips">
+                                                {['What are the key concepts?', 'Summarise in 3 points', 'What was the main argument?'].map(q => (
+                                                    <button key={q} className="lv-qa-chip" onClick={() => { setQaQuestion(q); }}>
+                                                        {q}
+                                                    </button>
+                                                ))}
+                                            </div>
                                         </div>
                                     )}
                                     <div className="lv-qa-messages">
@@ -1513,14 +1573,21 @@ export default function LectureView() {
                                                     }
                                                 </div>
                                                 {m.role === 'assistant' && (
-                                                    <p style={{ fontSize: 11, color: 'var(--color-muted)', fontStyle: 'italic', marginTop: 4, paddingLeft: 2 }}>
-                                                        From your lecture transcript
-                                                    </p>
+                                                    <div className="lv-qa-src">
+                                                        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                                                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                                                        </svg>
+                                                        Grounded in your transcript
+                                                    </div>
                                                 )}
                                             </div>
                                         ))}
                                         {qaLoading && (
-                                            <div className="lv-qa-msg lv-qa-assistant" style={{ color: C.muted }}>Thinking…</div>
+                                            <div className="lv-qa-typing">
+                                                <div className="lv-qa-dot" />
+                                                <div className="lv-qa-dot" />
+                                                <div className="lv-qa-dot" />
+                                            </div>
                                         )}
                                         <div ref={qaEndRef} />
                                     </div>
@@ -1532,11 +1599,13 @@ export default function LectureView() {
                                         value={qaQuestion}
                                         onChange={e => setQaQuestion(e.target.value)}
                                         onKeyDown={e => e.key === 'Enter' && handleAsk()}
-                                        placeholder="Ask a question about this lecture…"
+                                        placeholder="Ask anything about this lecture…"
                                         disabled={qaLoading}
                                     />
-                                    <button className="lv-qa-send" onClick={handleAsk} disabled={qaLoading || !qaQuestion.trim()}>
-                                        Ask
+                                    <button className="lv-qa-send" onClick={handleAsk} disabled={qaLoading || !qaQuestion.trim()} aria-label="Send">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                            <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                                        </svg>
                                     </button>
                                 </div>
                             </>
@@ -1616,22 +1685,46 @@ export default function LectureView() {
                             const cards = lecture?.flashcards || [];
                             if (!cards.length) return <div className="lv-empty-panel">No flashcards yet</div>;
                             const card = cards[fcIdx];
+                            const pct = ((fcIdx + 1) / cards.length * 100).toFixed(1);
                             return (
                                 <div className="lv-tab-body">
-                                    <div style={{ maxWidth: 480, margin: '0 auto' }}>
-                                        <div style={{ fontSize: 12, color: 'var(--color-muted)', textAlign: 'center', marginBottom: 12 }}>
-                                            {fcIdx + 1} / {cards.length} · Click card to flip
+                                    <div className="lv-fc-wrap">
+                                        {/* Progress bar */}
+                                        <div className="lv-fc-progress">
+                                            <div className="lv-fc-progress-bar" style={{ width: `${pct}%` }} />
                                         </div>
+                                        {/* Flip card */}
                                         <div className={`lv-card-flip${fcFlipped ? ' flipped' : ''}`} onClick={() => setFcFlipped(f => !f)}>
                                             <div className="lv-card-inner">
-                                                <div className="lv-card-face">{card.front}</div>
-                                                <div className="lv-card-face lv-card-back">{card.back}</div>
+                                                <div className="lv-card-face">
+                                                    <div className="lv-fc-side-label">Question</div>
+                                                    <div className="lv-card-text">{card.front}</div>
+                                                </div>
+                                                <div className="lv-card-face lv-card-back">
+                                                    <div className="lv-fc-side-label">Answer</div>
+                                                    <div className="lv-card-text">{card.back}</div>
+                                                </div>
                                             </div>
                                         </div>
+                                        {/* Hint */}
+                                        <div className="lv-fc-hint">Tap to flip · Use arrows to navigate</div>
+                                        {/* Nav */}
                                         <div className="lv-fc-nav">
-                                            <button className="lv-fc-btn" onClick={() => { setFcIdx(i => Math.max(0, i-1)); setFcFlipped(false); }}>←</button>
-                                            <button className="lv-fc-btn" onClick={() => { setFcIdx(i => Math.min(cards.length-1, i+1)); setFcFlipped(false); }}>→</button>
-                                            <button className="lv-fc-btn" onClick={() => { setFcIdx(Math.floor(Math.random() * cards.length)); setFcFlipped(false); }}>Shuffle</button>
+                                            <button className="lv-fc-btn" disabled={fcIdx === 0}
+                                                onClick={() => { setFcIdx(i => Math.max(0, i-1)); setFcFlipped(false); }}>
+                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+                                                Prev
+                                            </button>
+                                            <span className="lv-fc-count">{fcIdx + 1} / {cards.length}</span>
+                                            <button className="lv-fc-btn" disabled={fcIdx === cards.length - 1}
+                                                onClick={() => { setFcIdx(i => Math.min(cards.length-1, i+1)); setFcFlipped(false); }}>
+                                                Next
+                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+                                            </button>
+                                            <button className="lv-fc-btn" onClick={() => { setFcIdx(Math.floor(Math.random() * cards.length)); setFcFlipped(false); }}>
+                                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>
+                                                Shuffle
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
@@ -1642,15 +1735,46 @@ export default function LectureView() {
                         {activeTab === 'quiz' && (() => {
                             const questions = lecture?.quiz || [];
                             if (!questions.length) return <div className="lv-empty-panel">No quiz yet</div>;
+                            const answeredCount = Object.keys(quizAnswers).length;
+                            const correctCount = questions.reduce((acc, q, qi) => {
+                                const chosen = quizAnswers[qi];
+                                const correctLetter = (q.answer || '').charAt(0).toUpperCase();
+                                return acc + (chosen === correctLetter ? 1 : 0);
+                            }, 0);
+                            const allAnswered = answeredCount === questions.length;
                             return (
                                 <div className="lv-tab-body">
+                                    {/* Score banner */}
+                                    {answeredCount > 0 && (
+                                        <div className="lv-quiz-score">
+                                            <div className="lv-quiz-score-dot" style={{
+                                                background: allAnswered
+                                                    ? (correctCount / questions.length >= 0.7 ? '#22c55e' : '#f59e0b')
+                                                    : 'var(--color-muted)'
+                                            }} />
+                                            {allAnswered
+                                                ? `${correctCount} / ${questions.length} correct${correctCount === questions.length ? ' — Perfect! 🎉' : ''}`
+                                                : `${answeredCount} / ${questions.length} answered`
+                                            }
+                                            {allAnswered && answeredCount > 0 && (
+                                                <button
+                                                    onClick={() => setQuizAnswers({})}
+                                                    style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--color-muted)', background: 'none', border: '1px solid var(--color-border)', borderRadius: 6, padding: '3px 8px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                                                    Reset
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
                                     {questions.map((q, qi) => {
                                         const chosen = quizAnswers[qi];
                                         const answered = chosen !== undefined;
                                         const correctLetter = (q.answer || '').charAt(0).toUpperCase();
                                         return (
                                             <div key={qi} className="lv-quiz-q">
-                                                <div className="lv-quiz-qtext">{qi + 1}. {q.question}</div>
+                                                <div className="lv-quiz-qrow">
+                                                    <div className="lv-quiz-num">{qi + 1}</div>
+                                                    <div className="lv-quiz-qtext">{q.question}</div>
+                                                </div>
                                                 {(q.options || []).map((opt, oi) => {
                                                     const letter = String.fromCharCode(65 + oi);
                                                     let cls = 'lv-quiz-opt';
@@ -1662,12 +1786,16 @@ export default function LectureView() {
                                                         <button key={oi} className={cls}
                                                             disabled={answered}
                                                             onClick={() => setQuizAnswers(a => ({ ...a, [qi]: letter }))}>
+                                                            <span className="lv-quiz-opt-letter">{letter}</span>
                                                             {opt}
                                                         </button>
                                                     );
                                                 })}
                                                 {answered && q.explanation && (
-                                                    <div className="lv-quiz-expl">💡 {q.explanation}</div>
+                                                    <div className="lv-quiz-expl">
+                                                        <span className="lv-quiz-expl-icon">💡</span>
+                                                        {q.explanation}
+                                                    </div>
                                                 )}
                                             </div>
                                         );
@@ -1685,24 +1813,46 @@ export default function LectureView() {
                             const filtered = q
                                 ? sorted.filter(g => (g.term || '').toLowerCase().includes(q) || (g.definition || '').toLowerCase().includes(q))
                                 : sorted;
+                            // Group by first letter when not searching
+                            const groups = q ? null : filtered.reduce((acc, g) => {
+                                const letter = (g.term || '?')[0].toUpperCase();
+                                if (!acc[letter]) acc[letter] = [];
+                                acc[letter].push(g);
+                                return acc;
+                            }, {});
                             return (
                                 <div className="lv-tab-body">
-                                    <input
-                                        className="lv-search-input"
-                                        type="search"
-                                        placeholder="Search terms…"
-                                        value={glossarySearch}
-                                        onChange={e => setGlossarySearch(e.target.value)}
-                                        style={{ marginBottom: 10 }}
-                                    />
+                                    <div className="lv-gloss-hdr">
+                                        <input
+                                            className="lv-search-input"
+                                            type="search"
+                                            placeholder="Search terms…"
+                                            value={glossarySearch}
+                                            onChange={e => setGlossarySearch(e.target.value)}
+                                            style={{ flex: 1 }}
+                                        />
+                                        <span className="lv-gloss-count">{filtered.length}</span>
+                                    </div>
                                     {filtered.length === 0
                                         ? <div style={{ fontSize: 13, color: 'var(--color-muted)', textAlign: 'center', paddingTop: 16 }}>No terms match</div>
-                                        : filtered.map((g, i) => (
-                                            <div key={i} className="lv-gloss-row">
-                                                <div className="lv-gloss-term">{g.term}</div>
-                                                <div className="lv-gloss-def">{g.definition}</div>
-                                            </div>
-                                        ))
+                                        : q
+                                            ? filtered.map((g, i) => (
+                                                <div key={i} className="lv-gloss-row">
+                                                    <div className="lv-gloss-term">{g.term}</div>
+                                                    <div className="lv-gloss-def">{g.definition}</div>
+                                                </div>
+                                            ))
+                                            : Object.keys(groups).sort().map(letter => (
+                                                <div key={letter}>
+                                                    <div className="lv-gloss-group-letter">{letter}</div>
+                                                    {groups[letter].map((g, i) => (
+                                                        <div key={i} className="lv-gloss-row">
+                                                            <div className="lv-gloss-term">{g.term}</div>
+                                                            <div className="lv-gloss-def">{g.definition}</div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ))
                                     }
                                 </div>
                             );
