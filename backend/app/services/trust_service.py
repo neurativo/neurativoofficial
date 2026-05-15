@@ -1969,31 +1969,64 @@ Return a JSON array. Each item is one concept with:
   exam_trap: misconception the professor flagged or null
   distinction: other concept contrasted with this or null
   examples: array of real examples professor used
+  depth: "full" if the professor spent substantial time on this
+         concept with clear definition or demonstration (3+ dedicated
+         sentences). "brief" if only touched on lightly (1-2 sentences).
+  evidence_quote: one verbatim phrase from the transcript (max 20 words)
+                  proving the professor actively taught this concept,
+                  not just mentioned its name.
 
-A concept qualifies if ANY of these are true:
-  - Professor defines or names it
-  - Professor uses more than 40 words explaining it
-  - Professor uses a specific example for it
-  - Professor contrasts it with another concept
-  - Professor flags it as exam-relevant or tricky
-  - Professor corrects a student misconception about it
-  - Professor repeats it more than twice
+A concept qualifies ONLY if the professor does at least ONE of:
+  - Explicitly defines it in a dedicated sentence
+    ("X is Y", "X means Y", "X is a type of Y") — the definition
+    must be about this concept alone, not part of a multi-item list
+  - Demonstrates it with a worked example, code snippet, or
+    step-by-step walkthrough specific to this concept
+  - Contrasts it specifically with another named concept in a
+    focused comparison
+  - Flags it as exam-relevant and explains why
+  - Corrects a common misconception about it with explanation
 
-A concept does NOT qualify if it is about:
+AND there must be evidence of sustained attention:
+  - At least 2 distinct sentences in the transcript that are
+    specifically about this concept (not adjacent concepts)
+  - If you cannot find 2 sentences of explanation for a concept,
+    do not include it regardless of how relevant it sounds
+
+A concept does NOT qualify if:
+  - It is only mentioned in a list of possibilities, use cases,
+    or applications ("you can use X for A, B, C, D")
+  - The professor only names it without defining or demonstrating it
+  - It appears as background context used to motivate another topic
+  - It is a single throwaway example inside an explanation of
+    something else
   - Class timing, logistics, attendance
   - Study plans or exam strategy
   - How the lecture will be structured
   - Past papers or answer writing technique
 
-For a 30-40 minute subject lecture you should typically 
-find between 6 and 12 distinct concepts.
-If you find fewer than 5 you have missed concepts — 
+CRITICAL FOR PROGRAMMING AND CS LECTURES:
+  Extract the actual language features and constructs taught:
+  variables, data types, operators, conditionals, loops,
+  functions, classes, error handling, built-in functions.
+  Do NOT extract application domains that are only listed
+  as possibilities (machine learning, web development,
+  data science, Django, Flask, automation, PyCharm) unless
+  those domains are actually taught with code examples
+  and dedicated explanation in this lecture.
+  If the professor says "Python is used for data science,
+  web development, and automation" — that is a mention,
+  not a taught concept. Extract nothing from that sentence.
+
+For a 30-40 minute subject lecture you should typically
+find between 6 and 14 distinct concepts.
+If you find fewer than 5 you have missed concepts —
 re-read the transcript and look harder.
 
-For every 500 words of transcript you should 
-expect to find at least 2 concepts. If you are 
-finding fewer than this you are being too 
-conservative. Re-read and look for concepts you 
+For every 500 words of transcript you should
+expect to find at least 2 concepts. If you are
+finding fewer than this you are being too
+conservative. Re-read and look for concepts you
 initially skipped.
 
 Do not merge distinct concepts into one entry.
@@ -2504,10 +2537,26 @@ Return only JSON array. No other text."""
                 "examples": item.get("examples") if isinstance(item.get("examples"), list) else [],
                 "quote": _normalise_ws(str(item.get("quote") or "")),
                 "key_quote": _normalise_ws(str(item.get("key_quote") or "")),
+                "depth": _normalise_ws(str(item.get("depth") or "full")) or "full",
+                "evidence_quote": _normalise_ws(str(item.get("evidence_quote") or "")),
             })
         return out
 
     out = normalise_inventory(merged)
+
+    # Filter out concepts the model marked as "brief" — these are ghost concepts
+    # that were only mentioned in passing (e.g. application domains in a list)
+    # rather than actively taught. Do this before capping so brief concepts
+    # never consume card-generation slots.
+    brief_concepts = [item for item in out if item.get("depth") == "brief"]
+    if brief_concepts:
+        print(
+            f"[inventory] filtered {len(brief_concepts)} brief-depth concepts "
+            f"(mentioned only, not taught): "
+            f"{[item['name'] for item in brief_concepts]}"
+        )
+    out = [item for item in out if item.get("depth") != "brief"]
+
     if len(out) < 3:
         print(f"[inventory-cache] refusing to cache inventory with only {len(out)} concepts")
     print(f"[summary-card-debug] merged inventory count: {len(out[:concept_cap])}")
