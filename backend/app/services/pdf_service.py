@@ -19,6 +19,7 @@ from app.services.supabase_service import (
 )
 from app.services.cost_tracker import log_cost
 from app.services.trust_service import (
+    ConceptCoverageError,
     _light_clean,
     build_claim_registry,
     build_adaptive_study_weighting,
@@ -1997,12 +1998,22 @@ async def generate_lecture_pdf(
             )
             print(f"[pdf] regenerated concept cards: {len(concept_note_cards)}")
 
-        validate_summary_card_generation(
-            concept_sections,
-            concept_note_cards,
-            grounded_notes,
-            transcript=transcript,
-        )
+        try:
+            validate_summary_card_generation(
+                concept_sections,
+                concept_note_cards,
+                grounded_notes,
+                transcript=transcript,
+            )
+        except ConceptCoverageError as _val_exc:
+            print(f"[pdf] card validation fallback: {_val_exc}")
+            concept_note_cards = [
+                card for card in (concept_note_cards or [])
+                if isinstance(card, dict)
+                and card.get("concept_name")
+                and (card.get("summary") or card.get("key_definitions"))
+                and not str(card.get("concept_name", "")).startswith("__")
+            ]
         claim_registry = build_claim_registry(grounded_notes)
         title = _resolve_document_title(title, transcript, topic, concept_sections)
         grounded_summary = "\n\n".join(
