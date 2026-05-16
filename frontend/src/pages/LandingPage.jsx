@@ -121,6 +121,10 @@ const CSS = `
     max-width: 960px; margin: 0 auto 28px; padding: 0 40px;
   }
   @media (max-width: 640px) { .lp-beta-strip { padding: 0 24px; } }
+  @media (max-width: 480px) {
+    .lp-beta-inner { align-items: flex-start; }
+    .lp-beta-apply { width: 100%; text-align: center; margin-top: 2px; }
+  }
   @media (max-width: 400px) { .lp-beta-strip { padding: 0 14px; } }
   .lp-beta-inner {
     display: flex; align-items: center; gap: 12px; flex-wrap: wrap;

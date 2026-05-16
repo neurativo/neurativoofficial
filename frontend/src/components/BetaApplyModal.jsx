@@ -18,7 +18,13 @@ const CSS = `
     padding: 0;
     box-shadow: 0 24px 64px rgba(0,0,0,0.14);
     animation: bam-up 0.2s ease;
-    overflow: hidden;
+    overflow-y: auto;
+    max-height: calc(100dvh - 32px);
+  }
+  @media (max-width: 480px) {
+    .bam-box { border-radius: 16px; }
+    .bam-header { padding: 16px 16px 12px; }
+    .bam-body { padding: 14px 16px; }
   }
   @keyframes bam-up { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
   .bam-header {

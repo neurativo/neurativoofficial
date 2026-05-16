@@ -234,6 +234,10 @@ const CSS = `
     flex-shrink: 0; font-family: inherit;
   }
   .db-beta-dismiss:hover { opacity: 1; }
+  @media (max-width: 480px) {
+    .db-beta-banner { align-items: flex-start; }
+    .db-beta-apply { width: 100%; text-align: center; }
+  }
 
   /* Processing import cards */
   .db-proc-section { margin-bottom: 28px; }

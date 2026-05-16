@@ -14,6 +14,9 @@ const CSS = `
     animation: bfc-slide-up 0.3s cubic-bezier(0.22,1,0.36,1);
     font-family: 'Inter', sans-serif;
   }
+  @media (max-width: 420px) {
+    .bfc-wrap { left: 12px; right: 12px; bottom: 12px; width: auto; border-radius: 14px; }
+  }
   @keyframes bfc-slide-up {
     from { opacity: 0; transform: translateY(16px); }
     to   { opacity: 1; transform: translateY(0); }
