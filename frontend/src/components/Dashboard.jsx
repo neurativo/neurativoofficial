@@ -201,7 +201,37 @@ const CSS = `
   .dark .ob-mic-granted { background: rgba(22,163,74,0.15); border-color: rgba(134,239,172,0.3); }
   .dark .ob-mic-denied  { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.3); }
   .dark .ob-checkmark   { background: rgba(22,163,74,0.15); border-color: rgba(134,239,172,0.3); }
+
+  /* Processing import cards */
+  .db-proc-section { margin-bottom: 28px; }
+  .db-proc-section-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: ${C.muted}; margin: 0 0 10px; }
+  .db-proc-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  @media (max-width: 860px) { .db-proc-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 540px) { .db-proc-grid { grid-template-columns: 1fr; } }
+  .db-proc-card { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 14px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; }
+  .db-proc-top { display: flex; align-items: center; gap: 10px; }
+  @keyframes db-proc-spin { to { transform: rotate(360deg); } }
+  .db-proc-ring { width: 20px; height: 20px; border-radius: 50%; border: 2px solid ${C.border}; border-top-color: ${C.dark}; animation: db-proc-spin 0.9s linear infinite; flex-shrink: 0; }
+  .db-proc-name { font-size: 13px; font-weight: 500; color: ${C.text}; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .db-proc-status { font-size: 12px; color: ${C.sec}; }
+  .db-proc-bar { height: 3px; background: ${C.border}; border-radius: 3px; overflow: hidden; }
+  .db-proc-fill { height: 100%; background: ${C.dark}; border-radius: 3px; transition: width 0.5s ease; }
+  .db-proc-date { font-size: 11px; color: ${C.muted}; }
 `;
+
+// ─── Import processing constants ──────────────────────────────────────────────
+const IMPORT_STATUSES = new Set(['queued','importing','compressing','transcribing','cleaning','generating','storing','summarizing']);
+
+const IMPORT_STATUS_MAP = {
+    queued:       { label: 'Processing audio…',     pct: 25 },
+    importing:    { label: 'Processing audio…',     pct: 32 },
+    compressing:  { label: 'Processing audio…',     pct: 40 },
+    transcribing: { label: 'Transcribing lecture…', pct: 58 },
+    cleaning:     { label: 'Building your notes…',  pct: 74 },
+    generating:   { label: 'Building your notes…',  pct: 84 },
+    summarizing:  { label: 'Building your notes…',  pct: 84 },
+    storing:      { label: 'Almost done…',           pct: 94 },
+};
 
 // ─── Theme toggle ─────────────────────────────────────────────────────────────
 function ThemeToggle() {
@@ -339,6 +369,24 @@ function UserMenu({ user, onSignOut }) {
     );
 }
 
+// ─── ProcessingCard ───────────────────────────────────────────────────────────
+function ProcessingCard({ lecture, statusKey }) {
+    const { label, pct } = IMPORT_STATUS_MAP[statusKey] || { label: 'Processing…', pct: 30 };
+    return (
+        <div className="db-proc-card">
+            <div className="db-proc-top">
+                <div className="db-proc-ring" />
+                <div className="db-proc-name">{lecture.title || 'Untitled Lecture'}</div>
+            </div>
+            <div className="db-proc-status">{label}</div>
+            <div className="db-proc-bar">
+                <div className="db-proc-fill" style={{ width: `${pct}%` }} />
+            </div>
+            <div className="db-proc-date">{smartDate(lecture.created_at)}</div>
+        </div>
+    );
+}
+
 // ─── LectureCard ──────────────────────────────────────────────────────────────
 function LectureCard({ lecture, onDelete, onShare, onExport }) {
     const navigate = useNavigate();
@@ -440,6 +488,7 @@ export default function Dashboard({ user }) {
     const [exportId,  setExportId]  = useState(null);
     const [importOpen, setImportOpen] = useState(false);
     const [showOnboarding, setShowOnboarding] = useState(false);
+    const [jobStatuses, setJobStatuses] = useState({}); // { lectureId: statusKey }
 
     const searchRef = useRef(null);
     const searchTimerRef = useRef(null);
@@ -490,6 +539,49 @@ export default function Dashboard({ user }) {
     }, []);
 
     useEffect(() => () => clearTimeout(searchTimerRef.current), []);
+
+    // ── Register a newly-started background import ───────────────────────────
+    const handleImportStarted = useCallback(async (id) => {
+        try {
+            const res = await api.get(`/api/v1/lectures/${id}`);
+            if (res.data) {
+                setLectures(prev => prev.some(l => l.id === id) ? prev : [res.data, ...prev]);
+            }
+        } catch {}
+    }, []);
+
+    // ── Poll processing imports every 4s ─────────────────────────────────────
+    const processingLectures = lectures.filter(l => IMPORT_STATUSES.has(l.summary_status));
+    const processingIdsKey   = processingLectures.map(l => l.id).join(',');
+
+    useEffect(() => {
+        if (!processingIdsKey) return;
+        let cancelled = false;
+
+        const poll = async () => {
+            if (cancelled) return;
+            for (const id of processingIdsKey.split(',')) {
+                try {
+                    const res = await api.get(`/api/v1/jobs/${id}`);
+                    const status = res.data?.status;
+                    if (!status || cancelled) continue;
+                    setJobStatuses(prev => ({ ...prev, [id]: status }));
+                    if (status === 'done' || status === 'failed') {
+                        try {
+                            const lr = await api.get(`/api/v1/lectures/${id}`);
+                            if (!cancelled && lr.data) {
+                                setLectures(prev => prev.map(l => l.id === id ? { ...l, ...lr.data } : l));
+                            }
+                        } catch {}
+                    }
+                } catch {}
+            }
+            if (!cancelled) setTimeout(poll, 4000);
+        };
+
+        poll();
+        return () => { cancelled = true; };
+    }, [processingIdsKey]);
 
     // Keyboard shortcuts: Escape clears, / focuses search, n = new lecture
     useEffect(() => {
@@ -545,6 +637,7 @@ export default function Dashboard({ user }) {
 
     const baseList = searchResults !== null ? searchResults : lectures;
     const filtered = baseList
+        .filter(l => !IMPORT_STATUSES.has(l.summary_status))
         .filter(l => {
             const q = search.trim().toLowerCase();
             // When searchResults is active (backend search), backend already filtered
@@ -689,6 +782,22 @@ export default function Dashboard({ user }) {
                     <h1 className="db-page-title">Your lectures</h1>
                     <p className="db-page-sub">{loading ? '' : `${lectures.length} ${lectureWord}`}</p>
 
+                    {/* Processing imports */}
+                    {!loading && processingLectures.length > 0 && (
+                        <div className="db-proc-section">
+                            <p className="db-proc-section-label">Importing</p>
+                            <div className="db-proc-grid">
+                                {processingLectures.map(l => (
+                                    <ProcessingCard
+                                        key={l.id}
+                                        lecture={l}
+                                        statusKey={jobStatuses[l.id] || l.summary_status}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     {/* Search */}
                     <div className={`db-search-wrap${searchLoading ? ' db-search-loading' : ''}`}>
                         <span className="db-search-icon">
@@ -810,7 +919,7 @@ export default function Dashboard({ user }) {
 
                 {/* Import modal */}
                 {importOpen && (
-                    <ImportModal onClose={() => setImportOpen(false)} />
+                    <ImportModal onClose={() => setImportOpen(false)} onImportStarted={handleImportStarted} />
                 )}
 
                 {/* Export modal */}

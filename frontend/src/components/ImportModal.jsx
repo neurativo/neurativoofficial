@@ -160,7 +160,7 @@ function RingIcon({ isDone }) {
     );
 }
 
-export default function ImportModal({ onClose }) {
+export default function ImportModal({ onClose, onImportStarted }) {
     const navigate = useNavigate();
     const [file, setFile]                   = useState(null);
     const [drag, setDrag]                   = useState(false);
@@ -237,6 +237,7 @@ export default function ImportModal({ onClose }) {
             const id = res.data?.lecture_id;
             setLectureId(id);
             setUploadDone(true);  // file is on the server — safe to close
+            if (id && onImportStarted) onImportStarted(id);
             applyStatus('queued');
 
             // Dual polling: jobs API (granular) + lectures API (final status)
