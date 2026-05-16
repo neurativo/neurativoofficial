@@ -1100,7 +1100,7 @@ def get_user_profile(user_id: str) -> dict:
     except Exception as e:
         print(f"[profile] get_user_plan override error (non-fatal): {e}")
 
-    # Lazy beta expiry — downgrade to free if beta window has passed
+    # Lazy beta expiry — downgrade to free if beta window has passed (beta users only)
     beta_active = False
     if beta_expires_at_str:
         try:
@@ -1108,6 +1108,15 @@ def get_user_profile(user_id: str) -> dict:
             now_utc = datetime.now(timezone.utc)
             if expires <= now_utc:
                 profile["plan_tier"] = "free"   # beta over — lazy downgrade
+                # Write back to DB so the rest of the system stays consistent
+                try:
+                    supabase.table("user_subscriptions").update({
+                        "plan_tier": "free",
+                        "beta_expires_at": None,
+                        "updated_at": now_utc.isoformat(),
+                    }).eq("user_id", user_id).eq("plan_tier", "student").execute()
+                except Exception:
+                    pass  # non-fatal — in-memory downgrade is sufficient
             else:
                 beta_active = True
         except Exception:
@@ -2211,8 +2220,10 @@ def approve_beta_application(application_id: str) -> dict:
         "expires_at": expires.isoformat(),
     }).eq("id", application_id).execute()
 
-    # Upgrade user to student plan
+    # Upgrade user to student plan + grant plan credits
     set_user_plan(user_id, "student")
+    from app.services.credits_service import grant_plan_credits
+    grant_plan_credits(user_id, "student")
 
     # Set beta_expires_at on user_subscriptions
     supabase.table("user_subscriptions").upsert(

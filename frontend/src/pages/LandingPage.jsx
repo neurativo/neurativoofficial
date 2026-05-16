@@ -833,6 +833,7 @@ function Navbar({ user }) {
 
 // ─── BetaStrip ────────────────────────────────────────────────────────────────
 function BetaStrip({ user }) {
+    const { openSignUp } = useAuthModal();
     const [betaEnabled, setBetaEnabled] = useState(false);
     const [application, setApplication] = useState(undefined); // undefined = not fetched
     const [modalOpen, setModalOpen] = useState(false);
@@ -872,7 +873,7 @@ function BetaStrip({ user }) {
                     </button>
                 )}
                 {application === undefined && !user && (
-                    <button className="lp-beta-apply" onClick={() => setModalOpen(true)}>
+                    <button className="lp-beta-apply" onClick={openSignUp}>
                         Apply now →
                     </button>
                 )}
