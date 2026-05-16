@@ -5,6 +5,7 @@
 import axios from 'axios';
 
 const BASE = `${import.meta.env.VITE_API_URL || 'https://neurativoofficial-production.up.railway.app'}/api/v1/admin`;
+const BETA_BASE = `${import.meta.env.VITE_API_URL || 'https://neurativoofficial-production.up.railway.app'}/api/v1/beta`;
 
 async function _token() {
     return (await window.Clerk?.session?.getToken()) || '';
@@ -38,6 +39,18 @@ async function _post(path, params = {}) {
     return res.data;
 }
 
+async function _betaGet(path, params = {}) {
+    const token = await _token();
+    const res = await axios.get(BETA_BASE + path, { params, headers: _headers(token) });
+    return res.data;
+}
+
+async function _betaPost(path, body = {}) {
+    const token = await _token();
+    const res = await axios.post(BETA_BASE + path, body, { headers: _headers(token) });
+    return res.data;
+}
+
 export const adminApi = {
     verify:          ()                        => _get('/verify'),
     getStats:        ()                        => _get('/stats'),
@@ -68,7 +81,7 @@ export const adminApi = {
     deleteAnnouncement:  (id)                  => _delete(`/announcements/${id}`),
 
     // Credits management
-    getUserCredits: (userId) => _get(`/users/${userId}/credits`),
+    getUserCredits:  (userId)     => _get(`/users/${userId}/credits`),
     adjustCredits: async (userId, body) => {
         const token = await _token();
         const res = await axios.post(BASE + `/users/${userId}/credits/adjust`, body, { headers: _headers(token) });
@@ -84,4 +97,17 @@ export const adminApi = {
         const res = await axios.post(BASE + `/users/${userId}/credits/subscription`, body, { headers: _headers(token) });
         return res.data;
     },
+};
+
+/**
+ * Beta program API helpers — use /api/v1/beta/admin/* endpoints.
+ */
+export const betaApi = {
+    getBetaStatus:       ()                  => _betaGet('/admin/status'),
+    toggleBeta:          (enabled)           => _betaPost('/admin/toggle', { enabled }),
+    listBetaApplications: (status)           => _betaGet('/admin/applications', status ? { status } : {}),
+    approveApplication:  (id)                => _betaPost(`/admin/applications/${id}/approve`),
+    rejectApplication:   (id)                => _betaPost(`/admin/applications/${id}/reject`),
+    listBetaFeedback:    (page = 1, pageSize = 20) => _betaGet('/admin/feedback', { page, page_size: pageSize }),
+    getBetaStats:        ()                  => _betaGet('/admin/stats'),
 };

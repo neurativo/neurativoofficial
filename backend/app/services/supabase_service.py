@@ -1089,12 +1089,32 @@ def get_user_profile(user_id: str) -> dict:
     except Exception as e:
         print(f"[profile] get_user_profile error (non-fatal): {e}")
     # Override plan_tier from user_subscriptions (TEXT primary key, Clerk-ID compatible)
+    # Also checks beta_expires_at for lazy plan downgrade — no cron needed.
+    beta_expires_at_str = None
     try:
-        plan_resp = supabase.table("user_subscriptions").select("plan_tier").eq("user_id", user_id).execute()
+        plan_resp = supabase.table("user_subscriptions").select("plan_tier, beta_expires_at").eq("user_id", user_id).execute()
         if plan_resp.data:
-            profile["plan_tier"] = plan_resp.data[0].get("plan_tier") or profile["plan_tier"]
+            row = plan_resp.data[0]
+            profile["plan_tier"] = row.get("plan_tier") or profile["plan_tier"]
+            beta_expires_at_str = row.get("beta_expires_at")
     except Exception as e:
         print(f"[profile] get_user_plan override error (non-fatal): {e}")
+
+    # Lazy beta expiry — downgrade to free if beta window has passed
+    beta_active = False
+    if beta_expires_at_str:
+        try:
+            expires = datetime.fromisoformat(beta_expires_at_str.replace("Z", "+00:00"))
+            now_utc = datetime.now(timezone.utc)
+            if expires <= now_utc:
+                profile["plan_tier"] = "free"   # beta over — lazy downgrade
+            else:
+                beta_active = True
+        except Exception:
+            pass
+
+    profile["beta_expires_at"] = beta_expires_at_str
+    profile["beta_active"] = beta_active
     return profile
 
 
@@ -2084,3 +2104,224 @@ def admin_set_credits_subscription(
     # Use update+eq to avoid sending Clerk user ID in JSON body (avoids UUID cast error)
     db.table("profiles").update(payload).eq("id", user_id).execute()
     return {"credits_sub_status": status, "credits_sub_expires": expires_at}
+
+
+# =============================================================================
+#  BETA TESTING PROGRAM
+# =============================================================================
+
+def get_beta_enabled() -> bool:
+    """Returns True if the beta testing program is currently open."""
+    if not supabase:
+        return False
+    try:
+        resp = supabase.table("app_settings").select("value").eq("key", "beta_enabled").limit(1).execute()
+        if resp.data:
+            return bool(resp.data[0].get("value"))
+    except Exception as e:
+        print(f"[beta] get_beta_enabled error (non-fatal): {e}")
+    return False
+
+
+def set_beta_enabled(enabled: bool) -> None:
+    """Enables or disables the beta testing program."""
+    if not supabase:
+        raise Exception("Supabase not initialized")
+    import json as _json2
+    supabase.table("app_settings").upsert(
+        {"key": "beta_enabled", "value": _json2.dumps(enabled), "updated_at": datetime.now(timezone.utc).isoformat()},
+        on_conflict="key"
+    ).execute()
+
+
+def submit_beta_application(user_id: str, email: str, full_name: str = None,
+                            subject: str = None, use_case: str = None) -> dict:
+    """Inserts a new beta application. Silently ignores duplicate (user already applied)."""
+    if not supabase:
+        raise Exception("Supabase not initialized")
+    payload = {
+        "user_id": user_id,
+        "email": email,
+    }
+    if full_name:
+        payload["full_name"] = full_name
+    if subject:
+        payload["subject"] = subject
+    if use_case:
+        payload["use_case"] = use_case
+    resp = supabase.table("beta_applications").upsert(
+        payload, on_conflict="user_id", ignore_duplicates=True
+    ).execute()
+    # Return existing row if insert was ignored
+    existing = supabase.table("beta_applications").select("*").eq("user_id", user_id).limit(1).execute()
+    if existing.data:
+        return existing.data[0]
+    if hasattr(resp, "data") and resp.data:
+        return resp.data[0]
+    return payload
+
+
+def get_beta_application(user_id: str) -> dict | None:
+    """Returns a user's beta application row, or None if they haven't applied."""
+    if not supabase:
+        return None
+    try:
+        resp = supabase.table("beta_applications").select("*").eq("user_id", user_id).limit(1).execute()
+        if resp.data:
+            return resp.data[0]
+    except Exception as e:
+        print(f"[beta] get_beta_application error (non-fatal): {e}")
+    return None
+
+
+def list_beta_applications(status: str = None) -> list:
+    """Admin: list all applications, optionally filtered by status."""
+    if not supabase:
+        return []
+    try:
+        q = supabase.table("beta_applications").select("*")
+        if status:
+            q = q.eq("status", status)
+        resp = q.order("created_at", desc=True).execute()
+        return resp.data or []
+    except Exception as e:
+        print(f"[beta] list_beta_applications error (non-fatal): {e}")
+    return []
+
+
+def approve_beta_application(application_id: str) -> dict:
+    """Approves a beta application: sets status, approved_at, expires_at, upgrades plan."""
+    if not supabase:
+        raise Exception("Supabase not initialized")
+    from datetime import timedelta
+    now = datetime.now(timezone.utc)
+    expires = now + timedelta(days=7)
+
+    # Fetch the application to get user_id
+    app_resp = supabase.table("beta_applications").select("*").eq("id", application_id).limit(1).execute()
+    if not app_resp.data:
+        raise Exception("Application not found")
+    app_row = app_resp.data[0]
+    user_id = app_row["user_id"]
+
+    # Update application status
+    supabase.table("beta_applications").update({
+        "status": "approved",
+        "approved_at": now.isoformat(),
+        "expires_at": expires.isoformat(),
+    }).eq("id", application_id).execute()
+
+    # Upgrade user to student plan
+    set_user_plan(user_id, "student")
+
+    # Set beta_expires_at on user_subscriptions
+    supabase.table("user_subscriptions").upsert(
+        {
+            "user_id": user_id,
+            "beta_expires_at": expires.isoformat(),
+            "updated_at": now.isoformat(),
+        },
+        on_conflict="user_id"
+    ).execute()
+
+    updated = supabase.table("beta_applications").select("*").eq("id", application_id).limit(1).execute()
+    return updated.data[0] if updated.data else app_row
+
+
+def reject_beta_application(application_id: str) -> dict:
+    """Rejects a beta application."""
+    if not supabase:
+        raise Exception("Supabase not initialized")
+    supabase.table("beta_applications").update({"status": "rejected"}).eq("id", application_id).execute()
+    updated = supabase.table("beta_applications").select("*").eq("id", application_id).limit(1).execute()
+    if updated.data:
+        return updated.data[0]
+    return {"id": application_id, "status": "rejected"}
+
+
+def submit_beta_feedback(user_id: str, lecture_id: str = None, rating: int = None,
+                         comment: str = None) -> dict:
+    """Inserts a beta feedback row."""
+    if not supabase:
+        raise Exception("Supabase not initialized")
+    payload: dict = {"user_id": user_id}
+    if lecture_id:
+        payload["lecture_id"] = lecture_id
+    if rating is not None:
+        payload["rating"] = rating
+    if comment:
+        payload["comment"] = comment
+    resp = supabase.table("beta_feedback").insert(payload).execute()
+    if hasattr(resp, "data") and resp.data:
+        return resp.data[0]
+    return payload
+
+
+def list_beta_feedback(page: int = 1, page_size: int = 20) -> dict:
+    """Admin: paginated list of beta feedback entries."""
+    if not supabase:
+        return {"items": [], "total": 0}
+    try:
+        offset = (page - 1) * page_size
+        resp = supabase.table("beta_feedback").select("*", count="exact").order(
+            "created_at", desc=True
+        ).range(offset, offset + page_size - 1).execute()
+        return {
+            "items": resp.data or [],
+            "total": resp.count or 0,
+            "page": page,
+            "page_size": page_size,
+        }
+    except Exception as e:
+        print(f"[beta] list_beta_feedback error (non-fatal): {e}")
+    return {"items": [], "total": 0}
+
+
+def get_beta_stats() -> dict:
+    """Returns aggregate stats for the beta program."""
+    if not supabase:
+        return {}
+    try:
+        apps_resp = supabase.table("beta_applications").select("status, expires_at").execute()
+        apps = apps_resp.data or []
+        total_applied = len(apps)
+        pending = sum(1 for a in apps if a.get("status") == "pending")
+        approved = sum(1 for a in apps if a.get("status") == "approved")
+        rejected = sum(1 for a in apps if a.get("status") == "rejected")
+        now = datetime.now(timezone.utc)
+        active = 0
+        expired = 0
+        for a in apps:
+            if a.get("status") != "approved":
+                continue
+            exp_str = a.get("expires_at")
+            if not exp_str:
+                continue
+            try:
+                exp = datetime.fromisoformat(exp_str.replace("Z", "+00:00"))
+                if exp > now:
+                    active += 1
+                else:
+                    expired += 1
+            except Exception:
+                pass
+
+        fb_resp = supabase.table("beta_feedback").select("rating").execute()
+        fb_rows = fb_resp.data or []
+        total_feedback = len(fb_rows)
+        ratings = [r["rating"] for r in fb_rows if r.get("rating") is not None]
+        avg_rating = round(sum(ratings) / len(ratings), 1) if ratings else None
+
+        return {
+            "total_applied": total_applied,
+            "pending": pending,
+            "approved": approved,
+            "rejected": rejected,
+            "active": active,
+            "expired": expired,
+            "total_feedback": total_feedback,
+            "avg_rating": avg_rating,
+        }
+    except Exception as e:
+        print(f"[beta] get_beta_stats error (non-fatal): {e}")
+    return {}

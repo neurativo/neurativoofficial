@@ -14,6 +14,7 @@ import { useSEO } from '../lib/useSEO';
 import { renderDomainContent } from '../lib/renderDomainContent.jsx';
 import JobProgress from '../components/JobProgress.jsx';
 import { useCreditsApi } from '../lib/creditsApi.js';
+import BetaFeedbackCard from '../components/BetaFeedbackCard.jsx';
 
 function fmtTs(seconds) {
     const s = Math.floor(seconds);
@@ -1112,6 +1113,8 @@ export default function LectureView() {
     const dragHandleRef = React.useRef(null);
     const dragCleanupRef = React.useRef(null);
     const onHandleDragRef = React.useRef(null);
+    const [showFeedbackCard, setShowFeedbackCard] = useState(false);
+    const feedbackTimerRef = useRef(null);
 
     useEffect(() => {
         api.get(`/api/v1/lectures/${id}/full?t=${Date.now()}`)
@@ -1189,6 +1192,23 @@ export default function LectureView() {
         document.addEventListener('mousedown', handleClick);
         return () => document.removeEventListener('mousedown', handleClick);
     }, [topicEditing]);
+
+    // Beta feedback card: show after 30s if user is beta-active and hasn't submitted yet
+    useEffect(() => {
+        if (!id) return;
+        if (localStorage.getItem('fbk_' + id)) return;
+        // Check if user is a beta tester
+        api.get('/api/v1/profile').then(res => {
+            if (res.data?.beta_active) {
+                feedbackTimerRef.current = setTimeout(() => {
+                    if (!localStorage.getItem('fbk_' + id)) {
+                        setShowFeedbackCard(true);
+                    }
+                }, 30000);
+            }
+        }).catch(() => {});
+        return () => { if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current); };
+    }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
     async function saveTopic(newTopic) {
         const trimmed = (newTopic || '').trim();
@@ -2029,6 +2049,12 @@ export default function LectureView() {
                 initialToken={lecture?.share_token}
                 onClose={() => setShareOpen(false)}
                 addToast={addToast}
+            />
+        )}
+        {showFeedbackCard && (
+            <BetaFeedbackCard
+                lectureId={id}
+                onDismiss={() => setShowFeedbackCard(false)}
             />
         )}
         </>

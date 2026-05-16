@@ -3,6 +3,8 @@ import { Link, useLocation } from 'react-router-dom';
 import { useClerk } from '@clerk/react';
 import { useAuthModal } from '../components/AuthModal';
 import { useSEO } from '../lib/useSEO';
+import api from '../lib/api';
+import BetaApplyModal from '../components/BetaApplyModal';
 
 // ─── CSS ─────────────────────────────────────────────────────────────────────
 const CSS = `
@@ -113,6 +115,38 @@ const CSS = `
   }
   .lp-btn-ghost-md:hover { border-color: #e8e4de; color: #1a1a1a; }
   .lp-proof { font-size: 13px; color: #c8c4be; }
+
+  /* ── BETA STRIP ── */
+  .lp-beta-strip {
+    max-width: 960px; margin: 0 auto 28px; padding: 0 40px;
+  }
+  @media (max-width: 640px) { .lp-beta-strip { padding: 0 24px; } }
+  @media (max-width: 400px) { .lp-beta-strip { padding: 0 14px; } }
+  .lp-beta-inner {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding: 12px 16px; border-radius: 12px;
+    background: #f0fdf4; border: 1px solid #bbf7d0;
+    animation: lp-beta-in 0.3s ease;
+  }
+  @keyframes lp-beta-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+  .lp-beta-dot { width: 7px; height: 7px; border-radius: 50%; background: #22c55e; flex-shrink: 0; }
+  .lp-beta-text { flex: 1; font-size: 13px; color: #166534; min-width: 0; line-height: 1.5; }
+  .lp-beta-chip {
+    display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px;
+    border-radius: 100px; font-size: 11px; font-weight: 600; border: 1px solid;
+    letter-spacing: 0.2px; white-space: nowrap; flex-shrink: 0;
+  }
+  .lp-beta-chip.pending { background: #fef3c7; border-color: #fde68a; color: #92400e; }
+  .lp-beta-chip.approved { background: #f0fdf4; border-color: #86efac; color: #15803d; }
+  .lp-beta-apply {
+    padding: 6px 14px; background: #166534; color: #fff; border: none;
+    border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer;
+    font-family: inherit; transition: opacity 0.15s; white-space: nowrap; flex-shrink: 0;
+  }
+  .lp-beta-apply:hover { opacity: 0.88; }
+  .dark .lp-beta-inner { background: rgba(22,163,74,0.1); border-color: rgba(134,239,172,0.25); }
+  .dark .lp-beta-text { color: #4ade80; }
+  .dark .lp-beta-apply { background: #15803d; }
 
   /* ── MOCKUP ── */
   .lp-mockup-wrap { padding: 0 40px 80px; max-width: 960px; margin: 0 auto; }
@@ -793,6 +827,63 @@ function Navbar({ user }) {
     );
 }
 
+// ─── BetaStrip ────────────────────────────────────────────────────────────────
+function BetaStrip({ user }) {
+    const [betaEnabled, setBetaEnabled] = useState(false);
+    const [application, setApplication] = useState(undefined); // undefined = not fetched
+    const [modalOpen, setModalOpen] = useState(false);
+
+    useEffect(() => {
+        api.get('/api/v1/beta/status').then(r => {
+            setBetaEnabled(r.data?.enabled === true);
+        }).catch(() => {});
+    }, []);
+
+    useEffect(() => {
+        if (!betaEnabled || !user) return;
+        api.get('/api/v1/beta/me').then(r => setApplication(r.data || null)).catch(() => setApplication(null));
+    }, [betaEnabled, user?.id]);
+
+    if (!betaEnabled) return null;
+
+    const status = application?.status;
+
+    return (
+        <div className="lp-beta-strip">
+            <div className="lp-beta-inner">
+                <span className="lp-beta-dot" />
+                <span className="lp-beta-text">
+                    <strong>Beta Testing Open</strong> — 20 spots · 1 free week of Student plan · No credit card.
+                </span>
+                {status === 'pending' && (
+                    <span className="lp-beta-chip pending">Application pending</span>
+                )}
+                {status === 'approved' && (
+                    <span className="lp-beta-chip approved">Beta active</span>
+                )}
+                {status === 'rejected' && null}
+                {(application === null || (!status && application !== undefined)) && (
+                    <button className="lp-beta-apply" onClick={() => setModalOpen(true)}>
+                        Apply now →
+                    </button>
+                )}
+                {application === undefined && !user && (
+                    <button className="lp-beta-apply" onClick={() => setModalOpen(true)}>
+                        Apply now →
+                    </button>
+                )}
+            </div>
+            {modalOpen && (
+                <BetaApplyModal
+                    onClose={() => { setModalOpen(false); }}
+                    user={user}
+                    initialApplication={application || null}
+                />
+            )}
+        </div>
+    );
+}
+
 function Hero({ user }) {
     const { openSignUp } = useAuthModal();
     return (
@@ -1415,6 +1506,7 @@ export default function LandingPage({ user }) {
                 <Navbar user={user} />
                 <main>
                     <Hero user={user} />
+                    <BetaStrip user={user} />
                     <Mockup />
                     <StatsBar />
                     <Features />

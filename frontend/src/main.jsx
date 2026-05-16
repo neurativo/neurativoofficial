@@ -25,6 +25,7 @@ import AdminAnalytics from './pages/admin/AdminAnalytics.jsx';
 import AdminAnnouncements from './pages/admin/AdminAnnouncements.jsx';
 import AdminTeams from './pages/admin/AdminTeams.jsx';
 import AdminTeamDetail from './pages/admin/AdminTeamDetail.jsx';
+import AdminBeta from './pages/admin/AdminBeta.jsx';
 import CreditsPage from './pages/CreditsPage.jsx';
 import FeaturesPage from './pages/FeaturesPage.jsx';
 import PricingPage from './pages/PricingPage.jsx';
@@ -125,6 +126,7 @@ function Root() {
                 <Route path="sessions" element={<AdminSessions />} />
                 <Route path="analytics" element={<AdminAnalytics />} />
                 <Route path="announcements" element={<AdminAnnouncements />} />
+                <Route path="beta" element={<AdminBeta />} />
                 <Route path="system" element={<AdminSystem />} />
                 <Route path="teams" element={<AdminTeams />} />
                 <Route path="teams/:slug" element={<AdminTeamDetail />} />

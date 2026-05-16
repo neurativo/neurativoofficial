@@ -8,6 +8,7 @@ import ExportModal from './ExportModal';
 import ImportModal from './ImportModal';
 import Footer from './Footer';
 import { useSEO } from '../lib/useSEO';
+import BetaApplyModal from './BetaApplyModal';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const C = {
@@ -203,6 +204,36 @@ const CSS = `
   .dark .ob-mic-granted { background: rgba(22,163,74,0.15); border-color: rgba(134,239,172,0.3); }
   .dark .ob-mic-denied  { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.3); }
   .dark .ob-checkmark   { background: rgba(22,163,74,0.15); border-color: rgba(134,239,172,0.3); }
+
+  /* Beta banner */
+  .db-beta-banner {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 10px 14px; border-radius: 10px; margin-bottom: 14px;
+    font-size: 13px; line-height: 1.5;
+  }
+  .db-beta-banner.open { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; }
+  .db-beta-banner.pending { background: #fefce8; border: 1px solid #fde68a; color: #713f12; }
+  .db-beta-banner.active { background: #f0fdf4; border: 1px solid #86efac; color: #15803d; }
+  .db-beta-banner.expired { background: var(--color-card); border: 1px solid var(--color-border); color: var(--color-sec); }
+  .dark .db-beta-banner.open { background: rgba(22,163,74,0.1); border-color: rgba(134,239,172,0.25); color: #4ade80; }
+  .dark .db-beta-banner.active { background: rgba(22,163,74,0.1); border-color: rgba(22,163,74,0.3); color: #4ade80; }
+  .dark .db-beta-banner.pending { background: rgba(202,138,4,0.1); border-color: rgba(253,224,71,0.25); color: #fbbf24; }
+  .db-beta-banner-text { flex: 1; min-width: 0; }
+  .db-beta-banner-dot { width: 7px; height: 7px; border-radius: 50%; background: #22c55e; flex-shrink: 0; }
+  .db-beta-apply {
+    padding: 5px 12px; border: none; border-radius: 7px;
+    font-size: 12px; font-weight: 600; cursor: pointer;
+    font-family: inherit; transition: opacity 0.15s; white-space: nowrap; flex-shrink: 0;
+    background: #166534; color: #fff;
+  }
+  .dark .db-beta-apply { background: #15803d; }
+  .db-beta-apply:hover { opacity: 0.88; }
+  .db-beta-dismiss {
+    margin-left: auto; cursor: pointer; background: none; border: none;
+    color: inherit; opacity: 0.5; font-size: 16px; padding: 0 4px; line-height: 1;
+    flex-shrink: 0; font-family: inherit;
+  }
+  .db-beta-dismiss:hover { opacity: 1; }
 
   /* Processing import cards */
   .db-proc-section { margin-bottom: 28px; }
@@ -500,6 +531,10 @@ export default function Dashboard({ user }) {
     const [dismissedIds, setDismissedIds] = useState(() => {
         try { return JSON.parse(sessionStorage.getItem('dismissed_ann') || '[]'); } catch { return []; }
     });
+    const [betaEnabled, setBetaEnabled] = useState(false);
+    const [betaApplication, setBetaApplication] = useState(undefined); // undefined = loading
+    const [betaBannerDismissed, setBetaBannerDismissed] = useState(() => sessionStorage.getItem('beta_banner_dismissed') === '1');
+    const [betaModalOpen, setBetaModalOpen] = useState(false);
 
     const handleSignOut = async () => {
         await signOut();
@@ -518,6 +553,18 @@ export default function Dashboard({ user }) {
         api.get('/api/v1/announcements')
             .then(r => setAnnouncements(Array.isArray(r.data?.announcements) ? r.data.announcements : []))
             .catch(() => {});
+    }, []);
+
+    useEffect(() => {
+        Promise.all([
+            api.get('/api/v1/beta/status'),
+            api.get('/api/v1/beta/me'),
+        ]).then(([statusRes, meRes]) => {
+            setBetaEnabled(statusRes.data?.enabled === true);
+            setBetaApplication(meRes.data || null);
+        }).catch(() => {
+            setBetaApplication(null);
+        });
     }, []);
 
     function dismissAnnouncement(id) {
@@ -783,6 +830,66 @@ export default function Dashboard({ user }) {
                     )}
                     <h1 className="db-page-title">Your lectures</h1>
                     <p className="db-page-sub">{loading ? '' : `${lectures.length} ${lectureWord}`}</p>
+
+                    {/* Beta testing banner */}
+                    {(() => {
+                        const appStatus = betaApplication?.status;
+                        const expiresAt = betaApplication?.expires_at;
+                        const daysLeft = expiresAt
+                            ? Math.max(0, Math.ceil((new Date(expiresAt) - new Date()) / 86400000))
+                            : null;
+                        const isExpired = expiresAt && new Date(expiresAt) < new Date();
+
+                        if (appStatus === 'approved' && isExpired && !betaBannerDismissed) {
+                            return (
+                                <div className="db-beta-banner expired">
+                                    <span className="db-beta-banner-text">Beta ended — thanks for helping us improve!</span>
+                                    <button className="db-beta-dismiss" onClick={() => { setBetaBannerDismissed(true); sessionStorage.setItem('beta_banner_dismissed', '1'); }} aria-label="Dismiss">×</button>
+                                </div>
+                            );
+                        }
+                        if (appStatus === 'approved' && !isExpired) {
+                            return (
+                                <div className="db-beta-banner active">
+                                    <span className="db-beta-banner-dot" />
+                                    <span className="db-beta-banner-text">
+                                        <strong>Beta active</strong> · Student plan · {daysLeft !== null ? `${daysLeft} day${daysLeft !== 1 ? 's' : ''} remaining` : ''}
+                                    </span>
+                                </div>
+                            );
+                        }
+                        if (appStatus === 'pending') {
+                            return (
+                                <div className="db-beta-banner pending">
+                                    <span className="db-beta-banner-text">Beta application received — review in progress.</span>
+                                </div>
+                            );
+                        }
+                        if (betaEnabled && !appStatus && betaApplication !== undefined && appStatus !== 'rejected') {
+                            return (
+                                <div className="db-beta-banner open">
+                                    <span className="db-beta-banner-dot" />
+                                    <span className="db-beta-banner-text">
+                                        <strong>Beta Testing Open</strong> — get 1 free week of Student plan.
+                                    </span>
+                                    <button className="db-beta-apply" onClick={() => setBetaModalOpen(true)}>Apply now</button>
+                                </div>
+                            );
+                        }
+                        return null;
+                    })()}
+
+                    {betaModalOpen && (
+                        <BetaApplyModal
+                            onClose={() => {
+                                setBetaModalOpen(false);
+                                // Re-fetch application status after modal closes
+                                api.get('/api/v1/beta/me').then(r => setBetaApplication(r.data || null)).catch(() => {});
+                            }}
+                            user={user}
+                            initialApplication={betaApplication || null}
+                        />
+                    )}
 
                     {/* Processing imports */}
                     {!loading && processingLectures.length > 0 && (
