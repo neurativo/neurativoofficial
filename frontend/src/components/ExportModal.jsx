@@ -92,6 +92,7 @@ export default function ExportModal({ lectureId, onClose, onStart }) {
                 backdropFilter: 'blur(10px)',
                 WebkitBackdropFilter: 'blur(10px)',
                 animation: 'em-fade 0.18s ease',
+                padding: 'clamp(12px, 4vw, 24px)',
             }}
             onClick={() => !isLoading && onClose()}
         >
@@ -100,9 +101,21 @@ export default function ExportModal({ lectureId, onClose, onStart }) {
                 @keyframes em-up   { from { opacity:0; transform:translateY(12px) scale(0.97); } to { opacity:1; transform:translateY(0) scale(1); } }
                 @keyframes em-spin { to { transform: rotate(360deg); } }
                 @keyframes em-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(99,102,241,0.35); } 50% { box-shadow: 0 0 0 6px rgba(99,102,241,0); } }
+                .em-stage-list { overflow-y: auto; max-height: min(300px, 38vh); }
+                .em-stage-list::-webkit-scrollbar { width: 4px; }
+                .em-stage-list::-webkit-scrollbar-track { background: transparent; }
+                .em-stage-list::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 4px; }
+                @media (max-width: 440px) {
+                    .em-card { border-radius: 16px !important; }
+                    .em-header { padding: 18px 18px 0 !important; }
+                    .em-progress { padding: 0 18px !important; }
+                    .em-stage-list-wrap { margin: 0 18px 16px !important; }
+                    .em-footer { padding: 0 18px 20px !important; }
+                }
             `}</style>
 
             <div
+                className="em-card"
                 onClick={e => e.stopPropagation()}
                 style={{
                     background: 'var(--color-card)',
@@ -117,7 +130,7 @@ export default function ExportModal({ lectureId, onClose, onStart }) {
                 }}
             >
                 {/* Header */}
-                <div style={{ padding: '24px 24px 0', textAlign: 'center' }}>
+                <div className="em-header" style={{ padding: '24px 24px 0', textAlign: 'center' }}>
                     <div style={{
                         width: 56, height: 56, borderRadius: 16, margin: '0 auto 16px',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -141,7 +154,7 @@ export default function ExportModal({ lectureId, onClose, onStart }) {
 
                 {/* Progress bar */}
                 {(isLoading || isSuccess) && (
-                    <div style={{ padding: '0 24px', marginBottom: 20 }}>
+                    <div className="em-progress" style={{ padding: '0 24px', marginBottom: 20 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                             <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Progress</span>
                             <span style={{ fontSize: 11, color: 'var(--color-text)', fontWeight: 600, fontFamily: 'monospace' }}>
@@ -161,13 +174,14 @@ export default function ExportModal({ lectureId, onClose, onStart }) {
 
                 {/* Stage list */}
                 {isLoading && (
-                    <div style={{
+                    <div className="em-stage-list-wrap" style={{
                         margin: '0 24px 20px',
                         background: 'var(--color-bg)',
                         border: '1px solid var(--color-border)',
                         borderRadius: 14,
                         overflow: 'hidden',
                     }}>
+                        <div className="em-stage-list">
                         {STAGES.map((s, i) => {
                             const isCurrent = s.pct === progress;
                             const isDone = s.pct < progress;
@@ -206,6 +220,7 @@ export default function ExportModal({ lectureId, onClose, onStart }) {
                                 </div>
                             );
                         })}
+                        </div>
                     </div>
                 )}
 
@@ -217,7 +232,7 @@ export default function ExportModal({ lectureId, onClose, onStart }) {
                 )}
 
                 {/* Footer actions */}
-                <div style={{ padding: '0 24px 24px', display: 'flex', gap: 8 }}>
+                <div className="em-footer" style={{ padding: '0 24px 24px', display: 'flex', gap: 8 }}>
                     {isError && (
                         <button onClick={runExport} style={{ flex: 1, padding: '11px 0', background: 'var(--color-dark)', color: 'var(--color-dark-fg)', border: 'none', borderRadius: 12, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
                             Try Again
