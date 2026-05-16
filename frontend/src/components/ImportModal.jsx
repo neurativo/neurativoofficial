@@ -18,6 +18,19 @@ const C = {
     accent: '#2563eb',
 };
 
+// Map job/summary statuses → { label, pct }
+const STATUS_MAP = {
+    uploading:    { label: 'Uploading your file…',        pct: 12 },
+    queued:       { label: 'Processing audio…',           pct: 25 },
+    importing:    { label: 'Processing audio…',           pct: 32 },
+    transcribing: { label: 'Transcribing your lecture…',  pct: 55 },
+    cleaning:     { label: 'Building your notes…',        pct: 72 },
+    generating:   { label: 'Building your notes…',        pct: 83 },
+    summarizing:  { label: 'Building your notes…',        pct: 83 },
+    storing:      { label: 'Almost done…',                pct: 93 },
+    done:         { label: 'Your notes are ready!',       pct: 100 },
+};
+
 const CSS = `
   .im-overlay { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.35); backdrop-filter: blur(5px); padding: 16px; }
   .im-modal { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 18px; width: 100%; max-width: 480px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.12); font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; }
@@ -45,13 +58,38 @@ const CSS = `
   .im-file-remove { margin-left: auto; background: none; border: none; cursor: pointer; color: ${C.muted}; font-size: 18px; line-height: 1; padding: 0 2px; transition: color 0.12s; flex-shrink: 0; }
   .im-file-remove:hover { color: #ef4444; }
 
-  /* Progress */
-  .im-progress { margin-top: 16px; }
-  .im-progress-label { font-size: 13px; color: ${C.sec}; margin: 0 0 8px; display: flex; align-items: center; gap: 8px; }
-  .im-progress-label-dot { width: 6px; height: 6px; border-radius: 50%; background: ${C.accent}; animation: im-pulse 1.2s ease-in-out infinite; }
-  @keyframes im-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
-  .im-progress-bar { height: 4px; background: ${C.border}; border-radius: 4px; overflow: hidden; }
-  .im-progress-fill { height: 100%; background: ${C.accent}; border-radius: 4px; transition: width 0.4s ease; }
+  /* ── Processing state ── */
+  .im-processing { display: flex; flex-direction: column; align-items: center; padding: 8px 0 4px; text-align: center; }
+
+  /* Spinner ring */
+  @keyframes im-spin { to { transform: rotate(360deg); } }
+  @keyframes im-done-pop { 0% { transform: scale(0.7); opacity: 0; } 60% { transform: scale(1.15); } 100% { transform: scale(1); opacity: 1; } }
+  .im-ring-wrap { position: relative; width: 64px; height: 64px; margin-bottom: 20px; }
+  .im-ring { width: 64px; height: 64px; border-radius: 50%; border: 2.5px solid ${C.border}; border-top-color: ${C.accent}; animation: im-spin 0.9s linear infinite; }
+  .im-ring.done { border-color: #22c55e; border-top-color: #22c55e; animation: none; }
+  .im-ring-icon { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+
+  /* Status text */
+  .im-status-label { font-size: 15px; font-weight: 600; color: ${C.text}; letter-spacing: -0.3px; margin: 0 0 6px; transition: opacity 0.3s; }
+  .im-status-label.done { color: #16a34a; }
+  .im-status-file { font-size: 12px; color: ${C.muted}; margin: 0 0 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 320px; }
+
+  /* Progress bar */
+  .im-bar-wrap { width: 100%; }
+  .im-bar-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+  .im-bar-pct { font-size: 11px; font-weight: 600; color: ${C.muted}; font-family: monospace; }
+  .im-bar { height: 3px; background: ${C.border}; border-radius: 99px; overflow: hidden; }
+  .im-bar-fill { height: 100%; border-radius: 99px; background: ${C.accent}; transition: width 0.8s cubic-bezier(0.4,0,0.2,1); }
+  .im-bar-fill.done { background: #22c55e; }
+
+  /* Safe-to-close notice */
+  @keyframes im-fade-up { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  .im-safe-notice { margin-top: 18px; background: ${C.bg}; border: 1px solid ${C.border}; border-radius: 12px; padding: 12px 14px; text-align: left; animation: im-fade-up 0.3s ease; }
+  .im-safe-notice-row { display: flex; align-items: flex-start; gap: 9px; }
+  .im-safe-dot { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; margin-top: 5px; flex-shrink: 0; }
+  .im-safe-text { font-size: 12px; color: ${C.sec}; line-height: 1.55; margin: 0; }
+  .im-safe-btn { margin-top: 10px; width: 100%; padding: 9px; background: none; border: 1px solid ${C.border}; border-radius: 9px; font-size: 12px; font-weight: 500; color: ${C.text}; cursor: pointer; font-family: inherit; transition: border-color 0.15s, background 0.15s; }
+  .im-safe-btn:hover { border-color: ${C.borderHov}; background: ${C.bg}; }
 
   /* Error */
   .im-error { font-size: 12px; color: #ef4444; margin-top: 10px; background: #fff5f5; border: 1px solid #fecaca; border-radius: 8px; padding: 8px 12px; }
@@ -91,6 +129,9 @@ const CSS = `
   .dark .im-file-icon { background: #0f1e38; }
   .dark .im-error { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.3); color: #f87171; }
   .dark .im-btn-submit { color: var(--color-dark-fg); }
+  .dark .im-ring { border-color: var(--color-border); border-top-color: #60a5fa; }
+  .dark .im-bar-fill { background: #60a5fa; }
+  .dark .im-domain-pill.active { background: rgba(99,102,241,0.15); }
 `;
 
 function fmtBytes(b) {
@@ -98,28 +139,53 @@ function fmtBytes(b) {
     return `${(b / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-const STAGES = [
-    { key: 'uploading',    label: 'Uploading…',                        pct: 15 },
-    { key: 'transcribing', label: 'Transcribing audio… (may take a few minutes for long files)', pct: 55 },
-    { key: 'summarizing',  label: 'Generating summary…',               pct: 85 },
-    { key: 'done',         label: 'Done!',                             pct: 100 },
-];
+// Spinner when processing, checkmark when done
+function RingIcon({ isDone }) {
+    if (isDone) {
+        return (
+            <div className="im-ring-wrap">
+                <div className="im-ring done" />
+                <div className="im-ring-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'im-done-pop 0.35s ease' }}>
+                        <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                </div>
+            </div>
+        );
+    }
+    return (
+        <div className="im-ring-wrap">
+            <div className="im-ring" />
+        </div>
+    );
+}
 
 export default function ImportModal({ onClose }) {
     const navigate = useNavigate();
-    const [file, setFile]           = useState(null);
-    const [drag, setDrag]           = useState(false);
-    const [stage, setStage]         = useState(null); // null | 'uploading' | 'transcribing' | 'summarizing' | 'done'
-    const [error, setError]         = useState('');
-    const [usage, setUsage]         = useState(null);
+    const [file, setFile]                   = useState(null);
+    const [drag, setDrag]                   = useState(false);
+    const [jobStatus, setJobStatus]         = useState(null);  // raw backend status key
+    const [pct, setPct]                     = useState(0);
+    const [statusLabel, setStatusLabel]     = useState('');
+    const [lectureId, setLectureId]         = useState(null);
+    const [uploadDone, setUploadDone]       = useState(false); // show safe-to-close notice
+    const [error, setError]                 = useState('');
+    const [usage, setUsage]                 = useState(null);
     const [selectedDomain, setSelectedDomain] = useState('');
-    const inputRef = useRef(null);
+    const inputRef  = useRef(null);
+    const pollingRef = useRef(false);
 
     useEffect(() => {
         api.get('/api/v1/usage').then(res => setUsage(res.data)).catch(() => {});
     }, []);
 
-    const stageInfo = STAGES.find(s => s.key === stage);
+    const applyStatus = (key) => {
+        const info = STATUS_MAP[key];
+        if (!info) return;
+        setJobStatus(key);
+        setStatusLabel(info.label);
+        setPct(info.pct);
+    };
 
     const pickFile = useCallback((f) => {
         setError('');
@@ -145,7 +211,7 @@ export default function ImportModal({ onClose }) {
     const onInputChange = (e) => pickFile(e.target.files[0]);
 
     const handleSubmit = async () => {
-        if (!file || stage) return;
+        if (!file || jobStatus) return;
         setError('');
 
         const formData = new FormData();
@@ -153,62 +219,77 @@ export default function ImportModal({ onClose }) {
         if (selectedDomain) formData.append('topic', selectedDomain);
 
         try {
-            setStage('uploading');
+            applyStatus('uploading');
 
             const res = await api.post('/api/v1/transcribe', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' },
                 onUploadProgress: (e) => {
-                    if (e.loaded >= e.total) setStage('transcribing');
+                    // Smooth upload progress within the uploading band (0–12%)
+                    if (e.total) {
+                        const uploadPct = Math.round((e.loaded / e.total) * 12);
+                        setPct(Math.max(uploadPct, 2));
+                    }
+                    if (e.loaded >= e.total) applyStatus('queued');
                 },
-                timeout: 120_000, // 2 min max for the upload itself
+                timeout: 120_000,
             });
 
-            const lectureId = res.data?.lecture_id;
-            setStage('transcribing');
+            const id = res.data?.lecture_id;
+            setLectureId(id);
+            setUploadDone(true);  // file is on the server — safe to close
+            applyStatus('queued');
 
-            // Backend processes in background — poll until transcript appears
-            const POLL_INTERVAL = 5000;   // 5s between checks
-            const MAX_WAIT_MS   = 20 * 60 * 1000; // 20 min max
-            const deadline = Date.now() + MAX_WAIT_MS;
+            // Dual polling: jobs API (granular) + lectures API (final status)
+            pollingRef.current = true;
+            const POLL_MS  = 3000;
+            const MAX_WAIT = 20 * 60 * 1000;
+            const deadline = Date.now() + MAX_WAIT;
 
-            while (Date.now() < deadline) {
-                await new Promise(r => setTimeout(r, POLL_INTERVAL));
+            while (pollingRef.current && Date.now() < deadline) {
+                await new Promise(r => setTimeout(r, POLL_MS));
                 try {
-                    const check = await api.get(`/api/v1/lectures/${lectureId}`);
-                    const status = check.data?.summary_status;
-                    const transcript = check.data?.transcript;
+                    // Jobs API — granular stage
+                    try {
+                        const job = await api.get(`/api/v1/jobs/${id}`);
+                        const s = job.data?.status;
+                        if (s && STATUS_MAP[s]) applyStatus(s);
+                        if (s === 'failed') {
+                            setError(job.data?.error || 'Processing failed. Please try again.');
+                            setJobStatus('failed');
+                            return;
+                        }
+                    } catch { /* jobs endpoint optional */ }
 
-                    // Update displayed stage based on backend status.
-                    if (status === 'summarizing') {
-                        setStage('summarizing');
-                    } else if (!status && transcript && transcript.length > 10) {
-                        // Fallback: old backend without summary_status — show summarizing stage.
-                        setStage('summarizing');
-                    }
+                    // Lectures API — final gate
+                    const check = await api.get(`/api/v1/lectures/${id}`);
+                    const summaryStatus = check.data?.summary_status;
 
-                    // Navigate when backend confirms everything is done.
-                    if (status === 'final') {
-                        setStage('done');
-                        await new Promise(r => setTimeout(r, 600));
-                        navigate(`/lecture/${lectureId}`);
+                    if (summaryStatus === 'summarizing') applyStatus('generating');
+
+                    if (summaryStatus === 'final') {
+                        applyStatus('done');
+                        await new Promise(r => setTimeout(r, 900));
+                        navigate(`/lecture/${id}`);
                         return;
                     }
 
-                    // Fallback: old backend — navigate 5s after transcript appears
-                    // (gives summarisation extra time vs the old 800ms fake wait).
-                    if (!status && transcript && transcript.length > 10) {
+                    // Legacy backend without summary_status
+                    const transcript = check.data?.transcript;
+                    if (!summaryStatus && transcript && transcript.length > 10) {
+                        applyStatus('generating');
                         await new Promise(r => setTimeout(r, 5000));
-                        setStage('done');
-                        await new Promise(r => setTimeout(r, 600));
-                        navigate(`/lecture/${lectureId}`);
+                        applyStatus('done');
+                        await new Promise(r => setTimeout(r, 900));
+                        navigate(`/lecture/${id}`);
                         return;
                     }
                 } catch { /* keep polling */ }
             }
 
-            // Timed out
+            // Timed out — tell user to check dashboard
             setError('Transcription is taking longer than expected. Your lecture will appear in the dashboard once it finishes.');
-            setStage(null);
+            setJobStatus(null);
+            setPct(0);
 
         } catch (err) {
             const status = err?.response?.status;
@@ -230,156 +311,196 @@ export default function ImportModal({ onClose }) {
                 msg = (typeof detail === 'string' ? detail : null) || err?.message || 'Import failed. Please try again.';
             }
             setError(msg);
-            setStage(null);
+            setJobStatus(null);
+            setPct(0);
         }
     };
 
-    const busy = stage !== null && stage !== 'done';
+    // Stop polling when modal closes
+    const handleClose = () => {
+        pollingRef.current = false;
+        onClose();
+    };
+
+    const isProcessing = jobStatus && jobStatus !== 'done' && jobStatus !== 'failed';
+    const isDone       = jobStatus === 'done';
 
     return (
         <>
             <style>{CSS}</style>
-            <div className="im-overlay" onClick={() => !busy && onClose()}>
+            <div className="im-overlay" onClick={() => !isProcessing && handleClose()}>
                 <div className="im-modal" onClick={e => e.stopPropagation()}>
-                    <div className="im-header">
-                        <div>
-                            <p className="im-title">Import recording</p>
-                            <p className="im-sub">MP3, M4A, WAV, MP4 or WebM · max 500 MB</p>
+
+                    {/* Header — hide during processing to give status more room */}
+                    {!isProcessing && !isDone && (
+                        <div className="im-header">
+                            <div>
+                                <p className="im-title">Import recording</p>
+                                <p className="im-sub">MP3, M4A, WAV, MP4 or WebM · max 500 MB</p>
+                            </div>
+                            <button className="im-close" onClick={handleClose}>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                                </svg>
+                            </button>
                         </div>
-                        <button className="im-close" onClick={() => !busy && onClose()} disabled={busy}>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                            </svg>
-                        </button>
-                    </div>
+                    )}
 
                     <div className="im-body">
-                        {/* Drop zone (hide when busy) */}
-                        {!busy && (
-                            <div
-                                className={`im-drop${drag ? ' drag' : ''}`}
-                                onDragOver={e => { e.preventDefault(); setDrag(true); }}
-                                onDragLeave={() => setDrag(false)}
-                                onDrop={onDrop}
-                                onClick={() => !file && inputRef.current?.click()}
-                            >
-                                <input
-                                    ref={inputRef}
-                                    type="file"
-                                    accept={ACCEPTED.join(',')}
-                                    className="im-file-input"
-                                    onChange={onInputChange}
-                                    style={{ pointerEvents: file ? 'none' : 'auto' }}
-                                />
-                                <div className="im-drop-icon">
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-                                    </svg>
-                                </div>
-                                <p className="im-drop-title">{file ? 'Drop to replace' : 'Drag & drop your audio file'}</p>
-                                <p className="im-drop-sub">or <b>click to browse</b></p>
-                            </div>
-                        )}
 
-                        {/* Plan limit hint */}
-                        {!busy && usage && (
-                            <p style={{ fontSize: 12, color: C.muted, marginTop: 10, textAlign: 'center' }}>
-                                {usage.plan_tier === 'free'
-                                    ? `Free plan: up to ${usage.upload_max_duration_label || '60 min'} audio · ${usage.uploads_limit ?? 3} imports/month (${usage.uploads_this_month} used)`
-                                    : usage.plan_tier === 'student'
-                                    ? `Student plan: up to ${usage.upload_max_duration_label || '3 hours'} · Unlimited imports`
-                                    : 'Pro plan: unlimited imports · any file size'
-                                }
-                            </p>
-                        )}
+                        {/* ── Processing / done state ── */}
+                        {(isProcessing || isDone) && (
+                            <div className="im-processing">
+                                <RingIcon isDone={isDone} />
 
-                        {/* Selected file info */}
-                        {file && !busy && (
-                            <div className="im-file-info">
-                                <div className="im-file-icon">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                        <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
-                                    </svg>
-                                </div>
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                    <p className="im-file-name">{file.name}</p>
-                                    <p className="im-file-size">{fmtBytes(file.size)}</p>
-                                </div>
-                                <button className="im-file-remove" onClick={() => { setFile(null); setError(''); }}>×</button>
-                            </div>
-                        )}
-
-                        {/* Domain picker */}
-                        {file && !busy && (
-                            <div className="im-domain-section">
-                                <p className="im-domain-label">Field (optional — AI detects if blank)</p>
-                                <div className="im-domain-grid">
-                                    {KNOWN_TOPICS_LIST.map(t => (
-                                        <button
-                                            key={t}
-                                            className={`im-domain-pill${selectedDomain === t ? ' active' : ''}`}
-                                            onClick={() => setSelectedDomain(d => d === t ? '' : t)}
-                                        >
-                                            {t}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Progress */}
-                        {busy && stageInfo && (
-                            <div className="im-progress">
-                                <p className="im-progress-label">
-                                    <span className="im-progress-label-dot" />
-                                    {stageInfo.label}
+                                <p className={`im-status-label${isDone ? ' done' : ''}`}>
+                                    {statusLabel}
                                 </p>
-                                <div className="im-progress-bar">
-                                    <div className="im-progress-fill" style={{ width: `${stageInfo.pct}%` }} />
-                                </div>
                                 {file && (
-                                    <p style={{ fontSize: 12, color: '#a3a3a3', marginTop: 8 }}>{file.name}</p>
+                                    <p className="im-status-file">
+                                        {file.name} · {fmtBytes(file.size)}
+                                    </p>
+                                )}
+
+                                {/* Progress bar */}
+                                <div className="im-bar-wrap">
+                                    <div className="im-bar-row">
+                                        <span style={{ fontSize: 10, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Progress</span>
+                                        <span className="im-bar-pct">{pct}%</span>
+                                    </div>
+                                    <div className="im-bar">
+                                        <div className={`im-bar-fill${isDone ? ' done' : ''}`} style={{ width: `${pct}%` }} />
+                                    </div>
+                                </div>
+
+                                {/* Safe-to-close notice (appears once file is on server) */}
+                                {uploadDone && !isDone && (
+                                    <div className="im-safe-notice">
+                                        <div className="im-safe-notice-row">
+                                            <div className="im-safe-dot" />
+                                            <p className="im-safe-text">
+                                                Your file is processing on our servers — you can safely close this and your lecture will appear in the dashboard when ready.
+                                            </p>
+                                        </div>
+                                        <button
+                                            className="im-safe-btn"
+                                            onClick={() => { pollingRef.current = false; navigate('/app'); onClose(); }}
+                                        >
+                                            Open dashboard
+                                        </button>
+                                    </div>
                                 )}
                             </div>
                         )}
 
-                        {/* Error / no-credits */}
-                        {error && (() => {
-                            if (error.startsWith('__no_credits__:')) {
-                                const [, req, have] = error.split(':');
-                                const required = Number(req);
-                                const credits  = Number(have);
-                                return (
-                                    <div className="im-no-credits">
-                                        <p className="im-no-credits-title">Not enough credits</p>
-                                        <p className="im-no-credits-body">
-                                            This import needs <strong>{required} credit{required !== 1 ? 's' : ''}</strong>.
-                                            You have <strong>{credits}</strong>.
-                                        </p>
-                                        <p className="im-no-credits-hint">1 credit = up to 30 min · 2-hr lecture = 4 credits</p>
-                                        <button
-                                            className="im-no-credits-btn"
-                                            onClick={() => { onClose(); navigate('/credits'); }}
-                                        >
-                                            Buy credits →
-                                        </button>
+                        {/* ── Idle state ── */}
+                        {!isProcessing && !isDone && (
+                            <>
+                                {/* Drop zone */}
+                                <div
+                                    className={`im-drop${drag ? ' drag' : ''}`}
+                                    onDragOver={e => { e.preventDefault(); setDrag(true); }}
+                                    onDragLeave={() => setDrag(false)}
+                                    onDrop={onDrop}
+                                    onClick={() => !file && inputRef.current?.click()}
+                                >
+                                    <input
+                                        ref={inputRef}
+                                        type="file"
+                                        accept={ACCEPTED.join(',')}
+                                        className="im-file-input"
+                                        onChange={onInputChange}
+                                        style={{ pointerEvents: file ? 'none' : 'auto' }}
+                                    />
+                                    <div className="im-drop-icon">
+                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                                        </svg>
                                     </div>
-                                );
-                            }
-                            return <div className="im-error">{error}</div>;
-                        })()}
+                                    <p className="im-drop-title">{file ? 'Drop to replace' : 'Drag & drop your audio file'}</p>
+                                    <p className="im-drop-sub">or <b>click to browse</b></p>
+                                </div>
 
-                        {/* Footer */}
-                        <div className="im-footer">
-                            <button className="im-btn-cancel" onClick={onClose} disabled={busy}>Cancel</button>
-                            <button
-                                className="im-btn-submit"
-                                onClick={handleSubmit}
-                                disabled={!file || busy}
-                            >
-                                {busy ? stageInfo?.label : 'Import and transcribe'}
-                            </button>
-                        </div>
+                                {/* Plan limit hint */}
+                                {usage && (
+                                    <p style={{ fontSize: 12, color: C.muted, marginTop: 10, textAlign: 'center' }}>
+                                        {usage.plan_tier === 'free'
+                                            ? `Free plan: up to ${usage.upload_max_duration_label || '60 min'} audio · ${usage.uploads_limit ?? 3} imports/month (${usage.uploads_this_month} used)`
+                                            : usage.plan_tier === 'student'
+                                            ? `Student plan: up to ${usage.upload_max_duration_label || '3 hours'} · Unlimited imports`
+                                            : 'Pro plan: unlimited imports · any file size'
+                                        }
+                                    </p>
+                                )}
+
+                                {/* Selected file info */}
+                                {file && (
+                                    <div className="im-file-info">
+                                        <div className="im-file-icon">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
+                                            </svg>
+                                        </div>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <p className="im-file-name">{file.name}</p>
+                                            <p className="im-file-size">{fmtBytes(file.size)}</p>
+                                        </div>
+                                        <button className="im-file-remove" onClick={() => { setFile(null); setError(''); }}>×</button>
+                                    </div>
+                                )}
+
+                                {/* Domain picker */}
+                                {file && (
+                                    <div className="im-domain-section">
+                                        <p className="im-domain-label">Field (optional — AI detects if blank)</p>
+                                        <div className="im-domain-grid">
+                                            {KNOWN_TOPICS_LIST.map(t => (
+                                                <button
+                                                    key={t}
+                                                    className={`im-domain-pill${selectedDomain === t ? ' active' : ''}`}
+                                                    onClick={() => setSelectedDomain(d => d === t ? '' : t)}
+                                                >
+                                                    {t}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Error / no-credits */}
+                                {error && (() => {
+                                    if (error.startsWith('__no_credits__:')) {
+                                        const [, req, have] = error.split(':');
+                                        return (
+                                            <div className="im-no-credits">
+                                                <p className="im-no-credits-title">Not enough credits</p>
+                                                <p className="im-no-credits-body">
+                                                    This import needs <strong>{req} credit{Number(req) !== 1 ? 's' : ''}</strong>.
+                                                    You have <strong>{have}</strong>.
+                                                </p>
+                                                <p className="im-no-credits-hint">1 credit = up to 30 min · 2-hr lecture = 4 credits</p>
+                                                <button className="im-no-credits-btn" onClick={() => { onClose(); navigate('/credits'); }}>
+                                                    Buy credits →
+                                                </button>
+                                            </div>
+                                        );
+                                    }
+                                    return <div className="im-error">{error}</div>;
+                                })()}
+
+                                {/* Footer */}
+                                <div className="im-footer">
+                                    <button className="im-btn-cancel" onClick={handleClose}>Cancel</button>
+                                    <button
+                                        className="im-btn-submit"
+                                        onClick={handleSubmit}
+                                        disabled={!file}
+                                    >
+                                        Import and transcribe
+                                    </button>
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
             </div>
