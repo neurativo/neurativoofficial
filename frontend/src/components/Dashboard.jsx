@@ -162,6 +162,8 @@ const CSS = `
     .db-empty-num { font-size: 52px; letter-spacing: -4px; }
     .db-filters { gap: 6px; }
     .db-filter-select { font-size: 12px; padding: 5px 8px; }
+    .db-proc-card { padding: 14px 16px; gap: 8px; }
+    .db-proc-section { margin-bottom: 20px; }
   }
 
   /* Onboarding modal */

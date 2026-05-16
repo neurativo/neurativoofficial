@@ -53,7 +53,7 @@ const CSS = `
   /* Selected file */
   .im-file-info { display: flex; align-items: center; gap: 12px; background: ${C.bg}; border: 1px solid ${C.border}; border-radius: 12px; padding: 12px 14px; margin-top: 12px; }
   .im-file-icon { width: 36px; height: 36px; background: #eff6ff; border-radius: 9px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: ${C.accent}; }
-  .im-file-name { font-size: 13px; font-weight: 500; color: ${C.text}; margin: 0 0 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
+  .im-file-name { font-size: 13px; font-weight: 500; color: ${C.text}; margin: 0 0 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: min(260px, 100%); }
   .im-file-size { font-size: 11px; color: ${C.muted}; margin: 0; }
   .im-file-remove { margin-left: auto; background: none; border: none; cursor: pointer; color: ${C.muted}; font-size: 18px; line-height: 1; padding: 0 2px; transition: color 0.12s; flex-shrink: 0; }
   .im-file-remove:hover { color: #ef4444; }
@@ -72,7 +72,7 @@ const CSS = `
   /* Status text */
   .im-status-label { font-size: 15px; font-weight: 600; color: ${C.text}; letter-spacing: -0.3px; margin: 0 0 6px; transition: opacity 0.3s; }
   .im-status-label.done { color: #16a34a; }
-  .im-status-file { font-size: 12px; color: ${C.muted}; margin: 0 0 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 320px; }
+  .im-status-file { font-size: 12px; color: ${C.muted}; margin: 0 0 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: min(320px, 100%); }
 
   /* Progress bar */
   .im-bar-wrap { width: 100%; }
@@ -123,6 +123,19 @@ const CSS = `
   .im-domain-pill { padding: 6px 4px; border-radius: 8px; border: 1.5px solid var(--color-border); background: none; cursor: pointer; font-size: 11px; font-weight: 500; color: var(--color-text); text-align: center; transition: all 0.12s; text-transform: capitalize; font-family: 'Inter', sans-serif; }
   .im-domain-pill:hover { border-color: #6366f1; color: #6366f1; }
   .im-domain-pill.active { background: #f3f0ff; border-color: #6366f1; color: #6366f1; }
+
+  /* ── Mobile ── */
+  @media (max-width: 440px) {
+    .im-body { padding: 16px 18px 20px; }
+    .im-header { padding: 18px 18px 0; }
+    .im-drop { padding: 28px 14px; }
+    .im-ring-wrap { width: 52px; height: 52px; margin-bottom: 16px; }
+    .im-ring { width: 52px; height: 52px; }
+    .im-status-label { font-size: 14px; }
+    .im-domain-grid { grid-template-columns: repeat(2, 1fr); }
+    .im-footer { flex-direction: column; }
+    .im-btn-cancel, .im-btn-submit { flex: none; width: 100%; }
+  }
 
   /* ── Dark mode ── */
   .dark .im-drop:hover, .dark .im-drop.drag { background: #0f1e38; border-color: #3b82f6; }
