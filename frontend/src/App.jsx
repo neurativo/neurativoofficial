@@ -21,7 +21,7 @@ const KNOWN_TOPICS_LIST = [
     'art','music','architecture',
 ];
 
-const MAX_BUFFERED_CHUNKS = 5;
+const MAX_BUFFERED_CHUNKS = 30; // 30 × 12s = 6 min offline buffer before pausing
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://neurativoofficial-production.up.railway.app';
 const RECOVERY_STORAGE_KEY = 'neurativo_session';
 const RECOVERY_MAX_AGE_MS = 12 * 60 * 60 * 1000;
@@ -201,6 +201,7 @@ function App({ user }) {
     const [isOnline, setIsOnline]               = useState(navigator.onLine);
     const [connQuality, setConnQuality]         = useState('good'); // 'good' | 'poor' | 'offline'
     const [chunkBufferCount, setChunkBufferCount] = useState(0);
+    const [isSyncing, setIsSyncing]             = useState(false); // draining queued chunks after reconnect
     const [recoverySession, setRecoverySession] = useState(null);
 
     // ── Refs ──────────────────────────────────────────────
@@ -221,6 +222,7 @@ function App({ user }) {
     // Resilience refs
     const chunkBufferRef      = useRef([]);           // offline chunk queue
     const uploadQueueRef      = useRef(Promise.resolve()); // serializes uploads
+    const pausedByOfflineRef  = useRef(false);        // true if paused due to offline buffer limit
     const wakeLockRef         = useRef(null);         // screen wake lock
     const timerWorkerRef      = useRef(null);         // 12s chunk timer worker
     const sseReconnectRef     = useRef(0);            // SSE reconnect attempt count
@@ -318,14 +320,31 @@ function App({ user }) {
     useEffect(() => { sessionStatusRef.current = sessionStatus; }, [sessionStatus]);
 
     // Resilience 8 / Fix 10: preserve interrupted sessions on tab close/reload
+    // Also fires end-beacon so the backend finalizes notes immediately rather
+    // than waiting up to 15 min for the idle-cleanup job to run.
     useEffect(() => {
+        const fireEndBeacon = async () => {
+            const id = lectureIdRef.current;
+            const st = sessionStatusRef.current;
+            if (!id || (st !== 'recording' && st !== 'paused')) return;
+            try {
+                const token = await window.Clerk?.session?.getToken().catch(() => null);
+                if (token) {
+                    const url = `${API_BASE_URL}/api/v1/live/${id}/end-beacon?token=${encodeURIComponent(token)}`;
+                    navigator.sendBeacon(url, new Blob([], { type: 'application/json' }));
+                }
+            } catch {}
+        };
         const onUnload = () => {
             persistRecoveryState();
             releaseWakeLock();
+            fireEndBeacon();
         };
-        const onPageHide = () => {
+        const onPageHide = (e) => {
             persistRecoveryState();
             releaseWakeLock();
+            // Only fire beacon on true unload (not bfcache preserve)
+            if (!e.persisted) fireEndBeacon();
         };
         window.addEventListener('beforeunload', onUnload);
         window.addEventListener('pagehide', onPageHide);
@@ -407,14 +426,25 @@ function App({ user }) {
         const goOnline = () => {
             setIsOnline(true);
             setConnQuality('good');
+            setErrorMessage(null);
             // Drain buffered chunks through the upload queue
             const buffer = chunkBufferRef.current.splice(0);
             setChunkBufferCount(0);
+            if (buffer.length > 0) setIsSyncing(true);
+            let chain = uploadQueueRef.current;
             for (const { blob, targetId } of buffer) {
-                uploadQueueRef.current = uploadQueueRef.current
+                chain = chain
                     .then(() => uploadChunkWithRetry(blob, targetId))
                     .catch(() => {});
             }
+            uploadQueueRef.current = chain.then(() => {
+                setIsSyncing(false);
+                // Auto-resume if we paused solely because the offline buffer filled up
+                if (pausedByOfflineRef.current && lectureIdRef.current && sessionStatusRef.current === 'paused') {
+                    pausedByOfflineRef.current = false;
+                    startRecording(lectureIdRef.current);
+                }
+            });
         };
         const goOffline = () => { setIsOnline(false); setConnQuality('offline'); };
         window.addEventListener('online', goOnline);
@@ -513,9 +543,10 @@ function App({ user }) {
         }
         releaseWakeLock();
         stopScreenShare();
+        pausedByOfflineRef.current = true;
         setSessionStatus('paused');
         setConnQuality('offline');
-        showError('Connection was lost for too long. Recording paused before audio could be dropped. Reconnect, then press Resume.', 0);
+        showError('Connection lost. Recording paused — will auto-resume when network returns.', 0);
     };
 
     const endForMissingServerSession = () => {
@@ -1150,6 +1181,7 @@ function App({ user }) {
     };
 
     const pauseSession = () => {
+        pausedByOfflineRef.current = false; // manual pause — don't auto-resume on reconnect
         isRecordingRef.current = false;
         if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop();
         stopAudioMonitoring();
@@ -1407,17 +1439,10 @@ function App({ user }) {
             const statusRes = await api.get(`/api/v1/live/${savedId}/status`);
             if (!statusRes.data?.active) {
                 clearSavedRecovery();
-                try {
-                    const endedRes = await api.get(`/api/v1/lectures/${savedId}`);
-                    setLectureId(savedId);
-                    if (endedRes.data.transcript) setTranscript([{ id: Date.now(), text: endedRes.data.transcript }]);
-                    const endedSummary = endedRes.data.master_summary || endedRes.data.summary;
-                    if (endedSummary) setSummary(endedSummary);
-                    if (endedRes.data.language) setDetectedLanguage(endedRes.data.language);
-                    if (endedRes.data.topic) setDetectedTopic(endedRes.data.topic);
-                } catch {}
-                setSessionStatus('ended');
-                showError('That session has already expired on the server. The saved lecture is still available to review and export.', 0);
+                // Session ended (via beacon on tab close or idle-timeout cleanup).
+                // Notes are finalizing in the background — redirect to Dashboard
+                // where the lecture will appear in the library once ready.
+                navigate('/app');
                 return;
             }
         } catch {}
@@ -1454,7 +1479,7 @@ function App({ user }) {
                             </div>
                             <h2 className="text-[15px] font-bold text-[#1a1a1a] mb-1">Session interrupted</h2>
                             <p className="text-[13px] text-[#6b6b6b] mb-5 leading-relaxed">
-                                You have an active session from before. Would you like to resume where you left off?
+                                Looks like the tab was closed mid-lecture. Your notes so far are safe — resume to continue recording, or discard to start fresh.
                             </p>
                             <div className="flex gap-2">
                                 <button
@@ -1709,8 +1734,13 @@ function App({ user }) {
 
     return (
         <div className="h-screen bg-white flex flex-col overflow-hidden selection:bg-[#f0ede8] relative">
-            {/* ── Resilience 1: Offline Banner ── */}
-            {!isOnline && (sessionStatus === 'recording' || sessionStatus === 'paused') && (
+            {/* ── Resilience 1: Offline / Syncing Banner ── */}
+            {isSyncing && (sessionStatus === 'recording' || sessionStatus === 'paused') && (
+                <div className="bg-blue-500 text-white text-xs font-semibold px-4 py-1.5 text-center shrink-0 z-40">
+                    Back online — syncing queued audio…
+                </div>
+            )}
+            {!isOnline && !isSyncing && (sessionStatus === 'recording' || sessionStatus === 'paused') && (
                 <div className="bg-amber-400 text-amber-900 text-xs font-semibold px-4 py-1.5 text-center shrink-0 z-40">
                     No connection — recording continues locally.{chunkBufferCount > 0 ? ` ${chunkBufferCount} chunk${chunkBufferCount > 1 ? 's' : ''} queued.` : ''}
                 </div>
