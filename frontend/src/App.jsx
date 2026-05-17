@@ -225,6 +225,7 @@ function App({ user }) {
     const uploadQueueRef      = useRef(Promise.resolve()); // serializes uploads
     const pausedByOfflineRef  = useRef(false);        // true if paused due to offline buffer limit
     const wakeLockRef         = useRef(null);         // screen wake lock
+    const bgAudioCtxRef       = useRef(null);         // silent AudioContext — keeps audio session alive on Android when screen locks
     const timerWorkerRef      = useRef(null);         // 12s chunk timer worker
     const sseReconnectRef     = useRef(0);            // SSE reconnect attempt count
     const summaryPollRef      = useRef(null);         // fallback 15s summary poll
@@ -511,19 +512,24 @@ function App({ user }) {
         }
     }, [lectureId, sessionStatus, recordingSeconds, detectedLanguage, detectedTopic]);
 
-    // Resilience 5: re-acquire wake lock when tab becomes visible again
-    // Also show background-audio warning on mobile when tab goes hidden during recording
+    // Resilience 5: re-acquire wake lock when tab becomes visible again.
+    // On iOS, show a warning when the tab is hidden during recording (nothing we can do there).
+    // On Android the silent audio loop keeps recording alive — no warning needed.
     useEffect(() => {
-        const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+        const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+        const iosMsg = 'Recording may stop on iOS when the screen locks — keep the screen on for best results.';
         const onVisibility = () => {
             if (document.visibilityState === 'visible' && isRecordingRef.current) {
                 requestWakeLock();
+                // Resume AudioContext if browser suspended it while in background
+                if (bgAudioCtxRef.current?.ctx.state === 'suspended') {
+                    bgAudioCtxRef.current.ctx.resume().catch(() => {});
+                }
+                // Clear iOS warning if user comes back
+                setErrorMessage(msg => msg === iosMsg ? null : msg);
             }
-            if (document.hidden && isRecordingRef.current && isMobile) {
-                showError('Keep this tab open — background audio is not supported on mobile browsers.', 0);
-            }
-            if (!document.hidden) {
-                setErrorMessage(msg => msg === 'Keep this tab open — background audio is not supported on mobile browsers.' ? null : msg);
+            if (document.hidden && isRecordingRef.current && isIOS) {
+                showError(iosMsg, 0);
             }
         };
         document.addEventListener('visibilitychange', onVisibility);
@@ -594,6 +600,34 @@ function App({ user }) {
     const releaseWakeLock = () => {
         wakeLockRef.current?.release();
         wakeLockRef.current = null;
+    };
+
+    // Background audio session lock — keeps MediaRecorder alive when screen turns off on Android.
+    // Technique: play a near-silent (gain=0.001) oscillator through WebAudio so the browser
+    // considers there to be an active audio output, preventing it from suspending the audio session.
+    // iOS Safari will still kill it — nothing we can do there (OS-level restriction).
+    const _startBgAudioLoop = () => {
+        try {
+            _stopBgAudioLoop(); // clean up any previous instance
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            gain.gain.value = 0.001; // effectively silent but non-zero so browser counts it as output
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start();
+            bgAudioCtxRef.current = { ctx, osc };
+        } catch {
+            // AudioContext not available — silently skip
+        }
+    };
+
+    const _stopBgAudioLoop = () => {
+        try {
+            bgAudioCtxRef.current?.osc.stop();
+            bgAudioCtxRef.current?.ctx.close();
+        } catch { /* already stopped */ }
+        bgAudioCtxRef.current = null;
     };
 
     // Filtered transcript for search
@@ -1060,6 +1094,8 @@ function App({ user }) {
                     };
                 }
                 recorder.start();
+                // Keep audio session alive when screen locks on Android (silent output loop)
+                _startBgAudioLoop();
                 // setTimeout replaced by timerWorker (not throttled in background tabs)
             };
 
@@ -1206,6 +1242,7 @@ function App({ user }) {
         }
         // Resilience 5: release wake lock on pause
         releaseWakeLock();
+        _stopBgAudioLoop();
         // Stop visual captures if active
         stopScreenShare();
         setSessionStatus('paused');
