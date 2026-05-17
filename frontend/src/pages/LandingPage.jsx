@@ -92,7 +92,7 @@ const CSS = `
     color: #1a1a1a; max-width: 720px; margin-bottom: 20px;
     font-family: 'Inter', sans-serif;
   }
-  .lp-h1-em { color: #6b6b6b; font-style: italic; font-weight: 400; }
+  .lp-h1-em { color: #6b6b6b; font-style: italic; font-weight: 400; font-family: 'Playfair Display', Georgia, serif; }
   .lp-hero-sub {
     font-size: 16px; font-weight: 400; line-height: 1.7;
     color: #6b6b6b; max-width: 480px; margin-bottom: 36px;
