@@ -1456,7 +1456,6 @@ function About() {
                 <a href="https://linkedin.com/in/shazadarshad" target="_blank" rel="noopener noreferrer" className="lp-about-founder-lnk">Shazad Arshad</a>
                 {' '}&amp;{' '}
                 <a href="https://linkedin.com/in/shariffahamed" target="_blank" rel="noopener noreferrer" className="lp-about-founder-lnk">Shariff Ahamed</a>
-                {' '}· Sri Lanka
             </p>
         </section>
     );
