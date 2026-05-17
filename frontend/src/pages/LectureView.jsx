@@ -4,7 +4,7 @@ import {
     ArrowLeft, Download, Share2, FileText, MessageCircle, CreditCard,
     HelpCircle, BookOpen, BarChart2, Clock, AlignLeft, Star, Minimize2,
     Globe, Eye, Monitor, Send, Shield, ChevronLeft, ChevronRight,
-    Shuffle, Copy, X, GraduationCap, Network, Play, ChevronDown, ChevronUp,
+    Shuffle, Copy, X, GraduationCap, Play, ChevronDown, ChevronUp,
     Timer, CheckCircle, XCircle,
 } from 'lucide-react';
 import api from '../lib/api';
@@ -398,12 +398,6 @@ const CSS = `
   .lv-past-dur { color: ${C.muted}; }
 
   /* ── Concept Map ────────────────────────────────────────── */
-  .lv-map-container { position: relative; width: 100%; height: 480px; background: ${C.card}; border: 1px solid ${C.border}; border-radius: 12px; overflow: hidden; cursor: grab; user-select: none; }
-  .lv-map-container:active { cursor: grabbing; }
-  .lv-map-gen-wrap { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 48px 16px 16px; }
-  .lv-map-legend { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
-  .lv-map-legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: ${C.sec}; }
-  .lv-map-legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
 `;
 
 // ─── Accent palette (cycles per card) ────────────────────────────────────────
@@ -1182,12 +1176,6 @@ export default function LectureView() {
     const [examRevealed, setExamRevealed]   = useState({});    // { idx: true }
 
     // Concept Map
-    const [conceptMap, setConceptMap]       = useState(null);  // null = not loaded
-    const [mapLoading, setMapLoading]       = useState(false);
-    const [mapScale, setMapScale]           = useState(1);
-    const [mapOffset, setMapOffset]         = useState({ x: 0, y: 0 });
-    const [mapDragging, setMapDragging]     = useState(null);  // { startX, startY, origOffset }
-    const [mapNodePos, setMapNodePos]       = useState({});    // { nodeId: {x, y} }
 
     // Quiz Practice Mode
     const [practiceMode, setPracticeMode]   = useState(false);
@@ -1254,25 +1242,6 @@ export default function LectureView() {
                     else setExamPrep([]);
                 })
                 .finally(() => setExamLoading(false));
-        }
-        if (activeTab === 'map' && id && conceptMap === null && !mapLoading) {
-            setMapLoading(true);
-            api.get(`/api/v1/lectures/${id}/concept-map`)
-                .then(res => {
-                    const map = res.data.map || {};
-                    setConceptMap(map);
-                    // compute initial circular layout
-                    const nodes = map.nodes || [];
-                    const cx = 400; const cy = 220; const r = 150;
-                    const positions = {};
-                    nodes.forEach((n, i) => {
-                        const angle = (2 * Math.PI * i) / nodes.length - Math.PI / 2;
-                        positions[n.id] = { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
-                    });
-                    setMapNodePos(positions);
-                })
-                .catch(() => setConceptMap({}))
-                .finally(() => setMapLoading(false));
         }
     }, [activeTab, id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1453,7 +1422,6 @@ export default function LectureView() {
         { id: 'flashcards', label: 'Cards',  icon: <CreditCard     size={13} /> },
         { id: 'quiz',       label: 'Quiz',   icon: <HelpCircle     size={13} /> },
         { id: 'exam',       label: 'Exam',   icon: <GraduationCap  size={13} /> },
-        { id: 'map',        label: 'Map',    icon: <Network        size={13} /> },
         { id: 'glossary',   label: 'Terms',  icon: <BookOpen       size={13} /> },
         { id: 'stats',      label: 'Stats',  icon: <BarChart2      size={13} /> },
     ];
@@ -2350,124 +2318,6 @@ export default function LectureView() {
                             </div>
                         )}
 
-                        {/* Concept Map */}
-                        {activeTab === 'map' && (
-                            <div className="lv-tab-body">
-                                {mapLoading ? (
-                                    <div style={{ fontSize: 13, color: 'var(--color-muted)', padding: '40px 16px', textAlign: 'center' }}>Building concept map…</div>
-                                ) : conceptMap === null ? (
-                                    <div className="lv-map-gen-wrap">
-                                        <div style={{ fontSize: 13, color: 'var(--color-muted)', textAlign: 'center' }}>Generate a visual concept map from your lecture summary.</div>
-                                        <button className="lv-btn-primary" style={{ fontSize: 12, padding: '8px 20px' }}
-                                            onClick={() => {
-                                                setMapLoading(true);
-                                                api.get(`/api/v1/lectures/${id}/concept-map`)
-                                                    .then(res => {
-                                                        const map = res.data.map || {};
-                                                        setConceptMap(map);
-                                                        const nodes = map.nodes || [];
-                                                        const cx = 400; const cy = 220; const r = 150;
-                                                        const positions = {};
-                                                        nodes.forEach((n, idx) => {
-                                                            const angle = (2 * Math.PI * idx) / nodes.length - Math.PI / 2;
-                                                            positions[n.id] = { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
-                                                        });
-                                                        setMapNodePos(positions);
-                                                    })
-                                                    .catch(() => setConceptMap({}))
-                                                    .finally(() => setMapLoading(false));
-                                            }}>
-                                            Generate Concept Map
-                                        </button>
-                                    </div>
-                                ) : !conceptMap.nodes || conceptMap.nodes.length === 0 ? (
-                                    <div className="lv-empty-panel">Could not generate concept map. Make sure your lecture has a summary.</div>
-                                ) : (
-                                    <>
-                                        <div className="lv-map-legend">
-                                            {[['main','#6366f1','Core concepts'],['supporting','#10b981','Sub-concepts'],['example','#f59e0b','Examples']].map(([group,color,label]) => (
-                                                <div key={group} className="lv-map-legend-item">
-                                                    <div className="lv-map-legend-dot" style={{ background: color }} />
-                                                    {label}
-                                                </div>
-                                            ))}
-                                        </div>
-                                        <div className="lv-map-container"
-                                            onWheel={e => { e.preventDefault(); setMapScale(s => Math.min(3, Math.max(0.3, s - e.deltaY * 0.001))); }}
-                                            onMouseDown={e => {
-                                                if (e.target.closest('[data-nodeid]')) return;
-                                                setMapDragging({ startX: e.clientX - mapOffset.x, startY: e.clientY - mapOffset.y, type: 'pan' });
-                                            }}
-                                            onMouseMove={e => {
-                                                if (!mapDragging) return;
-                                                if (mapDragging.type === 'pan') {
-                                                    setMapOffset({ x: e.clientX - mapDragging.startX, y: e.clientY - mapDragging.startY });
-                                                } else if (mapDragging.type === 'node') {
-                                                    setMapNodePos(p => ({ ...p, [mapDragging.nodeId]: {
-                                                        x: (e.clientX - mapDragging.containerX) / mapScale - mapOffset.x / mapScale + mapDragging.origX - mapDragging.mouseOrigX,
-                                                        y: (e.clientY - mapDragging.containerY) / mapScale - mapOffset.y / mapScale + mapDragging.origY - mapDragging.mouseOrigY,
-                                                    }}));
-                                                }
-                                            }}
-                                            onMouseUp={() => setMapDragging(null)}
-                                            onMouseLeave={() => setMapDragging(null)}
-                                        >
-                                            <svg
-                                                width="100%" height="100%"
-                                                style={{ position: 'absolute', inset: 0, transform: `translate(${mapOffset.x}px,${mapOffset.y}px) scale(${mapScale})`, transformOrigin: '0 0' }}
-                                            >
-                                                <defs>
-                                                    <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
-                                                        <polygon points="0 0, 8 3, 0 6" fill="#94a3b8" />
-                                                    </marker>
-                                                </defs>
-                                                {/* Edges */}
-                                                {(conceptMap.edges || []).map((e, i) => {
-                                                    const s = mapNodePos[e.source]; const t = mapNodePos[e.target];
-                                                    if (!s || !t) return null;
-                                                    const mx = (s.x + t.x) / 2; const my = (s.y + t.y) / 2;
-                                                    return (
-                                                        <g key={i}>
-                                                            <line x1={s.x} y1={s.y} x2={t.x} y2={t.y} stroke="#94a3b8" strokeWidth="1.5" markerEnd="url(#arrowhead)" opacity="0.7" />
-                                                            {e.label && <text x={mx} y={my - 4} textAnchor="middle" fontSize="9" fill="#94a3b8">{e.label}</text>}
-                                                        </g>
-                                                    );
-                                                })}
-                                                {/* Nodes */}
-                                                {(conceptMap.nodes || []).map(n => {
-                                                    const pos = mapNodePos[n.id] || { x: 200, y: 200 };
-                                                    const color = n.group === 'main' ? '#6366f1' : n.group === 'example' ? '#f59e0b' : '#10b981';
-                                                    const r = n.group === 'main' ? 34 : 28;
-                                                    return (
-                                                        <g key={n.id} data-nodeid={n.id}
-                                                            style={{ cursor: 'grab' }}
-                                                            onMouseDown={e => {
-                                                                e.stopPropagation();
-                                                                const rect = e.currentTarget.closest('.lv-map-container').getBoundingClientRect();
-                                                                setMapDragging({ type: 'node', nodeId: n.id,
-                                                                    containerX: rect.left, containerY: rect.top,
-                                                                    origX: pos.x, origY: pos.y,
-                                                                    mouseOrigX: (e.clientX - rect.left) / mapScale,
-                                                                    mouseOrigY: (e.clientY - rect.top) / mapScale,
-                                                                });
-                                                            }}>
-                                                            <circle cx={pos.x} cy={pos.y} r={r} fill={color} opacity="0.9" />
-                                                            <foreignObject x={pos.x - r} y={pos.y - r} width={r*2} height={r*2}>
-                                                                <div xmlns="http://www.w3.org/1999/xhtml"
-                                                                    style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', color: '#fff', fontSize: 9, fontWeight: 600, lineHeight: 1.3, padding: '0 3px', wordBreak: 'break-word', pointerEvents: 'none' }}>
-                                                                    {n.label}
-                                                                </div>
-                                                            </foreignObject>
-                                                        </g>
-                                                    );
-                                                })}
-                                            </svg>
-                                        </div>
-                                        <div style={{ fontSize: 11, color: 'var(--color-muted)', marginTop: 6 }}>Scroll to zoom · drag to pan · drag nodes to rearrange</div>
-                                    </>
-                                )}
-                            </div>
-                        )}
 
                     </div>
                 </div>
