@@ -898,9 +898,9 @@ function Hero({ user }) {
                 Now in early access
             </div>
             <h1 className="lp-h1">
-                The lecture notes you{' '}
-                <em className="lp-h1-em">always wished</em>
-                {' '}you had taken
+                Every lecture,{' '}
+                <em className="lp-h1-em">captured</em>
+                {' '}and understood
             </h1>
             <p className="lp-hero-sub">
                 Neurativo records your lecture, transcribes every word, and builds structured
