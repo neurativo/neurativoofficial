@@ -16,12 +16,14 @@ Admin endpoints (require admin):
   GET  /beta/admin/feedback                  ?page=1&page_size=20
   GET  /beta/admin/stats
 """
+import re
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from app.core.auth import get_active_user, get_admin_user, User
+from app.core.rate_limit import limiter
 from app.services.supabase_service import (
     get_beta_enabled,
     set_beta_enabled,
@@ -42,9 +44,16 @@ router = APIRouter(prefix="/beta", tags=["beta"])
 # Request models
 # ---------------------------------------------------------------------------
 
+_UUID_RE = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.I)
+
+def _validate_uuid(value: str, label: str = "ID") -> None:
+    if not value or not _UUID_RE.match(value):
+        raise HTTPException(status_code=400, detail=f"Invalid {label}")
+
+
 class ApplyRequest(BaseModel):
-    full_name: Optional[str] = None
-    subject:   Optional[str] = None
+    full_name: Optional[str] = Field(None, max_length=120)
+    subject:   Optional[str] = Field(None, max_length=120)
     use_case:  Optional[str] = Field(None, max_length=400)
 
 
@@ -63,13 +72,15 @@ class ToggleRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 @router.get("/status")
-async def beta_status():
+@limiter.limit("60/minute")
+async def beta_status(request: Request):
     """Returns whether the beta program is currently open."""
     return {"enabled": get_beta_enabled()}
 
 
 @router.post("/apply")
-async def beta_apply(body: ApplyRequest, user: User = Depends(get_active_user)):
+@limiter.limit("5/hour")
+async def beta_apply(request: Request, body: ApplyRequest, user: User = Depends(get_active_user)):
     """Submit a beta application. Returns 409 if the user already has an application."""
     existing = get_beta_application(user.id)
     if existing:
@@ -94,8 +105,12 @@ async def beta_me(user: User = Depends(get_active_user)):
 
 
 @router.post("/feedback")
-async def beta_feedback(body: FeedbackRequest, user: User = Depends(get_active_user)):
-    """Submit feedback for the beta program."""
+@limiter.limit("20/hour")
+async def beta_feedback(request: Request, body: FeedbackRequest, user: User = Depends(get_active_user)):
+    """Submit feedback for the beta program. Only approved beta users may submit."""
+    app = get_beta_application(user.id)
+    if not app or app.get("status") != "approved":
+        raise HTTPException(status_code=403, detail="Beta feedback is only available to approved beta users.")
     row = submit_beta_feedback(
         user_id=user.id,
         lecture_id=body.lecture_id,
@@ -130,6 +145,7 @@ async def admin_list_applications(
 
 @router.post("/admin/applications/{application_id}/approve")
 async def admin_approve(application_id: str, _: User = Depends(get_admin_user)):
+    _validate_uuid(application_id, "application ID")
     try:
         return approve_beta_application(application_id)
     except Exception as exc:
@@ -138,6 +154,7 @@ async def admin_approve(application_id: str, _: User = Depends(get_admin_user)):
 
 @router.post("/admin/applications/{application_id}/reject")
 async def admin_reject(application_id: str, _: User = Depends(get_admin_user)):
+    _validate_uuid(application_id, "application ID")
     try:
         return reject_beta_application(application_id)
     except Exception as exc:

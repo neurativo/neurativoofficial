@@ -51,6 +51,8 @@ async def add_security_headers(request: Request, call_next):
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "geolocation=(), microphone=(self), camera=(self)"
     response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload"
+    # API responses are JSON — prevent any accidental HTML from being framed or executed
+    response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none';"
     # Remove server fingerprinting header
     if "server" in response.headers:
         del response.headers["server"]
