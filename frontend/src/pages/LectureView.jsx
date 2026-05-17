@@ -2406,7 +2406,7 @@ export default function LectureView() {
                                                     setMapNodePos(p => ({ ...p, [mapDragging.nodeId]: {
                                                         x: (e.clientX - mapDragging.containerX) / mapScale - mapOffset.x / mapScale + mapDragging.origX - mapDragging.mouseOrigX,
                                                         y: (e.clientY - mapDragging.containerY) / mapScale - mapOffset.y / mapScale + mapDragging.origY - mapDragging.mouseOrigY,
-                                                    }}});
+                                                    }}));
                                                 }
                                             }}
                                             onMouseUp={() => setMapDragging(null)}
