@@ -787,3 +787,239 @@ async def set_credits_subscription(
         raise HTTPException(status_code=500, detail=str(e))
     _audit(admin.id, "set_credits_subscription", user_id, f"status={body.status} expires={body.expires_at}")
     return {"ok": True, **result}
+
+
+# ---------------------------------------------------------------------------
+# Visit analytics
+# ---------------------------------------------------------------------------
+
+def _visit_analytics(days: int = 30) -> dict:
+    """Pageview stats from page_visits table."""
+    try:
+        from datetime import timedelta
+        sb = _sb_client()
+        if not sb:
+            return {}
+        since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        res = sb.table("page_visits").select("page,session_id,user_id,created_at").gte("created_at", since).execute()
+        rows = res.data or []
+
+        total_views = len(rows)
+        unique_sessions = len({r["session_id"] for r in rows if r.get("session_id")})
+        unique_users = len({r["user_id"] for r in rows if r.get("user_id")})
+
+        page_counts: dict = {}
+        for r in rows:
+            p = r.get("page") or "unknown"
+            page_counts[p] = page_counts.get(p, 0) + 1
+        top_pages = sorted([{"page": p, "views": v} for p, v in page_counts.items()], key=lambda x: -x["views"])
+
+        daily: dict = {}
+        for r in rows:
+            day = (r.get("created_at") or "")[:10]
+            if day:
+                daily[day] = daily.get(day, 0) + 1
+        daily_trend = sorted([{"date": d, "views": v} for d, v in daily.items()], key=lambda x: x["date"])
+
+        # Authenticated vs anonymous split
+        authed = sum(1 for r in rows if r.get("user_id"))
+        anon = total_views - authed
+
+        return {
+            "total_views":     total_views,
+            "unique_sessions": unique_sessions,
+            "unique_users":    unique_users,
+            "authed_views":    authed,
+            "anon_views":      anon,
+            "top_pages":       top_pages[:10],
+            "daily_trend":     daily_trend,
+        }
+    except Exception as e:
+        print(f"[admin/visits] failed: {e}")
+        return {}
+
+
+@router.get("/analytics/visits")
+async def get_visit_analytics(
+    days: int = Query(30, ge=1, le=365),
+    _: User = Depends(get_admin_user),
+):
+    """Pageview analytics: total views, unique sessions, top pages, daily trend."""
+    return _visit_analytics(days=days)
+
+
+# ---------------------------------------------------------------------------
+# Enhanced cost analytics
+# ---------------------------------------------------------------------------
+
+def _cost_overview(days: int = 30) -> dict:
+    """Grand total costs with plan-tier and model breakdowns."""
+    try:
+        from datetime import timedelta
+        sb = _sb_client()
+        if not sb:
+            return {}
+        since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+
+        res = sb.table("api_cost_logs").select("cost_usd,plan_tier,model,created_at").gte("created_at", since).execute()
+        rows = res.data or []
+
+        total_usd = 0.0
+        by_plan: dict = {}
+        by_model: dict = {}
+        daily: dict = {}
+
+        for r in rows:
+            cost = r.get("cost_usd") or 0.0
+            total_usd += cost
+            plan = r.get("plan_tier") or "unknown"
+            by_plan[plan] = round(by_plan.get(plan, 0.0) + cost, 8)
+            model = r.get("model") or "unknown"
+            by_model[model] = round(by_model.get(model, 0.0) + cost, 8)
+            day = (r.get("created_at") or "")[:10]
+            if day:
+                daily[day] = round(daily.get(day, 0.0) + cost, 8)
+
+        daily_list = sorted([{"date": d, "cost_usd": v, "cost_lkr": round(v * LKR_RATE, 2)} for d, v in daily.items()], key=lambda x: x["date"])
+
+        return {
+            "total_usd":  round(total_usd, 6),
+            "total_lkr":  round(total_usd * LKR_RATE, 2),
+            "by_plan":    {k: round(v, 6) for k, v in sorted(by_plan.items(), key=lambda x: -x[1])},
+            "by_model":   {k: round(v, 6) for k, v in sorted(by_model.items(), key=lambda x: -x[1])},
+            "daily":      daily_list,
+            "call_count": len(rows),
+        }
+    except Exception as e:
+        print(f"[admin/costs/overview] failed: {e}")
+        return {}
+
+
+def _cost_per_user(days: int = 30, page: int = 1, page_size: int = 50) -> dict:
+    """Per-user cost breakdown, sorted by total spend."""
+    try:
+        from datetime import timedelta
+        sb = _sb_client()
+        if not sb:
+            return {"users": [], "total": 0}
+        since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+
+        res = sb.table("api_cost_logs").select("user_id,cost_usd,plan_tier,feature,created_at").gte("created_at", since).execute()
+        rows = res.data or []
+
+        user_map: dict = {}
+        for r in rows:
+            uid = r.get("user_id")
+            if not uid:
+                continue
+            if uid not in user_map:
+                user_map[uid] = {"user_id": uid, "cost_usd": 0.0, "call_count": 0, "plan_tier": r.get("plan_tier") or "free", "features": set()}
+            user_map[uid]["cost_usd"] += r.get("cost_usd") or 0.0
+            user_map[uid]["call_count"] += 1
+            if r.get("feature"):
+                user_map[uid]["features"].add(r["feature"])
+            # Keep most recent plan_tier seen
+            if r.get("plan_tier"):
+                user_map[uid]["plan_tier"] = r["plan_tier"]
+
+        sorted_users = sorted(user_map.values(), key=lambda x: -x["cost_usd"])
+        total = len(sorted_users)
+        offset = (page - 1) * page_size
+        page_users = sorted_users[offset:offset + page_size]
+
+        for u in page_users:
+            u["cost_usd"] = round(u["cost_usd"], 6)
+            u["cost_lkr"] = round(u["cost_usd"] * LKR_RATE, 2)
+            u["features"] = list(u["features"])
+
+        return {"users": page_users, "total": total}
+    except Exception as e:
+        print(f"[admin/costs/per-user] failed: {e}")
+        return {"users": [], "total": 0}
+
+
+def _beta_costs(days: int = 30) -> dict:
+    """Cost breakdown for beta testers only."""
+    try:
+        from datetime import timedelta
+        sb = _sb_client()
+        if not sb:
+            return {}
+        since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+
+        # Get all beta user IDs (approved applications)
+        beta_res = sb.table("beta_applications").select("user_id,email,approved_at,expires_at").eq("status", "approved").execute()
+        beta_users = {r["user_id"]: r for r in (beta_res.data or [])}
+        if not beta_users:
+            return {"total_usd": 0.0, "total_lkr": 0.0, "user_count": 0, "avg_cost_usd": 0.0, "users": [], "by_feature": {}}
+
+        # Fetch cost logs for beta users in the period
+        cost_res = sb.table("api_cost_logs").select("user_id,cost_usd,feature,created_at").gte("created_at", since).in_("user_id", list(beta_users.keys())).execute()
+        rows = cost_res.data or []
+
+        total_usd = 0.0
+        by_feature: dict = {}
+        per_user: dict = {}
+
+        for r in rows:
+            uid = r.get("user_id")
+            cost = r.get("cost_usd") or 0.0
+            total_usd += cost
+            feat = r.get("feature") or "unknown"
+            by_feature[feat] = round(by_feature.get(feat, 0.0) + cost, 8)
+            if uid:
+                if uid not in per_user:
+                    per_user[uid] = {"user_id": uid, "email": beta_users[uid].get("email", ""), "cost_usd": 0.0, "call_count": 0}
+                per_user[uid]["cost_usd"] += cost
+                per_user[uid]["call_count"] += 1
+
+        user_list = sorted(per_user.values(), key=lambda x: -x["cost_usd"])
+        for u in user_list:
+            u["cost_usd"] = round(u["cost_usd"], 6)
+            u["cost_lkr"] = round(u["cost_usd"] * LKR_RATE, 2)
+
+        user_count = len(beta_users)
+        avg_cost = round(total_usd / max(len(per_user), 1), 6)
+
+        return {
+            "total_usd":     round(total_usd, 6),
+            "total_lkr":     round(total_usd * LKR_RATE, 2),
+            "user_count":    user_count,
+            "active_count":  len(per_user),
+            "avg_cost_usd":  avg_cost,
+            "avg_cost_lkr":  round(avg_cost * LKR_RATE, 2),
+            "users":         user_list,
+            "by_feature":    {k: round(v, 6) for k, v in sorted(by_feature.items(), key=lambda x: -x[1])},
+        }
+    except Exception as e:
+        print(f"[admin/costs/beta] failed: {e}")
+        return {}
+
+
+@router.get("/costs/overview")
+async def get_costs_overview(
+    days: int = Query(30, ge=1, le=365),
+    _: User = Depends(get_admin_user),
+):
+    """Grand total costs with plan-tier and model breakdowns."""
+    return _cost_overview(days=days)
+
+
+@router.get("/costs/per-user")
+async def get_costs_per_user(
+    days:      int = Query(30, ge=1, le=365),
+    page:      int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    _: User = Depends(get_admin_user),
+):
+    """Per-user cost breakdown sorted by total spend."""
+    return _cost_per_user(days=days, page=page, page_size=page_size)
+
+
+@router.get("/costs/beta")
+async def get_costs_beta(
+    days: int = Query(30, ge=1, le=365),
+    _: User = Depends(get_admin_user),
+):
+    """Cost breakdown for beta testers only."""
+    return _beta_costs(days=days)

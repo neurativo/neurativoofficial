@@ -2336,3 +2336,25 @@ def get_beta_stats() -> dict:
     except Exception as e:
         print(f"[beta] get_beta_stats error (non-fatal): {e}")
     return {}
+
+
+# ---------------------------------------------------------------------------
+# Visit analytics
+# ---------------------------------------------------------------------------
+
+def record_page_visit(page: str, session_id: str = None, user_id: str = None, referrer: str = None) -> None:
+    """Insert a row into page_visits. Fire-and-forget — never raises."""
+    try:
+        supabase = get_client()
+        if not supabase:
+            return
+        row = {"page": page[:64]}
+        if session_id:
+            row["session_id"] = session_id[:64]
+        if user_id:
+            row["user_id"] = user_id[:128]
+        if referrer:
+            row["referrer"] = referrer[:256]
+        supabase.table("page_visits").insert(row).execute()
+    except Exception as e:
+        print(f"[analytics] record_page_visit error (non-fatal): {e}")

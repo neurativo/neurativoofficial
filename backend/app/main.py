@@ -10,6 +10,7 @@ from app.api.teams import router as teams_router
 from app.api.credits import router as credits_router
 from app.api.jobs import router as jobs_router
 from app.api.beta import router as beta_router
+from app.api.analytics import router as analytics_router
 from app.core.config import settings
 from app.core.rate_limit import limiter
 
@@ -65,6 +66,7 @@ app.include_router(teams_router, prefix="/api/v1")
 app.include_router(credits_router, prefix="/api/v1")
 app.include_router(jobs_router, prefix="/api/v1")
 app.include_router(beta_router, prefix="/api/v1")
+app.include_router(analytics_router, prefix="/api/v1")
 
 
 @app.get("/")

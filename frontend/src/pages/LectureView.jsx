@@ -15,6 +15,7 @@ import { renderDomainContent } from '../lib/renderDomainContent.jsx';
 import JobProgress from '../components/JobProgress.jsx';
 import { useCreditsApi } from '../lib/creditsApi.js';
 import BetaFeedbackCard from '../components/BetaFeedbackCard.jsx';
+import { trackPageview } from '../lib/trackPageview';
 
 function fmtTs(seconds) {
     const s = Math.floor(seconds);
@@ -1115,6 +1116,8 @@ export default function LectureView() {
     const onHandleDragRef = React.useRef(null);
     const [showFeedbackCard, setShowFeedbackCard] = useState(false);
     const feedbackTimerRef = useRef(null);
+
+    useEffect(() => { trackPageview('lecture'); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
         api.get(`/api/v1/lectures/${id}/full?t=${Date.now()}`)

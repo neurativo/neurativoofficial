@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from './lib/api';
+import { trackPageview } from './lib/trackPageview';
 import { useClerk } from '@clerk/react';
 import QAAnswer from './components/QAAnswer';
 import { renderDomainContent } from './lib/renderDomainContent.jsx';
@@ -251,6 +252,8 @@ function App({ user }) {
     const SILENCE_WARN_AFTER = 2;
 
     // ── Effects ───────────────────────────────────────────
+
+    useEffect(() => { trackPageview('live'); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
         if (shouldAutoScrollRef.current && transcriptEndRef.current)

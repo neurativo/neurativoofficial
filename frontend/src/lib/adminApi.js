@@ -6,6 +6,7 @@ import axios from 'axios';
 
 const BASE = `${import.meta.env.VITE_API_URL || 'https://neurativoofficial-production.up.railway.app'}/api/v1/admin`;
 const BETA_BASE = `${import.meta.env.VITE_API_URL || 'https://neurativoofficial-production.up.railway.app'}/api/v1/beta`;
+export const API_BASE = `${import.meta.env.VITE_API_URL || 'https://neurativoofficial-production.up.railway.app'}/api/v1`;
 
 async function _token() {
     return (await window.Clerk?.session?.getToken()) || '';
@@ -72,6 +73,10 @@ export const adminApi = {
     getAnalytics:    (p = {})                  => _get('/analytics', p),
     getCosts:        (p = {})                  => _get('/costs', p),
     getCostsSummary: (p = {})                  => _get('/costs/summary', p),
+    getVisitAnalytics: (days = 30)             => _get('/analytics/visits', { days }),
+    getCostsOverview:  (days = 30)             => _get('/costs/overview', { days }),
+    getCostsPerUser:   (days = 30, page = 1, pageSize = 50) => _get('/costs/per-user', { days, page, page_size: pageSize }),
+    getCostsBeta:      (days = 30)             => _get('/costs/beta', { days }),
     listAnnouncements:   ()                    => _get('/announcements'),
     createAnnouncement: async (body) => {
         const token = await _token();

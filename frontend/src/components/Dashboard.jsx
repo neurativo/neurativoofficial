@@ -9,6 +9,7 @@ import ImportModal from './ImportModal';
 import Footer from './Footer';
 import { useSEO } from '../lib/useSEO';
 import BetaApplyModal from './BetaApplyModal';
+import { trackPageview } from '../lib/trackPageview';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const C = {
@@ -544,6 +545,8 @@ export default function Dashboard({ user }) {
         await signOut();
         navigate('/');
     };
+
+    useEffect(() => { trackPageview('app'); }, []);
 
     useEffect(() => {
         api.get('/api/v1/usage').then(res => setUsage(res.data)).catch(() => {});

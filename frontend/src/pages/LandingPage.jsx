@@ -5,6 +5,7 @@ import { useAuthModal } from '../components/AuthModal';
 import { useSEO } from '../lib/useSEO';
 import api from '../lib/api';
 import BetaApplyModal from '../components/BetaApplyModal';
+import { trackPageview } from '../lib/trackPageview';
 
 // ─── CSS ─────────────────────────────────────────────────────────────────────
 const CSS = `
@@ -1490,6 +1491,9 @@ export default function LandingPage({ user }) {
         canonicalPath: '/',
         keywords: 'AI lecture notes, real-time lecture transcription, lecture summary generator, AI note taking app, automatic lecture notes, student AI assistant, lecture recorder app, online class notes, AI study tool',
     });
+
+    // Pageview beacon
+    useEffect(() => { trackPageview('landing'); }, []);
 
     // Scroll to section when navigated from a section route (e.g. /pricing → /)
     useEffect(() => {
