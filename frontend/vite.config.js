@@ -10,6 +10,7 @@ export default defineConfig({
             registerType: 'autoUpdate',
             manifest: false, // use existing public/site.webmanifest
             workbox: {
+                maximumFileSizeToCacheInBytes: 4 * 1024 * 1024, // 4 MiB
                 globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
                 runtimeCaching: [
                     {
