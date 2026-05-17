@@ -1937,6 +1937,7 @@ def save_generated_content(lecture_id: str, content: dict) -> None:
     """
     Saves summary, flashcards, quiz, and glossary from a content_generator result.
     Idempotent — safe to call multiple times.
+    Also fires a background thread to embed the summary for semantic search.
     """
     import json as _json
     db = _fresh_db()
@@ -1951,6 +1952,163 @@ def save_generated_content(lecture_id: str, content: dict) -> None:
         update["glossary"] = _json.dumps(content["glossary"])
     if update:
         db.table("lectures").update(update).eq("id", lecture_id).execute()
+
+    # Fire-and-forget: generate and store summary embedding for semantic search
+    summary_text = content.get("summary") or ""
+    if summary_text.strip():
+        import threading as _threading
+        def _embed_summary():
+            try:
+                from app.services.embedding_service import embed_single
+                emb = embed_single(summary_text)
+                save_lecture_summary_embedding(lecture_id, emb)
+            except Exception as e:
+                print(f"[search] summary embedding failed for {lecture_id}: {e}")
+        _threading.Thread(target=_embed_summary, daemon=True).start()
+
+
+def save_exam_prep(lecture_id: str, data: list) -> None:
+    """Caches generated exam prep questions in the lectures table."""
+    import json as _json
+    _fresh_db().table("lectures").update(
+        {"exam_prep_questions": _json.dumps(data)}
+    ).eq("id", lecture_id).execute()
+
+
+def get_exam_prep(lecture_id: str) -> list | None:
+    """Returns cached exam prep questions, or None if not yet generated."""
+    import json as _json
+    if not supabase:
+        return None
+    try:
+        resp = supabase.table("lectures").select("exam_prep_questions").eq("id", lecture_id).execute()
+        if resp.data and resp.data[0].get("exam_prep_questions"):
+            raw = resp.data[0]["exam_prep_questions"]
+            return _json.loads(raw) if isinstance(raw, str) else raw
+    except Exception as e:
+        print(f"[exam_prep] get error: {e}")
+    return None
+
+
+def save_concept_map(lecture_id: str, data: dict) -> None:
+    """Caches generated concept map in the lectures table."""
+    import json as _json
+    _fresh_db().table("lectures").update(
+        {"concept_map": _json.dumps(data)}
+    ).eq("id", lecture_id).execute()
+
+
+def get_concept_map(lecture_id: str) -> dict | None:
+    """Returns cached concept map, or None if not yet generated."""
+    import json as _json
+    if not supabase:
+        return None
+    try:
+        resp = supabase.table("lectures").select("concept_map").eq("id", lecture_id).execute()
+        if resp.data and resp.data[0].get("concept_map"):
+            raw = resp.data[0]["concept_map"]
+            return _json.loads(raw) if isinstance(raw, str) else raw
+    except Exception as e:
+        print(f"[concept_map] get error: {e}")
+    return None
+
+
+def save_lecture_summary_embedding(lecture_id: str, embedding: list) -> None:
+    """Stores the summary embedding for semantic lecture search."""
+    import json as _json
+    _fresh_db().table("lectures").update(
+        {"summary_embedding": _json.dumps(embedding)}
+    ).eq("id", lecture_id).execute()
+
+
+def get_all_user_lecture_embeddings(user_id: str) -> list[dict]:
+    """Returns all lectures for a user that have a summary_embedding set."""
+    import json as _json
+    if not supabase:
+        return []
+    try:
+        resp = (
+            supabase.table("lectures")
+            .select("id, title, topic, master_summary, summary_embedding")
+            .eq("user_id", user_id)
+            .not_.is_("summary_embedding", "null")
+            .execute()
+        )
+        results = []
+        for row in (resp.data or []):
+            emb = row.get("summary_embedding")
+            if emb:
+                if isinstance(emb, str):
+                    try:
+                        emb = _json.loads(emb)
+                    except Exception:
+                        continue
+                results.append({
+                    "lecture_id": row["id"],
+                    "title": row.get("title") or "",
+                    "topic": row.get("topic") or "",
+                    "summary": (row.get("master_summary") or "")[:150],
+                    "summary_embedding": emb,
+                })
+        return results
+    except Exception as e:
+        print(f"[search] get_all_user_lecture_embeddings error: {e}")
+        return []
+
+
+def save_quiz_attempt(
+    lecture_id: str,
+    user_id: str,
+    score: int,
+    total: int,
+    duration_seconds: int | None,
+    answers_json: dict,
+    weak_topics: list,
+) -> dict:
+    """Inserts a quiz attempt row and returns the inserted record."""
+    import json as _json
+    db = _fresh_db()
+    payload = {
+        "lecture_id": lecture_id,
+        "user_id": user_id,
+        "score": score,
+        "total": total,
+        "duration_seconds": duration_seconds,
+        "answers_json": _json.dumps(answers_json),
+        "weak_topics": _json.dumps(weak_topics),
+    }
+    resp = db.table("quiz_attempts").insert(payload).execute()
+    return resp.data[0] if resp.data else {}
+
+
+def get_quiz_attempts(lecture_id: str, user_id: str, limit: int = 10) -> list[dict]:
+    """Returns the last `limit` quiz attempts for a given lecture + user."""
+    if not supabase:
+        return []
+    try:
+        resp = (
+            supabase.table("quiz_attempts")
+            .select("id, score, total, duration_seconds, weak_topics, attempted_at")
+            .eq("lecture_id", lecture_id)
+            .eq("user_id", user_id)
+            .order("attempted_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        import json as _json
+        rows = []
+        for row in (resp.data or []):
+            wt = row.get("weak_topics")
+            if isinstance(wt, str):
+                try:
+                    wt = _json.loads(wt)
+                except Exception:
+                    wt = []
+            rows.append({**row, "weak_topics": wt or []})
+        return rows
+    except Exception as e:
+        print(f"[quiz_attempts] get error: {e}")
+        return []
 
 
 def get_stale_free_lectures(days: int = 30) -> list:

@@ -44,6 +44,12 @@ if (localStorage.getItem('neurativo_theme') === 'dark') {
     document.documentElement.classList.add('dark');
 }
 
+// PWA install prompt — capture before it disappears
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    window._pwaInstallPrompt = e;
+});
+
 // ─── Session heartbeat ───────────────────────────────────────────────────────
 // Calls session.touch() every 30 minutes while the tab is open.
 // This resets Clerk's inactivity timer so users aren't logged out

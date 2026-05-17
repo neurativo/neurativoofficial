@@ -48,7 +48,7 @@ def answer_lecture_question(lecture_id: str, question: str, topic: str | None = 
 
     docs = _build_retrieval_docs(lecture_id, transcript, question)
     if not docs:
-        return "Lecture content is empty, cannot answer questions."
+        return {"answer": "Lecture content is empty, cannot answer questions.", "follow_ups": []}
 
     try:
         doc_hashes = [_hash(doc["text"]) for doc in docs]
@@ -100,11 +100,14 @@ def answer_lecture_question(lecture_id: str, question: str, topic: str | None = 
         )
 
         if best_semantic_score < _CONFIDENCE_THRESHOLD:
-            return (
-                "I couldn't find a clear answer to that question in this lecture. "
-                "The topic may not have been covered, or the question may be outside "
-                "the scope of what was recorded."
-            )
+            return {
+                "answer": (
+                    "I couldn't find a clear answer to that question in this lecture. "
+                    "The topic may not have been covered, or the question may be outside "
+                    "the scope of what was recorded."
+                ),
+                "follow_ups": [],
+            }
 
         relevant_docs = _select_context_docs(docs, scored_docs, question)
         context = "\n\n---\n\n".join(
@@ -162,7 +165,9 @@ def answer_lecture_question(lecture_id: str, question: str, topic: str | None = 
             input_tokens=response.usage.prompt_tokens,
             output_tokens=response.usage.completion_tokens,
         )
-        return _ensure_source_grounded(response.choices[0].message.content, relevant_docs)
+        answer_text = _ensure_source_grounded(response.choices[0].message.content, relevant_docs)
+        follow_ups = _generate_follow_ups(question, answer_text, topic or "")
+        return {"answer": answer_text, "follow_ups": follow_ups}
 
     except HTTPException:
         raise
@@ -206,6 +211,56 @@ def _expand_query(question: str) -> list[str]:
         return lines[:3]
     except Exception as e:
         print(f"[NRQA] Query expansion failed: {e}")
+        return []
+
+
+def _generate_follow_ups(question: str, answer: str, topic: str) -> list[str]:
+    """
+    Generates 3 short follow-up question suggestions based on the Q&A exchange.
+    Returns an empty list on failure so callers never see an error.
+    """
+    if not openai_service.client:
+        return []
+    try:
+        domain_hint = f"This is a {topic} lecture. " if topic and topic.strip() and topic.strip() != "general" else ""
+        resp = openai_service.client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        domain_hint
+                        + "You are a study assistant. Given a question and answer from a lecture Q&A, "
+                        "suggest exactly 3 concise follow-up questions a student might ask next. "
+                        "Each question must be ≤12 words. "
+                        "Output a JSON array of 3 strings only, no preamble, no extra keys."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": f"Question: {question}\n\nAnswer: {answer}",
+                },
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.5,
+            max_tokens=150,
+        )
+        log_cost(
+            "qa_follow_ups",
+            "gpt-4o-mini",
+            input_tokens=resp.usage.prompt_tokens,
+            output_tokens=resp.usage.completion_tokens,
+        )
+        import json as _json
+        raw = _json.loads(resp.choices[0].message.content)
+        # GPT may return {"questions": [...]} or {"follow_ups": [...]} or a bare list
+        if isinstance(raw, list):
+            items = raw
+        else:
+            items = next((v for v in raw.values() if isinstance(v, list)), [])
+        return [str(q).strip() for q in items if str(q).strip()][:3]
+    except Exception as e:
+        print(f"[NRQA] Follow-up generation failed: {e}")
         return []
 
 

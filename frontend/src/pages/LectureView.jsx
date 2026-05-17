@@ -4,7 +4,8 @@ import {
     ArrowLeft, Download, Share2, FileText, MessageCircle, CreditCard,
     HelpCircle, BookOpen, BarChart2, Clock, AlignLeft, Star, Minimize2,
     Globe, Eye, Monitor, Send, Shield, ChevronLeft, ChevronRight,
-    Shuffle, Copy, X,
+    Shuffle, Copy, X, GraduationCap, Network, Play, ChevronDown, ChevronUp,
+    Timer, CheckCircle, XCircle,
 } from 'lucide-react';
 import api from '../lib/api';
 import { useToast } from '../components/Toast';
@@ -150,6 +151,10 @@ const CSS = `
   .lv-qa-send { width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: ${C.dark}; color: #fafaf9; border: none; border-radius: 50%; cursor: pointer; transition: opacity 0.15s, transform 0.1s; }
   .lv-qa-send:hover { opacity: 0.85; transform: scale(1.05); }
   .lv-qa-send:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+  /* Follow-up chips */
+  .lv-followup-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; padding-left: 2px; }
+  .lv-followup-chip { font-size: 11px; color: ${C.sec}; border: 1px solid ${C.border}; border-radius: 999px; padding: 4px 10px; background: ${C.bg}; cursor: pointer; transition: border-color 0.15s, background 0.15s; white-space: nowrap; }
+  .lv-followup-chip:hover { border-color: ${C.borderHov}; background: ${C.card}; }
   /* Empty state */
   .lv-qa-empty { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 48px 16px 16px; }
   .lv-qa-empty-icon { width: 42px; height: 42px; border-radius: 12px; background: ${C.card}; border: 1px solid ${C.border}; display: flex; align-items: center; justify-content: center; color: ${C.muted}; }
@@ -347,6 +352,58 @@ const CSS = `
   .dark .lv-gloss-row:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.3); }
   .lv-gloss-term { font-weight: 600; font-size: 12px; color: var(--color-text); }
   .lv-gloss-def  { color: var(--color-sec); line-height: 1.6; font-size: 12px; }
+
+  /* ── Exam Prep ──────────────────────────────────────────── */
+  .lv-exam-filters { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
+  .lv-exam-filter { font-size: 11px; border: 1px solid ${C.border}; border-radius: 999px; padding: 4px 12px; background: ${C.bg}; color: ${C.sec}; cursor: pointer; transition: all 0.15s; font-family: inherit; }
+  .lv-exam-filter.active { background: ${C.dark}; color: #fafaf9; border-color: ${C.dark}; }
+  .lv-exam-q { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 12px; padding: 14px 16px; margin-bottom: 8px; }
+  .lv-exam-q-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; cursor: pointer; }
+  .lv-exam-q-text { font-size: 13px; font-weight: 500; color: ${C.text}; line-height: 1.55; flex: 1; }
+  .lv-exam-diff { font-size: 10px; padding: 2px 8px; border-radius: 999px; font-weight: 600; white-space: nowrap; flex-shrink: 0; margin-top: 1px; }
+  .lv-exam-diff-easy   { background: #dcfce7; color: #15803d; }
+  .lv-exam-diff-medium { background: #fef9c3; color: #a16207; }
+  .lv-exam-diff-hard   { background: #fee2e2; color: #b91c1c; }
+  .dark .lv-exam-diff-easy   { background: #14532d; color: #4ade80; }
+  .dark .lv-exam-diff-medium { background: #713f12; color: #fde047; }
+  .dark .lv-exam-diff-hard   { background: #7f1d1d; color: #fca5a5; }
+  .lv-exam-reveal-btn { font-size: 11px; color: ${C.sec}; background: none; border: 1px solid ${C.border}; border-radius: 6px; padding: 3px 10px; cursor: pointer; font-family: inherit; white-space: nowrap; transition: all 0.15s; }
+  .lv-exam-reveal-btn:hover { border-color: ${C.borderHov}; color: ${C.text}; }
+  .lv-exam-answer { margin-top: 12px; padding-top: 12px; border-top: 1px solid ${C.border}; }
+  .lv-exam-answer-text { font-size: 13px; color: ${C.text}; line-height: 1.65; margin-bottom: 8px; }
+  .lv-exam-kp-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+  .lv-exam-kp-item { font-size: 12px; color: ${C.sec}; padding-left: 14px; position: relative; }
+  .lv-exam-kp-item::before { content: '•'; position: absolute; left: 0; color: ${C.muted}; }
+  .lv-exam-gen-wrap { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 48px 16px 16px; }
+
+  /* ── Quiz Practice Mode ─────────────────────────────────── */
+  .lv-practice-overlay { position: absolute; inset: 0; background: ${C.bg}; z-index: 10; display: flex; flex-direction: column; border-radius: 0 0 16px 16px; overflow: hidden; }
+  .lv-practice-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid ${C.border}; flex-shrink: 0; }
+  .lv-practice-timer { font-size: 13px; font-weight: 600; color: ${C.text}; display: flex; align-items: center; gap: 5px; }
+  .lv-practice-progress { font-size: 12px; color: ${C.muted}; }
+  .lv-practice-body { flex: 1; overflow-y: auto; padding: 20px 16px; }
+  .lv-practice-q-text { font-size: 14px; font-weight: 500; color: ${C.text}; line-height: 1.6; margin-bottom: 16px; }
+  .lv-practice-result { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 32px 16px; text-align: center; }
+  .lv-practice-score { font-size: 36px; font-weight: 700; color: ${C.text}; letter-spacing: -1.5px; }
+  .lv-practice-score-label { font-size: 13px; color: ${C.muted}; }
+  .lv-practice-weak { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+  .lv-practice-weak-chip { font-size: 11px; background: #fee2e2; color: #b91c1c; border-radius: 999px; padding: 3px 10px; }
+  .dark .lv-practice-weak-chip { background: #7f1d1d; color: #fca5a5; }
+
+  /* ── Past Attempts ──────────────────────────────────────── */
+  .lv-past-toggle { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: ${C.sec}; cursor: pointer; padding: 12px 0 0; background: none; border: none; font-family: inherit; }
+  .lv-past-row { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border: 1px solid ${C.border}; border-radius: 10px; margin-bottom: 5px; font-size: 12px; background: ${C.card}; }
+  .lv-past-score { font-weight: 600; color: ${C.text}; min-width: 50px; }
+  .lv-past-date { color: ${C.muted}; flex: 1; }
+  .lv-past-dur { color: ${C.muted}; }
+
+  /* ── Concept Map ────────────────────────────────────────── */
+  .lv-map-container { position: relative; width: 100%; height: 480px; background: ${C.card}; border: 1px solid ${C.border}; border-radius: 12px; overflow: hidden; cursor: grab; user-select: none; }
+  .lv-map-container:active { cursor: grabbing; }
+  .lv-map-gen-wrap { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 48px 16px 16px; }
+  .lv-map-legend { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
+  .lv-map-legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: ${C.sec}; }
+  .lv-map-legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
 `;
 
 // ─── Accent palette (cycles per card) ────────────────────────────────────────
@@ -1117,6 +1174,35 @@ export default function LectureView() {
     const [showFeedbackCard, setShowFeedbackCard] = useState(false);
     const feedbackTimerRef = useRef(null);
 
+    // ── Study Tools state ─────────────────────────────────────────────────────
+    // Exam Prep
+    const [examPrep, setExamPrep]           = useState(null);  // null = not loaded
+    const [examLoading, setExamLoading]     = useState(false);
+    const [examFilter, setExamFilter]       = useState('all'); // all | easy | medium | hard
+    const [examRevealed, setExamRevealed]   = useState({});    // { idx: true }
+
+    // Concept Map
+    const [conceptMap, setConceptMap]       = useState(null);  // null = not loaded
+    const [mapLoading, setMapLoading]       = useState(false);
+    const [mapScale, setMapScale]           = useState(1);
+    const [mapOffset, setMapOffset]         = useState({ x: 0, y: 0 });
+    const [mapDragging, setMapDragging]     = useState(null);  // { startX, startY, origOffset }
+    const [mapNodePos, setMapNodePos]       = useState({});    // { nodeId: {x, y} }
+
+    // Quiz Practice Mode
+    const [practiceMode, setPracticeMode]   = useState(false);
+    const [practiceIdx, setPracticeIdx]     = useState(0);
+    const [practiceAnswers, setPracticeAnswers] = useState({});
+    const [practiceTimer, setPracticeTimer] = useState(0);
+    const [practiceDone, setPracticeDone]   = useState(false);
+    const [practiceSaving, setPracticeSaving] = useState(false);
+    const practiceTimerRef = useRef(null);
+
+    // Past Attempts
+    const [pastAttempts, setPastAttempts]   = useState(null);  // null = not fetched
+    const [pastOpen, setPastOpen]           = useState(false);
+    const [pastLoading, setPastLoading]     = useState(false);
+
     useEffect(() => { trackPageview('lecture'); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
@@ -1159,7 +1245,46 @@ export default function LectureView() {
                 .then(res => setVisualFrames(res.data.frames || []))
                 .catch(() => setVisualFrames([]));
         }
+        if (activeTab === 'exam' && id && examPrep === null && !examLoading) {
+            setExamLoading(true);
+            api.get(`/api/v1/lectures/${id}/exam-prep`)
+                .then(res => setExamPrep(res.data.questions || []))
+                .catch(err => {
+                    if (err?.response?.status === 403) setExamPrep('locked');
+                    else setExamPrep([]);
+                })
+                .finally(() => setExamLoading(false));
+        }
+        if (activeTab === 'map' && id && conceptMap === null && !mapLoading) {
+            setMapLoading(true);
+            api.get(`/api/v1/lectures/${id}/concept-map`)
+                .then(res => {
+                    const map = res.data.map || {};
+                    setConceptMap(map);
+                    // compute initial circular layout
+                    const nodes = map.nodes || [];
+                    const cx = 400; const cy = 220; const r = 150;
+                    const positions = {};
+                    nodes.forEach((n, i) => {
+                        const angle = (2 * Math.PI * i) / nodes.length - Math.PI / 2;
+                        positions[n.id] = { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
+                    });
+                    setMapNodePos(positions);
+                })
+                .catch(() => setConceptMap({}))
+                .finally(() => setMapLoading(false));
+        }
     }, [activeTab, id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Practice timer
+    useEffect(() => {
+        if (practiceMode && !practiceDone) {
+            practiceTimerRef.current = setInterval(() => setPracticeTimer(t => t + 1), 1000);
+        } else {
+            clearInterval(practiceTimerRef.current);
+        }
+        return () => clearInterval(practiceTimerRef.current);
+    }, [practiceMode, practiceDone]);
 
     useEffect(() => {
         if (qaEndRef.current) qaEndRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -1230,8 +1355,8 @@ export default function LectureView() {
         }
     }
 
-    const handleAsk = async () => {
-        const q = qaQuestion.trim();
+    const handleAsk = async (overrideQ) => {
+        const q = (overrideQ ?? qaQuestion).trim();
         if (!q || qaLoading) return;
         setQaQuestion('');
         setQaHistory(h => [...h, { role: 'user', text: q }]);
@@ -1244,9 +1369,9 @@ export default function LectureView() {
                     content: m.text,
                 })),
             });
-            setQaHistory(h => [...h, { role: 'assistant', text: res.data.answer }]);
+            setQaHistory(h => [...h, { role: 'assistant', text: res.data.answer, follow_ups: res.data.follow_ups || [] }]);
         } catch {
-            setQaHistory(h => [...h, { role: 'assistant', text: 'Failed to get answer. Please try again.' }]);
+            setQaHistory(h => [...h, { role: 'assistant', text: 'Failed to get answer. Please try again.', follow_ups: [] }]);
         }
         setQaLoading(false);
     };
@@ -1323,13 +1448,66 @@ export default function LectureView() {
         : 'Lecture';
 
     const TABS = [
-        { id: 'summary',    label: 'Notes', icon: <FileText    size={13} /> },
-        { id: 'ask',        label: 'Ask',   icon: <MessageCircle size={13} /> },
-        { id: 'flashcards', label: 'Cards', icon: <CreditCard  size={13} /> },
-        { id: 'quiz',       label: 'Quiz',  icon: <HelpCircle  size={13} /> },
-        { id: 'glossary',   label: 'Terms', icon: <BookOpen    size={13} /> },
-        { id: 'stats',      label: 'Stats', icon: <BarChart2   size={13} /> },
+        { id: 'summary',    label: 'Notes',  icon: <FileText       size={13} /> },
+        { id: 'ask',        label: 'Ask',    icon: <MessageCircle  size={13} /> },
+        { id: 'flashcards', label: 'Cards',  icon: <CreditCard     size={13} /> },
+        { id: 'quiz',       label: 'Quiz',   icon: <HelpCircle     size={13} /> },
+        { id: 'exam',       label: 'Exam',   icon: <GraduationCap  size={13} /> },
+        { id: 'map',        label: 'Map',    icon: <Network        size={13} /> },
+        { id: 'glossary',   label: 'Terms',  icon: <BookOpen       size={13} /> },
+        { id: 'stats',      label: 'Stats',  icon: <BarChart2      size={13} /> },
     ];
+
+    const fmtTime = (s) => `${String(Math.floor(s / 60)).padStart(2,'0')}:${String(s % 60).padStart(2,'0')}`;
+
+    const startPractice = () => {
+        setPracticeIdx(0);
+        setPracticeAnswers({});
+        setPracticeTimer(0);
+        setPracticeDone(false);
+        setPracticeMode(true);
+    };
+
+    const handlePracticeAnswer = async (qi, letter, questions) => {
+        const next = { ...practiceAnswers, [qi]: letter };
+        setPracticeAnswers(next);
+        if (Object.keys(next).length === questions.length) {
+            setPracticeDone(true);
+            // compute score
+            const score = questions.reduce((acc, q, i) => {
+                const correctLetter = (q.answer || '').charAt(0).toUpperCase();
+                return acc + (next[i] === correctLetter ? 1 : 0);
+            }, 0);
+            // save attempt
+            setPracticeSaving(true);
+            try {
+                await api.post(`/api/v1/lectures/${id}/quiz-attempts`, {
+                    score,
+                    total: questions.length,
+                    duration_seconds: practiceTimer,
+                    answers_json: next,
+                });
+                // reset past attempts cache so it refreshes
+                setPastAttempts(null);
+            } catch { /* silent */ }
+            setPracticeSaving(false);
+        } else {
+            setPracticeIdx(qi + 1);
+        }
+    };
+
+    const loadPastAttempts = async () => {
+        if (pastAttempts !== null) { setPastOpen(o => !o); return; }
+        setPastOpen(true);
+        setPastLoading(true);
+        try {
+            const res = await api.get(`/api/v1/lectures/${id}/quiz-attempts`);
+            setPastAttempts(res.data.attempts || []);
+        } catch {
+            setPastAttempts([]);
+        }
+        setPastLoading(false);
+    };
 
     if (loading) {
         return (
@@ -1637,10 +1815,25 @@ export default function LectureView() {
                                                     }
                                                 </div>
                                                 {m.role === 'assistant' && (
-                                                    <div className="lv-qa-src">
-                                                        <Shield size={9} />
-                                                        Grounded in your transcript
-                                                    </div>
+                                                    <>
+                                                        <div className="lv-qa-src">
+                                                            <Shield size={9} />
+                                                            Grounded in your transcript
+                                                        </div>
+                                                        {m.follow_ups && m.follow_ups.length > 0 && (
+                                                            <div className="lv-followup-chips">
+                                                                {m.follow_ups.map((fq, fi) => (
+                                                                    <button
+                                                                        key={fi}
+                                                                        className="lv-followup-chip"
+                                                                        onClick={() => handleAsk(fq)}
+                                                                    >
+                                                                        {fq}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </>
                                                 )}
                                             </div>
                                         ))}
@@ -1855,7 +2048,95 @@ export default function LectureView() {
                             }, 0);
                             const allAnswered = answeredCount === questions.length;
                             return (
-                                <div className="lv-tab-body">
+                                <div className="lv-tab-body" style={{ position: 'relative' }}>
+                                    {/* Practice Mode Overlay */}
+                                    {practiceMode && (
+                                        <div className="lv-practice-overlay">
+                                            <div className="lv-practice-header">
+                                                <div className="lv-practice-timer">
+                                                    <Timer size={13} />
+                                                    {fmtTime(practiceTimer)}
+                                                </div>
+                                                <div className="lv-practice-progress">
+                                                    {practiceDone ? 'Complete' : `${practiceIdx + 1} / ${questions.length}`}
+                                                </div>
+                                                <button onClick={() => setPracticeMode(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-muted)', fontFamily: 'inherit', fontSize: 12 }}>Exit</button>
+                                            </div>
+                                            <div className="lv-practice-body">
+                                                {practiceDone ? (
+                                                    <div className="lv-practice-result">
+                                                        {(() => {
+                                                            const sc = questions.reduce((acc, q, i) => acc + (practiceAnswers[i] === (q.answer || '').charAt(0).toUpperCase() ? 1 : 0), 0);
+                                                            const pct = Math.round((sc / questions.length) * 100);
+                                                            return (
+                                                                <>
+                                                                    <div style={{ color: pct >= 70 ? '#22c55e' : '#f59e0b', fontSize: 44 }}>
+                                                                        {pct >= 70 ? <CheckCircle size={44} /> : <XCircle size={44} />}
+                                                                    </div>
+                                                                    <div className="lv-practice-score">{sc}/{questions.length}</div>
+                                                                    <div className="lv-practice-score-label">{pct}% correct · {fmtTime(practiceTimer)}</div>
+                                                                    <button className="lv-btn-primary" style={{ fontSize: 12, padding: '8px 20px' }} onClick={startPractice}>Try again</button>
+                                                                    <button onClick={() => { setPracticeMode(false); }} style={{ fontSize: 12, color: 'var(--color-muted)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>See review mode</button>
+                                                                </>
+                                                            );
+                                                        })()}
+                                                    </div>
+                                                ) : (
+                                                    (() => {
+                                                        const q = questions[practiceIdx];
+                                                        const correctLetter = (q.answer || '').charAt(0).toUpperCase();
+                                                        const chosen = practiceAnswers[practiceIdx];
+                                                        const answered = chosen !== undefined;
+                                                        return (
+                                                            <>
+                                                                <div className="lv-practice-q-text">{q.question}</div>
+                                                                {(q.options || []).map((opt, oi) => {
+                                                                    const letter = String.fromCharCode(65 + oi);
+                                                                    let cls = 'lv-quiz-opt';
+                                                                    if (answered) {
+                                                                        if (letter === correctLetter) cls += ' correct';
+                                                                        else if (letter === chosen) cls += ' wrong';
+                                                                    }
+                                                                    return (
+                                                                        <button key={oi} className={cls}
+                                                                            disabled={answered}
+                                                                            onClick={() => handlePracticeAnswer(practiceIdx, letter, questions)}>
+                                                                            <span className="lv-quiz-opt-letter">{letter}</span>
+                                                                            {opt}
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                                {answered && (
+                                                                    <div style={{ marginTop: 12 }}>
+                                                                        {q.explanation && (
+                                                                            <div className="lv-quiz-expl">
+                                                                                <span className="lv-quiz-expl-icon">💡</span>
+                                                                                {q.explanation}
+                                                                            </div>
+                                                                        )}
+                                                                        {practiceIdx < questions.length - 1 && (
+                                                                            <button className="lv-btn-primary" style={{ fontSize: 12, padding: '7px 18px', marginTop: 10 }}
+                                                                                onClick={() => setPracticeIdx(i => i + 1)}>Next →</button>
+                                                                        )}
+                                                                    </div>
+                                                                )}
+                                                            </>
+                                                        );
+                                                    })()
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Regular quiz header */}
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                                        <div style={{ fontSize: 12, color: 'var(--color-muted)' }}>{questions.length} questions</div>
+                                        <button className="lv-btn-primary" style={{ fontSize: 11, padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 5 }}
+                                            onClick={startPractice}>
+                                            <Play size={10} /> Practice
+                                        </button>
+                                    </div>
+
                                     {/* Score banner */}
                                     {answeredCount > 0 && (
                                         <div className="lv-quiz-score">
@@ -1912,6 +2193,36 @@ export default function LectureView() {
                                             </div>
                                         );
                                     })}
+
+                                    {/* Past Attempts */}
+                                    <button className="lv-past-toggle" onClick={loadPastAttempts}>
+                                        {pastOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                                        Past Attempts
+                                    </button>
+                                    {pastOpen && (
+                                        <div style={{ marginTop: 8 }}>
+                                            {pastLoading ? (
+                                                <div style={{ fontSize: 12, color: 'var(--color-muted)', padding: '8px 0' }}>Loading…</div>
+                                            ) : pastAttempts && pastAttempts.length === 0 ? (
+                                                <div style={{ fontSize: 12, color: 'var(--color-muted)', padding: '8px 0' }}>No attempts yet</div>
+                                            ) : (pastAttempts || []).map((a, i) => (
+                                                <div key={i} className="lv-past-row">
+                                                    <div className="lv-past-score">{a.score}/{a.total}</div>
+                                                    <div className="lv-past-date">{new Date(a.attempted_at).toLocaleDateString()}</div>
+                                                    {a.duration_seconds != null && (
+                                                        <div className="lv-past-dur">{fmtTime(a.duration_seconds)}</div>
+                                                    )}
+                                                    {a.weak_topics && a.weak_topics.length > 0 && (
+                                                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                                                            {a.weak_topics.slice(0, 3).map((t, ti) => (
+                                                                <span key={ti} className="lv-practice-weak-chip">{t}</span>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             );
                         })()}
@@ -1969,6 +2280,194 @@ export default function LectureView() {
                                 </div>
                             );
                         })()}
+
+                        {/* Exam Prep */}
+                        {activeTab === 'exam' && (
+                            <div className="lv-tab-body">
+                                {examLoading ? (
+                                    <div style={{ fontSize: 13, color: 'var(--color-muted)', padding: '40px 16px', textAlign: 'center' }}>Generating exam questions…</div>
+                                ) : examPrep === 'locked' ? (
+                                    <div className="lv-empty-panel">Exam prep requires Student plan or higher.</div>
+                                ) : examPrep === null ? (
+                                    <div className="lv-exam-gen-wrap">
+                                        <div style={{ fontSize: 13, color: 'var(--color-muted)', textAlign: 'center' }}>Exam questions will be generated from your lecture summary.</div>
+                                        <button className="lv-btn-primary" style={{ fontSize: 12, padding: '8px 20px' }}
+                                            onClick={() => {
+                                                setExamLoading(true);
+                                                api.get(`/api/v1/lectures/${id}/exam-prep`)
+                                                    .then(res => setExamPrep(res.data.questions || []))
+                                                    .catch(err => {
+                                                        if (err?.response?.status === 403) setExamPrep('locked');
+                                                        else setExamPrep([]);
+                                                    })
+                                                    .finally(() => setExamLoading(false));
+                                            }}>
+                                            Generate Exam Questions
+                                        </button>
+                                    </div>
+                                ) : examPrep.length === 0 ? (
+                                    <div className="lv-empty-panel">No exam questions generated yet. Make sure your lecture has a summary.</div>
+                                ) : (
+                                    <>
+                                        <div className="lv-exam-filters">
+                                            {['all', 'easy', 'medium', 'hard'].map(f => (
+                                                <button key={f} className={`lv-exam-filter${examFilter === f ? ' active' : ''}`}
+                                                    onClick={() => setExamFilter(f)}>
+                                                    {f.charAt(0).toUpperCase() + f.slice(1)}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        {examPrep
+                                            .filter(q => examFilter === 'all' || q.difficulty === examFilter)
+                                            .map((q, i) => (
+                                                <div key={i} className="lv-exam-q">
+                                                    <div className="lv-exam-q-header" onClick={() => setExamRevealed(r => ({ ...r, [i]: !r[i] }))}>
+                                                        <div className="lv-exam-q-text">{q.question}</div>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                                                            <span className={`lv-exam-diff lv-exam-diff-${q.difficulty}`}>{q.difficulty}</span>
+                                                            <button className="lv-exam-reveal-btn" onClick={e => { e.stopPropagation(); setExamRevealed(r => ({ ...r, [i]: !r[i] })); }}>
+                                                                {examRevealed[i] ? 'Hide' : 'Reveal'}
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                    {examRevealed[i] && (
+                                                        <div className="lv-exam-answer">
+                                                            <div className="lv-exam-answer-text">{q.model_answer}</div>
+                                                            {q.key_points && q.key_points.length > 0 && (
+                                                                <ul className="lv-exam-kp-list">
+                                                                    {q.key_points.map((kp, ki) => (
+                                                                        <li key={ki} className="lv-exam-kp-item">{kp}</li>
+                                                                    ))}
+                                                                </ul>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))
+                                        }
+                                    </>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Concept Map */}
+                        {activeTab === 'map' && (
+                            <div className="lv-tab-body">
+                                {mapLoading ? (
+                                    <div style={{ fontSize: 13, color: 'var(--color-muted)', padding: '40px 16px', textAlign: 'center' }}>Building concept map…</div>
+                                ) : conceptMap === null ? (
+                                    <div className="lv-map-gen-wrap">
+                                        <div style={{ fontSize: 13, color: 'var(--color-muted)', textAlign: 'center' }}>Generate a visual concept map from your lecture summary.</div>
+                                        <button className="lv-btn-primary" style={{ fontSize: 12, padding: '8px 20px' }}
+                                            onClick={() => {
+                                                setMapLoading(true);
+                                                api.get(`/api/v1/lectures/${id}/concept-map`)
+                                                    .then(res => {
+                                                        const map = res.data.map || {};
+                                                        setConceptMap(map);
+                                                        const nodes = map.nodes || [];
+                                                        const cx = 400; const cy = 220; const r = 150;
+                                                        const positions = {};
+                                                        nodes.forEach((n, idx) => {
+                                                            const angle = (2 * Math.PI * idx) / nodes.length - Math.PI / 2;
+                                                            positions[n.id] = { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
+                                                        });
+                                                        setMapNodePos(positions);
+                                                    })
+                                                    .catch(() => setConceptMap({}))
+                                                    .finally(() => setMapLoading(false));
+                                            }}>
+                                            Generate Concept Map
+                                        </button>
+                                    </div>
+                                ) : !conceptMap.nodes || conceptMap.nodes.length === 0 ? (
+                                    <div className="lv-empty-panel">Could not generate concept map. Make sure your lecture has a summary.</div>
+                                ) : (
+                                    <>
+                                        <div className="lv-map-legend">
+                                            {[['main','#6366f1','Core concepts'],['supporting','#10b981','Sub-concepts'],['example','#f59e0b','Examples']].map(([group,color,label]) => (
+                                                <div key={group} className="lv-map-legend-item">
+                                                    <div className="lv-map-legend-dot" style={{ background: color }} />
+                                                    {label}
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <div className="lv-map-container"
+                                            onWheel={e => { e.preventDefault(); setMapScale(s => Math.min(3, Math.max(0.3, s - e.deltaY * 0.001))); }}
+                                            onMouseDown={e => {
+                                                if (e.target.closest('[data-nodeid]')) return;
+                                                setMapDragging({ startX: e.clientX - mapOffset.x, startY: e.clientY - mapOffset.y, type: 'pan' });
+                                            }}
+                                            onMouseMove={e => {
+                                                if (!mapDragging) return;
+                                                if (mapDragging.type === 'pan') {
+                                                    setMapOffset({ x: e.clientX - mapDragging.startX, y: e.clientY - mapDragging.startY });
+                                                } else if (mapDragging.type === 'node') {
+                                                    setMapNodePos(p => ({ ...p, [mapDragging.nodeId]: {
+                                                        x: (e.clientX - mapDragging.containerX) / mapScale - mapOffset.x / mapScale + mapDragging.origX - mapDragging.mouseOrigX,
+                                                        y: (e.clientY - mapDragging.containerY) / mapScale - mapOffset.y / mapScale + mapDragging.origY - mapDragging.mouseOrigY,
+                                                    }}});
+                                                }
+                                            }}
+                                            onMouseUp={() => setMapDragging(null)}
+                                            onMouseLeave={() => setMapDragging(null)}
+                                        >
+                                            <svg
+                                                width="100%" height="100%"
+                                                style={{ position: 'absolute', inset: 0, transform: `translate(${mapOffset.x}px,${mapOffset.y}px) scale(${mapScale})`, transformOrigin: '0 0' }}
+                                            >
+                                                <defs>
+                                                    <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+                                                        <polygon points="0 0, 8 3, 0 6" fill="#94a3b8" />
+                                                    </marker>
+                                                </defs>
+                                                {/* Edges */}
+                                                {(conceptMap.edges || []).map((e, i) => {
+                                                    const s = mapNodePos[e.source]; const t = mapNodePos[e.target];
+                                                    if (!s || !t) return null;
+                                                    const mx = (s.x + t.x) / 2; const my = (s.y + t.y) / 2;
+                                                    return (
+                                                        <g key={i}>
+                                                            <line x1={s.x} y1={s.y} x2={t.x} y2={t.y} stroke="#94a3b8" strokeWidth="1.5" markerEnd="url(#arrowhead)" opacity="0.7" />
+                                                            {e.label && <text x={mx} y={my - 4} textAnchor="middle" fontSize="9" fill="#94a3b8">{e.label}</text>}
+                                                        </g>
+                                                    );
+                                                })}
+                                                {/* Nodes */}
+                                                {(conceptMap.nodes || []).map(n => {
+                                                    const pos = mapNodePos[n.id] || { x: 200, y: 200 };
+                                                    const color = n.group === 'main' ? '#6366f1' : n.group === 'example' ? '#f59e0b' : '#10b981';
+                                                    const r = n.group === 'main' ? 34 : 28;
+                                                    return (
+                                                        <g key={n.id} data-nodeid={n.id}
+                                                            style={{ cursor: 'grab' }}
+                                                            onMouseDown={e => {
+                                                                e.stopPropagation();
+                                                                const rect = e.currentTarget.closest('.lv-map-container').getBoundingClientRect();
+                                                                setMapDragging({ type: 'node', nodeId: n.id,
+                                                                    containerX: rect.left, containerY: rect.top,
+                                                                    origX: pos.x, origY: pos.y,
+                                                                    mouseOrigX: (e.clientX - rect.left) / mapScale,
+                                                                    mouseOrigY: (e.clientY - rect.top) / mapScale,
+                                                                });
+                                                            }}>
+                                                            <circle cx={pos.x} cy={pos.y} r={r} fill={color} opacity="0.9" />
+                                                            <foreignObject x={pos.x - r} y={pos.y - r} width={r*2} height={r*2}>
+                                                                <div xmlns="http://www.w3.org/1999/xhtml"
+                                                                    style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', color: '#fff', fontSize: 9, fontWeight: 600, lineHeight: 1.3, padding: '0 3px', wordBreak: 'break-word', pointerEvents: 'none' }}>
+                                                                    {n.label}
+                                                                </div>
+                                                            </foreignObject>
+                                                        </g>
+                                                    );
+                                                })}
+                                            </svg>
+                                        </div>
+                                        <div style={{ fontSize: 11, color: 'var(--color-muted)', marginTop: 6 }}>Scroll to zoom · drag to pan · drag nodes to rearrange</div>
+                                    </>
+                                )}
+                            </div>
+                        )}
 
                     </div>
                 </div>

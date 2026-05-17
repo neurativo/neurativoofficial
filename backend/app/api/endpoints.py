@@ -106,6 +106,18 @@ from app.services.supabase_service import (
     get_announcements,
 )
 from app.services.trust_service import enrich_lecture_payload, sanitize_generated_content_bundle
+from app.services.exam_prep_service import generate_exam_prep
+from app.services.concept_map_service import generate_concept_map
+from app.services.supabase_service import (
+    save_exam_prep,
+    get_exam_prep,
+    save_concept_map,
+    get_concept_map,
+    save_lecture_summary_embedding,
+    get_all_user_lecture_embeddings,
+    save_quiz_attempt,
+    get_quiz_attempts,
+)
 
 
 def _next_month_iso() -> str:
@@ -1601,10 +1613,15 @@ def ask_question_auth(request: Request, lecture_id: str, body: QuestionRequest, 
         raise HTTPException(status_code=403, detail={"error": "feature_locked", "feature": "qa"})
     try:
         topic = get_lecture_topic(lecture_id)
-        answer = answer_lecture_question(lecture_id, body.question, topic=topic, history=body.history)
+        result = answer_lecture_question(lecture_id, body.question, topic=topic, history=body.history)
     except Exception:
         raise HTTPException(status_code=500, detail="Failed to answer question")
-    return {"lecture_id": lecture_id, "question": body.question, "answer": answer}
+    return {
+        "lecture_id": lecture_id,
+        "question": body.question,
+        "answer": result["answer"],
+        "follow_ups": result.get("follow_ups", []),
+    }
 
 
 @router.get("/lectures/{lecture_id}/full")
@@ -1911,4 +1928,205 @@ def get_active_announcements(user=Depends(get_active_user)):
         return {"announcements": get_announcements()}
     except Exception:
         return {"announcements": []}
+
+
+# =============================================================================
+#  STUDY TOOLS
+# =============================================================================
+
+# ── Exam Prep ─────────────────────────────────────────────────────────────────
+
+@router.get("/lectures/{lecture_id}/exam-prep")
+def get_exam_prep_endpoint(lecture_id: str, user=Depends(get_active_user)):
+    """Returns cached or freshly-generated exam prep questions. Student+ only."""
+    _check_owner(lecture_id, user.id)
+    profile = get_user_profile(str(user.id))
+    limits = get_limits(profile.get("plan_tier", "free"))
+    if not limits.get("qa_enabled"):
+        raise HTTPException(status_code=403, detail={"error": "feature_locked", "feature": "exam_prep"})
+
+    cached = get_exam_prep(lecture_id)
+    if cached:
+        return {"lecture_id": lecture_id, "questions": cached, "cached": True}
+
+    lecture = get_lecture_for_summarization(lecture_id)
+    if not lecture:
+        raise HTTPException(status_code=404, detail="Lecture not found")
+
+    master_summary = (lecture.get("master_summary") or lecture.get("summary") or "").strip()
+    if not master_summary:
+        raise HTTPException(status_code=422, detail="Lecture has no summary yet")
+
+    import json as _json
+    glossary_raw = lecture.get("glossary") or []
+    if isinstance(glossary_raw, str):
+        try:
+            glossary_raw = _json.loads(glossary_raw)
+        except Exception:
+            glossary_raw = []
+
+    topic = get_lecture_topic(lecture_id)
+    try:
+        questions = generate_exam_prep(master_summary, glossary_raw, topic=topic)
+    except Exception as e:
+        print(f"[exam_prep] generation failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate exam prep")
+
+    save_exam_prep(lecture_id, questions)
+    return {"lecture_id": lecture_id, "questions": questions, "cached": False}
+
+
+# ── Quiz Practice Attempts ────────────────────────────────────────────────────
+
+class QuizAttemptRequest(BaseModel):
+    score: int = Field(..., ge=0)
+    total: int = Field(..., ge=1)
+    duration_seconds: int | None = Field(None, ge=0)
+    answers_json: dict = Field(default_factory=dict)
+
+
+@router.post("/lectures/{lecture_id}/quiz-attempts")
+@limiter.limit("30/minute")
+def save_quiz_attempt_endpoint(
+    request: Request,
+    lecture_id: str,
+    body: QuizAttemptRequest,
+    user=Depends(get_active_user),
+):
+    """Saves a quiz attempt and computes weak topics from missed questions."""
+    _check_owner(lecture_id, user.id)
+
+    lecture = get_lecture_for_summarization(lecture_id)
+    if not lecture:
+        raise HTTPException(status_code=404, detail="Lecture not found")
+
+    # Build weak_topics from missed questions intersected with glossary terms
+    import json as _json
+    import re as _re
+    glossary_raw = lecture.get("glossary") or []
+    if isinstance(glossary_raw, str):
+        try:
+            glossary_raw = _json.loads(glossary_raw)
+        except Exception:
+            glossary_raw = []
+    quiz_raw = lecture.get("quiz") or []
+    if isinstance(quiz_raw, str):
+        try:
+            quiz_raw = _json.loads(quiz_raw)
+        except Exception:
+            quiz_raw = []
+
+    glossary_terms = {g.get("term", "").lower() for g in glossary_raw if isinstance(g, dict) and g.get("term")}
+    term_miss_count: dict[str, int] = {}
+
+    for idx_str, chosen in body.answers_json.items():
+        try:
+            idx = int(idx_str)
+            q = quiz_raw[idx] if idx < len(quiz_raw) else None
+        except (ValueError, IndexError):
+            continue
+        if not q:
+            continue
+        correct_answer = q.get("answer") or q.get("correct_answer") or ""
+        if str(chosen).strip().upper() == str(correct_answer).strip().upper():
+            continue  # correct — skip
+        # Missed — tokenize question text and find glossary matches
+        question_text = (q.get("question") or "") + " " + (q.get("explanation") or "")
+        tokens = set(_re.findall(r"[a-z]{3,}", question_text.lower()))
+        for term in glossary_terms:
+            term_tokens = set(_re.findall(r"[a-z]{3,}", term))
+            if term_tokens and term_tokens.issubset(tokens):
+                term_miss_count[term] = term_miss_count.get(term, 0) + 1
+
+    weak_topics = [t for t, _ in sorted(term_miss_count.items(), key=lambda x: -x[1])[:5]]
+
+    saved = save_quiz_attempt(
+        lecture_id=lecture_id,
+        user_id=str(user.id),
+        score=body.score,
+        total=body.total,
+        duration_seconds=body.duration_seconds,
+        answers_json=body.answers_json,
+        weak_topics=weak_topics,
+    )
+    return {"ok": True, "id": saved.get("id"), "weak_topics": weak_topics}
+
+
+@router.get("/lectures/{lecture_id}/quiz-attempts")
+def get_quiz_attempts_endpoint(lecture_id: str, user=Depends(get_active_user)):
+    """Returns last 10 quiz attempts for the requesting user on this lecture."""
+    _check_owner(lecture_id, user.id)
+    attempts = get_quiz_attempts(lecture_id, str(user.id), limit=10)
+    return {"lecture_id": lecture_id, "attempts": attempts}
+
+
+# ── Concept Map ───────────────────────────────────────────────────────────────
+
+@router.get("/lectures/{lecture_id}/concept-map")
+def get_concept_map_endpoint(lecture_id: str, user=Depends(get_active_user)):
+    """Returns cached or freshly-generated concept map."""
+    _check_owner(lecture_id, user.id)
+
+    cached = get_concept_map(lecture_id)
+    if cached:
+        return {"lecture_id": lecture_id, "map": cached, "cached": True}
+
+    lecture = get_lecture_for_summarization(lecture_id)
+    if not lecture:
+        raise HTTPException(status_code=404, detail="Lecture not found")
+
+    master_summary = (lecture.get("master_summary") or lecture.get("summary") or "").strip()
+    if not master_summary:
+        raise HTTPException(status_code=422, detail="Lecture has no summary yet")
+
+    topic = get_lecture_topic(lecture_id)
+    try:
+        concept_map_data = generate_concept_map(master_summary, topic=topic)
+    except Exception as e:
+        print(f"[concept_map] generation failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate concept map")
+
+    save_concept_map(lecture_id, concept_map_data)
+    return {"lecture_id": lecture_id, "map": concept_map_data, "cached": False}
+
+
+# ── Semantic Lecture Search ───────────────────────────────────────────────────
+
+class SearchRequest(BaseModel):
+    query: str = Field(..., min_length=1, max_length=300)
+
+
+@router.post("/search")
+@limiter.limit("20/minute")
+def semantic_search(request: Request, body: SearchRequest, user=Depends(get_active_user)):
+    """Semantic search across the user's lectures using summary embeddings."""
+    from app.services.embedding_service import embed_single
+
+    query = body.query.strip()
+    try:
+        query_embedding = embed_single(query)
+    except Exception as e:
+        print(f"[search] embed query failed: {e}")
+        raise HTTPException(status_code=500, detail="Search failed")
+
+    all_lectures = get_all_user_lecture_embeddings(str(user.id))
+    if not all_lectures:
+        return {"results": []}
+
+    scored = []
+    for lec in all_lectures:
+        emb = lec.get("summary_embedding")
+        if not emb:
+            continue
+        score = cosine_similarity(query_embedding, emb)
+        scored.append({
+            "lecture_id": lec["lecture_id"],
+            "title": lec["title"],
+            "topic": lec["topic"],
+            "score": round(float(score), 4),
+            "snippet": lec["summary"],
+        })
+
+    scored.sort(key=lambda x: x["score"], reverse=True)
+    return {"results": scored[:5]}
 

@@ -532,6 +532,8 @@ export default function Dashboard({ user }) {
     const searchTimerRef = useRef(null);
     const [searchResults, setSearchResults] = useState(null);
     const [searchLoading, setSearchLoading] = useState(false);
+    const [semanticResults, setSemanticResults] = useState(null); // null = no semantic search done
+    const semanticTimerRef = useRef(null);
     const [announcements, setAnnouncements] = useState([]);
     const [dismissedIds, setDismissedIds] = useState(() => {
         try { return JSON.parse(sessionStorage.getItem('dismissed_ann') || '[]'); } catch { return []; }
@@ -540,6 +542,9 @@ export default function Dashboard({ user }) {
     const [betaApplication, setBetaApplication] = useState(undefined); // undefined = loading
     const [betaBannerDismissed, setBetaBannerDismissed] = useState(() => sessionStorage.getItem('beta_banner_dismissed') === '1');
     const [betaModalOpen, setBetaModalOpen] = useState(false);
+    const [pwaBannerDismissed, setPwaBannerDismissed] = useState(() => sessionStorage.getItem('pwa_banner_dismissed') === '1');
+    const isMobileUA = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const showPwaBanner = !pwaBannerDismissed && isMobileUA && !!window._pwaInstallPrompt;
 
     const handleSignOut = async () => {
         await signOut();
@@ -810,6 +815,28 @@ export default function Dashboard({ user }) {
                 )}
 
                 <main className="db-main">
+                    {/* PWA Install Banner — mobile only, one-time per session */}
+                    {showPwaBanner && (
+                        <div className="db-announcement db-announcement-info" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <span style={{ flex: 1 }}>
+                                📲 <strong>Install Neurativo</strong> for quick access and offline support.
+                            </span>
+                            <button
+                                style={{ padding: '5px 12px', background: '#0369a1', color: '#fff', border: 'none', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 600, flexShrink: 0 }}
+                                onClick={async () => {
+                                    if (window._pwaInstallPrompt) {
+                                        window._pwaInstallPrompt.prompt();
+                                        await window._pwaInstallPrompt.userChoice;
+                                        window._pwaInstallPrompt = null;
+                                    }
+                                    sessionStorage.setItem('pwa_banner_dismissed', '1');
+                                    setPwaBannerDismissed(true);
+                                }}>
+                                Install
+                            </button>
+                            <button className="db-announcement-dismiss" onClick={() => { sessionStorage.setItem('pwa_banner_dismissed', '1'); setPwaBannerDismissed(true); }} aria-label="Dismiss">×</button>
+                        </div>
+                    )}
                     {announcements
                         .filter(a => !dismissedIds.includes(a.id))
                         .map(a => (
@@ -930,6 +957,7 @@ export default function Dashboard({ user }) {
                                 const val = e.target.value;
                                 setSearch(val);
                                 clearTimeout(searchTimerRef.current);
+                                clearTimeout(semanticTimerRef.current);
                                 if (val.trim().length >= 3) {
                                     setSearchLoading(true);
                                     searchTimerRef.current = setTimeout(async () => {
@@ -947,13 +975,28 @@ export default function Dashboard({ user }) {
                                     setSearchResults(null);
                                     setSearchLoading(false);
                                 }
+                                // Semantic search for queries ≥ 4 words
+                                if (val.trim().split(/\s+/).filter(Boolean).length >= 4) {
+                                    semanticTimerRef.current = setTimeout(async () => {
+                                        try {
+                                            const res = await api.post('/api/v1/search', { query: val.trim() });
+                                            setSemanticResults(res.data.results || []);
+                                        } catch {
+                                            setSemanticResults(null);
+                                        }
+                                    }, 600);
+                                } else {
+                                    setSemanticResults(null);
+                                }
                             }}
                             onKeyDown={e => {
                                 if (e.key === 'Escape') {
                                     setSearch('');
                                     setSearchResults(null);
+                                    setSemanticResults(null);
                                     setSearchLoading(false);
                                     clearTimeout(searchTimerRef.current);
+                                    clearTimeout(semanticTimerRef.current);
                                     e.target.blur();
                                 }
                             }}
@@ -986,6 +1029,32 @@ export default function Dashboard({ user }) {
                             </button>
                         )}
                     </div>
+
+                    {/* AI Match section — semantic search results */}
+                    {semanticResults && semanticResults.length > 0 && (
+                        <div style={{ marginBottom: 20 }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <span style={{ background: '#6366f1', color: '#fff', fontSize: 9, padding: '2px 6px', borderRadius: 4, fontWeight: 700 }}>AI</span>
+                                Semantic matches
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                {semanticResults.map(r => (
+                                    <a key={r.lecture_id} href={`/lecture/${r.lecture_id}`}
+                                        style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '10px 14px', border: '1px solid var(--color-border)', borderRadius: 12, background: 'var(--color-card)', textDecoration: 'none', transition: 'box-shadow 0.15s' }}
+                                        onMouseEnter={e => e.currentTarget.style.boxShadow = '0 2px 10px rgba(99,102,241,0.15)'}
+                                        onMouseLeave={e => e.currentTarget.style.boxShadow = 'none'}>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text)', marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.title || 'Untitled'}</div>
+                                            {r.snippet && <div style={{ fontSize: 12, color: 'var(--color-sec)', lineHeight: 1.5, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{r.snippet}</div>}
+                                        </div>
+                                        <div style={{ flexShrink: 0, fontSize: 11, fontWeight: 700, color: '#6366f1', background: '#f0f0fe', borderRadius: 999, padding: '2px 8px', whiteSpace: 'nowrap' }}>
+                                            {Math.round(r.score * 100)}% match
+                                        </div>
+                                    </a>
+                                ))}
+                            </div>
+                        </div>
+                    )}
 
                     {/* Content */}
                     {loading ? (

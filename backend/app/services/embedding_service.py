@@ -24,6 +24,14 @@ def get_embeddings(texts: List[str]) -> List[List[float]]:
         print(f"Error generating embeddings: {e}")
         raise e
 
+def embed_single(text: str) -> List[float]:
+    """Convenience wrapper — embeds a single text string."""
+    results = get_embeddings([text])
+    if not results:
+        raise Exception("Embedding returned empty result")
+    return results[0]
+
+
 def cosine_similarity(a: List[float], b: List[float]) -> float:
     """
     Computes cosine similarity between two vectors.

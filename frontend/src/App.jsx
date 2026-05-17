@@ -512,10 +512,18 @@ function App({ user }) {
     }, [lectureId, sessionStatus, recordingSeconds, detectedLanguage, detectedTopic]);
 
     // Resilience 5: re-acquire wake lock when tab becomes visible again
+    // Also show background-audio warning on mobile when tab goes hidden during recording
     useEffect(() => {
+        const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
         const onVisibility = () => {
             if (document.visibilityState === 'visible' && isRecordingRef.current) {
                 requestWakeLock();
+            }
+            if (document.hidden && isRecordingRef.current && isMobile) {
+                showError('Keep this tab open — background audio is not supported on mobile browsers.', 0);
+            }
+            if (!document.hidden) {
+                setErrorMessage(msg => msg === 'Keep this tab open — background audio is not supported on mobile browsers.' ? null : msg);
             }
         };
         document.addEventListener('visibilitychange', onVisibility);
