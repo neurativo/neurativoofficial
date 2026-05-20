@@ -31,6 +31,31 @@ async def create_checkout(body: CheckoutBody, user=Depends(get_active_user)):
     user_id = str(user.id)
     email = getattr(user, "email", "") or ""
 
+    # Clerk JWT may omit email — fall back to Clerk REST API
+    if not email or "@" not in email:
+        try:
+            import httpx as _httpx
+            r = _httpx.get(
+                f"https://api.clerk.com/v1/users/{user_id}",
+                headers={"Authorization": f"Bearer {settings.CLERK_SECRET_KEY}"},
+                timeout=8,
+            )
+            if r.is_success:
+                data = r.json()
+                addrs = data.get("email_addresses") or []
+                primary_id = data.get("primary_email_address_id")
+                for a in addrs:
+                    if a.get("id") == primary_id:
+                        email = a.get("email_address", "")
+                        break
+                if not email and addrs:
+                    email = addrs[0].get("email_address", "")
+        except Exception as e:
+            print(f"[billing] clerk email fetch error: {e}")
+
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="Could not determine your email address. Please update your profile.")
+
     try:
         subscription_id, payment_link = dodo_service.create_subscription_checkout(
             user_id=user_id,
