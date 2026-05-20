@@ -83,6 +83,8 @@ def create_subscription_checkout(
     print(f"[dodo] checkout session created: {data}")
     session_id = data.get("session_id") or data.get("id") or ""
     checkout_url = data.get("checkout_url") or data.get("url") or ""
+    if not checkout_url:
+        raise ValueError(f"Dodo returned no checkout_url. Full response: {data}")
     return session_id, checkout_url
 
 
@@ -137,8 +139,10 @@ def create_credits_checkout(
         resp.raise_for_status()
         data = resp.json()
 
-    session_id = data["session_id"]
-    checkout_url = data.get("checkout_url") or ""
+    session_id = data.get("session_id") or data.get("id") or ""
+    checkout_url = data.get("checkout_url") or data.get("url") or ""
+    if not checkout_url:
+        raise ValueError(f"Dodo returned no checkout_url. Full response: {data}")
     return session_id, checkout_url
 
 

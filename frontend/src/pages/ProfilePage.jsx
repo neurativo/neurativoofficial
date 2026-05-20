@@ -370,9 +370,13 @@ export default function ProfilePage({ user }) {
         setCheckoutLoading(plan);
         try {
             const res = await api.post('/api/v1/billing/checkout', { plan });
-            window.location.href = res.data.checkout_url;
+            const url = res.data.checkout_url;
+            if (!url) throw new Error('No checkout URL returned');
+            window.location.href = url;
         } catch (e) {
             console.error('Checkout error', e);
+            const msg = e?.response?.data?.detail || e?.message || 'Could not start checkout. Please try again.';
+            alert(msg);
             setCheckoutLoading(null);
         }
     };
