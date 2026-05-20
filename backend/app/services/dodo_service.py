@@ -81,6 +81,7 @@ def create_subscription_checkout(
         resp.raise_for_status()
         data = resp.json()
 
+    print(f"[dodo] checkout session created: {data}")
     session_id = data["session_id"]
     checkout_url = data.get("checkout_url") or ""
     return session_id, checkout_url
