@@ -50,40 +50,40 @@ def create_subscription_checkout(
     return_url: str,
 ) -> Tuple[str, str]:
     """
-    Creates a Dodo subscription via POST /subscriptions.
-    Returns (subscription_id, payment_link).
+    Creates a hosted checkout session for a subscription via POST /checkout-sessions.
+    Returns (session_id, checkout_url).
     """
     product_id = _plan_product_map().get(plan)
     if not product_id:
         raise ValueError(f"Unknown plan or product not configured: {plan}")
 
     payload = {
-        "product_id": product_id,
-        "quantity": 1,
+        "product_cart": [{"product_id": product_id, "quantity": 1}],
         "customer": {
             "email": email,
             "name": name or email.split("@")[0],
         },
-        "billing": {"country": "US"},
+        "billing_address": {"country": "US"},
         "return_url": return_url,
         "metadata": {"neurativo_user_id": user_id, "plan": plan},
+        "feature_flags": {"allow_discount_code": True},
     }
 
     with httpx.Client(timeout=20) as client:
         resp = client.post(
-            f"{_api_base()}/subscriptions",
+            f"{_api_base()}/checkout-sessions",
             headers=_headers(),
             json=payload,
         )
         if not resp.is_success:
-            print(f"[dodo] create_subscription failed {resp.status_code}: {resp.text}")
+            print(f"[dodo] create_subscription_checkout failed {resp.status_code}: {resp.text}")
         resp.raise_for_status()
         data = resp.json()
 
-    print(f"[dodo] subscription created: {data}")
-    sub_id = data.get("subscription_id") or data.get("id") or ""
-    checkout_url = data.get("payment_link") or data.get("checkout_url") or ""
-    return sub_id, checkout_url
+    print(f"[dodo] checkout session created: {data}")
+    session_id = data.get("session_id") or data.get("id") or ""
+    checkout_url = data.get("checkout_url") or data.get("url") or ""
+    return session_id, checkout_url
 
 
 def _credit_pack_product_map() -> dict:
