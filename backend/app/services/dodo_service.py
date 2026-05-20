@@ -70,6 +70,9 @@ def create_subscription_checkout(
         "return_url": return_url,
         "payment_link": True,
         "metadata": {"neurativo_user_id": user_id},
+        "feature_flags": {
+            "allow_discount_code": True,
+        },
     }
 
     with httpx.Client(timeout=20) as client:
