@@ -78,6 +78,8 @@ def create_subscription_checkout(
             headers=_headers(),
             json=payload,
         )
+        if not resp.is_success:
+            print(f"[dodo] create_subscription failed {resp.status_code}: {resp.text}")
         resp.raise_for_status()
         data = resp.json()
 
