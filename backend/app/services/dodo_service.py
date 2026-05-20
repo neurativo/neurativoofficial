@@ -64,6 +64,9 @@ def create_subscription_checkout(
             "email": email,
             "name": name or email.split("@")[0],
         },
+        "billing": {
+            "country": "US",
+        },
         "return_url": return_url,
         "payment_link": True,
         "metadata": {"neurativo_user_id": user_id},
