@@ -59,8 +59,9 @@ def create_subscription_checkout(
         raise ValueError(f"Unknown plan or product not configured: {plan}")
 
     payload = {
+        "product_id": product_id,
+        "quantity": 1,
         "payment_link": True,
-        "product_cart": [{"product_id": product_id, "quantity": 1}],
         "customer": {
             "email": email,
             "name": name or email.split("@")[0],
