@@ -7,6 +7,7 @@ import base64
 import hashlib
 import hmac
 import json
+import os
 import time
 from typing import Tuple
 
@@ -14,7 +15,10 @@ import httpx
 
 from app.core.config import settings
 
-DODO_API_BASE = "https://api.dodopayments.com"
+def _api_base() -> str:
+    if os.getenv("DODO_TEST_MODE", "").lower() in ("1", "true", "yes"):
+        return "https://test.dodopayments.com"
+    return "https://live.dodopayments.com"
 
 
 def _plan_product_map() -> dict:
@@ -67,7 +71,7 @@ def create_subscription_checkout(
 
     with httpx.Client(timeout=20) as client:
         resp = client.post(
-            f"{DODO_API_BASE}/subscriptions",
+            f"{_api_base()}/subscriptions",
             headers=_headers(),
             json=payload,
         )
@@ -83,7 +87,7 @@ def cancel_subscription(subscription_id: str) -> None:
     """Cancels an active subscription."""
     with httpx.Client(timeout=15) as client:
         resp = client.patch(
-            f"{DODO_API_BASE}/subscriptions/{subscription_id}",
+            f"{_api_base()}/subscriptions/{subscription_id}",
             headers=_headers(),
             json={"status": "cancelled"},
         )
