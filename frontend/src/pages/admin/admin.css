@@ -594,6 +594,15 @@
     border-radius: 8px;
     margin-bottom: 16px;
 }
+.adm-success {
+    color: #15803d;
+    font-size: 13px;
+    padding: 12px 16px;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 8px;
+    margin-bottom: 16px;
+}
 .adm-result { font-size: 12px; color: #6b6b6b; }
 .adm-save-result { font-size: 11px; color: #16a34a; }
 .adm-form-result { font-size: 12px; color: #16a34a; margin-top: 6px; }

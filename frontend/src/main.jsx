@@ -26,6 +26,7 @@ import AdminAnnouncements from './pages/admin/AdminAnnouncements.jsx';
 import AdminTeams from './pages/admin/AdminTeams.jsx';
 import AdminTeamDetail from './pages/admin/AdminTeamDetail.jsx';
 import AdminBeta from './pages/admin/AdminBeta.jsx';
+import AdminBilling from './pages/admin/AdminBilling.jsx';
 import CreditsPage from './pages/CreditsPage.jsx';
 import FeaturesPage from './pages/FeaturesPage.jsx';
 import PricingPage from './pages/PricingPage.jsx';
@@ -136,6 +137,7 @@ function Root() {
                 <Route path="system" element={<AdminSystem />} />
                 <Route path="teams" element={<AdminTeams />} />
                 <Route path="teams/:slug" element={<AdminTeamDetail />} />
+                <Route path="billing" element={<AdminBilling />} />
             </Route>
 
             <Route path="*" element={isLoaded ? <NotFoundPage /> : <Navigate to="/" replace />} />

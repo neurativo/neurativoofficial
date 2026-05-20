@@ -66,6 +66,12 @@ const NAV = [
             <line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/>
         </svg>
     )},
+    { to: '/admin/billing', label: 'Billing', icon: (
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
+            <line x1="1" y1="10" x2="23" y2="10"/>
+        </svg>
+    )},
 ];
 
 export default function AdminLayout() {

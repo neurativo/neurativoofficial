@@ -104,6 +104,37 @@ export const adminApi = {
     },
 };
 
+const BILLING_BASE = `${import.meta.env.VITE_API_URL || 'https://neurativoofficial-production.up.railway.app'}/api/v1/billing`;
+
+async function _billingGet(path, params = {}) {
+    const token = await _token();
+    const res = await axios.get(BILLING_BASE + path, { params, headers: _headers(token) });
+    return res.data;
+}
+
+async function _billingPost(path, body = {}) {
+    const token = await _token();
+    const res = await axios.post(BILLING_BASE + path, body, { headers: _headers(token) });
+    return res.data;
+}
+
+async function _billingDelete(path) {
+    const token = await _token();
+    const res = await axios.delete(BILLING_BASE + path, { headers: _headers(token) });
+    return res.data;
+}
+
+export const billingApi = {
+    listSubscriptions: (page = 0, pageSize = 20, status = null) =>
+        _billingGet('/admin/subscriptions', { page, page_size: pageSize, ...(status ? { status } : {}) }),
+    listDiscounts: () =>
+        _billingGet('/admin/discounts'),
+    createDiscount: (body) =>
+        _billingPost('/admin/discounts', body),
+    deleteDiscount: (id) =>
+        _billingDelete(`/admin/discounts/${id}`),
+};
+
 /**
  * Beta program API helpers — use /api/v1/beta/admin/* endpoints.
  */

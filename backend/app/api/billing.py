@@ -6,7 +6,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel
 
-from app.core.auth import get_active_user
+from app.core.auth import get_active_user, get_admin_user
 from app.core.config import settings
 from app.services import dodo_service, supabase_service
 from app.services.credits_service import (
@@ -205,6 +205,70 @@ async def cancel_subscription(user=Depends(get_active_user)):
         status="cancelled",
     )
     return {"ok": True}
+
+
+class CreateDiscountBody(BaseModel):
+    discount_type: Literal["percentage", "flat"]
+    amount: int  # percentage: 0-100, flat: cents
+    code: str | None = None
+    name: str | None = None
+    expires_at: str | None = None
+    usage_limit: int | None = None
+    restricted_to: list | None = None
+
+
+@router.get("/admin/subscriptions")
+async def admin_list_subscriptions(
+    page: int = 0,
+    page_size: int = 20,
+    status: str | None = None,
+    user=Depends(get_admin_user),
+):
+    """Lists Dodo subscriptions. Admin only."""
+    try:
+        return dodo_service.list_subscriptions(page=page, page_size=page_size, status=status or None)
+    except Exception as e:
+        print(f"[billing] admin list_subscriptions error: {e}")
+        raise HTTPException(status_code=502, detail="Could not fetch subscriptions")
+
+
+@router.get("/admin/discounts")
+async def admin_list_discounts(user=Depends(get_admin_user)):
+    """Lists all Dodo discount codes. Admin only."""
+    try:
+        return dodo_service.list_discounts()
+    except Exception as e:
+        print(f"[billing] admin list_discounts error: {e}")
+        raise HTTPException(status_code=502, detail="Could not fetch discounts")
+
+
+@router.post("/admin/discounts")
+async def admin_create_discount(body: CreateDiscountBody, user=Depends(get_admin_user)):
+    """Creates a Dodo discount code. Admin only."""
+    try:
+        return dodo_service.create_discount(
+            discount_type=body.discount_type,
+            amount=body.amount,
+            code=body.code,
+            name=body.name,
+            expires_at=body.expires_at,
+            usage_limit=body.usage_limit,
+            restricted_to=body.restricted_to,
+        )
+    except Exception as e:
+        print(f"[billing] admin create_discount error: {e}")
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+@router.delete("/admin/discounts/{discount_id}")
+async def admin_delete_discount(discount_id: str, user=Depends(get_admin_user)):
+    """Deletes a Dodo discount code. Admin only."""
+    try:
+        dodo_service.delete_discount(discount_id)
+        return {"ok": True}
+    except Exception as e:
+        print(f"[billing] admin delete_discount error: {e}")
+        raise HTTPException(status_code=502, detail="Could not delete discount")
 
 
 @router.post("/webhook")

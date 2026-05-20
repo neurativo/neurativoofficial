@@ -50,41 +50,40 @@ def create_subscription_checkout(
     return_url: str,
 ) -> Tuple[str, str]:
     """
-    Creates a Dodo checkout session for a subscription product.
-    Uses /checkout-sessions so feature_flags (discount code) works.
-    Returns (session_id, checkout_url).
+    Creates a Dodo subscription via POST /subscriptions.
+    Returns (subscription_id, payment_link).
     """
     product_id = _plan_product_map().get(plan)
     if not product_id:
         raise ValueError(f"Unknown plan or product not configured: {plan}")
 
     payload = {
-        "product_cart": [{"product_id": product_id, "quantity": 1}],
+        "product_id": product_id,
+        "quantity": 1,
         "customer": {
             "email": email,
             "name": name or email.split("@")[0],
         },
-        "billing_address": {"country": "US"},
+        "billing": {"country": "US"},
         "return_url": return_url,
         "metadata": {"neurativo_user_id": user_id, "plan": plan},
-        "feature_flags": {"allow_discount_code": True},
     }
 
     with httpx.Client(timeout=20) as client:
         resp = client.post(
-            f"{_api_base()}/checkout-sessions",
+            f"{_api_base()}/subscriptions",
             headers=_headers(),
             json=payload,
         )
         if not resp.is_success:
-            print(f"[dodo] create_subscription checkout failed {resp.status_code}: {resp.text}")
+            print(f"[dodo] create_subscription failed {resp.status_code}: {resp.text}")
         resp.raise_for_status()
         data = resp.json()
 
-    print(f"[dodo] checkout session created: {data}")
-    session_id = data["session_id"]
-    checkout_url = data.get("checkout_url") or ""
-    return session_id, checkout_url
+    print(f"[dodo] subscription created: {data}")
+    sub_id = data.get("subscription_id") or data.get("id") or ""
+    checkout_url = data.get("payment_link") or data.get("checkout_url") or ""
+    return sub_id, checkout_url
 
 
 def _credit_pack_product_map() -> dict:
@@ -151,6 +150,64 @@ def cancel_subscription(subscription_id: str) -> None:
             headers=_headers(),
             json={"status": "cancelled"},
         )
+        resp.raise_for_status()
+
+
+def list_subscriptions(page: int = 0, page_size: int = 20, status: str | None = None) -> dict:
+    params = {"page_number": page, "page_size": page_size}
+    if status:
+        params["status"] = status
+    with httpx.Client(timeout=15) as client:
+        resp = client.get(f"{_api_base()}/subscriptions", headers=_headers(), params=params)
+        if not resp.is_success:
+            print(f"[dodo] list_subscriptions failed {resp.status_code}: {resp.text}")
+        resp.raise_for_status()
+        return resp.json()
+
+
+def list_discounts(page: int = 0, page_size: int = 50) -> dict:
+    params = {"page_number": page, "page_size": page_size}
+    with httpx.Client(timeout=15) as client:
+        resp = client.get(f"{_api_base()}/discounts", headers=_headers(), params=params)
+        if not resp.is_success:
+            print(f"[dodo] list_discounts failed {resp.status_code}: {resp.text}")
+        resp.raise_for_status()
+        return resp.json()
+
+
+def create_discount(
+    discount_type: str,
+    amount: int,
+    code: str | None = None,
+    name: str | None = None,
+    expires_at: str | None = None,
+    usage_limit: int | None = None,
+    restricted_to: list | None = None,
+) -> dict:
+    payload: dict = {"type": discount_type, "amount": amount}
+    if code:
+        payload["code"] = code
+    if name:
+        payload["name"] = name
+    if expires_at:
+        payload["expires_at"] = expires_at
+    if usage_limit:
+        payload["usage_limit"] = usage_limit
+    if restricted_to:
+        payload["restricted_to"] = restricted_to
+    with httpx.Client(timeout=15) as client:
+        resp = client.post(f"{_api_base()}/discounts", headers=_headers(), json=payload)
+        if not resp.is_success:
+            print(f"[dodo] create_discount failed {resp.status_code}: {resp.text}")
+        resp.raise_for_status()
+        return resp.json()
+
+
+def delete_discount(discount_id: str) -> None:
+    with httpx.Client(timeout=15) as client:
+        resp = client.delete(f"{_api_base()}/discounts/{discount_id}", headers=_headers())
+        if not resp.is_success:
+            print(f"[dodo] delete_discount failed {resp.status_code}: {resp.text}")
         resp.raise_for_status()
 
 
