@@ -67,7 +67,7 @@ async def create_checkout(body: CheckoutBody, user=Depends(get_active_user)):
         raise HTTPException(status_code=400, detail="Could not determine your email address. Please update your profile.")
 
     try:
-        subscription_id, payment_link = dodo_service.create_subscription_checkout(
+        _session_id, checkout_url = dodo_service.create_subscription_checkout(
             user_id=user_id,
             email=email,
             name=email.split("@")[0] if email else "Student",
@@ -80,18 +80,7 @@ async def create_checkout(body: CheckoutBody, user=Depends(get_active_user)):
         print(f"[billing] checkout error: {e}")
         raise HTTPException(status_code=502, detail="Could not create checkout session")
 
-    # Store the subscription_id immediately so the webhook can resolve the user
-    try:
-        supabase_service.save_dodo_subscription(
-            user_id=user_id,
-            dodo_customer_id=None,
-            dodo_subscription_id=subscription_id,
-            status="pending",
-        )
-    except Exception as e:
-        print(f"[billing] save pending sub error (non-fatal): {e}")
-
-    return {"checkout_url": payment_link}
+    return {"checkout_url": checkout_url}
 
 
 @router.get("/subscription")

@@ -50,45 +50,40 @@ def create_subscription_checkout(
     return_url: str,
 ) -> Tuple[str, str]:
     """
-    Creates a Dodo Payments subscription and returns (subscription_id, payment_link).
-    Raises ValueError for unknown plans, httpx.HTTPError on API failure.
+    Creates a Dodo checkout session for a subscription product.
+    Uses /checkout-sessions so feature_flags (discount code) works.
+    Returns (session_id, checkout_url).
     """
     product_id = _plan_product_map().get(plan)
     if not product_id:
         raise ValueError(f"Unknown plan or product not configured: {plan}")
 
     payload = {
-        "product_id": product_id,
-        "quantity": 1,
+        "product_cart": [{"product_id": product_id, "quantity": 1}],
         "customer": {
             "email": email,
             "name": name or email.split("@")[0],
         },
-        "billing": {
-            "country": "US",
-        },
+        "billing_address": {"country": "US"},
         "return_url": return_url,
-        "payment_link": True,
-        "metadata": {"neurativo_user_id": user_id},
-        "feature_flags": {
-            "allow_discount_code": True,
-        },
+        "metadata": {"neurativo_user_id": user_id, "plan": plan},
+        "feature_flags": {"allow_discount_code": True},
     }
 
     with httpx.Client(timeout=20) as client:
         resp = client.post(
-            f"{_api_base()}/subscriptions",
+            f"{_api_base()}/checkout-sessions",
             headers=_headers(),
             json=payload,
         )
         if not resp.is_success:
-            print(f"[dodo] create_subscription failed {resp.status_code}: {resp.text}")
+            print(f"[dodo] create_subscription checkout failed {resp.status_code}: {resp.text}")
         resp.raise_for_status()
         data = resp.json()
 
-    subscription_id = data["subscription_id"]
-    payment_link = data.get("payment_link") or ""
-    return subscription_id, payment_link
+    session_id = data["session_id"]
+    checkout_url = data.get("checkout_url") or ""
+    return session_id, checkout_url
 
 
 def _credit_pack_product_map() -> dict:
