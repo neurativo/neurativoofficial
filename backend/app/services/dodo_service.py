@@ -50,28 +50,29 @@ def create_subscription_checkout(
     return_url: str,
 ) -> Tuple[str, str]:
     """
-    Creates a hosted checkout session for a subscription via POST /checkout-sessions.
-    Returns (session_id, checkout_url).
+    Creates a subscription with a hosted payment link via POST /subscriptions.
+    payment_link=true is required to get the redirect URL back.
+    Returns (subscription_id, payment_link_url).
     """
     product_id = _plan_product_map().get(plan)
     if not product_id:
         raise ValueError(f"Unknown plan or product not configured: {plan}")
 
     payload = {
+        "payment_link": True,
         "product_cart": [{"product_id": product_id, "quantity": 1}],
         "customer": {
             "email": email,
             "name": name or email.split("@")[0],
         },
-        "billing_address": {"country": "US"},
+        "billing": {"country": "US"},
         "return_url": return_url,
         "metadata": {"neurativo_user_id": user_id, "plan": plan},
-        "feature_flags": {"allow_discount_code": True},
     }
 
     with httpx.Client(timeout=20) as client:
         resp = client.post(
-            f"{_api_base()}/checkout-sessions",
+            f"{_api_base()}/subscriptions",
             headers=_headers(),
             json=payload,
         )
@@ -80,12 +81,12 @@ def create_subscription_checkout(
         resp.raise_for_status()
         data = resp.json()
 
-    print(f"[dodo] checkout session created: {data}")
-    session_id = data.get("session_id") or data.get("id") or ""
-    checkout_url = data.get("checkout_url") or data.get("url") or ""
+    print(f"[dodo] subscription created: {data}")
+    sub_id = data.get("subscription_id") or data.get("id") or ""
+    checkout_url = data.get("payment_link") or ""
     if not checkout_url:
-        raise ValueError(f"Dodo returned no checkout_url. Full response: {data}")
-    return session_id, checkout_url
+        raise ValueError(f"Dodo returned no payment_link. Full response: {data}")
+    return sub_id, checkout_url
 
 
 def _credit_pack_product_map() -> dict:
