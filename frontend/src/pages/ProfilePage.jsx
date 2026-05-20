@@ -306,12 +306,17 @@ export default function ProfilePage({ user }) {
     const [deleteConfirm,   setDeleteConfirm]   = useState('');
     const [deleting,        setDeleting]        = useState(false);
 
+    const [subInfo,        setSubInfo]         = useState(null);
+    const [checkoutLoading, setCheckoutLoading] = useState(null);
+    const [cancelLoading,   setCancelLoading]   = useState(false);
+
     useEffect(() => {
         Promise.all([
             api.get('/api/v1/profile'),
             api.get('/api/v1/usage'),
             creditsApi.getBalance(),
-        ]).then(([pRes, uRes, cRes]) => {
+            api.get('/api/v1/billing/subscription').catch(() => ({ data: null })),
+        ]).then(([pRes, uRes, cRes, sRes]) => {
             const p = pRes.data;
             setProfile(p);
             setDisplayName(p.display_name || '');
@@ -319,6 +324,7 @@ export default function ProfilePage({ user }) {
             setPdfAuto(p.pdf_auto_download !== false);
             setUsage(uRes.data);
             setCredits(cRes.data);
+            if (sRes.data) setSubInfo(sRes.data);
         }).catch(() => {}).finally(() => setLoading(false));
     }, []);
 
@@ -358,6 +364,29 @@ export default function ProfilePage({ user }) {
         setDarkMode(next);
         document.documentElement.classList.toggle('dark', next);
         localStorage.setItem('neurativo_theme', next ? 'dark' : 'light');
+    };
+
+    const handleUpgrade = async (plan) => {
+        setCheckoutLoading(plan);
+        try {
+            const res = await api.post('/api/v1/billing/checkout', { plan });
+            window.location.href = res.data.checkout_url;
+        } catch (e) {
+            console.error('Checkout error', e);
+            setCheckoutLoading(null);
+        }
+    };
+
+    const handleCancel = async () => {
+        if (!window.confirm('Cancel your subscription? Your plan stays active until the current period ends.')) return;
+        setCancelLoading(true);
+        try {
+            await api.post('/api/v1/billing/cancel');
+            setSubInfo(s => ({ ...s, subscription_status: 'cancelled', has_active_subscription: false }));
+        } catch (e) {
+            alert('Could not cancel subscription. Please try again or contact support.');
+        }
+        setCancelLoading(false);
     };
 
     const planTier      = usage?.plan_tier || 'free';
@@ -489,22 +518,35 @@ export default function ProfilePage({ user }) {
                                                 {isCurrent ? (
                                                     <span className="pp-plan-btn pp-plan-btn-current">Current plan</span>
                                                 ) : isDowngrade ? null : (
-                                                    <a
-                                                        href={`mailto:support@neurativo.com?subject=Upgrade to ${plan.name} plan`}
+                                                    <button
                                                         className="pp-plan-btn pp-plan-btn-upgrade"
+                                                        disabled={!!checkoutLoading}
+                                                        onClick={() => handleUpgrade(plan.key)}
+                                                        style={{ border: 'none', cursor: checkoutLoading ? 'default' : 'pointer' }}
                                                     >
-                                                        Upgrade to {plan.name}
-                                                    </a>
+                                                        {checkoutLoading === plan.key ? 'Redirecting…' : `Upgrade to ${plan.name}`}
+                                                    </button>
                                                 )}
                                             </div>
                                         );
                                     })}
                                 </div>
                             )}
-                            {!loading && planTier !== 'pro' && (
-                                <p style={{ fontSize: 11, color: 'var(--color-muted)', marginTop: 12 }}>
-                                    Payments via Stripe coming soon — email us to upgrade manually in the meantime.
-                                </p>
+                            {!loading && subInfo?.has_active_subscription && (
+                                <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                                    {subInfo.subscription_period_end && (
+                                        <span style={{ fontSize: 11, color: 'var(--color-muted)' }}>
+                                            Renews {new Date(subInfo.subscription_period_end).toLocaleDateString()}
+                                        </span>
+                                    )}
+                                    <button
+                                        onClick={handleCancel}
+                                        disabled={cancelLoading}
+                                        style={{ fontSize: 11, color: '#e54d4d', background: 'none', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline' }}
+                                    >
+                                        {cancelLoading ? 'Cancelling…' : 'Cancel subscription'}
+                                    </button>
+                                </div>
                             )}
                         </div>
                     </div>

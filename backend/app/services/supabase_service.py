@@ -1459,6 +1459,60 @@ def set_user_suspended(user_id: str, suspended: bool) -> None:
     ).execute()
 
 
+def save_dodo_subscription(
+    user_id: str,
+    dodo_customer_id: str | None,
+    dodo_subscription_id: str,
+    status: str,
+    period_end: str | None = None,
+) -> None:
+    """Persists Dodo billing fields on user_subscriptions."""
+    if not supabase:
+        raise Exception("Supabase not initialized")
+    from datetime import datetime, timezone
+    update: dict = {
+        "user_id": user_id,
+        "dodo_subscription_id": dodo_subscription_id,
+        "subscription_status": status,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    if dodo_customer_id:
+        update["dodo_customer_id"] = dodo_customer_id
+    if period_end is not None:
+        update["subscription_period_end"] = period_end
+    supabase.table("user_subscriptions").upsert(update, on_conflict="user_id").execute()
+
+
+def get_user_by_dodo_subscription(subscription_id: str) -> str | None:
+    """Returns user_id for a given dodo_subscription_id, or None."""
+    if not supabase:
+        return None
+    try:
+        resp = supabase.table("user_subscriptions").select("user_id").eq(
+            "dodo_subscription_id", subscription_id
+        ).limit(1).execute()
+        if resp.data:
+            return resp.data[0]["user_id"]
+    except Exception as e:
+        print(f"[billing] get_user_by_dodo_subscription error: {e}")
+    return None
+
+
+def get_dodo_subscription_info(user_id: str) -> dict:
+    """Returns Dodo billing fields for a user."""
+    if not supabase:
+        return {}
+    try:
+        resp = supabase.table("user_subscriptions").select(
+            "plan_tier, dodo_subscription_id, dodo_customer_id, subscription_status, subscription_period_end"
+        ).eq("user_id", user_id).limit(1).execute()
+        if resp.data:
+            return resp.data[0]
+    except Exception as e:
+        print(f"[billing] get_dodo_subscription_info error: {e}")
+    return {}
+
+
 def get_user_suspended(user_id: str) -> bool:
     """Returns True if the user is suspended. Defaults to False if not found."""
     if not supabase or not user_id:

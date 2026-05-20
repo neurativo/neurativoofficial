@@ -47,5 +47,11 @@ class Settings:
     RESEND_API_KEY: str = os.getenv("RESEND_API_KEY", "")
     RESEND_FROM_EMAIL: str = os.getenv("RESEND_FROM_EMAIL", "Neurativo <noreply@neurativo.com>")
 
+    # Dodo Payments — subscription billing
+    DODO_API_KEY: str = os.getenv("DODO_API_KEY", "")
+    DODO_WEBHOOK_SECRET: str = os.getenv("DODO_WEBHOOK_SECRET", "")
+    DODO_STUDENT_PRODUCT_ID: str = os.getenv("DODO_STUDENT_PRODUCT_ID", "")
+    DODO_PRO_PRODUCT_ID: str = os.getenv("DODO_PRO_PRODUCT_ID", "")
+
 
 settings = Settings()

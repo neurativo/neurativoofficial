@@ -1267,8 +1267,21 @@ function PlanItem({ text, no }) {
     );
 }
 
-function Pricing() {
+function Pricing({ user }) {
     const { openSignUp } = useAuthModal();
+    const [checkoutLoading, setCheckoutLoading] = React.useState(null);
+
+    const handlePlanCTA = async (plan) => {
+        if (!user) { openSignUp(); return; }
+        setCheckoutLoading(plan);
+        try {
+            const res = await api.post('/api/v1/billing/checkout', { plan });
+            window.location.href = res.data.checkout_url;
+        } catch (e) {
+            console.error('Checkout error', e);
+            setCheckoutLoading(null);
+        }
+    };
     return (
         <section id="pricing" className="lp-sec">
             <div className="lp-sec-eye">Pricing</div>
@@ -1326,7 +1339,9 @@ function Pricing() {
                         <PlanItem text="Real-world analogies & key stats" />
                         <PlanItem text="40+ languages" />
                     </ul>
-                    <button className="lp-btn-plan-dark" onClick={openSignUp}>Start Student</button>
+                    <button className="lp-btn-plan-dark" onClick={() => handlePlanCTA('student')} disabled={!!checkoutLoading}>
+                        {checkoutLoading === 'student' ? 'Redirecting…' : 'Start Student'}
+                    </button>
                 </div>
 
                 {/* Pro */}
@@ -1349,7 +1364,9 @@ function Pricing() {
                         <PlanItem text="Priority processing" />
                         <PlanItem text="Early access to new features" />
                     </ul>
-                    <button className="lp-btn-plan-outline" onClick={openSignUp}>Start Pro</button>
+                    <button className="lp-btn-plan-outline" onClick={() => handlePlanCTA('pro')} disabled={!!checkoutLoading}>
+                        {checkoutLoading === 'pro' ? 'Redirecting…' : 'Start Pro'}
+                    </button>
                 </div>
 
             </div>
@@ -1521,7 +1538,7 @@ export default function LandingPage({ user }) {
                     <NASTSection />
                     <HowItWorks />
                     <Testimonials />
-                    <Pricing />
+                    <Pricing user={user} />
                     <About />
                     <FAQ />
                     <CTASection />
