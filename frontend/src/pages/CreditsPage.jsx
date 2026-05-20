@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useCreditsApi } from '../lib/creditsApi.js';
+import api from '../lib/api.js';
 
 // ─── Design tokens (matches Dashboard palette) ────────────────────────────────
 const C = {
@@ -112,17 +113,22 @@ function fmtDate(iso) {
 }
 
 export default function CreditsPage() {
-    const api = useCreditsApi();
+    const creditsApi = useCreditsApi();
+    const location = useLocation();
 
     const [balance, setBalance]     = useState(null);
     const [history, setHistory]     = useState([]);
     const [loading, setLoading]     = useState(true);
     const [error, setError]         = useState('');
-    const [pending, setPending]     = useState(null);   // product key being purchased
-    const [intent, setIntent]       = useState(null);   // confirmed intent response
+    const [pending, setPending]     = useState(null);
+    const [purchased, setPurchased] = useState(false);
 
     useEffect(() => {
-        Promise.all([api.getBalance(), api.getHistory()])
+        // Show success banner if redirected back from Dodo checkout
+        if (new URLSearchParams(location.search).get('purchased') === '1') {
+            setPurchased(true);
+        }
+        Promise.all([creditsApi.getBalance(), creditsApi.getHistory()])
             .then(([balRes, histRes]) => {
                 setBalance(balRes.data);
                 setHistory(histRes.data.transactions || []);
@@ -135,17 +141,12 @@ export default function CreditsPage() {
         setPending(product);
         setError('');
         try {
-            const res = await api.purchaseIntent(product);
-            setIntent(res.data);
+            const res = await api.post('/api/v1/billing/credits-checkout', { pack: product });
+            window.location.href = res.data.checkout_url;
         } catch (err) {
-            setError(err.response?.data?.detail || 'Something went wrong.');
-        } finally {
+            setError(err.response?.data?.detail || 'Could not start checkout. Please try again.');
             setPending(null);
         }
-    }
-
-    function closeIntent() {
-        setIntent(null);
     }
 
     if (loading) return <div className="cr"><style>{CSS}</style><div className="cr-loading">Loading…</div></div>;
@@ -176,6 +177,11 @@ export default function CreditsPage() {
                 <p className="cr-sub">Credits scale with lecture duration: 1 credit per 30-min block, rounded up. So ≤30 min = 1 cr · 31–60 min = 2 cr · 61–90 min = 3 cr · 91–120 min = 4 cr · 4-hr lecture = 8 cr. Pack credits never expire.</p>
 
                 {error && <div className="cr-error">{error}</div>}
+                {purchased && !error && (
+                    <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, padding: '12px 16px', fontSize: 13, color: '#15803d', marginBottom: 20 }}>
+                        Payment successful! Credits are being added to your account — refresh if the balance hasn't updated yet.
+                    </div>
+                )}
 
                 {/* Balance */}
                 <div className="cr-balance-card">
@@ -348,23 +354,19 @@ export default function CreditsPage() {
                     ))}
                 </div>
 
-                <p style={{fontSize:12,color:'var(--color-muted)',lineHeight:1.6}}>
-                    Payment processing coming soon. Purchase intents are logged and credits will be applied manually until the payment system is live. Contact <a href="mailto:support@neurativo.com" style={{color:'var(--color-sec)'}}>support@neurativo.com</a> if you need credits urgently.
-                </p>
             </div>
 
-            {/* Purchase intent modal */}
-            {intent && (
-                <div className="cr-intent-modal" onClick={closeIntent}>
+            {/* Purchase success banner */}
+            {purchased && (
+                <div className="cr-intent-modal" onClick={() => setPurchased(false)}>
                     <div className="cr-intent-box" onClick={e => e.stopPropagation()}>
                         <div className="cr-intent-icon">✓</div>
-                        <h2 className="cr-intent-title">Request received!</h2>
+                        <h2 className="cr-intent-title">Payment received!</h2>
                         <p className="cr-intent-sub">
-                            Your purchase of <strong>{intent.credits} credits</strong> for <strong>${intent.price_usd?.toFixed(2)}</strong> has been logged.
-                            We'll add the credits to your account as soon as payments go live.
+                            Your credits are being added to your account. If they don't appear within a minute, refresh the page.
                         </p>
-                        <button className="cr-intent-btn" onClick={closeIntent}>Got it</button>
-                        <button className="cr-intent-close" onClick={closeIntent}>Close</button>
+                        <button className="cr-intent-btn" onClick={() => { setPurchased(false); window.location.reload(); }}>Refresh balance</button>
+                        <button className="cr-intent-close" onClick={() => setPurchased(false)}>Close</button>
                     </div>
                 </div>
             )}

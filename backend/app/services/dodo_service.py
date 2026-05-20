@@ -91,6 +91,62 @@ def create_subscription_checkout(
     return subscription_id, payment_link
 
 
+def _credit_pack_product_map() -> dict:
+    return {
+        "small_pack": settings.DODO_SMALL_PACK_PRODUCT_ID,
+        "large_pack": settings.DODO_LARGE_PACK_PRODUCT_ID,
+        "pro_pack":   settings.DODO_PRO_PACK_PRODUCT_ID,
+    }
+
+
+def create_credits_checkout(
+    user_id: str,
+    email: str,
+    name: str,
+    pack: str,
+    intent_id: str,
+    return_url: str,
+) -> Tuple[str, str]:
+    """
+    Creates a Dodo one-time payment checkout for a credit pack.
+    Returns (session_id, checkout_url).
+    """
+    product_id = _credit_pack_product_map().get(pack)
+    if not product_id:
+        raise ValueError(f"Unknown credit pack or product not configured: {pack}")
+
+    payload = {
+        "product_cart": [{"product_id": product_id, "quantity": 1}],
+        "customer": {
+            "email": email,
+            "name": name or email.split("@")[0],
+        },
+        "billing_address": {"country": "US"},
+        "return_url": return_url,
+        "metadata": {
+            "neurativo_user_id": user_id,
+            "product": pack,
+            "intent_id": intent_id,
+        },
+        "feature_flags": {"allow_discount_code": True},
+    }
+
+    with httpx.Client(timeout=20) as client:
+        resp = client.post(
+            f"{_api_base()}/checkout-sessions",
+            headers=_headers(),
+            json=payload,
+        )
+        if not resp.is_success:
+            print(f"[dodo] create_credits_checkout failed {resp.status_code}: {resp.text}")
+        resp.raise_for_status()
+        data = resp.json()
+
+    session_id = data["session_id"]
+    checkout_url = data.get("checkout_url") or ""
+    return session_id, checkout_url
+
+
 def cancel_subscription(subscription_id: str) -> None:
     """Cancels an active subscription."""
     with httpx.Client(timeout=15) as client:

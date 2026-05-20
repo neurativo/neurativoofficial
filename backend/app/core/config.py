@@ -52,6 +52,10 @@ class Settings:
     DODO_WEBHOOK_SECRET: str = os.getenv("DODO_WEBHOOK_SECRET", "")
     DODO_STUDENT_PRODUCT_ID: str = os.getenv("DODO_STUDENT_PRODUCT_ID", "")
     DODO_PRO_PRODUCT_ID: str = os.getenv("DODO_PRO_PRODUCT_ID", "")
+    # Credit pack one-time products
+    DODO_SMALL_PACK_PRODUCT_ID:  str = os.getenv("DODO_SMALL_PACK_PRODUCT_ID", "")
+    DODO_LARGE_PACK_PRODUCT_ID:  str = os.getenv("DODO_LARGE_PACK_PRODUCT_ID", "")
+    DODO_PRO_PACK_PRODUCT_ID:    str = os.getenv("DODO_PRO_PACK_PRODUCT_ID", "")
 
 
 settings = Settings()

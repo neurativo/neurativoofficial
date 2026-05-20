@@ -9,6 +9,12 @@ from pydantic import BaseModel
 from app.core.auth import get_active_user
 from app.core.config import settings
 from app.services import dodo_service, supabase_service
+from app.services.credits_service import (
+    PRODUCTS as CREDIT_PRODUCTS,
+    complete_purchase_intent,
+    create_credits_purchase_intent,
+    grant_plan_credits,
+)
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 
@@ -17,6 +23,10 @@ _RETURN_URL = "https://www.neurativo.com/app?subscribed=1"
 
 class CheckoutBody(BaseModel):
     plan: Literal["student", "pro"]
+
+
+class CreditsCheckoutBody(BaseModel):
+    pack: Literal["small_pack", "large_pack", "pro_pack"]
 
 
 @router.post("/checkout")
@@ -97,6 +107,92 @@ async def get_subscription(user=Depends(get_active_user)):
     }
 
 
+@router.post("/credits-checkout")
+async def create_credits_checkout(body: CreditsCheckoutBody, user=Depends(get_active_user)):
+    """
+    Creates a Dodo one-time payment checkout for a credit pack.
+    Returns {"checkout_url": "https://..."}.
+    """
+    if not settings.DODO_API_KEY:
+        raise HTTPException(status_code=503, detail="Billing not configured")
+
+    user_id = str(user.id)
+    email = getattr(user, "email", "") or ""
+    pack = body.pack
+
+    # Fetch email from Clerk if missing
+    if not email or "@" not in email:
+        try:
+            import httpx as _httpx
+            r = _httpx.get(
+                f"https://api.clerk.com/v1/users/{user_id}",
+                headers={"Authorization": f"Bearer {settings.CLERK_SECRET_KEY}"},
+                timeout=8,
+            )
+            if r.is_success:
+                data = r.json()
+                addrs = data.get("email_addresses") or []
+                primary_id = data.get("primary_email_address_id")
+                for a in addrs:
+                    if a.get("id") == primary_id:
+                        email = a.get("email_address", "")
+                        break
+                if not email and addrs:
+                    email = addrs[0].get("email_address", "")
+        except Exception as e:
+            print(f"[billing] clerk email fetch error: {e}")
+
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="Could not determine your email address.")
+
+    product_info = CREDIT_PRODUCTS.get(pack)
+    if not product_info:
+        raise HTTPException(status_code=400, detail=f"Unknown pack: {pack}")
+
+    return_url = f"https://www.neurativo.com/credits?purchased=1"
+
+    # Create a pending intent first so webhook can find it
+    try:
+        # Temporary intent_id placeholder — will be updated after we get session_id
+        intent_id = create_credits_purchase_intent(
+            user_id=user_id,
+            product=pack,
+            price_usd=product_info["price_usd"],
+            credits=product_info["credits"],
+            dodo_session_id="pending",  # updated below
+        )
+    except Exception as e:
+        print(f"[billing] create intent error: {e}")
+        intent_id = ""
+
+    try:
+        session_id, checkout_url = dodo_service.create_credits_checkout(
+            user_id=user_id,
+            email=email,
+            name=email.split("@")[0],
+            pack=pack,
+            intent_id=intent_id,
+            return_url=return_url,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"[billing] credits checkout error: {e}")
+        raise HTTPException(status_code=502, detail="Could not create checkout session")
+
+    # Update intent with real session_id
+    if intent_id and session_id:
+        try:
+            from app.services.supabase_service import _fresh_db
+            _fresh_db().table("purchase_intents").update(
+                {"dodo_session_id": session_id}
+            ).eq("id", intent_id).execute()
+        except Exception as e:
+            print(f"[billing] update session_id error (non-fatal): {e}")
+
+    return {"checkout_url": checkout_url}
+
+
 @router.post("/cancel")
 async def cancel_subscription(user=Depends(get_active_user)):
     """Cancels the current active subscription."""
@@ -171,6 +267,31 @@ async def webhook(
 
     plan_tier = dodo_service._product_to_plan(product_id) if product_id else None
 
+    # ── One-time payment (credit packs) ────────────────────────────────────────
+    if event_type == "payment.succeeded":
+        payment_id = data.get("payment_id", "")
+        p_metadata = data.get("metadata", {}) or {}
+        p_user_id = p_metadata.get("neurativo_user_id") or ""
+        p_product = p_metadata.get("product", "")
+        p_intent_id = p_metadata.get("intent_id", "")
+        p_session_id = data.get("checkout_session_id") or data.get("session_id") or ""
+
+        if p_user_id and p_product:
+            try:
+                complete_purchase_intent(
+                    payment_id=payment_id,
+                    session_id=p_session_id,
+                    intent_id=p_intent_id,
+                    user_id=p_user_id,
+                    product=p_product,
+                )
+            except Exception as e:
+                print(f"[billing] complete_purchase_intent error: {e}")
+        else:
+            print(f"[billing] payment.succeeded missing user_id or product in metadata: {p_metadata}")
+        return {"ok": True}
+
+    # ── Subscription events ─────────────────────────────────────────────────────
     if event_type in ("subscription.active", "subscription.renewed"):
         if plan_tier:
             supabase_service.set_user_plan(user_id, plan_tier)
@@ -182,6 +303,12 @@ async def webhook(
             period_end=next_billing_date,
         )
         print(f"[billing] activated: user={user_id} plan={plan_tier} event={event_type}")
+        # Grant monthly credits on new activation (not on every renewal to avoid duplicates)
+        if event_type == "subscription.active" and plan_tier:
+            try:
+                grant_plan_credits(user_id, plan_tier)
+            except Exception as e:
+                print(f"[billing] grant_plan_credits error (non-fatal): {e}")
 
     elif event_type == "subscription.plan_changed":
         if plan_tier:

@@ -405,6 +405,97 @@ def log_purchase_intent(
     return resp.data[0]["id"]
 
 
+def create_credits_purchase_intent(
+    user_id: str,
+    product: str,
+    price_usd: float,
+    credits: int,
+    dodo_session_id: str,
+) -> str:
+    """Creates a pending purchase intent linked to a Dodo checkout session."""
+    if product not in PRODUCTS:
+        raise ValueError(f"Unknown product: {product}")
+    db = _fresh_db()
+    resp = db.table("purchase_intents").insert({
+        "user_id": user_id,
+        "product": product,
+        "price_usd": price_usd,
+        "credits": credits,
+        "status": "pending",
+        "dodo_session_id": dodo_session_id,
+    }).execute()
+    if not resp.data:
+        raise Exception("Failed to create purchase intent")
+    return resp.data[0]["id"]
+
+
+def complete_purchase_intent(
+    payment_id: str,
+    session_id: str | None,
+    intent_id: str | None,
+    user_id: str,
+    product: str,
+) -> bool:
+    """
+    Idempotent: grants credits for a completed Dodo payment.
+    Returns True if credits were granted, False if already processed.
+    """
+    db = _fresh_db()
+
+    # Deduplicate by payment_id — if already processed, skip
+    if payment_id:
+        dup = db.table("purchase_intents").select("id, status").eq(
+            "dodo_payment_id", payment_id
+        ).limit(1).execute()
+        if dup.data and dup.data[0].get("status") == "completed":
+            print(f"[credits] payment {payment_id} already processed, skipping")
+            return False
+
+    # Find the intent — prefer by session_id, fall back to intent_id
+    intent_row = None
+    if session_id:
+        r = db.table("purchase_intents").select("*").eq(
+            "dodo_session_id", session_id
+        ).limit(1).execute()
+        if r.data:
+            intent_row = r.data[0]
+
+    if not intent_row and intent_id:
+        r = db.table("purchase_intents").select("*").eq("id", intent_id).limit(1).execute()
+        if r.data:
+            intent_row = r.data[0]
+
+    product_info = PRODUCTS.get(product)
+    if not product_info:
+        print(f"[credits] unknown product in webhook: {product}")
+        return False
+
+    credits_to_grant = product_info["credits"]
+
+    # Grant credits
+    add_credits(user_id, credits_to_grant, reason="pack_purchase", product=product)
+
+    # Mark intent completed
+    if intent_row:
+        db.table("purchase_intents").update({
+            "status": "completed",
+            "dodo_payment_id": payment_id,
+        }).eq("id", intent_row["id"]).execute()
+    elif payment_id:
+        # No intent found — insert a completed record for audit trail
+        db.table("purchase_intents").insert({
+            "user_id": user_id,
+            "product": product,
+            "price_usd": product_info["price_usd"],
+            "credits": credits_to_grant,
+            "status": "completed",
+            "dodo_payment_id": payment_id,
+        }).execute()
+
+    print(f"[credits] granted {credits_to_grant} credits to {user_id} for {product} (payment={payment_id})")
+    return True
+
+
 def grant_plan_credits(user_id: str, plan_tier: str) -> int:
     """
     Grant monthly credits for student/pro plan members.
