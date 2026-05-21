@@ -61,6 +61,37 @@ function PlanBadge({ plan }) {
     );
 }
 
+// ─── Stats Panel ─────────────────────────────────────────────────────────────
+function StatsPanel() {
+    const [stats, setStats] = useState(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        billingApi.getStats()
+            .then(setStats)
+            .catch(() => {})
+            .finally(() => setLoading(false));
+    }, []);
+
+    const tiles = [
+        { label: 'Active Subscribers', value: loading ? '…' : stats?.active_subscribers ?? 0, color: '#4ade80' },
+        { label: 'Student', value: loading ? '…' : stats?.by_plan?.student ?? 0, color: '#67e8f9' },
+        { label: 'Pro', value: loading ? '…' : stats?.by_plan?.pro ?? 0, color: '#a5b4fc' },
+        { label: 'Est. MRR', value: loading ? '…' : `$${(stats?.mrr_usd ?? 0).toFixed(2)}`, color: '#fbbf24' },
+    ];
+
+    return (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12, marginBottom: 24 }}>
+            {tiles.map(t => (
+                <div key={t.label} className="adm-card" style={{ margin: 0, padding: '16px 18px' }}>
+                    <div style={{ fontSize: 11, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{t.label}</div>
+                    <div style={{ fontSize: 26, fontWeight: 700, color: t.color }}>{t.value}</div>
+                </div>
+            ))}
+        </div>
+    );
+}
+
 // ─── Subscriptions Panel ──────────────────────────────────────────────────────
 function SubscriptionsPanel() {
     const [subs, setSubs] = useState([]);
@@ -69,8 +100,27 @@ function SubscriptionsPanel() {
     const [statusFilter, setStatusFilter] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [cancelling, setCancelling] = useState(null);
+    const [success, setSuccess] = useState('');
 
     const PAGE_SIZE = 20;
+
+    function flash(msg) { setSuccess(msg); setTimeout(() => setSuccess(''), 3500); }
+
+    async function handleCancel(subId, email) {
+        if (!window.confirm(`Cancel subscription for ${email || subId}?`)) return;
+        setCancelling(subId);
+        setError('');
+        try {
+            await billingApi.adminCancelSubscription(subId);
+            flash('Subscription cancelled');
+            load();
+        } catch (e) {
+            setError(e?.response?.data?.detail || e.message || 'Failed to cancel');
+        } finally {
+            setCancelling(null);
+        }
+    }
 
     const load = useCallback(() => {
         setLoading(true);
@@ -118,9 +168,10 @@ function SubscriptionsPanel() {
             </div>
 
             {error && <div className="adm-error" style={{ marginBottom: 12 }}>{error}</div>}
+            {success && <div className="adm-success" style={{ marginBottom: 12 }}>{success}</div>}
 
             <div style={{ overflowX: 'auto' }}>
-                <table className="adm-table" style={{ minWidth: 600 }}>
+                <table className="adm-table" style={{ minWidth: 640 }}>
                     <thead>
                         <tr>
                             <th>Customer</th>
@@ -129,19 +180,22 @@ function SubscriptionsPanel() {
                             <th>Next Billing</th>
                             <th>Created</th>
                             <th>Subscription ID</th>
+                            <th></th>
                         </tr>
                     </thead>
                     <tbody>
                         {loading && subs.length === 0 ? (
-                            <tr><td colSpan={6} style={{ textAlign: 'center', color: '#6b7280', padding: '24px 0' }}>Loading…</td></tr>
+                            <tr><td colSpan={7} style={{ textAlign: 'center', color: '#6b7280', padding: '24px 0' }}>Loading…</td></tr>
                         ) : subs.length === 0 ? (
-                            <tr><td colSpan={6} style={{ textAlign: 'center', color: '#6b7280', padding: '24px 0' }}>No subscriptions found</td></tr>
+                            <tr><td colSpan={7} style={{ textAlign: 'center', color: '#6b7280', padding: '24px 0' }}>No subscriptions found</td></tr>
                         ) : subs.map(sub => {
                             const customer = sub.customer || {};
                             const meta = sub.metadata || {};
                             const plan = meta.plan || null;
+                            const subId = sub.subscription_id || sub.id || '';
+                            const isActive = ['active', 'renewed', 'on_hold'].includes((sub.status || '').toLowerCase());
                             return (
-                                <tr key={sub.subscription_id || sub.id}>
+                                <tr key={subId}>
                                     <td>
                                         <div style={{ fontSize: 13 }}>{customer.name || customer.email || '—'}</div>
                                         {customer.email && customer.name && (
@@ -153,7 +207,19 @@ function SubscriptionsPanel() {
                                     <td style={{ fontSize: 12, color: '#9ca3af' }}>{fmtDate(sub.next_billing_date)}</td>
                                     <td style={{ fontSize: 12, color: '#9ca3af' }}>{fmtDate(sub.created_at)}</td>
                                     <td style={{ fontSize: 11, color: '#6b7280', fontFamily: 'monospace', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                        {sub.subscription_id || sub.id || '—'}
+                                        {subId || '—'}
+                                    </td>
+                                    <td>
+                                        {isActive && (
+                                            <button
+                                                className="adm-btn-ghost"
+                                                style={{ fontSize: 11, padding: '3px 8px', color: '#f87171' }}
+                                                onClick={() => handleCancel(subId, customer.email)}
+                                                disabled={cancelling === subId}
+                                            >
+                                                {cancelling === subId ? '…' : 'Cancel'}
+                                            </button>
+                                        )}
                                     </td>
                                 </tr>
                             );
@@ -439,6 +505,7 @@ export default function AdminBilling() {
                     Dodo Payments — subscription management and discount codes
                 </p>
             </div>
+            <StatsPanel />
             <SubscriptionsPanel />
             <DiscountsPanel />
         </div>

@@ -309,6 +309,7 @@ export default function ProfilePage({ user }) {
     const [subInfo,        setSubInfo]         = useState(null);
     const [checkoutLoading, setCheckoutLoading] = useState(null);
     const [cancelLoading,   setCancelLoading]   = useState(false);
+    const [payHistory,     setPayHistory]       = useState(null);
 
     useEffect(() => {
         Promise.all([
@@ -316,7 +317,8 @@ export default function ProfilePage({ user }) {
             api.get('/api/v1/usage'),
             creditsApi.getBalance(),
             api.get('/api/v1/billing/subscription').catch(() => ({ data: null })),
-        ]).then(([pRes, uRes, cRes, sRes]) => {
+            api.get('/api/v1/billing/payment-history').catch(() => ({ data: null })),
+        ]).then(([pRes, uRes, cRes, sRes, phRes]) => {
             const p = pRes.data;
             setProfile(p);
             setDisplayName(p.display_name || '');
@@ -325,6 +327,7 @@ export default function ProfilePage({ user }) {
             setUsage(uRes.data);
             setCredits(cRes.data);
             if (sRes.data) setSubInfo(sRes.data);
+            if (phRes.data) setPayHistory(phRes.data);
         }).catch(() => {}).finally(() => setLoading(false));
     }, []);
 
@@ -656,6 +659,63 @@ export default function ProfilePage({ user }) {
                             )}
                         </div>
                     </div>
+
+                    {/* Billing History */}
+                    {(payHistory?.payments?.length > 0 || payHistory?.subscription?.dodo_subscription_id) && (
+                        <div className="pp-section">
+                            <div className="pp-section-head">
+                                <div>
+                                    <div className="pp-section-title">Billing history</div>
+                                    <div className="pp-section-sub">Credit pack purchases and subscription details</div>
+                                </div>
+                            </div>
+                            <div className="pp-section-body">
+                                {payHistory?.subscription?.dodo_subscription_id && (
+                                    <div style={{ marginBottom: 16, padding: '12px 14px', background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 10 }}>
+                                        <div style={{ fontSize: 11, color: 'var(--color-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Active Subscription</div>
+                                        <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+                                            <div>
+                                                <div style={{ fontSize: 11, color: 'var(--color-muted)' }}>Plan</div>
+                                                <div style={{ fontSize: 13, fontWeight: 600, textTransform: 'capitalize' }}>{payHistory.subscription.plan_tier || '—'}</div>
+                                            </div>
+                                            <div>
+                                                <div style={{ fontSize: 11, color: 'var(--color-muted)' }}>Status</div>
+                                                <div style={{ fontSize: 13, fontWeight: 600, textTransform: 'capitalize', color: ['active','renewed'].includes(payHistory.subscription.subscription_status) ? '#16a34a' : 'var(--color-muted)' }}>
+                                                    {payHistory.subscription.subscription_status || '—'}
+                                                </div>
+                                            </div>
+                                            {payHistory.subscription.subscription_period_end && (
+                                                <div>
+                                                    <div style={{ fontSize: 11, color: 'var(--color-muted)' }}>Next billing</div>
+                                                    <div style={{ fontSize: 13 }}>{new Date(payHistory.subscription.subscription_period_end).toLocaleDateString()}</div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                                {payHistory?.payments?.length > 0 && (
+                                    <div>
+                                        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-muted)', marginBottom: 8 }}>Credit Pack Purchases</div>
+                                        {payHistory.payments.map((p, i) => (
+                                            <div key={p.payment_id || i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: i < payHistory.payments.length - 1 ? '1px solid var(--color-border)' : 'none', gap: 12, flexWrap: 'wrap' }}>
+                                                <div>
+                                                    <div style={{ fontSize: 13, fontWeight: 500, textTransform: 'capitalize' }}>
+                                                        {(p.product || '').replace(/_/g, ' ') || 'Credit Pack'}
+                                                    </div>
+                                                    <div style={{ fontSize: 11, color: 'var(--color-muted)' }}>
+                                                        {p.credits} credits · {new Date(p.date).toLocaleDateString()}
+                                                    </div>
+                                                </div>
+                                                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-text)' }}>
+                                                    ${Number(p.price_usd || 0).toFixed(2)}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
 
                     {/* All-time stats */}
                     <div className="pp-section">

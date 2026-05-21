@@ -125,8 +125,14 @@ async function _billingDelete(path) {
 }
 
 export const billingApi = {
+    getStats: () =>
+        _billingGet('/admin/stats'),
     listSubscriptions: (page = 0, pageSize = 20, status = null) =>
         _billingGet('/admin/subscriptions', { page, page_size: pageSize, ...(status ? { status } : {}) }),
+    getUserSubscription: (userId) =>
+        _billingGet(`/admin/users/${userId}/subscription`),
+    adminCancelSubscription: (subscriptionId) =>
+        _billingPost(`/admin/subscriptions/${subscriptionId}/cancel`),
     listDiscounts: () =>
         _billingGet('/admin/discounts'),
     createDiscount: (body) =>

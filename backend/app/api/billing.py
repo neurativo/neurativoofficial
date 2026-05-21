@@ -217,6 +217,90 @@ class CreateDiscountBody(BaseModel):
     restricted_to: list | None = None
 
 
+@router.get("/admin/stats")
+async def admin_billing_stats(user=Depends(get_admin_user)):
+    """Returns MRR estimate and active subscriber counts. Admin only."""
+    try:
+        db = supabase_service._fresh_db()
+        resp = db.table("user_subscriptions") \
+            .select("plan_tier") \
+            .in_("subscription_status", ["active", "renewed"]) \
+            .execute()
+        counts = {"student": 0, "pro": 0}
+        for row in (resp.data or []):
+            tier = row.get("plan_tier", "")
+            if tier in counts:
+                counts[tier] += 1
+        mrr = round(counts["student"] * 9.99 + counts["pro"] * 19.99, 2)
+        return {
+            "active_subscribers": sum(counts.values()),
+            "by_plan": counts,
+            "mrr_usd": mrr,
+        }
+    except Exception as e:
+        print(f"[billing] admin stats error: {e}")
+        raise HTTPException(status_code=502, detail="Could not fetch billing stats")
+
+
+@router.get("/admin/users/{user_id}/subscription")
+async def admin_get_user_subscription(user_id: str, user=Depends(get_admin_user)):
+    """Returns the Dodo subscription info for a specific user. Admin only."""
+    info = supabase_service.get_dodo_subscription_info(user_id)
+    return info or {}
+
+
+@router.post("/admin/subscriptions/{subscription_id}/cancel")
+async def admin_cancel_subscription(subscription_id: str, user=Depends(get_admin_user)):
+    """Cancels a subscription by Dodo subscription ID. Admin only."""
+    try:
+        dodo_service.cancel_subscription(subscription_id)
+    except Exception as e:
+        print(f"[billing] admin cancel error: {e}")
+        raise HTTPException(status_code=502, detail="Could not cancel subscription")
+    # Find user and update DB
+    uid = supabase_service.get_user_by_dodo_subscription(subscription_id)
+    if uid:
+        supabase_service.save_dodo_subscription(
+            user_id=uid,
+            dodo_customer_id=None,
+            dodo_subscription_id=subscription_id,
+            status="cancelled",
+        )
+    return {"ok": True}
+
+
+@router.get("/payment-history")
+async def get_payment_history(user=Depends(get_active_user)):
+    """Returns the user's completed credit pack purchases and subscription info."""
+    user_id = str(user.id)
+    try:
+        db = supabase_service._fresh_db()
+        # Credit pack purchases
+        pack_resp = db.table("purchase_intents") \
+            .select("id, product, price_usd, credits, dodo_payment_id, created_at") \
+            .eq("user_id", user_id) \
+            .eq("status", "completed") \
+            .order("created_at", desc=True) \
+            .limit(50) \
+            .execute()
+        payments = []
+        for row in (pack_resp.data or []):
+            payments.append({
+                "type": "credit_pack",
+                "product": row.get("product", ""),
+                "price_usd": row.get("price_usd", 0),
+                "credits": row.get("credits", 0),
+                "payment_id": row.get("dodo_payment_id", ""),
+                "date": row.get("created_at", ""),
+            })
+        # Subscription info
+        sub = supabase_service.get_dodo_subscription_info(user_id)
+        return {"payments": payments, "subscription": sub}
+    except Exception as e:
+        print(f"[billing] payment-history error: {e}")
+        raise HTTPException(status_code=502, detail="Could not fetch payment history")
+
+
 @router.get("/admin/subscriptions")
 async def admin_list_subscriptions(
     page: int = 0,

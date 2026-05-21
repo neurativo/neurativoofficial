@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { adminApi } from '../../lib/adminApi.js';
+import { adminApi, billingApi } from '../../lib/adminApi.js';
 
 function PlanPill({ tier }) {
     return <span className={`adm-plan-pill adm-plan-${tier || 'free'}`}>{tier || 'free'}</span>;
@@ -270,6 +270,92 @@ function CreditsPanel({ userId, showToast }) {
     );
 }
 
+function BillingPanel({ userId, showToast }) {
+    const [sub, setSub] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [cancelling, setCancelling] = useState(false);
+
+    const load = useCallback(() => {
+        setLoading(true);
+        billingApi.getUserSubscription(userId)
+            .then(setSub)
+            .catch(() => showToast('Failed to load billing info'))
+            .finally(() => setLoading(false));
+    }, [userId]);
+
+    useEffect(() => { load(); }, [load]);
+
+    async function handleCancel() {
+        if (!sub?.dodo_subscription_id) return;
+        if (!window.confirm('Cancel this subscription?')) return;
+        setCancelling(true);
+        try {
+            await billingApi.adminCancelSubscription(sub.dodo_subscription_id);
+            showToast('Subscription cancelled');
+            load();
+        } catch (e) {
+            showToast(e?.response?.data?.detail || 'Cancel failed');
+        } finally {
+            setCancelling(false);
+        }
+    }
+
+    if (loading) return <div style={{ color: '#888', fontSize: 13, padding: 20 }}>Loading billing info…</div>;
+
+    const statusMap = {
+        active:    { bg: '#14532d', color: '#4ade80' },
+        renewed:   { bg: '#14532d', color: '#4ade80' },
+        cancelled: { bg: '#450a0a', color: '#f87171' },
+        expired:   { bg: '#450a0a', color: '#f87171' },
+        on_hold:   { bg: '#422006', color: '#fbbf24' },
+        failed:    { bg: '#450a0a', color: '#f87171' },
+        none:      { bg: '#1c1c1c', color: '#6b7280' },
+    };
+    const status = (sub?.subscription_status || 'none').toLowerCase();
+    const statusStyle = statusMap[status] || statusMap.none;
+    const isActive = ['active', 'renewed', 'on_hold'].includes(status);
+
+    return (
+        <div className="adm-card">
+            <div className="adm-card-title" style={{ marginBottom: 16 }}>Dodo Subscription</div>
+            {!sub || !sub.dodo_subscription_id ? (
+                <div style={{ color: '#6b7280', fontSize: 13 }}>No Dodo subscription on record.</div>
+            ) : (
+                <>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12, marginBottom: 20 }}>
+                        {[
+                            { label: 'Plan', value: <span style={{ textTransform: 'capitalize', fontWeight: 600 }}>{sub.plan_tier || '—'}</span> },
+                            { label: 'Status', value: (
+                                <span style={{ display:'inline-block', padding:'2px 8px', borderRadius:4, fontSize:11, fontWeight:600, background:statusStyle.bg, color:statusStyle.color, letterSpacing:'0.04em', textTransform:'uppercase' }}>
+                                    {status}
+                                </span>
+                            )},
+                            { label: 'Next Billing', value: sub.subscription_period_end ? fmtDate(sub.subscription_period_end) : '—' },
+                            { label: 'Subscription ID', value: <span style={{ fontFamily:'monospace', fontSize:11, color:'#9ca3af', wordBreak:'break-all' }}>{sub.dodo_subscription_id}</span> },
+                            { label: 'Customer ID', value: <span style={{ fontFamily:'monospace', fontSize:11, color:'#9ca3af', wordBreak:'break-all' }}>{sub.dodo_customer_id || '—'}</span> },
+                        ].map(({ label, value }) => (
+                            <div key={label} style={{ background: '#111', border: '1px solid #2a2a2a', borderRadius: 8, padding: '12px 14px' }}>
+                                <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
+                                <div style={{ fontSize: 13 }}>{value}</div>
+                            </div>
+                        ))}
+                    </div>
+                    {isActive && (
+                        <button
+                            className="adm-btn-danger"
+                            style={{ padding: '6px 16px', fontSize: 13 }}
+                            onClick={handleCancel}
+                            disabled={cancelling}
+                        >
+                            {cancelling ? 'Cancelling…' : 'Cancel Subscription'}
+                        </button>
+                    )}
+                </>
+            )}
+        </div>
+    );
+}
+
 export default function AdminUserDetail() {
     const { userId } = useParams();
     const navigate = useNavigate();
@@ -349,6 +435,7 @@ export default function AdminUserDetail() {
     const TABS = [
         { key: 'profile', label: 'Profile & Plan' },
         { key: 'credits', label: 'Credits' },
+        { key: 'billing', label: 'Billing' },
         { key: 'lectures', label: `Lectures (${lectures.length})` },
     ];
 
@@ -480,6 +567,11 @@ export default function AdminUserDetail() {
                     {/* Credits Tab */}
                     {activeTab === 'credits' && (
                         <CreditsPanel userId={userId} showToast={showToast} />
+                    )}
+
+                    {/* Billing Tab */}
+                    {activeTab === 'billing' && (
+                        <BillingPanel userId={userId} showToast={showToast} />
                     )}
 
                     {/* Lectures Tab */}
