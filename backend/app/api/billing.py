@@ -355,6 +355,103 @@ async def admin_delete_discount(discount_id: str, user=Depends(get_admin_user)):
         raise HTTPException(status_code=502, detail="Could not delete discount")
 
 
+class RefundBody(BaseModel):
+    reason: str | None = None
+
+
+@router.get("/admin/payments")
+async def admin_list_payments(
+    page: int = 0,
+    page_size: int = 20,
+    status: str | None = None,
+    customer_id: str | None = None,
+    subscription_id: str | None = None,
+    user=Depends(get_admin_user),
+):
+    """Lists Dodo payments with optional filters. Admin only."""
+    try:
+        return dodo_service.list_payments(
+            page=page,
+            page_size=page_size,
+            status=status or None,
+            customer_id=customer_id or None,
+            subscription_id=subscription_id or None,
+        )
+    except Exception as e:
+        print(f"[billing] admin list_payments error: {e}")
+        raise HTTPException(status_code=502, detail="Could not fetch payments")
+
+
+@router.get("/admin/payments/{payment_id}")
+async def admin_get_payment(payment_id: str, user=Depends(get_admin_user)):
+    """Returns details of a specific Dodo payment. Admin only."""
+    try:
+        return dodo_service.get_payment(payment_id)
+    except Exception as e:
+        print(f"[billing] admin get_payment error: {e}")
+        raise HTTPException(status_code=502, detail="Could not fetch payment")
+
+
+@router.post("/admin/payments/{payment_id}/refund")
+async def admin_create_refund(payment_id: str, body: RefundBody, user=Depends(get_admin_user)):
+    """Creates a full refund for a payment. Admin only."""
+    try:
+        return dodo_service.create_refund(payment_id=payment_id, reason=body.reason or None)
+    except Exception as e:
+        print(f"[billing] admin create_refund error: {e}")
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+@router.get("/admin/refunds")
+async def admin_list_refunds(
+    page: int = 0,
+    page_size: int = 20,
+    status: str | None = None,
+    user=Depends(get_admin_user),
+):
+    """Lists Dodo refunds. Admin only."""
+    try:
+        return dodo_service.list_refunds(page=page, page_size=page_size, status=status or None)
+    except Exception as e:
+        print(f"[billing] admin list_refunds error: {e}")
+        raise HTTPException(status_code=502, detail="Could not fetch refunds")
+
+
+@router.get("/admin/disputes")
+async def admin_list_disputes(
+    page: int = 0,
+    page_size: int = 20,
+    dispute_status: str | None = None,
+    dispute_stage: str | None = None,
+    user=Depends(get_admin_user),
+):
+    """Lists Dodo disputes. Admin only."""
+    try:
+        return dodo_service.list_disputes(
+            page=page,
+            page_size=page_size,
+            dispute_status=dispute_status or None,
+            dispute_stage=dispute_stage or None,
+        )
+    except Exception as e:
+        print(f"[billing] admin list_disputes error: {e}")
+        raise HTTPException(status_code=502, detail="Could not fetch disputes")
+
+
+@router.post("/admin/customers/{customer_id}/portal")
+async def admin_customer_portal(
+    customer_id: str,
+    return_url: str | None = None,
+    user=Depends(get_admin_user),
+):
+    """Creates a Dodo customer portal session for a given customer. Admin only."""
+    try:
+        return dodo_service.create_customer_portal(customer_id=customer_id, return_url=return_url or None)
+    except Exception as e:
+        print(f"[billing] admin customer_portal error: {e}")
+        raise HTTPException(status_code=502, detail="Could not create customer portal session")
+
+
 @router.post("/webhook")
 async def webhook(
     request: Request,

@@ -124,6 +124,12 @@ async function _billingDelete(path) {
     return res.data;
 }
 
+async function _billingPostParams(path, params = {}) {
+    const token = await _token();
+    const res = await axios.post(BILLING_BASE + path, {}, { params, headers: _headers(token) });
+    return res.data;
+}
+
 export const billingApi = {
     getStats: () =>
         _billingGet('/admin/stats'),
@@ -139,6 +145,37 @@ export const billingApi = {
         _billingPost('/admin/discounts', body),
     deleteDiscount: (id) =>
         _billingDelete(`/admin/discounts/${id}`),
+
+    // Payments
+    listPayments: (page = 0, pageSize = 20, status = null, customerId = null, subscriptionId = null) =>
+        _billingGet('/admin/payments', {
+            page,
+            page_size: pageSize,
+            ...(status ? { status } : {}),
+            ...(customerId ? { customer_id: customerId } : {}),
+            ...(subscriptionId ? { subscription_id: subscriptionId } : {}),
+        }),
+    getPayment: (paymentId) =>
+        _billingGet(`/admin/payments/${paymentId}`),
+    createRefund: (paymentId, reason = null) =>
+        _billingPost(`/admin/payments/${paymentId}/refund`, reason ? { reason } : {}),
+
+    // Refunds
+    listRefunds: (page = 0, pageSize = 20, status = null) =>
+        _billingGet('/admin/refunds', { page, page_size: pageSize, ...(status ? { status } : {}) }),
+
+    // Disputes
+    listDisputes: (page = 0, pageSize = 20, disputeStatus = null, disputeStage = null) =>
+        _billingGet('/admin/disputes', {
+            page,
+            page_size: pageSize,
+            ...(disputeStatus ? { dispute_status: disputeStatus } : {}),
+            ...(disputeStage ? { dispute_stage: disputeStage } : {}),
+        }),
+
+    // Customer portal
+    createCustomerPortal: (customerId, returnUrl = null) =>
+        _billingPostParams(`/admin/customers/${customerId}/portal`, returnUrl ? { return_url: returnUrl } : {}),
 };
 
 /**

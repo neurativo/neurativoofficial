@@ -148,6 +148,98 @@ def create_credits_checkout(
     return session_id, checkout_url
 
 
+def create_refund(payment_id: str, reason: str | None = None) -> dict:
+    """Creates a full refund for a payment. Partial refunds require item_id — use full refund here."""
+    payload: dict = {"payment_id": payment_id}
+    if reason:
+        payload["reason"] = reason
+    with httpx.Client(timeout=20) as client:
+        resp = client.post(f"{_api_base()}/refunds", headers=_headers(), json=payload)
+        if not resp.is_success:
+            print(f"[dodo] create_refund failed {resp.status_code}: {resp.text}")
+        resp.raise_for_status()
+        return resp.json()
+
+
+def list_refunds(page: int = 0, page_size: int = 20, status: str | None = None) -> dict:
+    params = {"page_number": page, "page_size": page_size}
+    if status:
+        params["status"] = status
+    with httpx.Client(timeout=15) as client:
+        resp = client.get(f"{_api_base()}/refunds", headers=_headers(), params=params)
+        if not resp.is_success:
+            print(f"[dodo] list_refunds failed {resp.status_code}: {resp.text}")
+        resp.raise_for_status()
+        return resp.json()
+
+
+def list_payments(
+    page: int = 0,
+    page_size: int = 20,
+    status: str | None = None,
+    customer_id: str | None = None,
+    subscription_id: str | None = None,
+) -> dict:
+    params: dict = {"page_number": page, "page_size": page_size}
+    if status:
+        params["status"] = status
+    if customer_id:
+        params["customer_id"] = customer_id
+    if subscription_id:
+        params["subscription_id"] = subscription_id
+    with httpx.Client(timeout=15) as client:
+        resp = client.get(f"{_api_base()}/payments", headers=_headers(), params=params)
+        if not resp.is_success:
+            print(f"[dodo] list_payments failed {resp.status_code}: {resp.text}")
+        resp.raise_for_status()
+        return resp.json()
+
+
+def get_payment(payment_id: str) -> dict:
+    with httpx.Client(timeout=15) as client:
+        resp = client.get(f"{_api_base()}/payments/{payment_id}", headers=_headers())
+        if not resp.is_success:
+            print(f"[dodo] get_payment failed {resp.status_code}: {resp.text}")
+        resp.raise_for_status()
+        return resp.json()
+
+
+def list_disputes(
+    page: int = 0,
+    page_size: int = 20,
+    dispute_status: str | None = None,
+    dispute_stage: str | None = None,
+) -> dict:
+    params: dict = {"page_number": page, "page_size": page_size}
+    if dispute_status:
+        params["dispute_status"] = dispute_status
+    if dispute_stage:
+        params["dispute_stage"] = dispute_stage
+    with httpx.Client(timeout=15) as client:
+        resp = client.get(f"{_api_base()}/disputes", headers=_headers(), params=params)
+        if not resp.is_success:
+            print(f"[dodo] list_disputes failed {resp.status_code}: {resp.text}")
+        resp.raise_for_status()
+        return resp.json()
+
+
+def create_customer_portal(customer_id: str, return_url: str | None = None) -> dict:
+    """Creates a Dodo customer portal session. Returns {link: url}."""
+    params: dict = {}
+    if return_url:
+        params["return_url"] = return_url
+    with httpx.Client(timeout=15) as client:
+        resp = client.post(
+            f"{_api_base()}/customers/{customer_id}/customer-portal/session",
+            headers=_headers(),
+            params=params,
+        )
+        if not resp.is_success:
+            print(f"[dodo] create_customer_portal failed {resp.status_code}: {resp.text}")
+        resp.raise_for_status()
+        return resp.json()
+
+
 def cancel_subscription(subscription_id: str) -> None:
     """Cancels an active subscription."""
     with httpx.Client(timeout=15) as client:
