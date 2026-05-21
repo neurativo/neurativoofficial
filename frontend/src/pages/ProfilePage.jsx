@@ -309,6 +309,7 @@ export default function ProfilePage({ user }) {
     const [subInfo,        setSubInfo]         = useState(null);
     const [checkoutLoading, setCheckoutLoading] = useState(null);
     const [cancelLoading,   setCancelLoading]   = useState(false);
+    const [portalLoading,   setPortalLoading]   = useState(false);
     const [payHistory,     setPayHistory]       = useState(null);
 
     useEffect(() => {
@@ -394,6 +395,20 @@ export default function ProfilePage({ user }) {
             alert('Could not cancel subscription. Please try again or contact support.');
         }
         setCancelLoading(false);
+    };
+
+    const handleManageBilling = async () => {
+        setPortalLoading(true);
+        try {
+            const res = await api.post('/api/v1/billing/portal');
+            const url = res.data.portal_url;
+            if (!url) throw new Error('No portal URL');
+            window.location.href = url;
+        } catch (e) {
+            const msg = e?.response?.data?.detail || 'Could not open billing portal. Please try again.';
+            alert(msg);
+            setPortalLoading(false);
+        }
     };
 
     const planTier      = usage?.plan_tier || 'free';
@@ -540,12 +555,19 @@ export default function ProfilePage({ user }) {
                                 </div>
                             )}
                             {!loading && subInfo?.has_active_subscription && (
-                                <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                                <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                                     {subInfo.subscription_period_end && (
                                         <span style={{ fontSize: 11, color: 'var(--color-muted)' }}>
                                             Renews {new Date(subInfo.subscription_period_end).toLocaleDateString()}
                                         </span>
                                     )}
+                                    <button
+                                        onClick={handleManageBilling}
+                                        disabled={portalLoading}
+                                        style={{ fontSize: 11, color: 'var(--color-muted)', background: 'none', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline' }}
+                                    >
+                                        {portalLoading ? 'Opening…' : 'Manage billing / payment method'}
+                                    </button>
                                     <button
                                         onClick={handleCancel}
                                         disabled={cancelLoading}
@@ -553,6 +575,11 @@ export default function ProfilePage({ user }) {
                                     >
                                         {cancelLoading ? 'Cancelling…' : 'Cancel subscription'}
                                     </button>
+                                </div>
+                            )}
+                            {!loading && subInfo && !subInfo.has_active_subscription && subInfo.subscription_status === 'cancelled' && (
+                                <div style={{ marginTop: 10, fontSize: 12, color: 'var(--color-muted)' }}>
+                                    Subscription cancelled — access until period end.
                                 </div>
                             )}
                         </div>

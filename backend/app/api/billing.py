@@ -207,6 +207,31 @@ async def cancel_subscription(user=Depends(get_active_user)):
     return {"ok": True}
 
 
+@router.post("/portal")
+async def get_customer_portal(user=Depends(get_active_user)):
+    """
+    Creates a Dodo customer portal session for the authenticated user.
+    Returns {"portal_url": "https://..."} — frontend redirects the user there.
+    Users can update their payment method, view invoices, and manage their subscription.
+    """
+    info = supabase_service.get_dodo_subscription_info(str(user.id))
+    customer_id = info.get("dodo_customer_id")
+    if not customer_id:
+        raise HTTPException(status_code=404, detail="No billing account found. Please subscribe first.")
+    try:
+        result = dodo_service.create_customer_portal(
+            customer_id=customer_id,
+            return_url="https://www.neurativo.com/profile",
+        )
+    except Exception as e:
+        print(f"[billing] portal error: {e}")
+        raise HTTPException(status_code=502, detail="Could not open billing portal. Please try again.")
+    portal_url = result.get("link") or result.get("url") or result.get("portal_url") or ""
+    if not portal_url:
+        raise HTTPException(status_code=502, detail="Billing portal returned no URL.")
+    return {"portal_url": portal_url}
+
+
 class CreateDiscountBody(BaseModel):
     discount_type: Literal["percentage", "flat"]
     amount: int  # percentage: 0-100, flat: cents
@@ -537,8 +562,8 @@ async def webhook(
             period_end=next_billing_date,
         )
         print(f"[billing] activated: user={user_id} plan={plan_tier} event={event_type}")
-        # Grant monthly credits on new activation (not on every renewal to avoid duplicates)
-        if event_type == "subscription.active" and plan_tier:
+        # Grant monthly credits on both new activation and renewal (monthly refresh)
+        if plan_tier:
             try:
                 grant_plan_credits(user_id, plan_tier)
             except Exception as e:
