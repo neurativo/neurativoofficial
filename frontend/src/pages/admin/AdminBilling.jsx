@@ -248,8 +248,10 @@ function PaymentsPanel() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
-    const [refunding, setRefunding] = useState(null);
-    const [detail, setDetail] = useState(null);
+    const [refunding, setRefunding] = useState(null);   // paymentId currently submitting
+    const [refundOpen, setRefundOpen] = useState(null); // paymentId with open refund form
+    const [refundReason, setRefundReason] = useState('');
+    const [detail, setDetail] = useState(null);         // {payment_id, ...}
     const [detailLoading, setDetailLoading] = useState(false);
     const PAGE_SIZE = 20;
 
@@ -270,14 +272,20 @@ function PaymentsPanel() {
     useEffect(() => { setPage(0); }, [statusFilter]);
     useEffect(() => { load(); }, [load]);
 
-    async function handleRefund(paymentId, amount) {
-        const reason = window.prompt(`Refund payment ${paymentId.slice(-8)}?\nAmount: ${fmtAmount(amount)}\n\nOptional reason:`);
-        if (reason === null) return; // cancelled
+    function openRefundForm(paymentId) {
+        setRefundOpen(prev => prev === paymentId ? null : paymentId);
+        setRefundReason('');
+        setError('');
+    }
+
+    async function submitRefund(paymentId) {
         setRefunding(paymentId);
         setError('');
         try {
-            await billingApi.createRefund(paymentId, reason || null);
+            await billingApi.createRefund(paymentId, refundReason.trim() || null);
             flash(`Refund initiated for payment …${paymentId.slice(-8)}`);
+            setRefundOpen(null);
+            setRefundReason('');
             load();
         } catch (e) {
             setError(e?.response?.data?.detail || e.message || 'Refund failed');
@@ -346,6 +354,7 @@ function PaymentsPanel() {
                             const customer = p.customer || {};
                             const isRefundable = ['succeeded', 'paid'].includes((p.status || '').toLowerCase());
                             const isDetailOpen = (detail?.payment_id === pid || detail?.id === pid);
+                            const isRefundFormOpen = refundOpen === pid;
                             return (
                                 <React.Fragment key={pid}>
                                     <tr>
@@ -365,14 +374,51 @@ function PaymentsPanel() {
                                                     {detailLoading === pid ? '…' : isDetailOpen ? 'Hide' : 'Detail'}
                                                 </button>
                                                 {isRefundable && (
-                                                    <button className="adm-btn-ghost" style={{ fontSize: 11, padding: '3px 8px', color: '#fbbf24' }}
-                                                        onClick={() => handleRefund(pid, p.total_amount ?? p.amount)} disabled={refunding === pid}>
-                                                        {refunding === pid ? '…' : 'Refund'}
+                                                    <button className="adm-btn-ghost"
+                                                        style={{ fontSize: 11, padding: '3px 8px', color: isRefundFormOpen ? '#e5e7eb' : '#fbbf24', background: isRefundFormOpen ? '#292524' : undefined }}
+                                                        onClick={() => openRefundForm(pid)}
+                                                        disabled={refunding === pid}>
+                                                        {refunding === pid ? '…' : isRefundFormOpen ? 'Cancel' : 'Refund'}
                                                     </button>
                                                 )}
                                             </div>
                                         </td>
                                     </tr>
+                                    {/* Inline refund form */}
+                                    {isRefundFormOpen && (
+                                        <tr>
+                                            <td colSpan={7} style={{ padding: '0 0 8px' }}>
+                                                <div style={{ background: '#111', border: '1px solid #3b2f00', borderRadius: 8, padding: '14px 16px', margin: '0 4px', display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                                                    <div style={{ flex: 1, minWidth: 200 }}>
+                                                        <div style={{ fontSize: 11, color: '#fbbf24', marginBottom: 6, fontWeight: 600 }}>
+                                                            Refund {fmtAmount(p.total_amount ?? p.amount)} · …{pid.slice(-10)}
+                                                        </div>
+                                                        <input
+                                                            className="adm-input"
+                                                            type="text"
+                                                            placeholder="Reason (optional)"
+                                                            value={refundReason}
+                                                            onChange={e => setRefundReason(e.target.value)}
+                                                            style={{ fontSize: 13, width: '100%' }}
+                                                            onKeyDown={e => { if (e.key === 'Enter') submitRefund(pid); if (e.key === 'Escape') setRefundOpen(null); }}
+                                                            autoFocus
+                                                        />
+                                                    </div>
+                                                    <button
+                                                        onClick={() => submitRefund(pid)}
+                                                        disabled={refunding === pid}
+                                                        style={{
+                                                            background: '#b45309', color: '#fff', border: 'none', borderRadius: 7,
+                                                            padding: '8px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                                                            opacity: refunding === pid ? 0.5 : 1, fontFamily: 'inherit',
+                                                        }}>
+                                                        {refunding === pid ? 'Processing…' : 'Confirm Refund'}
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    )}
+                                    {/* Detail expand */}
                                     {isDetailOpen && (
                                         <tr>
                                             <td colSpan={7} style={{ padding: '0 0 8px' }}>

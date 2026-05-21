@@ -554,32 +554,82 @@ export default function ProfilePage({ user }) {
                                     })}
                                 </div>
                             )}
-                            {!loading && subInfo?.has_active_subscription && (
-                                <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                                    {subInfo.subscription_period_end && (
-                                        <span style={{ fontSize: 11, color: 'var(--color-muted)' }}>
-                                            Renews {new Date(subInfo.subscription_period_end).toLocaleDateString()}
-                                        </span>
-                                    )}
-                                    <button
-                                        onClick={handleManageBilling}
-                                        disabled={portalLoading}
-                                        style={{ fontSize: 11, color: 'var(--color-muted)', background: 'none', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline' }}
-                                    >
-                                        {portalLoading ? 'Opening…' : 'Manage billing / payment method'}
-                                    </button>
-                                    <button
-                                        onClick={handleCancel}
-                                        disabled={cancelLoading}
-                                        style={{ fontSize: 11, color: '#e54d4d', background: 'none', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline' }}
-                                    >
-                                        {cancelLoading ? 'Cancelling…' : 'Cancel subscription'}
-                                    </button>
-                                </div>
-                            )}
-                            {!loading && subInfo && !subInfo.has_active_subscription && subInfo.subscription_status === 'cancelled' && (
-                                <div style={{ marginTop: 10, fontSize: 12, color: 'var(--color-muted)' }}>
-                                    Subscription cancelled — access until period end.
+                            {!loading && subInfo && (subInfo.has_active_subscription || subInfo.dodo_subscription_id) && (
+                                <div style={{
+                                    marginTop: 14,
+                                    border: '1px solid var(--color-border)',
+                                    borderRadius: 12,
+                                    background: 'var(--color-bg)',
+                                    overflow: 'hidden',
+                                }}>
+                                    {/* Status row */}
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', flexWrap: 'wrap', gap: 8 }}>
+                                        <div style={{ display: 'flex', align: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                            <span style={{
+                                                display: 'inline-flex', alignItems: 'center', gap: 5,
+                                                fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 99,
+                                                background: subInfo.has_active_subscription ? 'rgba(22,163,74,0.12)' : 'rgba(107,114,128,0.12)',
+                                                color: subInfo.has_active_subscription ? '#16a34a' : '#6b7280',
+                                            }}>
+                                                <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor', display: 'inline-block' }} />
+                                                {subInfo.has_active_subscription ? 'Active' : (subInfo.subscription_status || 'Inactive')}
+                                            </span>
+                                            {subInfo.subscription_period_end && (
+                                                <span style={{ fontSize: 12, color: 'var(--color-muted)', alignSelf: 'center' }}>
+                                                    {subInfo.has_active_subscription ? 'Renews' : 'Access until'}{' '}
+                                                    {new Date(subInfo.subscription_period_end).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                    {/* Action row */}
+                                    <div style={{ borderTop: '1px solid var(--color-border)', padding: '10px 14px', display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                                        {subInfo.has_active_subscription && (
+                                            <button
+                                                onClick={handleManageBilling}
+                                                disabled={portalLoading}
+                                                style={{
+                                                    fontSize: 12, fontWeight: 500,
+                                                    padding: '6px 14px',
+                                                    border: '1px solid var(--color-border)',
+                                                    borderRadius: 8,
+                                                    background: 'var(--color-card)',
+                                                    color: 'var(--color-text)',
+                                                    cursor: portalLoading ? 'default' : 'pointer',
+                                                    fontFamily: 'inherit',
+                                                    transition: 'opacity 0.15s',
+                                                    opacity: portalLoading ? 0.5 : 1,
+                                                }}
+                                            >
+                                                {portalLoading ? 'Opening…' : 'Manage billing & payment method'}
+                                            </button>
+                                        )}
+                                        {subInfo.has_active_subscription && (
+                                            <button
+                                                onClick={handleCancel}
+                                                disabled={cancelLoading}
+                                                style={{
+                                                    fontSize: 12, fontWeight: 500,
+                                                    padding: '6px 14px',
+                                                    border: '1px solid rgba(239,68,68,0.3)',
+                                                    borderRadius: 8,
+                                                    background: 'none',
+                                                    color: '#e54d4d',
+                                                    cursor: cancelLoading ? 'default' : 'pointer',
+                                                    fontFamily: 'inherit',
+                                                    transition: 'opacity 0.15s',
+                                                    opacity: cancelLoading ? 0.5 : 1,
+                                                }}
+                                            >
+                                                {cancelLoading ? 'Cancelling…' : 'Cancel subscription'}
+                                            </button>
+                                        )}
+                                        {!subInfo.has_active_subscription && subInfo.subscription_status === 'cancelled' && (
+                                            <span style={{ fontSize: 12, color: 'var(--color-muted)' }}>
+                                                Your subscription was cancelled. Access continues until the billing period ends.
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
                             )}
                         </div>

@@ -274,6 +274,7 @@ function BillingPanel({ userId, showToast }) {
     const [sub, setSub] = useState(null);
     const [loading, setLoading] = useState(true);
     const [cancelling, setCancelling] = useState(false);
+    const [portalLoading, setPortalLoading] = useState(false);
 
     const load = useCallback(() => {
         setLoading(true);
@@ -300,6 +301,21 @@ function BillingPanel({ userId, showToast }) {
         }
     }
 
+    async function handlePortal() {
+        if (!sub?.dodo_customer_id) return;
+        setPortalLoading(true);
+        try {
+            const result = await billingApi.createCustomerPortal(sub.dodo_customer_id);
+            const url = result?.link || result?.url || result?.portal_url || '';
+            if (!url) throw new Error('No portal URL returned');
+            window.open(url, '_blank', 'noopener');
+        } catch (e) {
+            showToast(e?.response?.data?.detail || 'Could not open customer portal');
+        } finally {
+            setPortalLoading(false);
+        }
+    }
+
     if (loading) return <div style={{ color: '#888', fontSize: 13, padding: 20 }}>Loading billing info…</div>;
 
     const statusMap = {
@@ -317,7 +333,23 @@ function BillingPanel({ userId, showToast }) {
 
     return (
         <div className="adm-card">
-            <div className="adm-card-title" style={{ marginBottom: 16 }}>Dodo Subscription</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
+                <div className="adm-card-title" style={{ margin: 0 }}>Dodo Subscription</div>
+                {sub?.dodo_customer_id && (
+                    <button
+                        className="adm-btn-ghost"
+                        style={{ fontSize: 12, padding: '4px 12px', display: 'flex', alignItems: 'center', gap: 5 }}
+                        onClick={handlePortal}
+                        disabled={portalLoading}
+                    >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                            <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+                        </svg>
+                        {portalLoading ? 'Opening…' : 'Customer Portal'}
+                    </button>
+                )}
+            </div>
             {!sub || !sub.dodo_subscription_id ? (
                 <div style={{ color: '#6b7280', fontSize: 13 }}>No Dodo subscription on record.</div>
             ) : (
