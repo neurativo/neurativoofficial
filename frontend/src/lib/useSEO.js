@@ -5,7 +5,7 @@ import { useEffect } from 'react';
  * useEffect so DOM mutations never happen during the render phase.
  *
  * Supported params:
- *   title          – page-specific title (appended with " – Neurativo")
+ *   title          – page-specific title (formatted as "Title | Neurativo")
  *   description    – meta description (falls back to site default)
  *   canonicalPath  – path portion of canonical URL e.g. "/pricing"
  *   ogImage        – full URL of OG image (falls back to /og.png)
@@ -16,8 +16,8 @@ import { useEffect } from 'react';
 export function useSEO({ title, description, canonicalPath, ogImage, noindex, ogType, keywords } = {}) {
     const BASE       = 'https://www.neurativo.com';
     const siteTitle  = 'Neurativo';
-    const fullTitle  = title ? `${title} – ${siteTitle}` : `${siteTitle} — AI Lecture Assistant`;
-    const desc       = description || 'Record any lecture and get live transcription, AI summaries, and instant Q&A in any language. The smartest way to study.';
+    const fullTitle  = title ? `${title} | Neurativo` : `Neurativo — AI Education Platform`;
+    const desc       = description || 'Transforming education with intelligence. Neurativo captures live lectures and turns them into AI summaries, flashcards, quizzes, concept maps, and instant Q&A — the future of smarter learning.';
     const canonical  = canonicalPath ? `${BASE}${canonicalPath}` : `${BASE}/`;
     const image      = ogImage || `${BASE}/og.png`;
     const robots     = noindex ? 'noindex, nofollow' : 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1';

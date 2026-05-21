@@ -10,10 +10,10 @@ export default function FAQPage() {
         : null;
 
     useSEO({
-        title: 'FAQ — Neurativo Lecture Intelligence',
-        description: 'Common questions about Neurativo — how it works, supported languages, audio privacy, file import, mobile support, and more.',
+        title: 'FAQ — How Neurativo Works',
+        description: 'Frequently asked questions about Neurativo — how the AI works, pricing, supported languages, audio privacy, file import, mobile support, and more.',
         canonicalPath: '/faq',
-        keywords: 'Neurativo FAQ, AI lecture app questions, how does Neurativo work, lecture transcription privacy, supported languages',
+        keywords: 'Neurativo FAQ, AI education platform questions, how does Neurativo work, lecture transcription privacy, supported languages, AI learning platform help',
     });
 
     useEffect(() => {

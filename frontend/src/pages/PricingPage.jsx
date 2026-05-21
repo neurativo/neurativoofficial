@@ -10,10 +10,10 @@ export default function PricingPage() {
         : null;
 
     useSEO({
-        title: 'Pricing — Neurativo',
-        description: 'Simple, affordable plans for students. Start free — no credit card required. Upgrade when you need unlimited lectures, longer recordings, and full PDF exports.',
+        title: 'Pricing — Plans for Every Student',
+        description: 'Free plan available — no credit card required. Student plan from $9.99/month. Pro plan from $19.99/month. Affordable AI education for every learner.',
         canonicalPath: '/pricing',
-        keywords: 'Neurativo pricing, AI lecture app free plan, student AI tool pricing, lecture notes app cost',
+        keywords: 'Neurativo pricing, AI education platform pricing, AI lecture app cost, student AI tool plans, free AI learning platform, lecture notes app pricing',
     });
 
     useEffect(() => {

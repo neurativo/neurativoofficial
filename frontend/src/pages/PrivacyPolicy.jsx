@@ -129,7 +129,7 @@ const SECTIONS = [
 ];
 
 export default function PrivacyPolicy() {
-    useSEO({ title: 'Privacy Policy', description: "Neurativo's Privacy Policy — how we collect, use, and protect your data when you use our AI lecture transcription service.", canonicalPath: '/privacy' });
+    useSEO({ title: 'Privacy Policy', description: "Neurativo's Privacy Policy — how we collect, use, and protect your data when you use our AI education platform.", canonicalPath: '/privacy' });
     return (
         <>
             <style>{CSS}</style>

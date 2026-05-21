@@ -10,10 +10,10 @@ export default function FeaturesPage() {
         : null;
 
     useSEO({
-        title: 'Features — Neurativo Lecture Intelligence',
-        description: 'AI-generated exam traps, cheat sheets, self-test questions, flashcards, quiz, glossary and full PDF report from any lecture recording. Works in any language.',
+        title: 'Features — Live Lecture AI, Study Tools & Smart Learning',
+        description: 'Live lecture capture, real-time AI summaries, flashcards, quiz, concept maps, exam prep, semantic search, Smart Explain, and PDF export — everything you need to learn smarter.',
         canonicalPath: '/features',
-        keywords: 'AI lecture features, exam trap detection, lecture flashcards, lecture quiz, AI cheat sheet, lecture PDF export, lecture glossary',
+        keywords: 'AI education features, live lecture AI, lecture flashcards, AI quiz generator, concept map, exam prep AI, lecture summary, Smart Explain, AI study tools, lecture PDF export',
     });
 
     useEffect(() => {

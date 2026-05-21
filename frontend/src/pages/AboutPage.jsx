@@ -10,10 +10,10 @@ export default function AboutPage() {
         : null;
 
     useSEO({
-        title: 'About — Neurativo',
-        description: 'Neurativo is an AI lecture intelligence platform built to help students get more from every lecture. Founded by Shazad Arshad and Shariff Ahamed.',
+        title: 'About — Our Mission to Transform Education with AI',
+        description: 'Neurativo is an AI education platform on a mission to transform how students learn. Founded by Shazad Arshad and Shariff Ahamed. Transforming education with intelligence.',
         canonicalPath: '/about',
-        keywords: 'about Neurativo, Neurativo founders, AI lecture platform, student AI tool',
+        keywords: 'about Neurativo, Neurativo founders, AI education platform mission, student AI learning tool, Shazad Arshad, Shariff Ahamed',
     });
 
     useEffect(() => {

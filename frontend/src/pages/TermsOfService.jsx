@@ -114,7 +114,7 @@ const SECTIONS = [
 ];
 
 export default function TermsOfService() {
-    useSEO({ title: 'Terms of Service', description: 'Read the Neurativo Terms of Service — the rules, rights, and responsibilities for using our AI lecture transcription platform.', canonicalPath: '/terms' });
+    useSEO({ title: 'Terms of Service', description: 'Read the Neurativo Terms of Service — the rules, rights, and responsibilities for using our AI education platform.', canonicalPath: '/terms' });
     return (
         <>
             <style>{CSS}</style>

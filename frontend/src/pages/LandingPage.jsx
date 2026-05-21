@@ -1507,10 +1507,10 @@ export default function LandingPage({ user }) {
     const location = useLocation();
 
     useSEO({
-        title: null, // use default full title from index.html
-        description: 'Neurativo records your lecture, transcribes every word, and builds structured AI summaries in real time — so you can focus on learning, not writing. Free to start.',
+        title: null, // renders as "Neurativo — AI Education Platform" via useSEO default
+        description: 'Transforming education with intelligence. Neurativo captures live lectures and turns them into structured AI summaries, flashcards, quizzes, concept maps, and instant Q&A — the future of smarter learning. Free to start.',
         canonicalPath: '/',
-        keywords: 'AI lecture notes, real-time lecture transcription, lecture summary generator, AI note taking app, automatic lecture notes, student AI assistant, lecture recorder app, online class notes, AI study tool',
+        keywords: 'AI education platform, live lecture AI, AI learning platform, AI lecture notes, real-time lecture transcription, lecture summary generator, AI study tools, automatic lecture notes, student AI assistant, flashcard generator, exam prep AI, concept map AI',
     });
 
     // Pageview beacon
