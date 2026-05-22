@@ -144,72 +144,180 @@ def send_payment_failed_email(to: str, org_name: str) -> bool:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def _base_template(header_sub: str, body_html: str) -> str:
+    # Logo: nested 2-cell table — N icon (dark square) + Neurativo wordmark
+    # All table-based, no divs, no floats — works in Gmail/Outlook/Apple Mail
+    logo = """
+      <table cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td width="36" height="36" style="width:36px;height:36px;background:#1a1a1a;
+              border-radius:8px;text-align:center;vertical-align:middle;
+              font-size:18px;font-weight:800;color:#ffffff;
+              font-family:Georgia,'Times New Roman',serif;line-height:36px;">
+            N
+          </td>
+          <td style="padding-left:11px;vertical-align:middle;">
+            <span style="font-size:18px;font-weight:700;color:#1a1a1a;
+                         letter-spacing:-0.5px;line-height:1;
+                         font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+              Neurativo
+            </span>
+            <br>
+            <span style="font-size:11px;color:#a3a3a3;letter-spacing:0.02em;
+                         font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+              {header_sub}
+            </span>
+          </td>
+        </tr>
+      </table>"""
+
     return f"""<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#f5f4f1;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;">
-<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f5f4f1;padding:40px 16px;">
-  <tr><td align="center">
-    <table width="520" cellpadding="0" cellspacing="0" border="0"
-           style="max-width:520px;width:100%;background:#ffffff;border-radius:14px;
-                  overflow:hidden;border:1px solid #e8e5e0;box-shadow:0 2px 16px rgba(0,0,0,0.06);">
-      <tr>
-        <td style="background:#1a1a1a;padding:28px 36px 24px;">
-          <div style="font-size:20px;font-weight:700;color:#ffffff;letter-spacing:-0.4px;">Neurativo</div>
-          <div style="font-size:12px;color:#9ca3af;margin-top:3px;">{header_sub}</div>
-        </td>
-      </tr>
-      <tr><td style="padding:32px 36px 28px;">{body_html}</td></tr>
-      <tr>
-        <td style="padding:18px 36px 22px;border-top:1px solid #f0ede8;background:#fafaf9;">
-          <p style="margin:0;font-size:11px;color:#a3a3a3;line-height:1.6;">
-            You're receiving this because you have a Neurativo account.<br>
-            Questions? Reply to this email or visit <a href="https://www.neurativo.com" style="color:#a3a3a3;">neurativo.com</a>
-          </p>
-        </td>
-      </tr>
-    </table>
-  </td></tr>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="x-apple-disable-message-reformatting">
+  <title>Neurativo</title>
+</head>
+<body style="margin:0;padding:0;background:#f5f4f1;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
+
+<!--[if mso]>
+<center>
+<table width="600" cellpadding="0" cellspacing="0" border="0"><tr><td>
+<![endif]-->
+
+<table width="100%" cellpadding="0" cellspacing="0" border="0"
+       style="background:#f5f4f1;min-width:100%;">
+  <tr>
+    <td align="center" style="padding:48px 16px 48px;">
+
+      <!-- Card -->
+      <table width="600" cellpadding="0" cellspacing="0" border="0"
+             style="max-width:600px;width:100%;background:#ffffff;
+                    border:1.5px solid #e8e5e0;border-radius:16px;
+                    border-collapse:separate;">
+
+        <!-- Header -->
+        <tr>
+          <td style="padding:26px 36px 24px;border-bottom:1px solid #f0ede8;
+                     background:#ffffff;border-radius:16px 16px 0 0;">
+            {logo}
+          </td>
+        </tr>
+
+        <!-- Body -->
+        <tr>
+          <td style="padding:32px 36px 28px;background:#ffffff;
+                     font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;
+                     word-break:break-word;">
+            {body_html}
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td style="padding:20px 36px 24px;border-top:1px solid #f0ede8;
+                     background:#fafaf9;border-radius:0 0 16px 16px;">
+            <p style="margin:0;font-size:11px;color:#b0aba5;line-height:1.7;
+                      font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+              You're receiving this because you have a Neurativo account.
+              Questions? Just reply to this email.<br>
+              <a href="https://www.neurativo.com" style="color:#b0aba5;text-decoration:underline;">neurativo.com</a>
+            </p>
+          </td>
+        </tr>
+
+      </table>
+      <!-- /Card -->
+
+    </td>
+  </tr>
 </table>
-</body></html>"""
+
+<!--[if mso]>
+</td></tr></table>
+</center>
+<![endif]-->
+
+</body>
+</html>"""
 
 
 def _btn(text: str, url: str, bg: str = "#1a1a1a") -> str:
-    return (f'<a href="{url}" style="display:inline-block;background:{bg};color:#ffffff;text-decoration:none;'
-            f'font-size:13px;font-weight:600;padding:11px 22px;border-radius:8px;">{text}</a>')
+    # Table-based button — renders correctly in Outlook, Gmail, Apple Mail
+    return (
+        f'<table cellpadding="0" cellspacing="0" border="0" style="margin-top:20px;">'
+        f'<tr><td style="background:{bg};border-radius:9px;padding:0;">'
+        f'<a href="{url}" style="display:block;padding:13px 26px;color:#ffffff;'
+        f'font-size:14px;font-weight:600;text-decoration:none;letter-spacing:-0.1px;'
+        f'font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif;">'
+        f'{text} &rarr;</a>'
+        f'</td></tr></table>'
+    )
 
 
 def _row(icon: str, label: str, value: str) -> str:
-    # Use nested table instead of float:right — float is ignored in Gmail
+    # Two-cell nested table row — no float, works everywhere
     return (
-        f'<tr><td style="padding:0;border-bottom:1px solid #f5f4f1;">'
-        f'<table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>'
-        f'<td style="padding:9px 14px;font-size:13px;color:#6b6b6b;">{icon}&nbsp; {label}</td>'
-        f'<td align="right" style="padding:9px 14px;font-size:13px;font-weight:600;color:#1a1a1a;white-space:nowrap;">{value}</td>'
-        f'</tr></table>'
-        f'</td></tr>'
+        f'<tr>'
+        f'<td style="padding:0;border-bottom:1px solid #f5f4f1;">'
+        f'<table width="100%" cellpadding="0" cellspacing="0" border="0">'
+        f'<tr>'
+        f'<td style="padding:10px 16px;font-size:13px;color:#6b6b6b;'
+        f'font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif;'
+        f'word-break:break-word;">{icon}&nbsp; {label}</td>'
+        f'<td align="right" style="padding:10px 16px;font-size:13px;font-weight:600;'
+        f'color:#1a1a1a;white-space:nowrap;'
+        f'font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif;">{value}</td>'
+        f'</tr>'
+        f'</table>'
+        f'</td>'
+        f'</tr>'
     )
 
 
 def _info_table(rows_html: str) -> str:
-    return (f'<table width="100%" cellpadding="0" cellspacing="0" border="0" '
-            f'style="background:#fafaf9;border:1px solid #f0ede8;border-radius:10px;'
-            f'overflow:hidden;margin:18px 0;"><tbody>{rows_html}</tbody></table>')
+    return (
+        f'<table width="100%" cellpadding="0" cellspacing="0" border="0" '
+        f'style="background:#fafaf9;border:1.5px solid #f0ede8;'
+        f'border-radius:10px;border-collapse:separate;'
+        f'overflow:hidden;margin:20px 0;">'
+        f'<tbody>{rows_html}</tbody>'
+        f'</table>'
+    )
+
+
+def _h(text: str) -> str:
+    return (
+        f'<h2 style="margin:0 0 12px;font-size:23px;font-weight:700;color:#1a1a1a;'
+        f'letter-spacing:-0.5px;line-height:1.25;word-break:break-word;'
+        f'font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif;">'
+        f'{text}</h2>'
+    )
+
+
+def _p(text: str, muted: bool = False) -> str:
+    color = "#9ca3af" if muted else "#4a4a4a"
+    return (
+        f'<p style="margin:0 0 16px;font-size:14px;color:{color};line-height:1.75;'
+        f'word-break:break-word;'
+        f'font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif;">'
+        f'{text}</p>'
+    )
 
 
 # ── 1. Welcome ─────────────────────────────────────────────────────────────────
 
 def _html_welcome() -> str:
     body = (
-        '<h2 style="margin:0 0 10px;font-size:22px;font-weight:700;color:#1a1a1a;letter-spacing:-0.4px;">Welcome to Neurativo</h2>'
-        '<p style="margin:0 0 16px;font-size:14px;color:#3d3d3d;line-height:1.7;">Your account is ready. You\'ve been given <strong>5 free credits</strong> to get started — enough to record or import your first lectures.</p>'
+        _h("Welcome to Neurativo")
+        + _p("Your account is ready. You've been given <strong>5 free credits</strong> to get started — enough to record or import your first lectures.")
         + _info_table(
-            _row("🎙️", "Live recording", "Record in real-time")
-            + _row("📂", "Import audio/video", "Upload existing files")
-            + _row("🧠", "AI notes & flashcards", "Auto-generated")
-            + _row("❓", "Q&amp;A", "Ask anything about your lecture")
+            _row("🎙️", "Live recording", "Real-time")
+            + _row("📂", "Import audio / video", "Upload files")
+            + _row("🧠", "AI notes &amp; flashcards", "Auto-generated")
+            + _row("❓", "Q&amp;A", "Ask your lecture anything")
         )
-        + '<p style="margin:16px 0;font-size:13px;color:#6b6b6b;line-height:1.6;">1 credit = 30 minutes of audio. Credits never expire.</p>'
+        + _p("1 credit = 30 minutes of audio. Credits never expire.", muted=True)
         + _btn("Open Neurativo", "https://www.neurativo.com/app")
     )
     return _base_template("AI Lecture Assistant", body)
@@ -250,17 +358,19 @@ def _html_plan_upgraded(plan: str) -> str:
     label = _PLAN_LABELS.get(plan, plan.title())
     features = _PLAN_FEATURES.get(plan, [])
     feature_rows = "".join(
-        f'<tr><td style="padding:8px 14px;border-bottom:1px solid #f5f4f1;font-size:13px;color:#3d3d3d;">'
+        f'<tr><td style="padding:10px 16px;border-bottom:1px solid #f5f4f1;'
+        f'font-size:13px;color:#4a4a4a;word-break:break-word;'
+        f'font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif;">'
         f'{icon}&nbsp; {text}</td></tr>'
         for icon, text in features
     )
     body = (
-        f'<h2 style="margin:0 0 10px;font-size:22px;font-weight:700;color:#1a1a1a;letter-spacing:-0.4px;">You\'re now on {label}</h2>'
-        f'<p style="margin:0 0 16px;font-size:14px;color:#3d3d3d;line-height:1.7;">Your subscription is active. Here\'s what\'s included:</p>'
+        _h(f"You're now on {label}")
+        + _p(f"Your subscription is active. Here's everything included in your <strong>{label}</strong> plan:")
         + _info_table(feature_rows)
-        + '<p style="margin:16px 0;font-size:13px;color:#6b6b6b;">Your monthly credits have been added to your balance.</p>'
+        + _p("Your monthly credits have been added to your balance.", muted=True)
         + _btn("Go to your dashboard", "https://www.neurativo.com/app")
-        + '<p style="margin:18px 0 0;font-size:12px;color:#a3a3a3;">Manage your subscription from <a href="https://www.neurativo.com/profile" style="color:#a3a3a3;">your profile</a>.</p>'
+        + _p('Manage your subscription from <a href="https://www.neurativo.com/profile" style="color:#9ca3af;">your profile</a>.', muted=True)
     )
     return _base_template(f"{label} Plan — Active", body)
 
@@ -278,15 +388,15 @@ def send_plan_upgraded_for_user(user_id: str, plan: str) -> None:
 
 def _html_plan_downgraded() -> str:
     body = (
-        '<h2 style="margin:0 0 10px;font-size:22px;font-weight:700;color:#1a1a1a;letter-spacing:-0.4px;">Your subscription has ended</h2>'
-        '<p style="margin:0 0 16px;font-size:14px;color:#3d3d3d;line-height:1.7;">Your Neurativo subscription has been cancelled or expired. Your account is now on the <strong>Free plan</strong>.</p>'
+        _h("Your subscription has ended")
+        + _p("Your Neurativo subscription has been cancelled or expired. Your account is now on the <strong>Free plan</strong>.")
         + _info_table(
             _row("✅", "Your lecture library", "Kept forever")
             + _row("📖", "Read-only access", "Always available")
             + _row("🎙️", "Existing credits", "Still in your account")
             + _row("🔒", "Live recording &amp; imports", "Requires active plan")
         )
-        + '<p style="margin:16px 0;font-size:13px;color:#6b6b6b;">Resubscribe at any time to restore full access instantly.</p>'
+        + _p("Resubscribe at any time to restore full access instantly.", muted=True)
         + _btn("Resubscribe", "https://www.neurativo.com/app?upgrade=1")
     )
     return _base_template("Subscription Ended", body)
@@ -304,16 +414,16 @@ def send_plan_downgraded_for_user(user_id: str) -> None:
 
 def _html_subscription_payment_failed() -> str:
     body = (
-        '<h2 style="margin:0 0 10px;font-size:22px;font-weight:700;color:#dc2626;letter-spacing:-0.4px;">Payment failed — action needed</h2>'
-        '<p style="margin:0 0 16px;font-size:14px;color:#3d3d3d;line-height:1.7;">We couldn\'t process your latest subscription payment. Your account has been temporarily moved to the <strong>Free plan</strong> until payment is resolved.</p>'
+        _h("Payment failed — action needed")
+        + _p("We couldn't process your latest subscription payment. Your account has been temporarily moved to the <strong>Free plan</strong> until payment is resolved.")
         + _info_table(
             _row("⚠️", "Account status", "On hold")
             + _row("📖", "Your lecture library", "Still accessible")
             + _row("🔒", "Recording &amp; imports", "Paused until resolved")
         )
-        + '<p style="margin:16px 0;font-size:13px;color:#6b6b6b;">Update your payment method to restore your plan instantly.</p>'
+        + _p("Update your payment method to restore your plan instantly.", muted=True)
         + _btn("Update payment method", "https://www.neurativo.com/profile?billing=1", bg="#dc2626")
-        + '<p style="margin:18px 0 0;font-size:12px;color:#a3a3a3;">If you believe this is an error, reply to this email.</p>'
+        + _p("If you believe this is an error, just reply to this email.", muted=True)
     )
     return _base_template("Payment Issue", body)
 
@@ -330,14 +440,14 @@ def send_subscription_payment_failed_for_user(user_id: str) -> None:
 
 def _html_credits_purchased(pack_label: str, credits: int, price_usd: float) -> str:
     body = (
-        f'<h2 style="margin:0 0 10px;font-size:22px;font-weight:700;color:#1a1a1a;letter-spacing:-0.4px;">Payment confirmed — {credits} credits added</h2>'
-        f'<p style="margin:0 0 16px;font-size:14px;color:#3d3d3d;line-height:1.7;">Your <strong>{pack_label}</strong> purchase was successful.</p>'
+        _h(f"Payment confirmed — {credits} credits added")
+        + _p(f"Your <strong>{pack_label}</strong> purchase was successful. Credits have been added to your account.")
         + _info_table(
             _row("🎙️", "Credits added", f"+{credits}")
             + _row("💳", "Amount charged", f"${price_usd:.2f} USD")
             + _row("📦", "Pack", pack_label)
         )
-        + '<p style="margin:16px 0;font-size:13px;color:#6b6b6b;">1 credit = 30 minutes of audio. Credits never expire.</p>'
+        + _p("1 credit = 30 minutes of audio. Credits never expire.", muted=True)
         + _btn("Start a new lecture", "https://www.neurativo.com/app")
     )
     return _base_template("Purchase Confirmed", body)
@@ -357,8 +467,8 @@ def send_credits_purchased_for_user(user_id: str, pack_label: str, credits: int,
 def _html_credits_refreshed(plan: str, credits: int) -> str:
     label = _PLAN_LABELS.get(plan, plan.title())
     body = (
-        f'<h2 style="margin:0 0 10px;font-size:22px;font-weight:700;color:#1a1a1a;letter-spacing:-0.4px;">Your {credits} monthly credits are ready</h2>'
-        f'<p style="margin:0 0 16px;font-size:14px;color:#3d3d3d;line-height:1.7;">Your <strong>{label}</strong> subscription has renewed and your monthly credits have been added.</p>'
+        _h(f"Your {credits} monthly credits are ready")
+        + _p(f"Your <strong>{label}</strong> subscription has renewed and your monthly credits have been added to your balance.")
         + _info_table(
             _row("🎙️", "Credits added", f"+{credits}")
             + _row("📋", "Plan", label)
@@ -384,8 +494,8 @@ def send_credits_refreshed_for_user(user_id: str, plan: str, credits: int) -> No
 def _html_lecture_ready(title: str, lecture_url: str) -> str:
     display = title or "Your lecture"
     body = (
-        '<h2 style="margin:0 0 10px;font-size:22px;font-weight:700;color:#1a1a1a;letter-spacing:-0.4px;">Your lecture is ready</h2>'
-        f'<p style="margin:0 0 16px;font-size:14px;color:#3d3d3d;line-height:1.7;">We\'ve finished processing <strong>{display}</strong>. Your study materials are all ready.</p>'
+        _h("Your lecture is ready")
+        + _p(f"We've finished processing <strong>{display}</strong>. Your study materials are all ready to go.")
         + _info_table(
             _row("📝", "AI summary", "Ready")
             + _row("🃏", "Flashcards", "Generated")
@@ -422,13 +532,13 @@ def send_lecture_ready_for_job(lecture_id: str, user_id: str) -> None:
 def _html_low_credits(balance: int) -> str:
     credit_word = "credit" if balance == 1 else "credits"
     body = (
-        f'<h2 style="margin:0 0 10px;font-size:22px;font-weight:700;color:#1a1a1a;letter-spacing:-0.4px;">You\'re running low on credits</h2>'
-        f'<p style="margin:0 0 16px;font-size:14px;color:#3d3d3d;line-height:1.7;">You have <strong>{balance} {credit_word} remaining</strong>. Each credit covers 30 minutes of recording or import.</p>'
+        _h("You're running low on credits")
+        + _p(f"You have <strong>{balance} {credit_word} remaining</strong>. Each credit covers 30 minutes of recording or import.")
         + _info_table(
             _row("🎙️", "Credits left", str(balance))
-            + _row("⏱️", "Recording time remaining", f"~{balance * 30} minutes")
+            + _row("⏱️", "Recording time remaining", f"~{balance * 30} min")
         )
-        + '<p style="margin:16px 0;font-size:13px;color:#6b6b6b;">Top up now to keep recording without interruption. Packs start at $4.99.</p>'
+        + _p("Top up now to keep recording without interruption. Packs start at $4.99.", muted=True)
         + _btn("Get more credits", "https://www.neurativo.com/credits")
     )
     return _base_template("Low Credits", body)
