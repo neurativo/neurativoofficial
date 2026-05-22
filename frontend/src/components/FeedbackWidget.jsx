@@ -361,7 +361,7 @@ export default function FeedbackWidget() {
                                     placeholder={
                                         type === 'bug'     ? 'Describe what happened and how to reproduce it…' :
                                         type === 'feature' ? 'What would you like to see? How would it help you?' :
-                                                             'What's on your mind? Any feedback is welcome…'
+                                                             "What's on your mind? Any feedback is welcome…"
                                     }
                                     value={message}
                                     onChange={e => setMessage(e.target.value)}
