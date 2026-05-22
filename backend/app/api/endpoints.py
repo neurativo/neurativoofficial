@@ -1399,7 +1399,8 @@ async def process_visual_frame(
 
 
 @router.get("/live/{lecture_id}/stream")
-async def stream_summary(lecture_id: str, token: str = Query(None)):
+@limiter.limit("10/minute")
+async def stream_summary(request: Request, lecture_id: str, token: str = Query(None)):
     """
     Server-Sent Events stream for live summary + topic updates.
     Requires a Bearer token passed as ?token= query param (EventSource can't set headers).
@@ -1414,7 +1415,8 @@ async def stream_summary(lecture_id: str, token: str = Query(None)):
     # Authenticate via query param since EventSource doesn't support custom headers
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    user = await get_current_user(f"Bearer {token}")
+    # Use get_active_user to block suspended users from streaming
+    user = await get_active_user(f"Bearer {token}")
     _check_owner(lecture_id, user.id)
     profile = get_user_profile(str(user.id))
     _stream_limits = get_limits(profile.get("plan_tier", "free"))
@@ -1499,7 +1501,7 @@ def end_session_endpoint(lecture_id: str, background_tasks: BackgroundTasks, use
 async def end_session_beacon(lecture_id: str, token: str = Query(None), background_tasks: BackgroundTasks = None):
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    user = await get_current_user(f"Bearer {token}")
+    user = await get_active_user(f"Bearer {token}")
     _check_owner(lecture_id, user.id)
     if background_tasks is None:
         background_tasks = BackgroundTasks()
@@ -2064,8 +2066,12 @@ def get_quiz_attempts_endpoint(lecture_id: str, user=Depends(get_active_user)):
 
 @router.get("/lectures/{lecture_id}/concept-map")
 def get_concept_map_endpoint(lecture_id: str, user=Depends(get_active_user)):
-    """Returns cached or freshly-generated concept map."""
+    """Returns cached or freshly-generated concept map. Student+ only."""
     _check_owner(lecture_id, user.id)
+    profile = get_user_profile(str(user.id))
+    limits = get_limits(profile.get("plan_tier", "free"))
+    if not limits.get("qa_enabled"):
+        raise HTTPException(status_code=403, detail={"error": "feature_locked", "feature": "concept_map", "required_plan": "student"})
 
     cached = get_concept_map(lecture_id)
     if cached:

@@ -496,14 +496,47 @@ def complete_purchase_intent(
     return True
 
 
-def grant_plan_credits(user_id: str, plan_tier: str) -> int:
+def grant_plan_credits(user_id: str, plan_tier: str, period_end: Optional[str] = None) -> int:
     """
     Grant monthly credits for student/pro plan members.
     Called when plan is assigned or renewed.
-    Returns credits added (0 if plan has no credit grant).
+    Returns credits added (0 if plan has no credit grant or already granted).
+
+    Idempotency: when period_end is provided (from the webhook's next_billing_date),
+    a unique product key "<plan>_grant_<YYYY-MM-DD>" is written to credit_transactions.
+    A duplicate key means this billing period was already processed — safe to skip.
+    This prevents double grants on webhook retries.
     """
     amount = PLAN_MONTHLY_CREDITS.get(plan_tier, 0)
     if amount == 0:
         return 0
-    add_credits(user_id, amount, reason="plan_grant", product=f"{plan_tier}_grant")
+
+    # Build a period-scoped idempotency key from next_billing_date
+    period_key = f"{plan_tier}_grant"
+    if period_end:
+        try:
+            period_key = f"{plan_tier}_grant_{str(period_end)[:10]}"  # YYYY-MM-DD
+        except Exception:
+            pass
+
+    # Dedup: skip if we already granted credits for this exact period key
+    if period_end:
+        try:
+            db = _fresh_db()
+            existing = (
+                db.table("credit_transactions")
+                .select("id")
+                .eq("user_id", user_id)
+                .eq("reason", "plan_grant")
+                .eq("product", period_key)
+                .limit(1)
+                .execute()
+            )
+            if existing.data:
+                print(f"[credits] plan_grant {period_key} already processed for {user_id}, skipping duplicate")
+                return 0
+        except Exception as e:
+            print(f"[credits] idempotency check failed (proceeding with grant): {e}")
+
+    add_credits(user_id, amount, reason="plan_grant", product=period_key)
     return amount

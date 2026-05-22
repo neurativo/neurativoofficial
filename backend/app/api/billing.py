@@ -562,10 +562,12 @@ async def webhook(
             period_end=next_billing_date,
         )
         print(f"[billing] activated: user={user_id} plan={plan_tier} event={event_type}")
-        # Grant monthly credits on both new activation and renewal (monthly refresh)
+        # Grant monthly credits on both new activation and renewal (monthly refresh).
+        # period_end (next_billing_date) is used as a deduplication key so retried
+        # webhooks for the same billing cycle never double-grant credits.
         if plan_tier:
             try:
-                grant_plan_credits(user_id, plan_tier)
+                grant_plan_credits(user_id, plan_tier, period_end=next_billing_date)
             except Exception as e:
                 print(f"[billing] grant_plan_credits error (non-fatal): {e}")
 
@@ -579,6 +581,12 @@ async def webhook(
             status="active",
             period_end=next_billing_date,
         )
+        # Grant credits for the new plan on upgrade (idempotent via period_end key)
+        if plan_tier:
+            try:
+                grant_plan_credits(user_id, plan_tier, period_end=next_billing_date)
+            except Exception as e:
+                print(f"[billing] grant_plan_credits (plan_changed) error (non-fatal): {e}")
 
     elif event_type in ("subscription.cancelled", "subscription.expired"):
         supabase_service.set_user_plan(user_id, "free")
@@ -591,12 +599,16 @@ async def webhook(
         print(f"[billing] downgraded to free: user={user_id} event={event_type}")
 
     elif event_type == "subscription.on_hold":
+        # on_hold means payment failed — downgrade to free immediately so
+        # the user doesn't retain paid features while the subscription is unpaid.
+        supabase_service.set_user_plan(user_id, "free")
         supabase_service.save_dodo_subscription(
             user_id=user_id,
             dodo_customer_id=dodo_customer_id,
             dodo_subscription_id=subscription_id,
             status="on_hold",
         )
+        print(f"[billing] on_hold: downgraded user={user_id} to free")
 
     elif event_type == "subscription.failed":
         supabase_service.save_dodo_subscription(
