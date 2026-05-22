@@ -208,7 +208,7 @@ export default function AdminDashboard() {
                 {/* Quick Actions + Recent Users */}
                 <div>
                     <div className="adm-section-title">Quick Actions</div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 24 }}>
+                    <div className="adm-quick-grid">
                         {QUICK_ACTIONS.map(a => (
                             <div
                                 key={a.to}

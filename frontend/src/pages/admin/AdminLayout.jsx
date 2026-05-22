@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useClerk, useUser } from '@clerk/react';
 import { adminApi, feedbackApi } from '../../lib/adminApi.js';
@@ -128,15 +128,43 @@ function getPageLabel(pathname) {
     return '';
 }
 
+// ── Bottom nav items (mobile only) ────────────────────────────────────────────
+const BOTTOM_NAV = [
+    { to: '/admin', label: 'Dashboard', end: true, icon: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+            <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+        </svg>
+    )},
+    { to: '/admin/users', label: 'Users', icon: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+        </svg>
+    )},
+    { to: '/admin/sessions', label: 'Sessions', icon: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/>
+        </svg>
+    )},
+    { to: '/admin/feedback', label: 'Feedback', badge: true, icon: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+    )},
+];
+
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function AdminLayout() {
     const { isLoaded, isSignedIn, user } = useUser();
     const { signOut } = useClerk();
     const navigate = useNavigate();
     const { pathname } = useLocation();
-    const [verified, setVerified]         = useState(null);
-    const [sidebarOpen, setSidebarOpen]   = useState(false);
+    const [verified, setVerified]             = useState(null);
+    const [sidebarOpen, setSidebarOpen]       = useState(false);
     const [feedbackUnread, setFeedbackUnread] = useState(0);
+    const touchStartX = useRef(0);
+    const touchStartY = useRef(0);
 
     useEffect(() => {
         if (!isLoaded) return;
@@ -153,6 +181,19 @@ export default function AdminLayout() {
 
     const closeSidebar = () => setSidebarOpen(false);
     const pageLabel = getPageLabel(pathname);
+
+    // Swipe to open/close sidebar
+    const handleTouchStart = (e) => {
+        touchStartX.current = e.touches[0].clientX;
+        touchStartY.current = e.touches[0].clientY;
+    };
+    const handleTouchEnd = (e) => {
+        const dx = e.changedTouches[0].clientX - touchStartX.current;
+        const dy = e.changedTouches[0].clientY - touchStartY.current;
+        if (Math.abs(dx) < Math.abs(dy) * 1.2) return; // mostly vertical — ignore
+        if (!sidebarOpen && touchStartX.current < 32 && dx > 56) setSidebarOpen(true);
+        if (sidebarOpen && dx < -56) setSidebarOpen(false);
+    };
 
     if (!isLoaded || verified === null) {
         return <div className="adm-loading">Verifying admin access…</div>;
@@ -171,16 +212,23 @@ export default function AdminLayout() {
     }
 
     return (
-        <div className="adm-shell">
+        <div
+            className="adm-shell"
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+        >
             {/* Mobile overlay */}
             <div className={`adm-overlay${sidebarOpen ? ' open' : ''}`} onClick={closeSidebar} />
 
             <aside className={`adm-sidebar${sidebarOpen ? ' open' : ''}`}>
-                <button className="adm-close-sidebar" onClick={closeSidebar} aria-label="Close menu">×</button>
-
                 <div className="adm-logo">
                     <div className="adm-logo-title">Neurativo</div>
                     <span className="adm-logo-badge">Admin</span>
+                    <button className="adm-close-sidebar" onClick={closeSidebar} aria-label="Close menu">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
+                    </button>
                 </div>
 
                 <nav className="adm-nav">
@@ -192,15 +240,7 @@ export default function AdminLayout() {
                                     {icon}
                                     {label}
                                     {badge && feedbackUnread > 0 && (
-                                        <span style={{
-                                            marginLeft: 'auto',
-                                            background: '#2563eb', color: '#fff',
-                                            borderRadius: 99, fontSize: 10, fontWeight: 700,
-                                            padding: '1px 6px', lineHeight: '16px',
-                                            minWidth: 16, textAlign: 'center',
-                                        }}>
-                                            {feedbackUnread}
-                                        </span>
+                                        <span className="adm-nav-badge">{feedbackUnread}</span>
                                     )}
                                 </NavLink>
                             ))}
@@ -209,15 +249,17 @@ export default function AdminLayout() {
                 </nav>
 
                 <div className="adm-sidebar-footer">
-                    <div style={{ marginBottom: 6, fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div className="adm-sidebar-footer-email">
                         {user?.primaryEmailAddress?.emailAddress}
                     </div>
-                    <div
-                        style={{ cursor: 'pointer', fontSize: 11, transition: 'color 0.13s' }}
-                        className="adm-back"
-                        onClick={() => navigate('/app')}
-                    >
-                        ← Back to App
+                    <div className="adm-sidebar-footer-actions">
+                        <button className="adm-sidebar-footer-btn" onClick={() => navigate('/app')}>
+                            ← Back to App
+                        </button>
+                        <button className="adm-sidebar-footer-btn adm-sidebar-footer-signout"
+                            onClick={() => signOut(() => navigate('/'))}>
+                            Sign Out
+                        </button>
                     </div>
                 </div>
             </aside>
@@ -232,7 +274,7 @@ export default function AdminLayout() {
                         </svg>
                     </button>
 
-                    <div style={{ display: 'flex', alignItems: 'center', flex: 1, gap: 0, minWidth: 0 }}>
+                    <div className="adm-topbar-breadcrumb">
                         <span className="adm-topbar-title">Neurativo</span>
                         {pageLabel && (
                             <>
@@ -243,7 +285,7 @@ export default function AdminLayout() {
                     </div>
 
                     <span className="adm-topbar-email">{user?.primaryEmailAddress?.emailAddress}</span>
-                    <button className="adm-signout" onClick={() => signOut(() => navigate('/'))}>
+                    <button className="adm-signout adm-signout-desktop" onClick={() => signOut(() => navigate('/'))}>
                         Sign Out
                     </button>
                 </header>
@@ -252,6 +294,31 @@ export default function AdminLayout() {
                     <Outlet />
                 </div>
             </div>
+
+            {/* Bottom nav — mobile only */}
+            <nav className="adm-bottom-nav">
+                {BOTTOM_NAV.map(({ to, label, end, icon, badge }) => (
+                    <NavLink key={to} to={to} end={end} className="adm-bottom-nav-item">
+                        <span className="adm-bottom-nav-icon">
+                            {icon}
+                            {badge && feedbackUnread > 0 && (
+                                <span className="adm-bottom-nav-badge">{feedbackUnread > 9 ? '9+' : feedbackUnread}</span>
+                            )}
+                        </span>
+                        <span className="adm-bottom-nav-label">{label}</span>
+                    </NavLink>
+                ))}
+                <button className="adm-bottom-nav-item" onClick={() => setSidebarOpen(true)}>
+                    <span className="adm-bottom-nav-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <line x1="3" y1="6" x2="21" y2="6"/>
+                            <line x1="3" y1="12" x2="21" y2="12"/>
+                            <line x1="3" y1="18" x2="21" y2="18"/>
+                        </svg>
+                    </span>
+                    <span className="adm-bottom-nav-label">More</span>
+                </button>
+            </nav>
         </div>
     );
 }

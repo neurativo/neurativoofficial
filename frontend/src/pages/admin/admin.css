@@ -70,10 +70,14 @@ html.dark {
 }
 
 .adm-logo {
-    padding: 20px 18px 16px;
+    padding: 18px 18px 16px;
     border-bottom: 1px solid var(--adm-border);
     position: relative;
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
 }
 .adm-logo-title {
     font-size: 15px;
@@ -132,14 +136,50 @@ html.dark .adm-logo-badge { background: rgba(99,102,241,0.15); border-color: rgb
 .adm-nav a svg { opacity: 0.5; flex-shrink: 0; transition: opacity 0.13s; }
 .adm-nav a:hover svg { opacity: 0.75; }
 .adm-nav a.active svg { opacity: 1; }
+.adm-nav-badge {
+    margin-left: auto;
+    background: #2563eb;
+    color: #fff;
+    border-radius: 99px;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 6px;
+    line-height: 16px;
+    min-width: 16px;
+    text-align: center;
+}
 
 .adm-sidebar-footer {
-    padding: 12px 18px;
+    padding: 12px 18px 16px;
     border-top: 1px solid var(--adm-border);
-    font-size: 12px;
-    color: var(--adm-text-muted);
     flex-shrink: 0;
 }
+.adm-sidebar-footer-email {
+    font-size: 11px;
+    color: var(--adm-text-muted);
+    margin-bottom: 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.adm-sidebar-footer-actions {
+    display: flex;
+    gap: 6px;
+}
+.adm-sidebar-footer-btn {
+    background: none;
+    border: 1px solid var(--adm-border);
+    border-radius: 7px;
+    color: var(--adm-text-muted);
+    font-size: 11px;
+    padding: 5px 10px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: color 0.13s, border-color 0.13s;
+    white-space: nowrap;
+}
+.adm-sidebar-footer-btn:hover { color: var(--adm-text); border-color: var(--adm-border-hov); }
+.adm-sidebar-footer-signout { margin-left: auto; }
 
 .adm-main {
     flex: 1;
@@ -162,13 +202,22 @@ html.dark .adm-logo-badge { background: rgba(99,102,241,0.15); border-color: rgb
     top: 0;
     z-index: 50;
 }
-.adm-topbar-title {
+.adm-topbar-breadcrumb {
+    display: flex;
+    align-items: center;
     flex: 1;
+    min-width: 0;
+    gap: 0;
+    overflow: hidden;
+}
+.adm-topbar-title {
     font-size: 14px;
     font-weight: 600;
     color: var(--adm-text);
     font-family: 'Outfit', sans-serif;
     letter-spacing: -0.2px;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 .adm-topbar-page {
     font-size: 13px;
@@ -195,6 +244,7 @@ html.dark .adm-logo-badge { background: rgba(99,102,241,0.15); border-color: rgb
     white-space: nowrap;
 }
 .adm-signout:hover { border-color: var(--adm-border-hov); color: var(--adm-text); background: var(--adm-row-hover); }
+.adm-signout-desktop { /* hidden on mobile via responsive rules */ }
 
 .adm-content {
     flex: 1;
@@ -269,17 +319,17 @@ html.dark .adm-logo-badge { background: rgba(99,102,241,0.15); border-color: rgb
     background: none;
     border: none;
     cursor: pointer;
-    padding: 4px 8px;
+    padding: 6px;
     color: var(--adm-text-muted);
-    font-size: 20px;
-    position: absolute;
-    top: 12px;
-    right: 12px;
-    line-height: 1;
-    border-radius: 4px;
-    transition: color 0.13s;
+    border-radius: 7px;
+    transition: color 0.13s, background 0.13s;
+    margin-left: auto;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    line-height: 0;
 }
-.adm-close-sidebar:hover { color: var(--adm-text); }
+.adm-close-sidebar:hover { color: var(--adm-text); background: var(--adm-row-hover); }
 
 /* ── Page titles ─────────────────────────────────────────────── */
 
@@ -1011,6 +1061,21 @@ html.dark .adm-section-num { background: rgba(99,102,241,0.15); border-color: rg
 .adm-quick-action-label { font-weight: 500; font-size: 13px; }
 .adm-quick-action-sub { font-size: 11px; color: var(--adm-text-muted); }
 
+/* ── Quick actions grid ──────────────────────────────────────── */
+
+.adm-quick-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 24px;
+}
+
+/* ── Bottom navigation (mobile only) ────────────────────────── */
+
+.adm-bottom-nav {
+    display: none; /* shown only on mobile */
+}
+
 /* ── Responsive ──────────────────────────────────────────────── */
 
 @media (max-width: 960px) {
@@ -1023,45 +1088,166 @@ html.dark .adm-section-num { background: rgba(99,102,241,0.15); border-color: rg
 }
 
 @media (max-width: 768px) {
+    /* Sidebar */
     .adm-hamburger { display: flex; }
-    .adm-sidebar { transform: translateX(-100%); width: 240px; min-width: 240px; }
+    .adm-sidebar {
+        transform: translateX(-100%);
+        width: 270px;
+        min-width: 270px;
+        transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+                    box-shadow 0.28s ease;
+    }
     .adm-sidebar.open {
         transform: translateX(0);
-        box-shadow: 6px 0 40px rgba(0, 0, 0, 0.18);
+        box-shadow: 8px 0 48px rgba(0, 0, 0, 0.2);
     }
     .adm-overlay.open { display: block; }
-    .adm-close-sidebar { display: block; }
+    .adm-close-sidebar { display: flex; }
     .adm-main { margin-left: 0; }
-    .adm-content { padding: 16px 14px; }
-    .adm-topbar { padding: 0 14px; height: 50px; }
+
+    /* Topbar */
+    .adm-topbar { padding: 0 14px; height: 52px; gap: 10px; }
     .adm-topbar-email { display: none; }
-    .adm-topbar-page { display: none; }
+    .adm-signout-desktop { display: none; }
+    /* Show page label on mobile (hide brand "Neurativo" text, show page label) */
+    .adm-topbar-title { display: none; }
     .adm-topbar-sep { display: none; }
+    .adm-topbar-page {
+        display: block;
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--adm-text);
+        font-family: 'Outfit', sans-serif;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* Content */
+    .adm-content {
+        padding: 16px 14px;
+        padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+    }
+
+    /* Tables */
     .adm-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .adm-table { min-width: 520px; }
+
+    /* Cards */
     .adm-cards { grid-template-columns: repeat(2, 1fr); gap: 10px; }
     .adm-page-title { font-size: 18px; margin-bottom: 16px; }
     .adm-section-title { margin-top: 20px; }
+
+    /* Quick actions full-width on mobile */
+    .adm-quick-grid { grid-template-columns: 1fr; gap: 6px; }
+
+    /* Toolbar wrap */
+    .adm-toolbar { flex-wrap: wrap; gap: 8px; }
+    .adm-toolbar .adm-input-search { width: 100%; }
+
+    /* Modal → bottom sheet */
+    .adm-modal-overlay { align-items: flex-end; padding: 0; }
+    .adm-modal {
+        max-width: 100%;
+        width: 100%;
+        border-radius: 20px 20px 0 0;
+        padding: 24px 20px calc(24px + env(safe-area-inset-bottom, 0px));
+        animation: adm-sheet-in 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    @keyframes adm-sheet-in {
+        from { transform: translateY(100%); opacity: 0.6; }
+        to   { transform: translateY(0);    opacity: 1; }
+    }
+
+    /* Nav touch targets */
+    .adm-nav a { min-height: 44px; padding: 10px 18px; }
+
+    /* Bottom nav */
+    .adm-bottom-nav {
+        display: flex;
+        position: fixed;
+        bottom: 0; left: 0; right: 0;
+        height: calc(56px + env(safe-area-inset-bottom, 0px));
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+        background: var(--adm-topbar-bg);
+        border-top: 1px solid var(--adm-border);
+        z-index: 90;
+        align-items: stretch;
+    }
+    .adm-bottom-nav-item {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 3px;
+        text-decoration: none;
+        color: var(--adm-text-muted);
+        font-size: 10px;
+        font-weight: 500;
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-family: inherit;
+        padding: 0;
+        transition: color 0.15s;
+        -webkit-tap-highlight-color: transparent;
+        position: relative;
+    }
+    .adm-bottom-nav-item.active { color: var(--adm-text); }
+    .adm-bottom-nav-item.active .adm-bottom-nav-icon svg { opacity: 1; stroke: var(--adm-text); }
+    .adm-bottom-nav-item:active { background: var(--adm-row-hover); }
+    .adm-bottom-nav-icon {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+    }
+    .adm-bottom-nav-icon svg { opacity: 0.45; transition: opacity 0.15s; }
+    .adm-bottom-nav-item.active .adm-bottom-nav-icon svg { opacity: 1; }
+    .adm-bottom-nav-label { font-size: 10px; line-height: 1; }
+    .adm-bottom-nav-badge {
+        position: absolute;
+        top: -2px; right: -4px;
+        background: #2563eb;
+        color: #fff;
+        border-radius: 99px;
+        font-size: 9px;
+        font-weight: 700;
+        padding: 1px 4px;
+        min-width: 14px;
+        text-align: center;
+        line-height: 14px;
+        border: 1.5px solid var(--adm-topbar-bg);
+    }
 }
 
 @media (max-width: 500px) {
     .adm-cards { grid-template-columns: 1fr 1fr; gap: 8px; }
-    .adm-card-value { font-size: 24px; }
+    .adm-card-value { font-size: 22px; }
+    .adm-card { padding: 14px 14px; }
     .adm-stats-row { grid-template-columns: 1fr; }
     .adm-feat-label { width: 100px; }
     .adm-adopt-label { width: 110px; }
-    .adm-topbar-title { font-size: 13px; }
-    .adm-content { padding: 12px; }
+    .adm-content { padding: 12px 12px; padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)); }
+    .adm-page-title { font-size: 17px; }
+    .adm-table td, .adm-table th { padding: 8px 10px; }
+    .adm-btn, .adm-btn-ghost, .adm-btn-primary,
+    .adm-btn-danger, .adm-btn-warn { min-height: 40px; }
+    .adm-input, .adm-select, .adm-textarea { font-size: 16px; } /* prevent iOS zoom */
 }
 
-/* Table scroll hint on mobile */
+/* Table scroll gradient hint */
 @media (max-width: 640px) {
     .adm-table-wrap { position: relative; }
     .adm-table-wrap::after {
         content: '';
         position: absolute;
         top: 0; right: 0; bottom: 0;
-        width: 32px;
-        background: linear-gradient(to left, var(--adm-card), transparent);
+        width: 36px;
+        background: linear-gradient(to left, var(--adm-card) 30%, transparent);
         pointer-events: none;
         border-radius: 0 12px 12px 0;
     }
