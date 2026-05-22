@@ -1506,11 +1506,15 @@ function Footer() {
 export default function LandingPage({ user }) {
     const location = useLocation();
 
+    // When LandingPage is rendered at a section route (/features, /pricing etc.)
+    // the parent page (FeaturesPage etc.) already called useSEO with the right
+    // title/description. We only supply our own when we're at the root URL.
+    const isRoot = location.pathname === '/';
     useSEO({
-        title: null, // renders as "Neurativo — AI Education Platform" via useSEO default
-        description: 'Transforming education with intelligence. Neurativo captures live lectures and turns them into structured AI summaries, flashcards, quizzes, concept maps, and instant Q&A — the future of smarter learning. Free to start.',
-        canonicalPath: '/',
-        keywords: 'AI education platform, live lecture AI, AI learning platform, AI lecture notes, real-time lecture transcription, lecture summary generator, AI study tools, automatic lecture notes, student AI assistant, flashcard generator, exam prep AI, concept map AI',
+        title: isRoot ? null : undefined,  // null = use default "Neurativo — AI Education Platform"; undefined = don't overwrite
+        description: isRoot ? 'Transforming education with intelligence. Neurativo captures live lectures and turns them into structured AI summaries, flashcards, quizzes, concept maps, and instant Q&A — the future of smarter learning. Free to start.' : undefined,
+        canonicalPath: location.pathname,
+        keywords: isRoot ? 'AI education platform, live lecture AI, AI learning platform, AI lecture notes, real-time lecture transcription, lecture summary generator, AI study tools, automatic lecture notes, student AI assistant, flashcard generator, exam prep AI, concept map AI' : undefined,
     });
 
     // Pageview beacon
