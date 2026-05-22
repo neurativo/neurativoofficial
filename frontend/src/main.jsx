@@ -32,7 +32,7 @@ import AdminFeatureFlags from './pages/admin/AdminFeatureFlags.jsx';
 import AdminReleases from './pages/admin/AdminReleases.jsx';
 import FeedbackWidget from './components/FeedbackWidget.jsx';
 import WhatsNewModal from './components/WhatsNewModal.jsx';
-import { FeatureFlagsProvider } from './lib/featureFlags.js';
+import { FeatureFlagsProvider } from './lib/featureFlags.jsx';
 import CreditsPage from './pages/CreditsPage.jsx';
 import FeaturesPage from './pages/FeaturesPage.jsx';
 import PricingPage from './pages/PricingPage.jsx';
