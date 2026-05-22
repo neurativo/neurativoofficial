@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useClerk, useUser } from '@clerk/react';
-import { adminApi } from '../../lib/adminApi.js';
+import { adminApi, feedbackApi } from '../../lib/adminApi.js';
 import './admin.css';
 
 const NAV = [
@@ -72,20 +72,32 @@ const NAV = [
             <line x1="1" y1="10" x2="23" y2="10"/>
         </svg>
     )},
+    { to: '/admin/feedback', label: 'Feedback', icon: (
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+    )},
 ];
 
 export default function AdminLayout() {
     const { isLoaded, isSignedIn, user } = useUser();
     const { signOut } = useClerk();
     const navigate = useNavigate();
-    const [verified, setVerified] = useState(null);
-    const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [verified, setVerified]         = useState(null);
+    const [sidebarOpen, setSidebarOpen]   = useState(false);
+    const [feedbackUnread, setFeedbackUnread] = useState(0);
 
     useEffect(() => {
         if (!isLoaded) return;
         if (!isSignedIn) { navigate('/'); return; }
         adminApi.verify()
-            .then(() => setVerified(true))
+            .then(() => {
+                setVerified(true);
+                // Load unread feedback count once verified
+                feedbackApi.unreadCount()
+                    .then(r => setFeedbackUnread(r.count || 0))
+                    .catch(() => {});
+            })
             .catch(() => setVerified(false));
     }, [isLoaded, isSignedIn]);
 
@@ -128,7 +140,24 @@ export default function AdminLayout() {
                     <div className="adm-nav-section">Management</div>
                     {NAV.map(({ to, label, end, icon }) => (
                         <NavLink key={to} to={to} end={end} onClick={closeSidebar}>
-                            {icon}{label}
+                            {icon}
+                            {label}
+                            {label === 'Feedback' && feedbackUnread > 0 && (
+                                <span style={{
+                                    marginLeft: 'auto',
+                                    background: '#2563eb',
+                                    color: '#fff',
+                                    borderRadius: 99,
+                                    fontSize: 10,
+                                    fontWeight: 700,
+                                    padding: '1px 6px',
+                                    lineHeight: '16px',
+                                    minWidth: 16,
+                                    textAlign: 'center',
+                                }}>
+                                    {feedbackUnread}
+                                </span>
+                            )}
                         </NavLink>
                     ))}
                 </nav>

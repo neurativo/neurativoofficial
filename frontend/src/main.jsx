@@ -27,6 +27,8 @@ import AdminTeams from './pages/admin/AdminTeams.jsx';
 import AdminTeamDetail from './pages/admin/AdminTeamDetail.jsx';
 import AdminBeta from './pages/admin/AdminBeta.jsx';
 import AdminBilling from './pages/admin/AdminBilling.jsx';
+import AdminFeedback from './pages/admin/AdminFeedback.jsx';
+import FeedbackWidget from './components/FeedbackWidget.jsx';
 import CreditsPage from './pages/CreditsPage.jsx';
 import FeaturesPage from './pages/FeaturesPage.jsx';
 import PricingPage from './pages/PricingPage.jsx';
@@ -117,11 +119,11 @@ function Root() {
             <Route path="/terms"          element={<TermsOfService />} />
             <Route path="/privacy"        element={<PrivacyPolicy />} />
 
-            <Route path="/app"     element={<ProtectedRoute><Dashboard user={user} /></ProtectedRoute>} />
-            <Route path="/record"  element={<ProtectedRoute><App user={user} /></ProtectedRoute>} />
-            <Route path="/lecture/:id" element={<ProtectedRoute><LectureView user={user} /></ProtectedRoute>} />
-            <Route path="/profile" element={<ProtectedRoute><ProfilePage user={user} /></ProtectedRoute>} />
-            <Route path="/credits" element={<ProtectedRoute><CreditsPage /></ProtectedRoute>} />
+            <Route path="/app"     element={<ProtectedRoute><Dashboard user={user} /><FeedbackWidget /></ProtectedRoute>} />
+            <Route path="/record"  element={<ProtectedRoute><App user={user} /><FeedbackWidget /></ProtectedRoute>} />
+            <Route path="/lecture/:id" element={<ProtectedRoute><LectureView user={user} /><FeedbackWidget /></ProtectedRoute>} />
+            <Route path="/profile" element={<ProtectedRoute><ProfilePage user={user} /><FeedbackWidget /></ProtectedRoute>} />
+            <Route path="/credits" element={<ProtectedRoute><CreditsPage /><FeedbackWidget /></ProtectedRoute>} />
 
             <Route path="/admin" element={<AdminLayout />}>
                 <Route index element={<AdminDashboard />} />
@@ -137,7 +139,8 @@ function Root() {
                 <Route path="system" element={<AdminSystem />} />
                 <Route path="teams" element={<AdminTeams />} />
                 <Route path="teams/:slug" element={<AdminTeamDetail />} />
-                <Route path="billing" element={<AdminBilling />} />
+                <Route path="billing"  element={<AdminBilling />} />
+                <Route path="feedback" element={<AdminFeedback />} />
             </Route>
 
             <Route path="*" element={isLoaded ? <NotFoundPage /> : <Navigate to="/" replace />} />

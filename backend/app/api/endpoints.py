@@ -2136,3 +2136,40 @@ def semantic_search(request: Request, body: SearchRequest, user=Depends(get_acti
     scored.sort(key=lambda x: x["score"], reverse=True)
     return {"results": scored[:5]}
 
+
+# =============================================================================
+#  FEEDBACK
+# =============================================================================
+
+class FeedbackRequest(BaseModel):
+    type: str    = Field("general", pattern=r'^(bug|feature|general)$')
+    message: str = Field(..., min_length=3, max_length=1000)
+    page_path: str        = Field("", max_length=200)
+    lecture_id: str | None = Field(None)
+    rating: int | None    = Field(None, ge=1, le=5)
+
+
+@router.post("/feedback")
+@limiter.limit("10/hour")
+def submit_feedback(request: Request, body: FeedbackRequest, user=Depends(get_active_user)):
+    """
+    Saves user feedback submitted via the floating widget or post-lecture prompt.
+    Rate-limited to 10 submissions per hour per user.
+    """
+    from app.services.supabase_service import save_feedback
+    if body.lecture_id:
+        _validate_uuid(body.lecture_id)
+    try:
+        save_feedback(
+            user_id=str(user.id),
+            feedback_type=body.type,
+            message=body.message.strip(),
+            page_path=body.page_path,
+            lecture_id=body.lecture_id,
+            rating=body.rating,
+        )
+    except Exception as e:
+        print(f"[feedback] save error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save feedback")
+    return {"ok": True}
+

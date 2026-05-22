@@ -209,6 +209,64 @@ const CSS = `
   /* Loading */
   .lv-loading { display: flex; align-items: center; justify-content: center; height: 100%; font-size: 13px; color: ${C.muted}; }
 
+  /* Post-lecture rating card */
+  .lv-rate-card {
+    margin-top: 20px;
+    background: ${C.card};
+    border: 1px solid ${C.border};
+    border-radius: 16px;
+    padding: 18px 20px 16px;
+    animation: lv-card-in 0.3s ease both;
+  }
+  .lv-rate-title { font-size: 14px; font-weight: 600; color: ${C.text}; margin-bottom: 4px; }
+  .lv-rate-sub { font-size: 12px; color: ${C.muted}; margin-bottom: 14px; }
+  .lv-rate-stars { display: flex; gap: 5px; margin-bottom: 12px; }
+  .lv-rate-star {
+    font-size: 26px; cursor: pointer;
+    transition: transform 0.1s, filter 0.1s;
+    line-height: 1; background: none; border: none; padding: 0;
+    filter: grayscale(1) opacity(0.35);
+  }
+  .lv-rate-star.active, .lv-rate-star.hover { filter: none; transform: scale(1.12); }
+  .lv-rate-star.hover { transform: scale(1.18); }
+  .lv-rate-textarea {
+    width: 100%; padding: 9px 12px;
+    border: 1px solid ${C.border}; border-radius: 10px;
+    font-size: 12px; line-height: 1.6; color: ${C.text};
+    background: ${C.bg}; resize: none; outline: none;
+    font-family: 'Inter', sans-serif; box-sizing: border-box;
+    transition: border-color 0.15s;
+  }
+  .lv-rate-textarea:focus { border-color: ${C.borderHov}; }
+  .lv-rate-textarea::placeholder { color: ${C.muted}; }
+  .lv-rate-actions { display: flex; gap: 8px; margin-top: 10px; }
+  .lv-rate-skip {
+    padding: 7px 14px; font-size: 12px; font-weight: 500;
+    border: 1px solid ${C.border}; border-radius: 9px;
+    background: none; color: ${C.muted}; cursor: pointer;
+    font-family: inherit; transition: border-color 0.12s, color 0.12s;
+  }
+  .lv-rate-skip:hover { border-color: ${C.borderHov}; color: ${C.sec}; }
+  .lv-rate-submit {
+    padding: 7px 18px; font-size: 12px; font-weight: 600;
+    border: none; border-radius: 9px;
+    background: ${C.dark}; color: ${C.darkFg};
+    cursor: pointer; font-family: inherit;
+    transition: opacity 0.12s;
+  }
+  .lv-rate-submit:disabled { opacity: 0.35; cursor: not-allowed; }
+  .lv-rate-submit:not(:disabled):hover { opacity: 0.85; }
+  .lv-rate-thanks {
+    display: flex; align-items: center; gap: 10px;
+    padding: 14px 0 2px; font-size: 13px; color: ${C.sec};
+  }
+  .lv-rate-thanks-icon {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.25);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; flex-shrink: 0;
+  }
+
   /* Share modal */
   .lv-share-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 16px; animation: lv-chunk-in 0.15s ease; }
   .lv-share-box { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 20px; width: 100%; max-width: 420px; padding: 0; box-shadow: 0 12px 48px rgba(0,0,0,0.22); overflow: hidden; animation: lv-card-in 0.2s ease; }
@@ -1191,6 +1249,15 @@ export default function LectureView() {
     const [pastOpen, setPastOpen]           = useState(false);
     const [pastLoading, setPastLoading]     = useState(false);
 
+    // Post-lecture rating prompt
+    const [ratingValue, setRatingValue]     = useState(0);
+    const [ratingHover, setRatingHover]     = useState(0);
+    const [ratingMsg, setRatingMsg]         = useState('');
+    const [ratingSent, setRatingSent]       = useState(false);
+    const [ratingDismissed, setRatingDismissed] = useState(
+        () => !!localStorage.getItem(`feedback_rated_${id}`)
+    );
+
     useEffect(() => { trackPageview('lecture'); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
@@ -1748,6 +1815,76 @@ export default function LectureView() {
                                         );
                                     })()
                                 }
+
+                                {/* Post-lecture rating prompt — shown once per lecture after content loads */}
+                                {!ratingDismissed && !isProcessing && summaryStatus === 'final' &&
+                                 (conceptNoteCards.length > 0 || summarySections.length > 0) && (
+                                    <div className="lv-rate-card">
+                                        {ratingSent ? (
+                                            <div className="lv-rate-thanks">
+                                                <div className="lv-rate-thanks-icon">✓</div>
+                                                <span>Thanks! Your feedback helps us improve note quality.</span>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <div className="lv-rate-title">How were these notes?</div>
+                                                <div className="lv-rate-sub">Rate the quality of the AI-generated summary</div>
+                                                <div className="lv-rate-stars">
+                                                    {[1,2,3,4,5].map(n => (
+                                                        <button
+                                                            key={n}
+                                                            className={`lv-rate-star${ratingValue >= n ? ' active' : ''}${ratingHover >= n && ratingHover > 0 ? ' hover' : ''}`}
+                                                            onMouseEnter={() => setRatingHover(n)}
+                                                            onMouseLeave={() => setRatingHover(0)}
+                                                            onClick={() => setRatingValue(n)}
+                                                            aria-label={`${n} star${n > 1 ? 's' : ''}`}
+                                                        >
+                                                            ★
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                                {ratingValue > 0 && (
+                                                    <textarea
+                                                        className="lv-rate-textarea"
+                                                        rows={2}
+                                                        maxLength={500}
+                                                        placeholder={ratingValue >= 4 ? 'What did you like? (optional)' : 'What could be better? (optional)'}
+                                                        value={ratingMsg}
+                                                        onChange={e => setRatingMsg(e.target.value)}
+                                                    />
+                                                )}
+                                                <div className="lv-rate-actions">
+                                                    <button className="lv-rate-skip" onClick={() => {
+                                                        localStorage.setItem(`feedback_rated_${id}`, '1');
+                                                        setRatingDismissed(true);
+                                                    }}>
+                                                        Skip
+                                                    </button>
+                                                    <button
+                                                        className="lv-rate-submit"
+                                                        disabled={ratingValue === 0}
+                                                        onClick={async () => {
+                                                            localStorage.setItem(`feedback_rated_${id}`, '1');
+                                                            try {
+                                                                await api.post('/api/v1/feedback', {
+                                                                    type: 'general',
+                                                                    message: ratingMsg.trim() || `${ratingValue}-star rating`,
+                                                                    page_path: window.location.pathname,
+                                                                    lecture_id: id,
+                                                                    rating: ratingValue,
+                                                                });
+                                                            } catch { /* silent */ }
+                                                            setRatingSent(true);
+                                                            setTimeout(() => setRatingDismissed(true), 2500);
+                                                        }}
+                                                    >
+                                                        Submit
+                                                    </button>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         )}
 

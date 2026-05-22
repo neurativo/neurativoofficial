@@ -1023,3 +1023,51 @@ async def get_costs_beta(
 ):
     """Cost breakdown for beta testers only."""
     return _beta_costs(days=days)
+
+
+# ---------------------------------------------------------------------------
+# Feedback
+# ---------------------------------------------------------------------------
+
+class FeedbackStatusUpdate(BaseModel):
+    status: str  # "new" | "read" | "done"
+
+
+@router.get("/feedback")
+async def admin_list_feedback(
+    limit:  int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    type:   str = Query(None),
+    status: str = Query(None),
+    admin: User = Depends(get_admin_user),
+):
+    """Returns all user feedback, newest first. Filterable by type and status."""
+    from app.services.supabase_service import get_feedback_list, get_feedback_unread_count
+    rows = get_feedback_list(limit=limit, offset=offset, feedback_type=type or None, status=status or None)
+    unread = get_feedback_unread_count()
+    return {"feedback": rows, "unread_count": unread, "total": len(rows)}
+
+
+@router.get("/feedback/unread-count")
+async def admin_feedback_unread_count(admin: User = Depends(get_admin_user)):
+    """Returns the count of unread (status='new') feedback items."""
+    from app.services.supabase_service import get_feedback_unread_count
+    return {"count": get_feedback_unread_count()}
+
+
+@router.patch("/feedback/{feedback_id}")
+async def admin_update_feedback(
+    feedback_id: str,
+    body: FeedbackStatusUpdate,
+    admin: User = Depends(get_admin_user),
+):
+    """Updates the status of a feedback item (new → read → done)."""
+    if body.status not in ("new", "read", "done"):
+        raise HTTPException(status_code=400, detail="Invalid status")
+    from app.services.supabase_service import update_feedback_status
+    try:
+        update_feedback_status(feedback_id, body.status)
+        return {"ok": True}
+    except Exception as e:
+        print(f"[admin/feedback] update error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update feedback")

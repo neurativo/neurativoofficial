@@ -190,3 +190,12 @@ export const betaApi = {
     listBetaFeedback:    (page = 1, pageSize = 20) => _betaGet('/admin/feedback', { page, page_size: pageSize }),
     getBetaStats:        ()                  => _betaGet('/admin/stats'),
 };
+
+/**
+ * User Feedback API helpers — /api/v1/admin/feedback
+ */
+export const feedbackApi = {
+    list:         (params = {})             => _get('/feedback', params),
+    unreadCount:  ()                        => _get('/feedback/unread-count'),
+    updateStatus: (id, status)              => _patch(`/feedback/${id}`, { status }),
+};

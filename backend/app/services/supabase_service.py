@@ -1985,6 +1985,72 @@ def delete_announcement(announcement_id: int) -> None:
     supabase.table("announcements").delete().eq("id", announcement_id).execute()
 
 
+# ── User Feedback ──────────────────────────────────────────────────────────────
+
+def save_feedback(
+    user_id: str,
+    feedback_type: str,
+    message: str,
+    page_path: str = "",
+    lecture_id: str | None = None,
+    rating: int | None = None,
+) -> dict:
+    """Inserts a user feedback row. Returns the inserted row."""
+    db = _fresh_db()
+    row: dict = {
+        "user_id": user_id,
+        "type": feedback_type,
+        "message": message,
+        "page_path": page_path,
+        "status": "new",
+    }
+    if lecture_id:
+        row["lecture_id"] = lecture_id
+    if rating is not None:
+        row["rating"] = rating
+    resp = db.table("feedback").insert(row).execute()
+    return resp.data[0] if resp.data else {}
+
+
+def get_feedback_list(
+    limit: int = 50,
+    offset: int = 0,
+    feedback_type: str | None = None,
+    status: str | None = None,
+) -> list:
+    """Returns feedback rows newest-first with optional filters."""
+    db = _fresh_db()
+    q = db.table("feedback").select("*")
+    if feedback_type:
+        q = q.eq("type", feedback_type)
+    if status:
+        q = q.eq("status", status)
+    resp = q.order("created_at", desc=True).limit(limit).offset(offset).execute()
+    return resp.data or []
+
+
+def update_feedback_status(feedback_id: str, new_status: str) -> dict:
+    """Updates the status of a single feedback row."""
+    db = _fresh_db()
+    resp = (
+        db.table("feedback")
+        .update({"status": new_status})
+        .eq("id", feedback_id)
+        .execute()
+    )
+    return resp.data[0] if resp.data else {}
+
+
+def get_feedback_unread_count() -> int:
+    """Returns the count of feedback rows with status='new'."""
+    try:
+        db = _fresh_db()
+        resp = db.table("feedback").select("id", count="exact").eq("status", "new").execute()
+        return resp.count or 0
+    except Exception:
+        return 0
+
+
 # ── Content save helpers ───────────────────────────────────────────────────────
 
 def save_generated_content(lecture_id: str, content: dict) -> None:
