@@ -180,9 +180,15 @@ def _btn(text: str, url: str, bg: str = "#1a1a1a") -> str:
 
 
 def _row(icon: str, label: str, value: str) -> str:
-    return (f'<tr><td style="padding:9px 14px;border-bottom:1px solid #f5f4f1;font-size:13px;color:#6b6b6b;">'
-            f'{icon}&nbsp; {label}'
-            f'<span style="float:right;font-weight:600;color:#1a1a1a;">{value}</span></td></tr>')
+    # Use nested table instead of float:right — float is ignored in Gmail
+    return (
+        f'<tr><td style="padding:0;border-bottom:1px solid #f5f4f1;">'
+        f'<table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>'
+        f'<td style="padding:9px 14px;font-size:13px;color:#6b6b6b;">{icon}&nbsp; {label}</td>'
+        f'<td align="right" style="padding:9px 14px;font-size:13px;font-weight:600;color:#1a1a1a;white-space:nowrap;">{value}</td>'
+        f'</tr></table>'
+        f'</td></tr>'
+    )
 
 
 def _info_table(rows_html: str) -> str:
