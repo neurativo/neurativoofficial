@@ -8,9 +8,10 @@ from pydantic import BaseModel
 
 from app.core.auth import get_active_user, get_admin_user
 from app.core.config import settings
-from app.services import dodo_service, supabase_service
+from app.services import dodo_service, supabase_service, email_service
 from app.services.credits_service import (
     PRODUCTS as CREDIT_PRODUCTS,
+    PLAN_MONTHLY_CREDITS,
     complete_purchase_intent,
     create_credits_purchase_intent,
     grant_plan_credits,
@@ -537,13 +538,21 @@ async def webhook(
 
         if p_user_id and p_product:
             try:
-                complete_purchase_intent(
+                granted = complete_purchase_intent(
                     payment_id=payment_id,
                     session_id=p_session_id,
                     intent_id=p_intent_id,
                     user_id=p_user_id,
                     product=p_product,
                 )
+                if granted:
+                    product_info = CREDIT_PRODUCTS.get(p_product, {})
+                    email_service.send_credits_purchased_for_user(
+                        user_id=p_user_id,
+                        pack_label=product_info.get("label", p_product),
+                        credits=product_info.get("credits", 0),
+                        price_usd=product_info.get("price_usd", 0.0),
+                    )
             except Exception as e:
                 print(f"[billing] complete_purchase_intent error: {e}")
         else:
@@ -562,12 +571,16 @@ async def webhook(
             period_end=next_billing_date,
         )
         print(f"[billing] activated: user={user_id} plan={plan_tier} event={event_type}")
-        # Grant monthly credits on both new activation and renewal (monthly refresh).
-        # period_end (next_billing_date) is used as a deduplication key so retried
-        # webhooks for the same billing cycle never double-grant credits.
         if plan_tier:
             try:
-                grant_plan_credits(user_id, plan_tier, period_end=next_billing_date)
+                granted = grant_plan_credits(user_id, plan_tier, period_end=next_billing_date)
+                if granted:
+                    if event_type == "subscription.active":
+                        email_service.send_plan_upgraded_for_user(user_id, plan_tier)
+                    else:
+                        email_service.send_credits_refreshed_for_user(
+                            user_id, plan_tier, PLAN_MONTHLY_CREDITS.get(plan_tier, 0)
+                        )
             except Exception as e:
                 print(f"[billing] grant_plan_credits error (non-fatal): {e}")
 
@@ -581,10 +594,10 @@ async def webhook(
             status="active",
             period_end=next_billing_date,
         )
-        # Grant credits for the new plan on upgrade (idempotent via period_end key)
         if plan_tier:
             try:
                 grant_plan_credits(user_id, plan_tier, period_end=next_billing_date)
+                email_service.send_plan_upgraded_for_user(user_id, plan_tier)
             except Exception as e:
                 print(f"[billing] grant_plan_credits (plan_changed) error (non-fatal): {e}")
 
@@ -597,10 +610,9 @@ async def webhook(
             status=event_type.split(".")[1],
         )
         print(f"[billing] downgraded to free: user={user_id} event={event_type}")
+        email_service.send_plan_downgraded_for_user(user_id)
 
     elif event_type == "subscription.on_hold":
-        # on_hold means payment failed — downgrade to free immediately so
-        # the user doesn't retain paid features while the subscription is unpaid.
         supabase_service.set_user_plan(user_id, "free")
         supabase_service.save_dodo_subscription(
             user_id=user_id,
@@ -609,6 +621,7 @@ async def webhook(
             status="on_hold",
         )
         print(f"[billing] on_hold: downgraded user={user_id} to free")
+        email_service.send_subscription_payment_failed_for_user(user_id)
 
     elif event_type == "subscription.failed":
         supabase_service.save_dodo_subscription(

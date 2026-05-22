@@ -68,7 +68,18 @@ def update_job_status(lecture_id: str, status: str, error: str | None = None) ->
         }
         if error:
             update["error"] = error[:500]   # cap error message length
-        _fresh_db().table("processing_jobs").update(update).eq("lecture_id", lecture_id).execute()
+        db = _fresh_db()
+        db.table("processing_jobs").update(update).eq("lecture_id", lecture_id).execute()
+
+        if status == "done":
+            try:
+                job_resp = db.table("processing_jobs").select("user_id").eq("lecture_id", lecture_id).limit(1).execute()
+                user_id = (job_resp.data[0].get("user_id") or "") if job_resp.data else ""
+                if user_id:
+                    from app.services.email_service import send_lecture_ready_for_job
+                    send_lecture_ready_for_job(lecture_id, user_id)
+            except Exception as e:
+                print(f"[job_queue] lecture ready email error (non-fatal): {e}")
     except Exception as e:
         print(f"[job_queue] update_job_status failed (non-fatal): {e}")
 

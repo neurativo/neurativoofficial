@@ -182,6 +182,15 @@ def _deduct_amount(user_id: str, lecture_id: str, amount: int, reason: str = "le
         reason=reason,
         lecture_id=lecture_id,
     )
+
+    # Send low-credits warning email once when balance crosses the threshold of 2
+    if current > 2 and new_balance <= 2:
+        try:
+            from app.services.email_service import send_low_credits_for_user
+            send_low_credits_for_user(user_id, new_balance)
+        except Exception:
+            pass
+
     return new_balance
 
 
@@ -358,10 +367,20 @@ def maybe_grant_starter(user_id: str, email: str = "", email_verified: bool = Fa
             },
         ).execute()
         if isinstance(resp.data, bool):
-            return resp.data
-        if isinstance(resp.data, list) and resp.data:
-            return bool(resp.data[0])
-        return bool(resp.data)
+            granted = resp.data
+        elif isinstance(resp.data, list) and resp.data:
+            granted = bool(resp.data[0])
+        else:
+            granted = bool(resp.data)
+
+        if granted:
+            try:
+                from app.services.email_service import send_welcome_for_user
+                send_welcome_for_user(user_id)
+            except Exception:
+                pass
+
+        return granted
     except Exception as e:
         raise Exception(f"Starter credit RPC failed: {e}")
 
