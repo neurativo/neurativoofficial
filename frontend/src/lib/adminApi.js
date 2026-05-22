@@ -199,3 +199,32 @@ export const feedbackApi = {
     unreadCount:  ()                        => _get('/feedback/unread-count'),
     updateStatus: (id, status)              => _patch(`/feedback/${id}`, { status }),
 };
+
+// Internal helper: POST with JSON body (not params)
+async function _postBody(path, body = {}) {
+    const token = await _token();
+    const res = await axios.post(BASE + path, body, { headers: _headers(token) });
+    return res.data;
+}
+
+/**
+ * Feature Flags API helpers — /api/v1/admin/feature-flags
+ */
+export const featureFlagsApi = {
+    list:   ()                => _get('/feature-flags'),
+    create: (body)            => _postBody('/feature-flags', body),
+    update: (key, body)       => _patch(`/feature-flags/${key}`, body),
+    delete: (key)             => _delete(`/feature-flags/${key}`),
+};
+
+/**
+ * Feature Releases (What's New) API helpers — /api/v1/admin/releases
+ */
+export const releasesApi = {
+    list:      ()             => _get('/releases'),
+    create:    (body)         => _postBody('/releases', body),
+    update:    (id, body)     => _patch(`/releases/${id}`, body),
+    publish:   (id)           => _postBody(`/releases/${id}/publish`),
+    unpublish: (id)           => _postBody(`/releases/${id}/unpublish`),
+    delete:    (id)           => _delete(`/releases/${id}`),
+};

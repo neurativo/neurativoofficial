@@ -28,7 +28,11 @@ import AdminTeamDetail from './pages/admin/AdminTeamDetail.jsx';
 import AdminBeta from './pages/admin/AdminBeta.jsx';
 import AdminBilling from './pages/admin/AdminBilling.jsx';
 import AdminFeedback from './pages/admin/AdminFeedback.jsx';
+import AdminFeatureFlags from './pages/admin/AdminFeatureFlags.jsx';
+import AdminReleases from './pages/admin/AdminReleases.jsx';
 import FeedbackWidget from './components/FeedbackWidget.jsx';
+import WhatsNewModal from './components/WhatsNewModal.jsx';
+import { FeatureFlagsProvider } from './lib/featureFlags.js';
 import CreditsPage from './pages/CreditsPage.jsx';
 import FeaturesPage from './pages/FeaturesPage.jsx';
 import PricingPage from './pages/PricingPage.jsx';
@@ -119,11 +123,11 @@ function Root() {
             <Route path="/terms"          element={<TermsOfService />} />
             <Route path="/privacy"        element={<PrivacyPolicy />} />
 
-            <Route path="/app"     element={<ProtectedRoute><Dashboard user={user} /><FeedbackWidget /></ProtectedRoute>} />
-            <Route path="/record"  element={<ProtectedRoute><App user={user} /><FeedbackWidget /></ProtectedRoute>} />
-            <Route path="/lecture/:id" element={<ProtectedRoute><LectureView user={user} /><FeedbackWidget /></ProtectedRoute>} />
-            <Route path="/profile" element={<ProtectedRoute><ProfilePage user={user} /><FeedbackWidget /></ProtectedRoute>} />
-            <Route path="/credits" element={<ProtectedRoute><CreditsPage /><FeedbackWidget /></ProtectedRoute>} />
+            <Route path="/app"     element={<ProtectedRoute><FeatureFlagsProvider enabled={!!user}><Dashboard user={user} /><FeedbackWidget /><WhatsNewModal /></FeatureFlagsProvider></ProtectedRoute>} />
+            <Route path="/record"  element={<ProtectedRoute><FeatureFlagsProvider enabled={!!user}><App user={user} /><FeedbackWidget /></FeatureFlagsProvider></ProtectedRoute>} />
+            <Route path="/lecture/:id" element={<ProtectedRoute><FeatureFlagsProvider enabled={!!user}><LectureView user={user} /><FeedbackWidget /><WhatsNewModal /></FeatureFlagsProvider></ProtectedRoute>} />
+            <Route path="/profile" element={<ProtectedRoute><FeatureFlagsProvider enabled={!!user}><ProfilePage user={user} /><FeedbackWidget /><WhatsNewModal /></FeatureFlagsProvider></ProtectedRoute>} />
+            <Route path="/credits" element={<ProtectedRoute><FeatureFlagsProvider enabled={!!user}><CreditsPage /><FeedbackWidget /></FeatureFlagsProvider></ProtectedRoute>} />
 
             <Route path="/admin" element={<AdminLayout />}>
                 <Route index element={<AdminDashboard />} />
@@ -141,6 +145,8 @@ function Root() {
                 <Route path="teams/:slug" element={<AdminTeamDetail />} />
                 <Route path="billing"  element={<AdminBilling />} />
                 <Route path="feedback" element={<AdminFeedback />} />
+                <Route path="feature-flags" element={<AdminFeatureFlags />} />
+                <Route path="releases" element={<AdminReleases />} />
             </Route>
 
             <Route path="*" element={isLoaded ? <NotFoundPage /> : <Navigate to="/" replace />} />

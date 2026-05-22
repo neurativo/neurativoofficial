@@ -1071,3 +1071,150 @@ async def admin_update_feedback(
     except Exception as e:
         print(f"[admin/feedback] update error: {e}")
         raise HTTPException(status_code=500, detail="Failed to update feedback")
+
+
+# =============================================================================
+#  FEATURE FLAGS  (admin CRUD)
+# =============================================================================
+
+from app.services.feature_flags_service import (
+    get_all_flags,
+    create_flag,
+    update_flag,
+    delete_flag,
+    get_all_releases,
+    create_release,
+    update_release,
+    publish_release,
+    unpublish_release,
+    delete_release,
+    get_release_stats,
+)
+
+
+class CreateFlagRequest(BaseModel):
+    key:              str
+    name:             str
+    description:      str  = ""
+    visibility:       str  = "internal"
+    enabled:          bool = False
+    allowed_user_ids: list = []
+
+
+class UpdateFlagRequest(BaseModel):
+    name:             Optional[str]  = None
+    description:      Optional[str]  = None
+    visibility:       Optional[str]  = None
+    enabled:          Optional[bool] = None
+    allowed_user_ids: Optional[list] = None
+
+
+@router.get("/feature-flags")
+async def admin_list_flags(admin: User = Depends(get_admin_user)):
+    return {"flags": get_all_flags()}
+
+
+@router.post("/feature-flags")
+async def admin_create_flag(body: CreateFlagRequest, admin: User = Depends(get_admin_user)):
+    if body.visibility not in ("internal", "beta", "public"):
+        raise HTTPException(400, "visibility must be internal|beta|public")
+    flag = create_flag(
+        key=body.key,
+        name=body.name,
+        description=body.description,
+        visibility=body.visibility,
+        enabled=body.enabled,
+        allowed_user_ids=body.allowed_user_ids,
+    )
+    _audit(admin.id, "create_feature_flag", body.key)
+    return {"flag": flag}
+
+
+@router.patch("/feature-flags/{key}")
+async def admin_update_flag(key: str, body: UpdateFlagRequest, admin: User = Depends(get_admin_user)):
+    fields = {k: v for k, v in body.model_dump().items() if v is not None}
+    if "visibility" in fields and fields["visibility"] not in ("internal", "beta", "public"):
+        raise HTTPException(400, "visibility must be internal|beta|public")
+    flag = update_flag(key, **fields)
+    _audit(admin.id, "update_feature_flag", key, str(fields))
+    return {"flag": flag}
+
+
+@router.delete("/feature-flags/{key}")
+async def admin_delete_flag(key: str, admin: User = Depends(get_admin_user)):
+    delete_flag(key)
+    _audit(admin.id, "delete_feature_flag", key)
+    return {"ok": True}
+
+
+# =============================================================================
+#  FEATURE RELEASES — What's New  (admin CRUD)
+# =============================================================================
+
+class CreateReleaseRequest(BaseModel):
+    title:        str
+    subtitle:     str  = ""
+    features:     list = []
+    cta_label:    str  = "Start exploring"
+    cta_url:      str  = ""
+    target_plans: list = []
+
+
+class UpdateReleaseRequest(BaseModel):
+    title:        Optional[str]  = None
+    subtitle:     Optional[str]  = None
+    features:     Optional[list] = None
+    cta_label:    Optional[str]  = None
+    cta_url:      Optional[str]  = None
+    target_plans: Optional[list] = None
+
+
+@router.get("/releases")
+async def admin_list_releases(admin: User = Depends(get_admin_user)):
+    releases = get_all_releases()
+    for rel in releases:
+        rel["stats"] = get_release_stats(rel["id"])
+    return {"releases": releases}
+
+
+@router.post("/releases")
+async def admin_create_release(body: CreateReleaseRequest, admin: User = Depends(get_admin_user)):
+    rel = create_release(
+        title=body.title,
+        subtitle=body.subtitle,
+        features=body.features,
+        cta_label=body.cta_label,
+        cta_url=body.cta_url,
+        target_plans=body.target_plans,
+    )
+    _audit(admin.id, "create_release", rel.get("id", ""), body.title)
+    return {"release": rel}
+
+
+@router.patch("/releases/{release_id}")
+async def admin_update_release(release_id: str, body: UpdateReleaseRequest, admin: User = Depends(get_admin_user)):
+    fields = {k: v for k, v in body.model_dump().items() if v is not None}
+    rel = update_release(release_id, **fields)
+    _audit(admin.id, "update_release", release_id)
+    return {"release": rel}
+
+
+@router.post("/releases/{release_id}/publish")
+async def admin_publish_release(release_id: str, admin: User = Depends(get_admin_user)):
+    rel = publish_release(release_id)
+    _audit(admin.id, "publish_release", release_id)
+    return {"release": rel}
+
+
+@router.post("/releases/{release_id}/unpublish")
+async def admin_unpublish_release(release_id: str, admin: User = Depends(get_admin_user)):
+    rel = unpublish_release(release_id)
+    _audit(admin.id, "unpublish_release", release_id)
+    return {"release": rel}
+
+
+@router.delete("/releases/{release_id}")
+async def admin_delete_release(release_id: str, admin: User = Depends(get_admin_user)):
+    delete_release(release_id)
+    _audit(admin.id, "delete_release", release_id)
+    return {"ok": True}

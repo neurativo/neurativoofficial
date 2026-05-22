@@ -108,6 +108,7 @@ from app.services.supabase_service import (
 from app.services.trust_service import enrich_lecture_payload, sanitize_generated_content_bundle
 from app.services.exam_prep_service import generate_exam_prep
 from app.services.concept_map_service import generate_concept_map
+from app.services.feature_flags_service import get_flags_for_user, get_unseen_releases, dismiss_release
 from app.services.supabase_service import (
     save_exam_prep,
     get_exam_prep,
@@ -2171,5 +2172,48 @@ def submit_feedback(request: Request, body: FeedbackRequest, user=Depends(get_ac
     except Exception as e:
         print(f"[feedback] save error: {e}")
         raise HTTPException(status_code=500, detail="Failed to save feedback")
+    return {"ok": True}
+
+
+# =============================================================================
+#  FEATURE FLAGS
+# =============================================================================
+
+@router.get("/feature-flags")
+def user_feature_flags(user=Depends(get_active_user)):
+    """
+    Returns {flags: {key: bool}} for the current user.
+    Frontend fetches this once on auth and stores in context.
+    """
+    is_admin = str(user.id) in settings.ADMIN_USER_IDS
+    flags = get_flags_for_user(str(user.id), is_admin=is_admin)
+    return {"flags": flags}
+
+
+# =============================================================================
+#  FEATURE RELEASES (What's New)
+# =============================================================================
+
+@router.get("/releases/unseen")
+def unseen_releases(user=Depends(get_active_user)):
+    """
+    Returns published feature releases this user hasn't dismissed yet.
+    Used by the What's New modal.
+    """
+    from app.services.supabase_service import get_user_plan
+    plan = get_user_plan(str(user.id)) or "free"
+    releases = get_unseen_releases(str(user.id), user_plan=plan)
+    return {"releases": releases}
+
+
+@router.post("/releases/{release_id}/dismiss")
+@limiter.limit("60/hour")
+def dismiss_release_endpoint(release_id: str, request: Request, user=Depends(get_active_user)):
+    """Mark a release as dismissed for this user — never shown again."""
+    _validate_uuid(release_id)
+    try:
+        dismiss_release(str(user.id), release_id)
+    except Exception as e:
+        print(f"[releases/dismiss] error: {e}")
     return {"ok": True}
 
