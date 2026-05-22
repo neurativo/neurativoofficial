@@ -8,6 +8,12 @@ function fmtDate(iso) {
     return new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+function fmtDuration(secs) {
+    if (!secs) return '—';
+    const m = Math.floor(secs / 60);
+    return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60}m`;
+}
+
 function timeSince(iso) {
     if (!iso) return '—';
     const diff = Math.floor((Date.now() - new Date(iso)) / 1000);
@@ -67,18 +73,19 @@ export default function AdminSessions() {
                             <th>User ID</th>
                             <th>Started</th>
                             <th>Last Chunk</th>
-                            <th>Session ID</th>
+                            <th>Duration</th>
+                            <th>Chunks</th>
                         </tr>
                     </thead>
                     <tbody>
                         {loading && !sessions.length && (
-                            <tr><td colSpan={6} className="adm-empty">Loading…</td></tr>
+                            <tr><td colSpan={7} className="adm-empty">Loading…</td></tr>
                         )}
                         {!loading && !sessions.length && (
-                            <tr><td colSpan={6} className="adm-empty">No sessions found.</td></tr>
+                            <tr><td colSpan={7} className="adm-empty">No sessions found.</td></tr>
                         )}
                         {sessions.map(s => (
-                            <tr key={s.id}>
+                            <tr key={s.id} className="adm-tr-hover">
                                 <td>
                                     {s.is_active
                                         ? <span className="adm-badge-active"><span className="adm-pulse" />Active</span>
@@ -95,17 +102,16 @@ export default function AdminSessions() {
                                 <td
                                     className="adm-link-cell"
                                     onClick={() => s.user_id && navigate(`/admin/users/${s.user_id}`)}
-                                    style={{ fontFamily: 'monospace', fontSize: 11, color: s.user_id ? '#6366f1' : '#d1d5db' }}
+                                    style={{ fontFamily: 'monospace', fontSize: 11, color: s.user_id ? '#6366f1' : 'var(--adm-text-muted)' }}
                                 >
                                     {s.user_id ? s.user_id.slice(0, 16) + '…' : '—'}
                                 </td>
                                 <td style={{ fontSize: 12 }}>{fmtDate(s.created_at)}</td>
-                                <td style={{ fontSize: 12, color: s.is_active ? '#16a34a' : '#a3a3a3' }}>
+                                <td style={{ fontSize: 12, color: s.is_active ? '#16a34a' : 'var(--adm-text-muted)' }}>
                                     {timeSince(s.last_chunk_at)}
                                 </td>
-                                <td style={{ fontFamily: 'monospace', fontSize: 10, color: '#c4c4c4' }}>
-                                    {s.id?.slice(0, 12)}…
-                                </td>
+                                <td style={{ fontSize: 12 }}>{fmtDuration(s.total_duration_seconds)}</td>
+                                <td style={{ fontSize: 12 }}>{s.total_chunks || '—'}</td>
                             </tr>
                         ))}
                     </tbody>

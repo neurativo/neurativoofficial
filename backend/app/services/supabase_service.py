@@ -1887,15 +1887,19 @@ def admin_list_sessions(page: int = 1, page_size: int = 20) -> dict:
         ).order("created_at", desc=True).range(offset, offset + page_size - 1).execute()
         sessions = resp.data or []
 
-        # Attach lecture title for context
+        # Attach lecture title, duration, chunk count for context
         if sessions:
             lec_ids = list({s["lecture_id"] for s in sessions if s.get("lecture_id")})
-            lec_resp = supabase.table("lectures").select("id, title, user_id").in_("id", lec_ids).execute()
+            lec_resp = supabase.table("lectures").select(
+                "id, title, user_id, total_chunks, total_duration_seconds"
+            ).in_("id", lec_ids).execute()
             lec_map = {l["id"]: l for l in (lec_resp.data or [])}
             for s in sessions:
                 lec = lec_map.get(s.get("lecture_id"), {})
                 s["lecture_title"] = lec.get("title") or "Untitled"
                 s["user_id"] = lec.get("user_id")
+                s["total_chunks"] = lec.get("total_chunks") or 0
+                s["total_duration_seconds"] = lec.get("total_duration_seconds") or 0
 
         return {"sessions": sessions, "total": resp.count or 0, "page": page, "page_size": page_size}
     except Exception as e:
