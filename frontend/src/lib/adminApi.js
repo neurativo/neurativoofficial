@@ -77,6 +77,8 @@ export const adminApi = {
     getCostsOverview:  (days = 30)             => _get('/costs/overview', { days }),
     getCostsPerUser:   (days = 30, page = 1, pageSize = 50) => _get('/costs/per-user', { days, page, page_size: pageSize }),
     getCostsBeta:      (days = 30)             => _get('/costs/beta', { days }),
+    getCostsFinancial: (days = 30)             => _get('/costs/financial', { days }),
+    getCostsUserDetail:(userId, days = 30)     => _get(`/costs/user/${userId}`, { days }),
     listAnnouncements:   ()                    => _get('/announcements'),
     createAnnouncement: async (body) => {
         const token = await _token();

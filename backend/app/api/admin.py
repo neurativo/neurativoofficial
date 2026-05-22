@@ -1025,6 +1025,175 @@ async def get_costs_beta(
     return _beta_costs(days=days)
 
 
+def _cost_financial(days: int = 30) -> dict:
+    """
+    Financial overview: actual AI costs + actual credit-pack revenue +
+    subscription MRR snapshot + gross profit per plan tier.
+    All figures are real data — nothing estimated except where labeled.
+    """
+    try:
+        from datetime import timedelta
+        sb = _sb_client()
+        if not sb:
+            return {}
+        since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+
+        # ── 1. AI costs (actual, from api_cost_logs) ──────────────────────────
+        cost_res = sb.table("api_cost_logs") \
+            .select("cost_usd,plan_tier") \
+            .gte("created_at", since).execute()
+        cost_rows = cost_res.data or []
+        total_ai_cost = sum(r.get("cost_usd") or 0.0 for r in cost_rows)
+        ai_by_plan: dict = {}
+        for r in cost_rows:
+            plan = r.get("plan_tier") or "free"
+            ai_by_plan[plan] = round(ai_by_plan.get(plan, 0.0) + (r.get("cost_usd") or 0.0), 8)
+
+        # ── 2. Credit-pack revenue (actual completed purchases in period) ──────
+        pack_res = sb.table("purchase_intents") \
+            .select("price_usd,product,user_id") \
+            .eq("status", "completed") \
+            .gte("created_at", since).execute()
+        pack_rows = pack_res.data or []
+        credit_revenue = sum(r.get("price_usd") or 0.0 for r in pack_rows)
+        credit_by_product: dict = {}
+        for r in pack_rows:
+            prod = r.get("product") or "unknown"
+            credit_by_product[prod] = credit_by_product.get(prod, 0) + 1
+
+        # ── 3. Subscription MRR — current active subscribers snapshot ──────────
+        PLAN_PRICES = {"student": 9.99, "pro": 19.99}
+        sub_res = sb.table("user_subscriptions") \
+            .select("plan_tier") \
+            .in_("subscription_status", ["active", "renewed"]).execute()
+        sub_counts: dict = {"student": 0, "pro": 0}
+        for r in (sub_res.data or []):
+            tier = r.get("plan_tier", "")
+            if tier in sub_counts:
+                sub_counts[tier] += 1
+        mrr_usd = round(sub_counts["student"] * PLAN_PRICES["student"] +
+                        sub_counts["pro"]    * PLAN_PRICES["pro"], 2)
+
+        # ── 4. User counts by plan (current state from profiles) ───────────────
+        profile_res = sb.table("profiles").select("plan_tier").execute()
+        plan_user_counts: dict = {"free": 0, "student": 0, "pro": 0}
+        for r in (profile_res.data or []):
+            tier = r.get("plan_tier") or "free"
+            if tier in plan_user_counts:
+                plan_user_counts[tier] += 1
+
+        # ── 5. Totals + profit ─────────────────────────────────────────────────
+        # Revenue = actual credit packs + MRR estimate (subscription)
+        total_revenue_usd = round(credit_revenue + mrr_usd, 2)
+        gross_profit_usd  = round(total_revenue_usd - total_ai_cost, 2)
+        margin_pct = round((gross_profit_usd / max(total_revenue_usd, 0.000001)) * 100, 1) \
+                     if total_revenue_usd > 0 else 0.0
+
+        # ── 6. Per-plan breakdown ──────────────────────────────────────────────
+        by_plan: dict = {}
+        for tier in ["free", "student", "pro"]:
+            ai_cost     = round(ai_by_plan.get(tier, 0.0), 6)
+            sub_rev     = round(sub_counts.get(tier, 0) * PLAN_PRICES.get(tier, 0.0), 2)
+            # profit per plan only considers subscription revenue vs AI cost for that tier
+            plan_profit = round(sub_rev - ai_cost, 6)
+            by_plan[tier] = {
+                "user_count":          plan_user_counts.get(tier, 0),
+                "subscriber_count":    sub_counts.get(tier, 0),
+                "ai_cost_usd":         ai_cost,
+                "ai_cost_lkr":         round(ai_cost * LKR_RATE, 2),
+                "subscription_mrr_usd": sub_rev,
+                "plan_profit_usd":     plan_profit,
+                "plan_profit_lkr":     round(plan_profit * LKR_RATE, 2),
+            }
+
+        return {
+            "days":                days,
+            "total_ai_cost_usd":   round(total_ai_cost, 6),
+            "total_ai_cost_lkr":   round(total_ai_cost * LKR_RATE, 2),
+            "credit_revenue_usd":  round(credit_revenue, 2),
+            "credit_pack_count":   len(pack_rows),
+            "credit_by_product":   credit_by_product,
+            "mrr_usd":             mrr_usd,
+            "subscriber_counts":   sub_counts,
+            "total_revenue_usd":   total_revenue_usd,
+            "total_revenue_lkr":   round(total_revenue_usd * LKR_RATE, 2),
+            "gross_profit_usd":    gross_profit_usd,
+            "gross_profit_lkr":    round(gross_profit_usd * LKR_RATE, 2),
+            "margin_pct":          margin_pct,
+            "by_plan":             by_plan,
+        }
+    except Exception as e:
+        print(f"[admin/costs/financial] failed: {e}")
+        return {}
+
+
+def _cost_user_detail(user_id: str, days: int = 30) -> dict:
+    """Full cost breakdown for a single user."""
+    try:
+        from datetime import timedelta
+        sb = _sb_client()
+        if not sb:
+            return {}
+        since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+
+        res = sb.table("api_cost_logs") \
+            .select("feature,model,cost_usd,input_tokens,output_tokens,audio_seconds,created_at,lecture_id,plan_tier") \
+            .eq("user_id", user_id) \
+            .gte("created_at", since) \
+            .order("created_at", desc=True) \
+            .limit(500).execute()
+        rows = res.data or []
+
+        total_cost = sum(r.get("cost_usd") or 0.0 for r in rows)
+        by_feature: dict = {}
+        by_model:   dict = {}
+        daily:      dict = {}
+
+        for r in rows:
+            feat  = r.get("feature") or "unknown"
+            model = r.get("model")   or "unknown"
+            cost  = r.get("cost_usd") or 0.0
+            by_feature[feat]  = round(by_feature.get(feat, 0.0) + cost, 8)
+            by_model[model]   = round(by_model.get(model, 0.0)  + cost, 8)
+            day = (r.get("created_at") or "")[:10]
+            if day:
+                daily[day] = round(daily.get(day, 0.0) + cost, 8)
+
+        return {
+            "user_id":        user_id,
+            "days":           days,
+            "total_cost_usd": round(total_cost, 6),
+            "total_cost_lkr": round(total_cost * LKR_RATE, 2),
+            "call_count":     len(rows),
+            "by_feature":     {k: round(v, 6) for k, v in sorted(by_feature.items(),  key=lambda x: -x[1])},
+            "by_model":       {k: round(v, 6) for k, v in sorted(by_model.items(),    key=lambda x: -x[1])},
+            "daily":          sorted([{"date": d, "cost_usd": v} for d, v in daily.items()], key=lambda x: x["date"]),
+            "recent_logs":    rows[:50],
+        }
+    except Exception as e:
+        print(f"[admin/costs/user] failed: {e}")
+        return {}
+
+
+@router.get("/costs/financial")
+async def get_costs_financial(
+    days: int = Query(30, ge=1, le=365),
+    _: User = Depends(get_admin_user),
+):
+    """Financial overview: AI costs, credit-pack revenue, subscription MRR, profit."""
+    return _cost_financial(days=days)
+
+
+@router.get("/costs/user/{user_id}")
+async def get_costs_user(
+    user_id: str,
+    days: int = Query(30, ge=1, le=365),
+    _: User = Depends(get_admin_user),
+):
+    """Full cost breakdown for a single user."""
+    return _cost_user_detail(user_id=user_id, days=days)
+
+
 # ---------------------------------------------------------------------------
 # Feedback
 # ---------------------------------------------------------------------------
