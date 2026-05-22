@@ -166,6 +166,25 @@ export default function AdminLayout() {
     const touchStartX = useRef(0);
     const touchStartY = useRef(0);
 
+    // Inject admin-scoped PWA manifest while admin panel is mounted
+    useEffect(() => {
+        const link = document.createElement('link');
+        link.rel = 'manifest';
+        link.href = '/admin.webmanifest';
+        link.id = 'admin-manifest';
+        // Remove any existing manifest so admin one takes precedence
+        document.querySelectorAll('link[rel="manifest"]').forEach(el => el.remove());
+        document.head.appendChild(link);
+        return () => {
+            link.remove();
+            // Restore main app manifest on unmount
+            const restore = document.createElement('link');
+            restore.rel = 'manifest';
+            restore.href = '/site.webmanifest';
+            document.head.appendChild(restore);
+        };
+    }, []);
+
     useEffect(() => {
         if (!isLoaded) return;
         if (!isSignedIn) { navigate('/'); return; }
