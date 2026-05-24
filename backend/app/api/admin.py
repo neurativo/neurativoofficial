@@ -10,6 +10,7 @@ All destructive actions are recorded in the Supabase audit_logs table (persisten
 an in-memory deque (fast display buffer for the current process lifetime).
 """
 import collections
+import calendar as _calendar
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -660,6 +661,238 @@ def _cost_summary(days: int = 30) -> dict:
     except Exception as e:
         print(f"[admin/costs/summary] query failed: {e}")
         return {"by_feature": {}, "daily": [], "total_usd": 0.0, "total_lkr": 0.0, "pricing": PRICING}
+
+
+# ── Financials helpers ────────────────────────────────────────────────────────
+
+_PLAN_PRICES_FIN = {"student": 9.99, "pro": 19.99}
+_DODO_RATE       = 0.035
+_DODO_FIXED      = 0.35   # per transaction
+
+
+def _month_bounds(month_str: str):
+    """Return (start_iso, end_iso) for a 'YYYY-MM' period string."""
+    year, mon = int(month_str[:4]), int(month_str[5:7])
+    start = datetime(year, mon, 1, tzinfo=timezone.utc)
+    last  = _calendar.monthrange(year, mon)[1]
+    end   = datetime(year, mon, last, 23, 59, 59, 999999, tzinfo=timezone.utc)
+    return start.isoformat(), end.isoformat()
+
+
+def _build_financials_summary(month_str: str) -> dict:
+    """Full P&L for one month. Returns {} when Supabase is unavailable."""
+    sb = _sb_client()
+    if not sb:
+        return {}
+
+    start, end = _month_bounds(month_str)
+
+    # 1. Subscription revenue (active/renewed subs whose period_end >= month_start)
+    sub_res = sb.table("user_subscriptions") \
+        .select("plan_tier") \
+        .in_("subscription_status", ["active", "renewed"]) \
+        .gte("subscription_period_end", start) \
+        .execute()
+    sub_counts: dict = {"student": 0, "pro": 0}
+    for r in (sub_res.data or []):
+        tier = r.get("plan_tier", "")
+        if tier in sub_counts:
+            sub_counts[tier] += 1
+    sub_revenue = round(
+        sub_counts["student"] * _PLAN_PRICES_FIN["student"] +
+        sub_counts["pro"]     * _PLAN_PRICES_FIN["pro"], 2
+    )
+    total_subs = sub_counts["student"] + sub_counts["pro"]
+
+    # 2. Credit pack revenue (completed purchase_intents in period)
+    pack_res = sb.table("purchase_intents") \
+        .select("price_usd") \
+        .eq("status", "completed") \
+        .gte("created_at", start) \
+        .lte("created_at", end) \
+        .execute()
+    pack_rows       = pack_res.data or []
+    credit_revenue  = round(sum(r.get("price_usd") or 0.0 for r in pack_rows), 2)
+    credit_pack_count = len(pack_rows)
+
+    total_revenue = round(sub_revenue + credit_revenue, 2)
+
+    # 3. AI API costs
+    cost_res = sb.table("api_cost_logs") \
+        .select("cost_usd") \
+        .gte("created_at", start) \
+        .lte("created_at", end) \
+        .execute()
+    ai_cost = round(sum(r.get("cost_usd") or 0.0 for r in (cost_res.data or [])), 2)
+
+    # 4. Dodo payment processing fees (auto-calculated)
+    credit_pack_fees = round(
+        sum((r.get("price_usd") or 0.0) * _DODO_RATE + _DODO_FIXED for r in pack_rows), 2
+    )
+    sub_fees   = round(sub_revenue * _DODO_RATE + total_subs * _DODO_FIXED, 2)
+    dodo_fees  = round(credit_pack_fees + sub_fees, 2)
+
+    # 5. Infrastructure costs (manual entries)
+    infra_res = sb.table("admin_external_costs") \
+        .select("category,amount_usd") \
+        .eq("period", month_str) \
+        .execute()
+    infra_by_cat: dict = {"railway": 0.0, "supabase": 0.0, "clerk": 0.0, "resend": 0.0, "other": 0.0}
+    for r in (infra_res.data or []):
+        cat = r.get("category") or "other"
+        infra_by_cat[cat] = round(infra_by_cat.get(cat, 0.0) + (r.get("amount_usd") or 0.0), 2)
+    infra_total = round(sum(infra_by_cat.values()), 2)
+
+    # 6. Totals
+    total_costs  = round(ai_cost + dodo_fees + infra_total, 2)
+    net_profit   = round(total_revenue - total_costs, 2)
+    margin_pct   = round((net_profit / max(total_revenue, 0.000001)) * 100, 1) \
+                   if total_revenue > 0 else 0.0
+
+    return {
+        "month": month_str,
+        "revenue": {
+            "subscriptions_usd":  sub_revenue,
+            "subscriber_counts":  sub_counts,
+            "credit_packs_usd":   credit_revenue,
+            "credit_pack_count":  credit_pack_count,
+            "total_usd":          total_revenue,
+        },
+        "costs": {
+            "ai_api_usd":          ai_cost,
+            "dodo_fees_usd":       dodo_fees,
+            "dodo_fees_breakdown": {
+                "credit_pack_fees_usd": credit_pack_fees,
+                "subscription_fees_usd": sub_fees,
+            },
+            "infrastructure_usd":          infra_total,
+            "infrastructure_by_category":  infra_by_cat,
+            "total_usd":                   total_costs,
+        },
+        "net_profit_usd": net_profit,
+        "margin_pct":     margin_pct,
+    }
+
+
+# ── Financials endpoints ──────────────────────────────────────────────────────
+
+@router.get("/financials/summary")
+async def get_financials_summary(
+    month: str = None,
+    admin: User = Depends(get_admin_user),
+):
+    """Full P&L for a single month. Defaults to current month."""
+    if not month:
+        month = datetime.now(timezone.utc).strftime("%Y-%m")
+    summary = _build_financials_summary(month)
+    if not summary:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    return summary
+
+
+@router.get("/financials/trend")
+async def get_financials_trend(
+    months: int = 12,
+    admin: User = Depends(get_admin_user),
+):
+    """Monthly P&L summaries for the last N months (oldest first)."""
+    if months < 1 or months > 24:
+        months = 12
+    now   = datetime.now(timezone.utc)
+    result = []
+    for i in range(months - 1, -1, -1):
+        year  = now.year
+        mon   = now.month - i
+        while mon <= 0:
+            mon  += 12
+            year -= 1
+        month_str = f"{year:04d}-{mon:02d}"
+        s = _build_financials_summary(month_str)
+        result.append({
+            "month":          month_str,
+            "revenue_usd":    s.get("revenue", {}).get("total_usd", 0.0) if s else 0.0,
+            "costs_usd":      s.get("costs",   {}).get("total_usd", 0.0) if s else 0.0,
+            "net_profit_usd": s.get("net_profit_usd", 0.0) if s else 0.0,
+            "margin_pct":     s.get("margin_pct", 0.0)     if s else 0.0,
+        })
+    return {"months": result}
+
+
+@router.get("/external-costs")
+async def list_external_costs(
+    month: str,
+    admin: User = Depends(get_admin_user),
+):
+    """List all manual cost entries for a given YYYY-MM month."""
+    sb = _sb_client()
+    if not sb:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    res = sb.table("admin_external_costs") \
+        .select("id,category,label,amount_usd,note,period,created_at") \
+        .eq("period", month) \
+        .execute()
+    return {"month": month, "items": res.data or []}
+
+
+@router.post("/external-costs", status_code=201)
+async def create_external_cost(
+    body: dict,
+    admin: User = Depends(get_admin_user),
+):
+    """Create a manual cost entry."""
+    sb = _sb_client()
+    if not sb:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    row = {
+        "category":   body.get("category", "other"),
+        "label":      body.get("label", ""),
+        "amount_usd": float(body.get("amount_usd", 0)),
+        "period":     body.get("period", ""),
+        "note":       body.get("note"),
+    }
+    res = sb.table("admin_external_costs").insert(row).execute()
+    items = res.data or []
+    if not items:
+        raise HTTPException(status_code=500, detail="Insert failed")
+    return items[0]
+
+
+@router.put("/external-costs/{cost_id}")
+async def update_external_cost(
+    cost_id: str,
+    body: dict,
+    admin: User = Depends(get_admin_user),
+):
+    """Update a manual cost entry."""
+    sb = _sb_client()
+    if not sb:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    row = {
+        "category":   body.get("category", "other"),
+        "label":      body.get("label", ""),
+        "amount_usd": float(body.get("amount_usd", 0)),
+        "period":     body.get("period", ""),
+        "note":       body.get("note"),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    res = sb.table("admin_external_costs").update(row).eq("id", cost_id).execute()
+    items = res.data or []
+    if not items:
+        raise HTTPException(status_code=404, detail="Cost entry not found")
+    return items[0]
+
+
+@router.delete("/external-costs/{cost_id}", status_code=204)
+async def delete_external_cost(
+    cost_id: str,
+    admin: User = Depends(get_admin_user),
+):
+    """Delete a manual cost entry."""
+    sb = _sb_client()
+    if not sb:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    sb.table("admin_external_costs").delete().eq("id", cost_id).execute()
+    return None
 
 
 @router.get("/costs")
