@@ -104,6 +104,20 @@ export const adminApi = {
         const res = await axios.post(BASE + `/users/${userId}/credits/subscription`, body, { headers: _headers(token) });
         return res.data;
     },
+
+    // Financials P&L
+    getFinancialSummary: (month) =>
+        _get('/financials/summary', month ? { month } : {}),
+    getFinancialTrend: (months = 12) =>
+        _get('/financials/trend', { months }),
+    getExternalCosts: (month) =>
+        _get('/external-costs', { month }),
+    createExternalCost: (data) =>
+        _postBody('/external-costs', data),
+    updateExternalCost: (id, data) =>
+        _putBody(`/external-costs/${id}`, data),
+    deleteExternalCost: (id) =>
+        _delete(`/external-costs/${id}`),
 };
 
 const BILLING_BASE = `${import.meta.env.VITE_API_URL || 'https://neurativoofficial-production.up.railway.app'}/api/v1/billing`;
@@ -218,6 +232,12 @@ export const feedbackApi = {
 async function _postBody(path, body = {}) {
     const token = await _token();
     const res = await axios.post(BASE + path, body, { headers: _headers(token) });
+    return res.data;
+}
+
+async function _putBody(path, body = {}) {
+    const token = await _token();
+    const res = await axios.put(BASE + path, body, { headers: _headers(token) });
     return res.data;
 }
 
