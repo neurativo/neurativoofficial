@@ -268,7 +268,14 @@ def finalize_reserved_credits(user_id: str, lecture_id: str, actual_duration_sec
                 lecture_id=lecture_id,
             )
     elif actual > reserved:
-        _deduct_amount(user_id, lecture_id, actual - reserved, reason="lecture_processed")
+        try:
+            _deduct_amount(user_id, lecture_id, actual - reserved, reason="lecture_processed")
+        except HTTPException as exc:
+            if exc.status_code == 402:
+                print(f"[credits] shortfall forgiven for {user_id} lecture {lecture_id}: "
+                      f"needed {actual} credits, had {reserved} reserved, balance insufficient")
+            else:
+                raise
     mark_credit_deducted(lecture_id)
 
 
