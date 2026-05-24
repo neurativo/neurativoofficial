@@ -98,6 +98,91 @@ class CreateAnnouncementRequest(BaseModel):
 # Routes
 # ---------------------------------------------------------------------------
 
+@router.get("/admins")
+async def list_admins(admin: User = Depends(get_admin_user)):
+    """List all admins: env-var superadmins + DB-managed admins."""
+    sb = _sb_client()
+    db_admins = []
+    if sb:
+        res = sb.table("admin_users").select("user_id,added_by,note,created_at").order("created_at").execute()
+        db_admins = res.data or []
+
+    # Enrich all entries with Clerk profile info where possible
+    all_user_ids = list(set(
+        list(settings.ADMIN_USER_IDS) + [r["user_id"] for r in db_admins]
+    ))
+    profiles: dict[str, dict] = {}
+    for uid in all_user_ids:
+        try:
+            p = await clerk_get_user(uid)
+            profiles[uid] = p
+        except Exception:
+            profiles[uid] = {"id": uid, "email_addresses": [], "first_name": "", "last_name": ""}
+
+    def _fmt(uid: str) -> dict:
+        p = profiles.get(uid, {})
+        emails = p.get("email_addresses", [])
+        email = emails[0].get("email_address", "") if emails else ""
+        name = f"{p.get('first_name', '')} {p.get('last_name', '')}".strip() or uid
+        return {"user_id": uid, "name": name, "email": email,
+                "image_url": p.get("image_url", "")}
+
+    env_entries = [
+        {**_fmt(uid), "source": "env", "removable": False}
+        for uid in settings.ADMIN_USER_IDS
+    ]
+    db_ids = {r["user_id"] for r in db_admins}
+    db_entries = [
+        {**_fmt(r["user_id"]), "source": "db",
+         "removable": r["user_id"] not in settings.ADMIN_USER_IDS,
+         "added_by": r["added_by"], "note": r.get("note"),
+         "created_at": r["created_at"]}
+        for r in db_admins
+        if r["user_id"] not in settings.ADMIN_USER_IDS
+    ]
+    return {"admins": env_entries + db_entries}
+
+
+@router.post("/admins", status_code=201)
+async def add_admin(body: dict, admin: User = Depends(get_admin_user)):
+    """Grant admin access to a Clerk user by user_id."""
+    user_id = (body.get("user_id") or "").strip()
+    if not user_id:
+        raise HTTPException(status_code=422, detail="user_id is required")
+    if user_id == admin.id:
+        raise HTTPException(status_code=400, detail="You are already an admin")
+    # Validate that this Clerk user exists
+    try:
+        await clerk_get_user(user_id)
+    except Exception:
+        raise HTTPException(status_code=404, detail="Clerk user not found")
+    sb = _sb_client()
+    if not sb:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    existing = sb.table("admin_users").select("user_id").eq("user_id", user_id).maybe_single().execute()
+    if existing.data or user_id in settings.ADMIN_USER_IDS:
+        raise HTTPException(status_code=409, detail="User is already an admin")
+    row = {"user_id": user_id, "added_by": admin.id, "note": body.get("note") or None}
+    res = sb.table("admin_users").insert(row).execute()
+    if not res.data:
+        raise HTTPException(status_code=500, detail="Insert failed")
+    return res.data[0]
+
+
+@router.delete("/admins/{user_id}", status_code=204)
+async def remove_admin(user_id: str, admin: User = Depends(get_admin_user)):
+    """Revoke admin access for a DB-managed admin (cannot remove env-var superadmins)."""
+    if user_id in settings.ADMIN_USER_IDS:
+        raise HTTPException(status_code=400, detail="Cannot remove a superadmin set via environment variable")
+    if user_id == admin.id:
+        raise HTTPException(status_code=400, detail="Cannot remove yourself")
+    sb = _sb_client()
+    if not sb:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    sb.table("admin_users").delete().eq("user_id", user_id).execute()
+    return None
+
+
 @router.get("/verify")
 async def verify_admin(admin: User = Depends(get_admin_user)):
     """Health-check for admin access. Frontend calls this on mount."""

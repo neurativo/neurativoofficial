@@ -105,6 +105,11 @@ export const adminApi = {
         return res.data;
     },
 
+    // Admin management
+    listAdmins:    ()               => _get('/admins'),
+    addAdmin:      (data)           => _postBody('/admins', data),
+    removeAdmin:   (userId)         => _delete(`/admins/${userId}`),
+
     // Financials P&L
     getFinancialSummary: (month) =>
         _get('/financials/summary', month ? { month } : {}),

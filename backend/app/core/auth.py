@@ -119,9 +119,22 @@ async def get_active_user(authorization: str = Header(None)) -> User:
 async def get_admin_user(authorization: str = Header(None)) -> User:
     """
     FastAPI dependency — verifies the Clerk Bearer token AND checks that
-    the user is in the ADMIN_USER_IDS allowlist. Raises 403 if not admin.
+    the user is either in the ADMIN_USER_IDS env-var list (superadmin) or
+    in the admin_users DB table (dynamically added admin).
+    Raises 403 if neither condition is met.
     """
     user = await get_current_user(authorization)
-    if user.id not in settings.ADMIN_USER_IDS:
-        raise HTTPException(status_code=403, detail="Admin access required")
-    return user
+    # Fast path: env-var superadmins
+    if user.id in settings.ADMIN_USER_IDS:
+        return user
+    # DB-managed admins
+    try:
+        from app.services.supabase_service import get_client as _sb
+        sb = _sb()
+        if sb:
+            res = sb.table("admin_users").select("user_id").eq("user_id", user.id).maybe_single().execute()
+            if res.data:
+                return user
+    except Exception:
+        pass
+    raise HTTPException(status_code=403, detail="Admin access required")

@@ -31,6 +31,7 @@ import AdminFeedback from './pages/admin/AdminFeedback.jsx';
 import AdminFeatureFlags from './pages/admin/AdminFeatureFlags.jsx';
 import AdminReleases from './pages/admin/AdminReleases.jsx';
 import AdminFinancials from './pages/admin/AdminFinancials.jsx';
+import AdminAdmins from './pages/admin/AdminAdmins.jsx';
 import FeedbackWidget from './components/FeedbackWidget.jsx';
 import WhatsNewModal from './components/WhatsNewModal.jsx';
 import { FeatureFlagsProvider } from './lib/featureFlags.jsx';
@@ -146,6 +147,7 @@ function Root() {
                 <Route path="teams/:slug" element={<AdminTeamDetail />} />
                 <Route path="billing"  element={<AdminBilling />} />
                 <Route path="financials" element={<AdminFinancials />} />
+                <Route path="admins" element={<AdminAdmins />} />
                 <Route path="feedback" element={<AdminFeedback />} />
                 <Route path="feature-flags" element={<AdminFeatureFlags />} />
                 <Route path="releases" element={<AdminReleases />} />
