@@ -104,8 +104,11 @@ async def list_admins(admin: User = Depends(get_admin_user)):
     sb = _sb_client()
     db_admins = []
     if sb:
-        res = sb.table("admin_users").select("user_id,added_by,note,created_at").order("created_at").execute()
-        db_admins = res.data or []
+        try:
+            res = sb.table("admin_users").select("user_id,added_by,note,created_at").order("created_at").execute()
+            db_admins = res.data or []
+        except Exception:
+            pass  # Table may not exist yet — graceful degradation
 
     # Enrich all entries with Clerk profile info where possible
     all_user_ids = list(set(
@@ -114,7 +117,7 @@ async def list_admins(admin: User = Depends(get_admin_user)):
     profiles: dict[str, dict] = {}
     for uid in all_user_ids:
         try:
-            p = await clerk_get_user(uid)
+            p = clerk_get_user(uid)   # sync function — no await
             profiles[uid] = p
         except Exception:
             profiles[uid] = {"id": uid, "email_addresses": [], "first_name": "", "last_name": ""}
@@ -152,9 +155,8 @@ async def add_admin(body: dict, admin: User = Depends(get_admin_user)):
     if user_id == admin.id:
         raise HTTPException(status_code=400, detail="You are already an admin")
     # Validate that this Clerk user exists
-    try:
-        await clerk_get_user(user_id)
-    except Exception:
+    profile = clerk_get_user(user_id)   # sync — no await
+    if not profile:
         raise HTTPException(status_code=404, detail="Clerk user not found")
     sb = _sb_client()
     if not sb:
