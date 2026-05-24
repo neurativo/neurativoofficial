@@ -129,6 +129,7 @@ def test_financials_trend_returns_months_array(mock_sb):
             assert "revenue_usd" in entry
             assert "costs_usd" in entry
             assert "net_profit_usd" in entry
+            assert "margin_pct" in entry
     finally:
         app.dependency_overrides.pop(get_admin_user, None)
 
