@@ -672,11 +672,14 @@ _DODO_FIXED      = 0.35   # per transaction
 
 def _month_bounds(month_str: str):
     """Return (start_iso, end_iso) for a 'YYYY-MM' period string."""
-    year, mon = int(month_str[:4]), int(month_str[5:7])
-    start = datetime(year, mon, 1, tzinfo=timezone.utc)
-    last  = _calendar.monthrange(year, mon)[1]
-    end   = datetime(year, mon, last, 23, 59, 59, 999999, tzinfo=timezone.utc)
-    return start.isoformat(), end.isoformat()
+    try:
+        year, mon = int(month_str[:4]), int(month_str[5:7])
+        start = datetime(year, mon, 1, tzinfo=timezone.utc)
+        last  = _calendar.monthrange(year, mon)[1]
+        end   = datetime(year, mon, last, 23, 59, 59, 999999, tzinfo=timezone.utc)
+        return start.isoformat(), end.isoformat()
+    except (ValueError, IndexError):
+        raise HTTPException(status_code=422, detail=f"Invalid month format '{month_str}'. Expected YYYY-MM.")
 
 
 def _build_financials_summary(month_str: str) -> dict:
@@ -843,10 +846,14 @@ async def create_external_cost(
     sb = _sb_client()
     if not sb:
         raise HTTPException(status_code=503, detail="Database unavailable")
+    try:
+        amount = float(body.get("amount_usd", 0) or 0)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=422, detail="amount_usd must be a number")
     row = {
         "category":   body.get("category", "other"),
         "label":      body.get("label", ""),
-        "amount_usd": float(body.get("amount_usd", 0)),
+        "amount_usd": amount,
         "period":     body.get("period", ""),
         "note":       body.get("note"),
     }
@@ -867,10 +874,14 @@ async def update_external_cost(
     sb = _sb_client()
     if not sb:
         raise HTTPException(status_code=503, detail="Database unavailable")
+    try:
+        amount = float(body.get("amount_usd", 0) or 0)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=422, detail="amount_usd must be a number")
     row = {
         "category":   body.get("category", "other"),
         "label":      body.get("label", ""),
-        "amount_usd": float(body.get("amount_usd", 0)),
+        "amount_usd": amount,
         "period":     body.get("period", ""),
         "note":       body.get("note"),
         "updated_at": datetime.now(timezone.utc).isoformat(),

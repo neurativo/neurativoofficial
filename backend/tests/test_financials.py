@@ -92,6 +92,10 @@ def test_financials_summary_with_data(mock_sb):
         assert body["net_profit_usd"] == pytest.approx(
             body["revenue"]["total_usd"] - body["costs"]["total_usd"], abs=0.01
         )
+        # Dodo fees: 1 credit pack ($11.99 * 3.5% + $0.35) + 2 subs ($29.98 * 3.5% + 2 * $0.35) > 0
+        assert body["costs"]["dodo_fees_usd"] > 0
+        assert "credit_pack_fees_usd" in body["costs"]["dodo_fees_breakdown"]
+        assert "subscription_fees_usd" in body["costs"]["dodo_fees_breakdown"]
     finally:
         app.dependency_overrides.pop(get_admin_user, None)
 
