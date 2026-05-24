@@ -1,9 +1,9 @@
 """
 Billing API — Dodo Payments subscription management.
 """
-from typing import Literal
+from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from app.core.auth import get_active_user, get_admin_user
@@ -496,6 +496,117 @@ async def admin_customer_portal(
     except Exception as e:
         print(f"[billing] admin customer_portal error: {e}")
         raise HTTPException(status_code=502, detail="Could not create customer portal session")
+
+
+# ── Admin: credit pack purchase data ──────────────────────────────────────────
+
+_CREDIT_PACK_KEYS = ("small_pack", "large_pack", "pro_pack")
+_PACK_LABELS = {
+    "small_pack": "Starter (10 cr)",
+    "large_pack": "Best Value (30 cr)",
+    "pro_pack":   "Power Pack (60 cr)",
+}
+
+
+@router.get("/admin/credit-purchases")
+async def admin_credit_purchases(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(25, ge=1, le=100),
+    product: Optional[str] = Query(None),
+    from_date: Optional[str] = Query(None),
+    to_date: Optional[str] = Query(None),
+    _=Depends(get_admin_user),
+):
+    """Paginated list of completed credit pack purchases with user email."""
+    db = supabase_service._fresh_db()
+
+    q = db.table("purchase_intents").select("*").eq("status", "completed").in_(
+        "product", list(_CREDIT_PACK_KEYS)
+    )
+    if product and product in _CREDIT_PACK_KEYS:
+        q = db.table("purchase_intents").select("*").eq("status", "completed").eq("product", product)
+    if from_date:
+        q = q.gte("created_at", from_date)
+    if to_date:
+        q = q.lte("created_at", to_date + "T23:59:59Z")
+
+    all_resp = q.order("created_at", desc=True).execute()
+    all_items = all_resp.data or []
+    total = len(all_items)
+    offset = (page - 1) * page_size
+    page_items = all_items[offset: offset + page_size]
+
+    user_ids = list({i["user_id"] for i in page_items if i.get("user_id")})
+    profile_map: dict = {}
+    if user_ids:
+        prof_resp = db.table("profiles").select("id, email, plan_tier").in_("id", user_ids).execute()
+        for p in (prof_resp.data or []):
+            profile_map[p["id"]] = p
+
+    items = []
+    for row in page_items:
+        prof = profile_map.get(row.get("user_id"), {})
+        items.append({
+            "id":              row.get("id"),
+            "created_at":      row.get("created_at"),
+            "user_id":         row.get("user_id"),
+            "email":           prof.get("email", "—"),
+            "plan_tier":       prof.get("plan_tier", "—"),
+            "product":         row.get("product"),
+            "product_label":   _PACK_LABELS.get(row.get("product", ""), row.get("product", "")),
+            "credits":         row.get("credits"),
+            "price_usd":       row.get("price_usd"),
+            "dodo_payment_id": row.get("dodo_payment_id"),
+        })
+
+    return {"items": items, "total": total, "page": page, "page_size": page_size}
+
+
+@router.get("/admin/credit-revenue")
+async def admin_credit_revenue(_=Depends(get_admin_user)):
+    """Aggregated credit pack revenue: totals, by-product breakdown, monthly trend."""
+    from collections import defaultdict
+    from datetime import datetime, timezone
+
+    db = supabase_service._fresh_db()
+    resp = db.table("purchase_intents").select(
+        "product, price_usd, credits, created_at"
+    ).eq("status", "completed").in_("product", list(_CREDIT_PACK_KEYS)).execute()
+    items = resp.data or []
+
+    now = datetime.now(timezone.utc)
+    this_month = now.strftime("%Y-%m")
+
+    total_rev   = sum(float(i.get("price_usd") or 0) for i in items)
+    total_count = len(items)
+    month_items = [i for i in items if (i.get("created_at") or "")[:7] == this_month]
+
+    by_product = {}
+    for key, label in _PACK_LABELS.items():
+        p_items = [i for i in items if i.get("product") == key]
+        rev = sum(float(i.get("price_usd") or 0) for i in p_items)
+        by_product[key] = {
+            "label":       label,
+            "count":       len(p_items),
+            "revenue_usd": round(rev, 2),
+            "pct":         round(rev / total_rev * 100) if total_rev else 0,
+        }
+
+    monthly: dict = defaultdict(lambda: {"purchases": 0, "revenue_usd": 0.0})
+    for i in items:
+        m = (i.get("created_at") or "")[:7]
+        if m:
+            monthly[m]["purchases"] += 1
+            monthly[m]["revenue_usd"] = round(monthly[m]["revenue_usd"] + float(i.get("price_usd") or 0), 2)
+
+    return {
+        "total_revenue_usd":      round(total_rev, 2),
+        "total_purchases":        total_count,
+        "this_month_revenue_usd": round(sum(float(i.get("price_usd") or 0) for i in month_items), 2),
+        "this_month_purchases":   len(month_items),
+        "by_product":             by_product,
+        "monthly_trend":          [{"month": k, **v} for k, v in sorted(monthly.items(), reverse=True)][:12],
+    }
 
 
 @router.post("/webhook")
