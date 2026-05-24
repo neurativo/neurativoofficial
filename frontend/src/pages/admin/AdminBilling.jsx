@@ -831,11 +831,44 @@ const TABS = [
     { id: 'refunds',        label: 'Refunds' },
     { id: 'disputes',       label: 'Disputes' },
     { id: 'discounts',      label: 'Discounts' },
+    { id: 'credits',        label: 'Credit Packs' },
 ];
+
+function CreditStatCard({ label, value, sub }) {
+    return (
+        <div style={{
+            background: 'var(--ab-card, #1a1a1a)', border: '1px solid var(--ab-border, #2a2a2a)',
+            borderRadius: 10, padding: '16px 20px', flex: '1 1 140px',
+        }}>
+            <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em', color: '#6b7280', marginBottom: 6 }}>{label}</div>
+            <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.5px', color: '#f9fafb' }}>{value}</div>
+            {sub && <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 3 }}>{sub}</div>}
+        </div>
+    );
+}
 
 // ─── Main page ─────────────────────────────────────────────────────────────────
 export default function AdminBilling() {
     const [activeTab, setActiveTab] = useState('overview');
+    const [creditRevenue, setCreditRevenue]     = useState(null);
+    const [creditPurchases, setCreditPurchases] = useState({ items: [], total: 0 });
+    const [creditPage, setCreditPage]           = useState(1);
+    const [creditProduct, setCreditProduct]     = useState('');
+    const [creditLoading, setCreditLoading]     = useState(false);
+
+    useEffect(() => {
+        billingApi.getCreditRevenue()
+            .then(r => setCreditRevenue(r.data))
+            .catch(() => {});
+    }, []);
+
+    useEffect(() => {
+        setCreditLoading(true);
+        billingApi.getCreditPurchases({ page: creditPage, pageSize: 25, product: creditProduct || undefined })
+            .then(r => setCreditPurchases(r.data))
+            .catch(() => {})
+            .finally(() => setCreditLoading(false));
+    }, [creditPage, creditProduct]);
 
     return (
         <div>
@@ -884,6 +917,131 @@ export default function AdminBilling() {
             {activeTab === 'refunds'       && <RefundsPanel />}
             {activeTab === 'disputes'      && <DisputesPanel />}
             {activeTab === 'discounts'     && <DiscountsPanel />}
+            {activeTab === 'credits'       && (
+                /* ── Credit Pack Sales ─────────────────────────────────── */
+                <div style={{ marginTop: 40 }}>
+                    <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: '-0.3px', color: '#f9fafb', marginBottom: 16 }}>
+                        Credit Pack Sales
+                    </div>
+
+                    {creditRevenue && (
+                        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 24 }}>
+                            <CreditStatCard
+                                label="All-time revenue"
+                                value={`$${creditRevenue.total_revenue_usd.toFixed(2)}`}
+                                sub={`${creditRevenue.total_purchases} purchases`}
+                            />
+                            <CreditStatCard
+                                label="This month"
+                                value={`$${creditRevenue.this_month_revenue_usd.toFixed(2)}`}
+                                sub={`${creditRevenue.this_month_purchases} purchases`}
+                            />
+                            <CreditStatCard
+                                label="Top seller"
+                                value={Object.entries(creditRevenue.by_product).sort((a,b) => b[1].count - a[1].count)[0]?.[1]?.label || '—'}
+                                sub="by volume"
+                            />
+                        </div>
+                    )}
+
+                    {creditRevenue && (
+                        <div style={{ background: 'var(--ab-card,#1a1a1a)', border: '1px solid var(--ab-border,#2a2a2a)', borderRadius: 10, overflow: 'hidden', marginBottom: 24 }}>
+                            <div style={{ padding: '12px 16px', fontSize: 12, fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '.06em', borderBottom: '1px solid var(--ab-border,#2a2a2a)' }}>
+                                Revenue by pack
+                            </div>
+                            <div style={{ overflowX: 'auto' }}>
+                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                                    <thead>
+                                        <tr style={{ borderBottom: '1px solid var(--ab-border,#2a2a2a)' }}>
+                                            {['Pack','Sales','Revenue','% of packs'].map(h => (
+                                                <th key={h} style={{ padding: '8px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '.04em' }}>{h}</th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {Object.entries(creditRevenue.by_product).map(([key, p]) => (
+                                            <tr key={key} style={{ borderBottom: '1px solid var(--ab-border,#2a2a2a)' }}>
+                                                <td style={{ padding: '10px 16px', color: '#f9fafb', fontWeight: 500 }}>{p.label}</td>
+                                                <td style={{ padding: '10px 16px', color: '#d1d5db' }}>{p.count}</td>
+                                                <td style={{ padding: '10px 16px', color: '#4ade80', fontWeight: 600 }}>${p.revenue_usd.toFixed(2)}</td>
+                                                <td style={{ padding: '10px 16px', color: '#9ca3af' }}>{p.pct}%</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+
+                    <div style={{ display: 'flex', gap: 10, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: '#f9fafb', flex: 1 }}>Purchase history</div>
+                        <select
+                            value={creditProduct}
+                            onChange={e => { setCreditProduct(e.target.value); setCreditPage(1); }}
+                            style={{ padding: '6px 10px', borderRadius: 7, border: '1px solid var(--ab-border,#2a2a2a)', background: 'var(--ab-card,#1a1a1a)', color: '#f9fafb', fontSize: 12 }}
+                        >
+                            <option value="">All packs</option>
+                            <option value="small_pack">Starter (10 cr)</option>
+                            <option value="large_pack">Best Value (30 cr)</option>
+                            <option value="pro_pack">Power Pack (60 cr)</option>
+                        </select>
+                    </div>
+
+                    <div style={{ background: 'var(--ab-card,#1a1a1a)', border: '1px solid var(--ab-border,#2a2a2a)', borderRadius: 10, overflow: 'hidden', marginBottom: 12 }}>
+                        <div style={{ overflowX: 'auto' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                                <thead>
+                                    <tr style={{ borderBottom: '1px solid var(--ab-border,#2a2a2a)' }}>
+                                        {['Date','User','Plan','Pack','Credits','Amount','Payment ID'].map(h => (
+                                            <th key={h} style={{ padding: '8px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '.04em', whiteSpace: 'nowrap' }}>{h}</th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {creditLoading ? (
+                                        <tr><td colSpan={7} style={{ padding: '24px 16px', textAlign: 'center', color: '#6b7280' }}>Loading…</td></tr>
+                                    ) : creditPurchases.items.length === 0 ? (
+                                        <tr><td colSpan={7} style={{ padding: '24px 16px', textAlign: 'center', color: '#6b7280' }}>No credit pack purchases yet.</td></tr>
+                                    ) : creditPurchases.items.map(row => (
+                                        <tr key={row.id} style={{ borderBottom: '1px solid var(--ab-border,#2a2a2a)' }}>
+                                            <td style={{ padding: '10px 16px', color: '#9ca3af', whiteSpace: 'nowrap' }}>{fmtDate(row.created_at)}</td>
+                                            <td style={{ padding: '10px 16px' }}>
+                                                <a href={`/admin/users/${row.user_id}`} style={{ color: '#60a5fa', textDecoration: 'none', fontSize: 12 }}>{row.email}</a>
+                                            </td>
+                                            <td style={{ padding: '10px 16px' }}>
+                                                <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', background: '#1e3a5f', color: '#60a5fa', padding: '2px 7px', borderRadius: 4 }}>{row.plan_tier}</span>
+                                            </td>
+                                            <td style={{ padding: '10px 16px', color: '#f9fafb', fontWeight: 500, whiteSpace: 'nowrap' }}>{row.product_label}</td>
+                                            <td style={{ padding: '10px 16px', color: '#d1d5db' }}>{row.credits} cr</td>
+                                            <td style={{ padding: '10px 16px', color: '#4ade80', fontWeight: 600 }}>${Number(row.price_usd).toFixed(2)}</td>
+                                            <td style={{ padding: '10px 16px', color: '#6b7280', fontSize: 11, fontFamily: 'monospace' }}>{row.dodo_payment_id ? row.dodo_payment_id.slice(0,16) + '…' : '—'}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    {creditPurchases.total > 25 && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, color: '#9ca3af' }}>
+                            <span>{creditPurchases.total} total purchases</span>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <button
+                                    disabled={creditPage <= 1}
+                                    onClick={() => setCreditPage(p => p - 1)}
+                                    style={{ padding: '5px 12px', borderRadius: 6, border: '1px solid var(--ab-border,#2a2a2a)', background: 'transparent', color: creditPage <= 1 ? '#374151' : '#f9fafb', cursor: creditPage <= 1 ? 'default' : 'pointer', fontSize: 12 }}
+                                >← Prev</button>
+                                <span style={{ padding: '5px 0' }}>Page {creditPage}</span>
+                                <button
+                                    disabled={creditPage * 25 >= creditPurchases.total}
+                                    onClick={() => setCreditPage(p => p + 1)}
+                                    style={{ padding: '5px 12px', borderRadius: 6, border: '1px solid var(--ab-border,#2a2a2a)', background: 'transparent', color: creditPage * 25 >= creditPurchases.total ? '#374151' : '#f9fafb', cursor: creditPage * 25 >= creditPurchases.total ? 'default' : 'pointer', fontSize: 12 }}
+                                >Next →</button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 }
