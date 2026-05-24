@@ -344,7 +344,7 @@ function ManageCostsPanel({ month, onClose, onSaved }) {
     };
 
     const addCustom = () => {
-        setRows(rows => [...rows, { id: null, category: 'other', label: '', amount_usd: 0, note: '', period: panelMonth, _dirty: true, _custom: true }]);
+        setRows(rows => [...rows, { id: null, category: 'other', label: '', amount_usd: 0, note: '', period: panelMonth, cost_date: '', _dirty: true, _custom: true }]);
     };
 
     const removeRow = async (idx) => {
@@ -367,6 +367,7 @@ function ManageCostsPanel({ month, onClose, onSaved }) {
                     amount_usd: parseFloat(row.amount_usd) || 0,
                     period:     panelMonth,
                     note:       row.note || null,
+                    cost_date:  row.cost_date || null,
                 };
                 if (row.id) {
                     await adminApi.updateExternalCost(row.id, payload);
@@ -410,39 +411,54 @@ function ManageCostsPanel({ month, onClose, onSaved }) {
                             opacity: nextMonth(panelMonth) > CURRENT_MONTH ? 0.3 : 1 }}>→</button>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                     {rows.map((row, idx) => (
-                        <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <span style={{ fontSize: 16, width: 24, textAlign: 'center' }}>
-                                {CATEGORY_ICONS[row.category] || '📦'}
-                            </span>
-                            {row._custom ? (
+                        <div key={idx} style={{ display: 'flex', flexDirection: 'column', gap: 5,
+                            background: '#f9fafb', borderRadius: 8, padding: '10px 10px 8px' }}>
+                            {/* Row header: icon + label + amount + delete */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span style={{ fontSize: 16, width: 22, textAlign: 'center', flexShrink: 0 }}>
+                                    {CATEGORY_ICONS[row.category] || '📦'}
+                                </span>
+                                {row._custom ? (
+                                    <input
+                                        value={row.label}
+                                        onChange={e => updateRow(idx, 'label', e.target.value)}
+                                        placeholder="Custom cost name"
+                                        className="adm-input"
+                                        style={{ flex: 1, fontSize: 13 }}
+                                    />
+                                ) : (
+                                    <span style={{ flex: 1, fontSize: 13, fontWeight: 500, color: '#374151' }}>{row.label}</span>
+                                )}
+                                <div style={{ position: 'relative', flexShrink: 0 }}>
+                                    <span style={{ position: 'absolute', left: 7, top: '50%', transform: 'translateY(-50%)', fontSize: 12, color: '#6b7280' }}>$</span>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        value={row.amount_usd}
+                                        onChange={e => updateRow(idx, 'amount_usd', e.target.value)}
+                                        style={{ width: 78, paddingLeft: 18, paddingRight: 6, paddingTop: 6, paddingBottom: 6,
+                                            border: '1px solid #e5e7eb', borderRadius: 6, fontSize: 13, background: 'white' }}
+                                    />
+                                </div>
+                                {row._custom && (
+                                    <button onClick={() => removeRow(idx)}
+                                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: 16, flexShrink: 0 }}>×</button>
+                                )}
+                            </div>
+                            {/* Date row */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingLeft: 30 }}>
+                                <span style={{ fontSize: 11, color: '#9ca3af', width: 32 }}>Date</span>
                                 <input
-                                    value={row.label}
-                                    onChange={e => updateRow(idx, 'label', e.target.value)}
-                                    placeholder="Custom cost name"
-                                    className="adm-input"
-                                    style={{ flex: 1, fontSize: 13 }}
-                                />
-                            ) : (
-                                <span style={{ flex: 1, fontSize: 13, color: '#374151' }}>{row.label}</span>
-                            )}
-                            <div style={{ position: 'relative' }}>
-                                <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: '#6b7280' }}>$</span>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
-                                    value={row.amount_usd}
-                                    onChange={e => updateRow(idx, 'amount_usd', e.target.value)}
-                                    style={{ width: 80, paddingLeft: 20, paddingRight: 6, paddingTop: 6, paddingBottom: 6,
-                                        border: '1px solid #e5e7eb', borderRadius: 6, fontSize: 13 }}
+                                    type="date"
+                                    value={row.cost_date || ''}
+                                    onChange={e => updateRow(idx, 'cost_date', e.target.value)}
+                                    style={{ fontSize: 12, padding: '3px 6px', border: '1px solid #e5e7eb',
+                                        borderRadius: 5, color: '#6b7280', background: 'white', flex: 1 }}
                                 />
                             </div>
-                            {row._custom && (
-                                <button onClick={() => removeRow(idx)}
-                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: 16 }}>×</button>
-                            )}
                         </div>
                     ))}
                 </div>

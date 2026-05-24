@@ -831,8 +831,9 @@ async def list_external_costs(
     if not sb:
         raise HTTPException(status_code=503, detail="Database unavailable")
     res = sb.table("admin_external_costs") \
-        .select("id,category,label,amount_usd,note,period,created_at") \
+        .select("id,category,label,amount_usd,note,period,cost_date,created_at") \
         .eq("period", month) \
+        .order("cost_date", desc=False) \
         .execute()
     return {"month": month, "items": res.data or []}
 
@@ -850,12 +851,18 @@ async def create_external_cost(
         amount = float(body.get("amount_usd", 0) or 0)
     except (ValueError, TypeError):
         raise HTTPException(status_code=422, detail="amount_usd must be a number")
+    cost_date = body.get("cost_date") or None
+    period = body.get("period", "")
+    # Auto-derive period from cost_date if not supplied
+    if cost_date and not period:
+        period = cost_date[:7]  # 'YYYY-MM-DD' → 'YYYY-MM'
     row = {
         "category":   body.get("category", "other"),
         "label":      body.get("label", ""),
         "amount_usd": amount,
-        "period":     body.get("period", ""),
+        "period":     period,
         "note":       body.get("note"),
+        "cost_date":  cost_date,
     }
     res = sb.table("admin_external_costs").insert(row).execute()
     items = res.data or []
@@ -878,12 +885,17 @@ async def update_external_cost(
         amount = float(body.get("amount_usd", 0) or 0)
     except (ValueError, TypeError):
         raise HTTPException(status_code=422, detail="amount_usd must be a number")
+    cost_date = body.get("cost_date") or None
+    period = body.get("period", "")
+    if cost_date and not period:
+        period = cost_date[:7]
     row = {
         "category":   body.get("category", "other"),
         "label":      body.get("label", ""),
         "amount_usd": amount,
-        "period":     body.get("period", ""),
+        "period":     period,
         "note":       body.get("note"),
+        "cost_date":  cost_date,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
     res = sb.table("admin_external_costs").update(row).eq("id", cost_id).execute()
