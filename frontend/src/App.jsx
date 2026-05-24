@@ -5,6 +5,7 @@ import { trackPageview } from './lib/trackPageview';
 import { useClerk } from '@clerk/react';
 import QAAnswer from './components/QAAnswer';
 import { renderDomainContent } from './lib/renderDomainContent.jsx';
+import TopUpBanner from './components/TopUpBanner.jsx';
 
 const LANGUAGE_NAMES = {
     en: 'English', ar: 'Arabic',  zh: 'Chinese',    fr: 'French',
@@ -191,6 +192,9 @@ function App({ user }) {
     const [isUnlimitedDuration, setIsUnlimitedDuration] = useState(true);
     const [planTier, setPlanTier]                     = useState('free');
     const [limitModal, setLimitModal]                 = useState({ show: false, reason: '', plan: '', limit: 0, limitLabel: '', resetsAt: '', credits: 0, required: 1 });
+    // ── Credit top-up banner ──────────────────────────────
+    const [creditBalance, setCreditBalance]           = useState(0);
+    const balancePollRef                              = useRef(null);
 
     // ── Visual Lecture Intelligence (screen capture) ──────
     const [screenShareActive, setScreenShareActive]   = useState(false);
@@ -363,6 +367,7 @@ function App({ user }) {
         return () => {
             stopScreenShare();
             stopSummaryPoll();
+            stopBalancePoll();
             isRecordingRef.current = false;
             cancelAnimationFrame(animFrameRef.current);
             if (audioContextRef.current?.state !== 'closed') {
@@ -581,6 +586,7 @@ function App({ user }) {
         releaseTabAudio();
         disconnectSSE();
         stopSummaryPoll();
+        stopBalancePoll();
         clearSavedRecovery();
         setSessionStatus('ended');
         setEndModal(true);
@@ -765,6 +771,34 @@ function App({ user }) {
         summaryPollRef.current = null;
     };
 
+    const startBalancePoll = () => {
+        if (balancePollRef.current) return;
+        balancePollRef.current = setInterval(async () => {
+            try {
+                const res = await api.get('/api/v1/credits/balance');
+                const newBal = res.data?.credits ?? 0;
+                setCreditBalance(newBal);
+            } catch { /* ignore poll failures */ }
+        }, 20000);
+    };
+
+    const stopBalancePoll = () => {
+        clearInterval(balancePollRef.current);
+        balancePollRef.current = null;
+    };
+
+    const handleTopUp = () => {
+        window.open('/credits?topup=1', '_blank', 'noopener');
+        startBalancePoll();
+    };
+
+    const handleTopUpAutoEnd = () => {
+        stopBalancePoll();
+        if (lectureId) {
+            api.post(`/api/v1/live/${lectureId}/end`).catch(() => {});
+        }
+    };
+
     // ── Chunk overlap helper ──────────────────────────────
     const getLastTwoSentences = (text) => {
         if (!text) return '';
@@ -808,6 +842,12 @@ function App({ user }) {
             startSummaryPoll(res.data.lecture_id);
             startRecording(res.data.lecture_id);
             // isStarting clears when sessionStatus changes to 'recording' (in startRecording)
+
+            // Fetch initial credit balance for top-up banner
+            try {
+                const balRes = await api.get('/api/v1/credits/balance');
+                setCreditBalance(balRes.data?.credits ?? 0);
+            } catch { /* non-critical */ }
         } catch (err) {
             setIsStarting(false);
             if (err?.response?.status === 402) {
@@ -1253,6 +1293,7 @@ function App({ user }) {
         releaseTabAudio(); // stop tab audio tracks if active
         disconnectSSE();
         stopSummaryPoll();
+        stopBalancePoll();
         sseReconnectRef.current = 0;
         clearSavedRecovery();
         setSessionStatus('ended');
@@ -1720,6 +1761,16 @@ function App({ user }) {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* ── Mid-lecture top-up banner ── */}
+            {sessionStatus === 'recording' && (
+                <TopUpBanner
+                    recordingSeconds={recordingSeconds}
+                    creditBalance={creditBalance}
+                    onTopUp={handleTopUp}
+                    onAutoEnd={handleTopUpAutoEnd}
+                />
             )}
 
             {/* ── Limit Modal (no credits / plan limit) ── */}
@@ -2795,6 +2846,16 @@ function App({ user }) {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* ── Mid-lecture top-up banner ── */}
+            {sessionStatus === 'recording' && (
+                <TopUpBanner
+                    recordingSeconds={recordingSeconds}
+                    creditBalance={creditBalance}
+                    onTopUp={handleTopUp}
+                    onAutoEnd={handleTopUpAutoEnd}
+                />
             )}
 
             {/* ── Limit Modal ── */}
