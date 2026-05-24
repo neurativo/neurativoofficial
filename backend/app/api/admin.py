@@ -110,40 +110,50 @@ async def list_admins(admin: User = Depends(get_admin_user)):
         except Exception:
             pass  # Table may not exist yet — graceful degradation
 
-    # Enrich all entries with Clerk profile info where possible
-    all_user_ids = list(set(
-        list(settings.ADMIN_USER_IDS) + [r["user_id"] for r in db_admins]
-    ))
-    profiles: dict[str, dict] = {}
-    for uid in all_user_ids:
+    env_user_ids = list(settings.ADMIN_USER_IDS)
+
+    # Enrich with Clerk profile info (clerk_get_user is sync, returns {} on error)
+    profiles = {}
+    seen = set()
+    for uid in env_user_ids + [r["user_id"] for r in db_admins]:
+        if uid in seen:
+            continue
+        seen.add(uid)
         try:
-            p = clerk_get_user(uid)   # sync function — no await
-            profiles[uid] = p
+            profiles[uid] = clerk_get_user(uid) or {}
         except Exception:
-            profiles[uid] = {"id": uid, "email_addresses": [], "first_name": "", "last_name": ""}
+            profiles[uid] = {}
 
-    def _fmt(uid: str) -> dict:
+    def _profile_fields(uid):
         p = profiles.get(uid, {})
-        emails = p.get("email_addresses", [])
-        email = emails[0].get("email_address", "") if emails else ""
-        name = f"{p.get('first_name', '')} {p.get('last_name', '')}".strip() or uid
-        return {"user_id": uid, "name": name, "email": email,
-                "image_url": p.get("image_url", "")}
+        name = (p.get("display_name") or
+                f"{p.get('first_name', '')} {p.get('last_name', '')}".strip() or
+                uid)
+        return {
+            "user_id": uid,
+            "name": name,
+            "email": p.get("email", ""),
+            "image_url": p.get("image_url", ""),
+        }
 
-    env_entries = [
-        {**_fmt(uid), "source": "env", "removable": False}
-        for uid in settings.ADMIN_USER_IDS
-    ]
-    db_ids = {r["user_id"] for r in db_admins}
-    db_entries = [
-        {**_fmt(r["user_id"]), "source": "db",
-         "removable": r["user_id"] not in settings.ADMIN_USER_IDS,
-         "added_by": r["added_by"], "note": r.get("note"),
-         "created_at": r["created_at"]}
-        for r in db_admins
-        if r["user_id"] not in settings.ADMIN_USER_IDS
-    ]
-    return {"admins": env_entries + db_entries}
+    result = []
+    for uid in env_user_ids:
+        result.append({**_profile_fields(uid), "source": "env", "removable": False})
+
+    for row in db_admins:
+        uid = row["user_id"]
+        if uid in env_user_ids:
+            continue  # already listed as superadmin
+        result.append({
+            **_profile_fields(uid),
+            "source": "db",
+            "removable": True,
+            "added_by": row.get("added_by", ""),
+            "note": row.get("note"),
+            "created_at": row.get("created_at"),
+        })
+
+    return {"admins": result}
 
 
 @router.post("/admins", status_code=201)
