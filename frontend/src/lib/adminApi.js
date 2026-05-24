@@ -178,6 +178,18 @@ export const billingApi = {
     // Customer portal
     createCustomerPortal: (customerId, returnUrl = null) =>
         _billingPostParams(`/admin/customers/${customerId}/portal`, returnUrl ? { return_url: returnUrl } : {}),
+
+    getCreditPurchases: ({ page = 1, pageSize = 25, product, fromDate, toDate } = {}) =>
+        _billingGet('/admin/credit-purchases', {
+            page,
+            page_size: pageSize,
+            ...(product  ? { product }             : {}),
+            ...(fromDate ? { from_date: fromDate }  : {}),
+            ...(toDate   ? { to_date: toDate }      : {}),
+        }),
+
+    getCreditRevenue: () =>
+        _billingGet('/admin/credit-revenue'),
 };
 
 /**
