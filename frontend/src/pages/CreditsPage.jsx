@@ -93,6 +93,17 @@ const CSS = `
 
   .cr-error { background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 12px 16px; font-size: 13px; color: #dc2626; margin-bottom: 20px; }
   .cr-loading { text-align: center; padding: 80px; color: ${C.muted}; font-size: 14px; }
+
+  /* Subscriber gate */
+  .cr-gate-card { background: var(--color-card); border: 1.5px solid #fde68a; border-radius: 14px; padding: 20px 22px; margin-bottom: 20px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .cr-gate-icon { font-size: 24px; flex-shrink: 0; }
+  .cr-gate-text { flex: 1; min-width: 180px; }
+  .cr-gate-title { font-size: 14px; font-weight: 600; color: #92400e; margin-bottom: 3px; }
+  .cr-gate-sub { font-size: 12px; color: #b45309; line-height: 1.5; }
+  .cr-gate-btn { display: inline-block; padding: 8px 18px; background: #1a1a1a; color: #fafaf9; border-radius: 9px; font-size: 13px; font-weight: 500; text-decoration: none; white-space: nowrap; transition: opacity .15s; }
+  .cr-gate-btn:hover { opacity: 0.8; }
+  .cr-pack-lock-label { display: block; text-align: center; padding: 9px 16px; border-radius: 9px; font-size: 12px; font-weight: 500; color: var(--color-muted); border: 1.5px solid var(--color-border); background: transparent; }
+  .cr-topup-mode { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 12px 16px; font-size: 13px; color: #15803d; font-weight: 500; margin-bottom: 20px; display: flex; align-items: center; gap: 8px; }
 `;
 
 const REASON_LABELS = {
@@ -122,16 +133,19 @@ export default function CreditsPage() {
     const [error, setError]         = useState('');
     const [pending, setPending]     = useState(null);
     const [purchased, setPurchased] = useState(false);
+    const [planTier, setPlanTier]   = useState('free');
+    const isTopUpMode               = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '').get('topup') === '1';
 
     useEffect(() => {
         // Show success banner if redirected back from Dodo checkout
         if (new URLSearchParams(location.search).get('purchased') === '1') {
             setPurchased(true);
         }
-        Promise.all([creditsApi.getBalance(), creditsApi.getHistory()])
-            .then(([balRes, histRes]) => {
+        Promise.all([creditsApi.getBalance(), creditsApi.getHistory(), api.get('/api/v1/profile')])
+            .then(([balRes, histRes, profRes]) => {
                 setBalance(balRes.data);
                 setHistory(histRes.data.transactions || []);
+                setPlanTier(profRes.data?.plan_tier || 'free');
             })
             .catch(() => setError('Failed to load credit data.'))
             .finally(() => setLoading(false));
@@ -144,7 +158,11 @@ export default function CreditsPage() {
             const res = await api.post('/api/v1/billing/credits-checkout', { pack: product });
             window.location.href = res.data.checkout_url;
         } catch (err) {
-            setError(err.response?.data?.detail || 'Could not start checkout. Please try again.');
+            if (err.response?.status === 403 && err.response?.data?.error === 'subscription_required') {
+                setError('Credit packs require an active subscription. Please upgrade your plan first.');
+            } else {
+                setError(err.response?.data?.detail || 'Could not start checkout. Please try again.');
+            }
             setPending(null);
         }
     }
@@ -287,6 +305,25 @@ export default function CreditsPage() {
 
                 {/* Packs */}
                 <div className="cr-section-title">Buy credits</div>
+
+                {isTopUpMode && (
+                    <div className="cr-topup-mode">
+                        <span>💳</span>
+                        <span>Add credits to continue your recording — your session is still running in the other tab.</span>
+                    </div>
+                )}
+
+                {planTier === 'free' && (
+                    <div className="cr-gate-card">
+                        <div className="cr-gate-icon">🔒</div>
+                        <div className="cr-gate-text">
+                            <div className="cr-gate-title">Credit packs are available on Student &amp; Pro plans</div>
+                            <div className="cr-gate-sub">Subscribe to unlock top-ups, unlimited lectures, Q&amp;A, flashcards, and more.</div>
+                        </div>
+                        <a href="/pricing" className="cr-gate-btn">Upgrade to Student →</a>
+                    </div>
+                )}
+
                 <div className="cr-pack-grid">
                     {/* Small pack */}
                     <div className="cr-pack">
@@ -294,13 +331,17 @@ export default function CreditsPage() {
                         <div className="cr-pack-credits">{products.small_pack?.credits ?? 10} <span>credits</span></div>
                         <div className="cr-pack-price">${products.small_pack?.price_usd?.toFixed(2) ?? '4.99'}</div>
                         <div className="cr-pack-desc">Rs. 1,520 &middot; $0.50 each &middot; never expire.</div>
-                        <button
-                            className="cr-pack-btn cr-pack-btn-outline"
-                            onClick={() => handleBuy('small_pack')}
-                            disabled={!!pending}
-                        >
-                            {pending === 'small_pack' ? 'Processing…' : 'Buy pack'}
-                        </button>
+                        {planTier === 'free' ? (
+                            <span className="cr-pack-lock-label">🔒 Subscribers only</span>
+                        ) : (
+                            <button
+                                className="cr-pack-btn cr-pack-btn-outline"
+                                onClick={() => handleBuy('small_pack')}
+                                disabled={!!pending}
+                            >
+                                {pending === 'small_pack' ? 'Processing…' : 'Buy pack'}
+                            </button>
+                        )}
                     </div>
 
                     {/* Large pack */}
@@ -309,13 +350,17 @@ export default function CreditsPage() {
                         <div className="cr-pack-credits">{products.large_pack?.credits ?? 30} <span>credits</span></div>
                         <div className="cr-pack-price">${products.large_pack?.price_usd?.toFixed(2) ?? '11.99'}</div>
                         <div className="cr-pack-desc">Rs. 3,660 &middot; $0.40 each &middot; never expire.</div>
-                        <button
-                            className="cr-pack-btn cr-pack-btn-dark"
-                            onClick={() => handleBuy('large_pack')}
-                            disabled={!!pending}
-                        >
-                            {pending === 'large_pack' ? 'Processing…' : 'Buy pack'}
-                        </button>
+                        {planTier === 'free' ? (
+                            <span className="cr-pack-lock-label">🔒 Subscribers only</span>
+                        ) : (
+                            <button
+                                className="cr-pack-btn cr-pack-btn-dark"
+                                onClick={() => handleBuy('large_pack')}
+                                disabled={!!pending}
+                            >
+                                {pending === 'large_pack' ? 'Processing…' : 'Buy pack'}
+                            </button>
+                        )}
                     </div>
 
                     {/* Pro pack */}
@@ -324,13 +369,17 @@ export default function CreditsPage() {
                         <div className="cr-pack-credits">{products.pro_pack?.credits ?? 60} <span>credits</span></div>
                         <div className="cr-pack-price">${products.pro_pack?.price_usd?.toFixed(2) ?? '19.99'}</div>
                         <div className="cr-pack-desc">Rs. 6,700 &middot; $0.37 each &middot; best rate.</div>
-                        <button
-                            className="cr-pack-btn cr-pack-btn-outline"
-                            onClick={() => handleBuy('pro_pack')}
-                            disabled={!!pending}
-                        >
-                            {pending === 'pro_pack' ? 'Processing…' : 'Buy pack'}
-                        </button>
+                        {planTier === 'free' ? (
+                            <span className="cr-pack-lock-label">🔒 Subscribers only</span>
+                        ) : (
+                            <button
+                                className="cr-pack-btn cr-pack-btn-outline"
+                                onClick={() => handleBuy('pro_pack')}
+                                disabled={!!pending}
+                            >
+                                {pending === 'pro_pack' ? 'Processing…' : 'Buy pack'}
+                            </button>
+                        )}
                     </div>
                 </div>
 
