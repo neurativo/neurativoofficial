@@ -106,6 +106,26 @@ async def create_credits_checkout(body: CreditsCheckoutBody, user=Depends(get_ac
     if not settings.DODO_API_KEY:
         raise HTTPException(status_code=503, detail="Billing not configured")
 
+    # ── Subscription gate ──────────────────────────────────────────────────
+    try:
+        _db = supabase_service._fresh_db()
+        _prof = _db.table("profiles").select("plan_tier").eq(
+            "id", str(user.id)
+        ).maybe_single().execute()
+        _plan_tier = (_prof.data or {}).get("plan_tier", "free")
+    except Exception:
+        _plan_tier = "free"
+
+    if _plan_tier == "free":
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "subscription_required",
+                "message": "Credit packs require an active Student or Pro subscription.",
+            },
+        )
+    # ── End subscription gate ──────────────────────────────────────────────
+
     user_id = str(user.id)
     email = getattr(user, "email", "") or ""
     pack = body.pack
