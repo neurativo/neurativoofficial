@@ -1,6 +1,6 @@
 """Tests for graceful credit shortfall handling in finalize_reserved_credits."""
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, call
 from fastapi import HTTPException
 
 
@@ -17,10 +17,6 @@ def _make_db(credits=0, reserved_amount=1):
     tx_resp = MagicMock()
     tx_resp.data = [{"amount": -reserved_amount, "reason": "credit_reserved"}]
     db.table.return_value.select.return_value.eq.return_value.eq.return_value.execute.return_value = tx_resp
-
-    # lectures.select for refund_credit
-    lec_resp = MagicMock()
-    lec_resp.data = [{"credit_deducted": True, "total_duration_seconds": 1800}]
 
     return db
 
@@ -51,6 +47,23 @@ def test_finalize_still_deducts_when_balance_sufficient():
         mock_db_fn.return_value = db
 
         finalize_reserved_credits("user-1", "lecture-1", actual_duration_seconds=2100)
-        mock_deduct.assert_called_once()
-        args = mock_deduct.call_args[0]
-        assert args[2] == 1
+        mock_deduct.assert_called_once_with(
+            "user-1", "lecture-1", 1, reason="lecture_processed"
+        )
+
+
+def test_finalize_propagates_non_402_exception():
+    """Non-402 HTTPExceptions from _deduct_amount must still be raised."""
+    from app.services.credits_service import finalize_reserved_credits
+
+    with patch("app.services.credits_service._fresh_db") as mock_db_fn, \
+         patch("app.services.credits_service.mark_credit_deducted"), \
+         patch("app.services.credits_service._deduct_amount") as mock_deduct:
+        db = _make_db(credits=5, reserved_amount=1)
+        mock_db_fn.return_value = db
+        mock_deduct.side_effect = HTTPException(status_code=500, detail="internal error")
+
+        with pytest.raises(HTTPException) as exc_info:
+            finalize_reserved_credits("user-1", "lecture-1", actual_duration_seconds=2100)
+
+        assert exc_info.value.status_code == 500
