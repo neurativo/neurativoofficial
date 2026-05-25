@@ -705,11 +705,11 @@ const CSS = `
     font-size: 30px; font-weight: 600; color: #fafaf9; letter-spacing: -1px;
     line-height: 1.2; margin-bottom: 16px; font-family: 'Inter', sans-serif;
   }
-  .lp-vision-h2 span { color: rgba(255,255,255,0.32); }
+  .lp-vision-h2 span { color: rgba(255,255,255,0.52); }
   .lp-vision-sub { font-size: 14px; color: rgba(255,255,255,0.45); line-height: 1.8; }
 
   .lp-vtl { display: flex; flex-direction: column; }
-  .lp-vtl-item { display: flex; gap: 16px; align-items: flex-start; padding-bottom: 26px; position: relative; }
+  .lp-vtl-item { display: flex; gap: 16px; align-items: flex-start; padding-bottom: 36px; position: relative; }
   .lp-vtl-item:not(:last-child)::before {
     content: ''; position: absolute; left: 15px; top: 28px; bottom: 0;
     width: 1px; background: rgba(255,255,255,0.08);
@@ -1074,7 +1074,7 @@ function VisionSection() {
                     </div>
                     <h2 className="lp-vision-h2">
                         Today, it captures your lecture.<br />
-                        <span>Tomorrow, it teaches you.</span>
+                        <span>Tomorrow, it guides your learning.</span>
                     </h2>
                     <p className="lp-vision-sub">
                         We built Neurativo to solve a problem every student knows — you can't fully listen, take notes, and understand at the same time. That's where we started.
@@ -1089,7 +1089,7 @@ function VisionSection() {
                         <div className="lp-vtl-dot-wrap"><div className="lp-vtl-dot active" /></div>
                         <div>
                             <div className="lp-vtl-label">Now</div>
-                            <div className="lp-vtl-title active">Real-time lecture AI</div>
+                            <div className="lp-vtl-title active">Live lecture intelligence</div>
                             <div className="lp-vtl-desc active">Live transcription, smart notes, flashcards, quiz, Q&amp;A — built as your professor speaks.</div>
                         </div>
                     </div>
@@ -1097,7 +1097,7 @@ function VisionSection() {
                         <div className="lp-vtl-dot-wrap"><div className="lp-vtl-dot active" /></div>
                         <div>
                             <div className="lp-vtl-label">In progress</div>
-                            <div className="lp-vtl-title active">Adaptive study</div>
+                            <div className="lp-vtl-title active">Adaptive learning</div>
                             <div className="lp-vtl-desc active">Spaced repetition, concept maps, exam simulation, and weak-spot identification across all your lectures.</div>
                         </div>
                     </div>
