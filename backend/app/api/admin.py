@@ -11,6 +11,8 @@ an in-memory deque (fast display buffer for the current process lifetime).
 """
 import collections
 import calendar as _calendar
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -98,61 +100,57 @@ class CreateAnnouncementRequest(BaseModel):
 # Routes
 # ---------------------------------------------------------------------------
 
+_clerk_executor = ThreadPoolExecutor(max_workers=4)
+
+
 @router.get("/admins")
 async def list_admins(admin: User = Depends(get_admin_user)):
     """List all admins: env-var superadmins + DB-managed admins."""
-    sb = _sb_client()
+    loop = asyncio.get_event_loop()
+
+    # 1. Fetch DB-managed admins (sync supabase call in thread)
     db_admins = []
-    if sb:
-        try:
-            res = sb.table("admin_users").select("user_id,added_by,note,created_at").order("created_at").execute()
+    try:
+        sb = _sb_client()
+        if sb:
+            def _fetch_db():
+                return sb.table("admin_users").select("user_id,added_by,note,created_at").order("created_at").execute()
+            res = await loop.run_in_executor(_clerk_executor, _fetch_db)
             db_admins = res.data or []
-        except Exception:
-            pass  # Table may not exist yet — graceful degradation
+    except Exception:
+        pass
 
     env_user_ids = list(settings.ADMIN_USER_IDS)
+    all_uids = list({uid for uid in env_user_ids + [r["user_id"] for r in db_admins]})
 
-    # Enrich with Clerk profile info (clerk_get_user is sync, returns {} on error)
-    profiles = {}
-    seen = set()
-    for uid in env_user_ids + [r["user_id"] for r in db_admins]:
-        if uid in seen:
-            continue
-        seen.add(uid)
+    # 2. Enrich with Clerk profiles concurrently (sync HTTP in thread pool)
+    async def _get_profile(uid):
         try:
-            profiles[uid] = clerk_get_user(uid) or {}
+            return uid, await loop.run_in_executor(_clerk_executor, clerk_get_user, uid)
         except Exception:
-            profiles[uid] = {}
+            return uid, {}
 
-    def _profile_fields(uid):
+    profile_pairs = await asyncio.gather(*[_get_profile(uid) for uid in all_uids])
+    profiles = {uid: (p or {}) for uid, p in profile_pairs}
+
+    def _fmt(uid):
         p = profiles.get(uid, {})
         name = (p.get("display_name") or
                 f"{p.get('first_name', '')} {p.get('last_name', '')}".strip() or
                 uid)
-        return {
-            "user_id": uid,
-            "name": name,
-            "email": p.get("email", ""),
-            "image_url": p.get("image_url", ""),
-        }
+        return {"user_id": uid, "name": name,
+                "email": p.get("email", ""), "image_url": p.get("image_url", "")}
 
     result = []
     for uid in env_user_ids:
-        result.append({**_profile_fields(uid), "source": "env", "removable": False})
-
+        result.append({**_fmt(uid), "source": "env", "removable": False})
     for row in db_admins:
         uid = row["user_id"]
         if uid in env_user_ids:
-            continue  # already listed as superadmin
-        result.append({
-            **_profile_fields(uid),
-            "source": "db",
-            "removable": True,
-            "added_by": row.get("added_by", ""),
-            "note": row.get("note"),
-            "created_at": row.get("created_at"),
-        })
-
+            continue
+        result.append({**_fmt(uid), "source": "db", "removable": True,
+                       "added_by": row.get("added_by", ""), "note": row.get("note"),
+                       "created_at": row.get("created_at")})
     return {"admins": result}
 
 
@@ -164,8 +162,9 @@ async def add_admin(body: dict, admin: User = Depends(get_admin_user)):
         raise HTTPException(status_code=422, detail="user_id is required")
     if user_id == admin.id:
         raise HTTPException(status_code=400, detail="You are already an admin")
-    # Validate that this Clerk user exists
-    profile = clerk_get_user(user_id)   # sync — no await
+    # Validate that this Clerk user exists (sync call → thread)
+    loop = asyncio.get_event_loop()
+    profile = await loop.run_in_executor(_clerk_executor, clerk_get_user, user_id)
     if not profile:
         raise HTTPException(status_code=404, detail="Clerk user not found")
     sb = _sb_client()
