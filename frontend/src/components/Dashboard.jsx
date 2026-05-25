@@ -464,7 +464,7 @@ function LectureCard({ lecture, onDelete, onShare, onExport }) {
     }, [menuOpen]);
 
     const displayPreview = cleanPreview(lecture.summary_preview);
-    const isImport = !lecture.live_session_id;
+    const isImport = !lecture.is_live;
     const sectionCount = lecture.total_sections || 0;
 
     return (
