@@ -20,6 +20,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from pydantic import BaseModel
 
 from app.core.auth import get_admin_user, User
+from app.core.config import settings
 from app.core.plans import PLAN_LIMITS
 from app.services.clerk_service import clerk_list_users, clerk_get_user, clerk_get_user_count
 from app.services.supabase_service import (
