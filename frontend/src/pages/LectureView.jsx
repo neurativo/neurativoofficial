@@ -1462,9 +1462,23 @@ export default function LectureView() {
     };
     onHandleDragRef.current = onHandleDrag;
 
-    const segments = lecture?.transcript
-        ? lecture.transcript.split('\n').filter(s => s.trim())
-        : [];
+    // Split transcript into readable segments.
+    // Live recordings: already newline-separated 12-second chunks → keep as-is.
+    // Imported recordings: arrive as one big paragraph → split into sentence groups.
+    const { segments, isSentenceSplit } = (() => {
+        const raw = lecture?.transcript || '';
+        if (!raw) return { segments: [], isSentenceSplit: false };
+        const lines = raw.split('\n').filter(s => s.trim());
+        if (lines.length > 2) return { segments: lines, isSentenceSplit: false };
+        // Single blob — split on sentence boundaries, group 3 per chunk
+        const sentences = raw.match(/[^.!?]+(?:[.!?]+(?:\s|$)|\s*$)/g) || [raw];
+        const chunks = [];
+        for (let i = 0; i < sentences.length; i += 3) {
+            const chunk = sentences.slice(i, i + 3).join(' ').trim();
+            if (chunk) chunks.push(chunk);
+        }
+        return { segments: chunks.length > 0 ? chunks : lines, isSentenceSplit: true };
+    })();
 
     const wordCount = lecture?.transcript_word_count || segments.reduce((n, s) => n + s.split(/\s+/).filter(Boolean).length, 0);
     const summaryText = lecture?.master_summary || lecture?.summary || '';
@@ -1705,8 +1719,10 @@ export default function LectureView() {
                                             return (
                                                 <div key={i} className={`lv-segment lv-chunk-enter${isLast && !q ? ' lv-seg-live' : ''}`}>
                                                     <span className="lv-seg-num">
-                                                        {fmtTs(i * 12)}<br />
-                                                        <span style={{ opacity: 0.6 }}>–{fmtTs((i + 1) * 12)}</span>
+                                                        {isSentenceSplit
+                                                            ? <span style={{ opacity: 0.5 }}>{String(i + 1).padStart(2, '0')}</span>
+                                                            : <>{fmtTs(i * 12)}<br /><span style={{ opacity: 0.6 }}>–{fmtTs((i + 1) * 12)}</span></>
+                                                        }
                                                     </span>
                                                     {display}
                                                 </div>
