@@ -326,8 +326,9 @@ function ManageCostsPanel({ month, onClose, onSaved }) {
             });
             const customs = existing.filter(e => !DEFAULT_ROWS.find(d => d.category === e.category));
             setRows([...merged, ...customs.map(c => ({ ...c, _dirty: false, _custom: true }))]);
-        } catch {
+        } catch (e) {
             setRows(DEFAULT_ROWS.map(d => ({ ...d, id: null, period: m, _dirty: false })));
+            setError(e?.message || 'Failed to load costs for this month');
         }
     }, []);
 

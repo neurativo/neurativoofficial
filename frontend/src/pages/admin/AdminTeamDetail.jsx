@@ -47,10 +47,10 @@ export default function AdminTeamDetail() {
 
     async function handleTierChange(memberId, tier) {
         await updateMember(slug, memberId, { seat_tier: tier }).catch(() => {});
-        setData(prev => ({
+        setData(prev => prev ? ({
             ...prev,
-            members: prev.members.map(m => m.id === memberId ? { ...m, seat_tier: tier } : m),
-        }));
+            members: (prev.members || []).map(m => m.id === memberId ? { ...m, seat_tier: tier } : m),
+        }) : prev);
     }
 
     async function handleRemove(memberId) {
