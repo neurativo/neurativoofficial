@@ -687,6 +687,57 @@ const CSS = `
   .dark .lp-faq-q:hover { background: var(--color-bg); }
   .dark .lp-faq-chevron { color: var(--color-muted); }
   .dark .lp-faq-a { color: var(--color-sec); }
+
+  /* ── VISION ── */
+  .lp-vision-wrap { padding: 0 40px 80px; max-width: 960px; margin: 0 auto; }
+  .lp-vision-inner {
+    background: #111; border-radius: 20px; padding: 60px 52px;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 52px; align-items: center;
+  }
+  .lp-vision-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 10px; font-weight: 600; letter-spacing: 1.2px; text-transform: uppercase;
+    color: rgba(255,255,255,0.35); border: 1px solid rgba(255,255,255,0.1);
+    padding: 4px 12px; border-radius: 100px; margin-bottom: 22px;
+  }
+  .lp-vision-badge-dot { width: 5px; height: 5px; border-radius: 50%; background: #22c55e; flex-shrink: 0; }
+  .lp-vision-h2 {
+    font-size: 30px; font-weight: 600; color: #fafaf9; letter-spacing: -1px;
+    line-height: 1.2; margin-bottom: 16px; font-family: 'Inter', sans-serif;
+  }
+  .lp-vision-h2 span { color: rgba(255,255,255,0.32); }
+  .lp-vision-sub { font-size: 14px; color: rgba(255,255,255,0.45); line-height: 1.8; }
+
+  .lp-vtl { display: flex; flex-direction: column; }
+  .lp-vtl-item { display: flex; gap: 16px; align-items: flex-start; padding-bottom: 26px; position: relative; }
+  .lp-vtl-item:not(:last-child)::before {
+    content: ''; position: absolute; left: 15px; top: 28px; bottom: 0;
+    width: 1px; background: rgba(255,255,255,0.08);
+  }
+  .lp-vtl-dot-wrap { width: 32px; flex-shrink: 0; display: flex; justify-content: center; padding-top: 3px; }
+  .lp-vtl-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.15); background: transparent; flex-shrink: 0;
+  }
+  .lp-vtl-dot.active { background: #22c55e; border-color: #22c55e; }
+  .lp-vtl-dot.future { border-style: dashed; opacity: 0.5; }
+  .lp-vtl-label { font-size: 10px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: rgba(255,255,255,0.25); margin-bottom: 3px; }
+  .lp-vtl-title { font-size: 14px; font-weight: 500; color: rgba(255,255,255,0.38); margin-bottom: 4px; }
+  .lp-vtl-title.active { color: #fafaf9; }
+  .lp-vtl-desc { font-size: 12px; color: rgba(255,255,255,0.22); line-height: 1.65; }
+  .lp-vtl-desc.active { color: rgba(255,255,255,0.45); }
+
+  @media (max-width: 768px) {
+    .lp-vision-wrap { padding: 0 24px 60px; }
+    .lp-vision-inner { grid-template-columns: 1fr; padding: 32px 24px; gap: 32px; }
+    .lp-vision-h2 { font-size: 24px; }
+  }
+  @media (max-width: 480px) {
+    .lp-vision-wrap { padding: 0 16px 48px; }
+    .lp-vision-inner { padding: 28px 20px; gap: 28px; }
+    .lp-vision-h2 { font-size: 20px; letter-spacing: -0.6px; }
+  }
+  .dark .lp-vision-inner { background: #0a0a0a; border: 1px solid rgba(255,255,255,0.06); }
 `;
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
@@ -1010,6 +1061,59 @@ function NASTSection() {
     );
 }
 
+
+function VisionSection() {
+    return (
+        <div className="lp-vision-wrap">
+            <div className="lp-vision-inner">
+                {/* Left — copy */}
+                <div>
+                    <div className="lp-vision-badge">
+                        <span className="lp-vision-badge-dot" />
+                        Where this is going
+                    </div>
+                    <h2 className="lp-vision-h2">
+                        Today, it captures your lecture.<br />
+                        <span>Tomorrow, it teaches you.</span>
+                    </h2>
+                    <p className="lp-vision-sub">
+                        We built Neurativo to solve a problem every student knows — you can't fully listen, take notes, and understand at the same time. That's where we started.
+                        <br /><br />
+                        But a lecture is just the beginning of learning. The gap between hearing something and truly knowing it is where most students fall behind. We're working on closing that gap.
+                    </p>
+                </div>
+
+                {/* Right — timeline */}
+                <div className="lp-vtl">
+                    <div className="lp-vtl-item">
+                        <div className="lp-vtl-dot-wrap"><div className="lp-vtl-dot active" /></div>
+                        <div>
+                            <div className="lp-vtl-label">Now</div>
+                            <div className="lp-vtl-title active">Real-time lecture AI</div>
+                            <div className="lp-vtl-desc active">Live transcription, smart notes, flashcards, quiz, Q&amp;A — built as your professor speaks.</div>
+                        </div>
+                    </div>
+                    <div className="lp-vtl-item">
+                        <div className="lp-vtl-dot-wrap"><div className="lp-vtl-dot active" /></div>
+                        <div>
+                            <div className="lp-vtl-label">In progress</div>
+                            <div className="lp-vtl-title active">Adaptive study</div>
+                            <div className="lp-vtl-desc active">Spaced repetition, concept maps, exam simulation, and weak-spot identification across all your lectures.</div>
+                        </div>
+                    </div>
+                    <div className="lp-vtl-item">
+                        <div className="lp-vtl-dot-wrap"><div className="lp-vtl-dot future" /></div>
+                        <div>
+                            <div className="lp-vtl-label">On the horizon</div>
+                            <div className="lp-vtl-title">Learning that continues after class ends</div>
+                            <div className="lp-vtl-desc">A learning system that understands what you've learned, what you've revised, and what still needs attention.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
 
 function Mockup() {
     return (
@@ -1545,6 +1649,7 @@ export default function LandingPage({ user }) {
                     <Features />
                     <NASTSection />
                     <HowItWorks />
+                    <VisionSection />
                     <Testimonials />
                     <Pricing user={user} />
                     <About />
