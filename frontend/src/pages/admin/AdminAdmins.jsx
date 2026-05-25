@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useAuth } from '@clerk/react';
 import { adminApi } from '../../lib/adminApi.js';
 
 // ── Add Admin Modal ────────────────────────────────────────────────────────────
@@ -163,6 +164,7 @@ function AddAdminModal({ onClose, onAdded }) {
 
 // ── Main page ──────────────────────────────────────────────────────────────────
 export default function AdminAdmins() {
+    const { isLoaded, isSignedIn } = useAuth();
     const [admins, setAdmins]     = useState([]);
     const [loading, setLoading]   = useState(true);
     const [error, setError]       = useState('');
@@ -183,7 +185,9 @@ export default function AdminAdmins() {
         }
     }, []);
 
-    useEffect(() => { load(); }, [load]);
+    useEffect(() => {
+        if (isLoaded && isSignedIn) load();
+    }, [load, isLoaded, isSignedIn]);
 
     const handleRemove = async (userId) => {
         if (!window.confirm('Remove admin access for this user?')) return;
