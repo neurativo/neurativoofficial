@@ -114,7 +114,7 @@ const CSS = `
 
   /* Empty state */
   .db-empty { text-align: center; padding: 80px 24px 40px; }
-  .db-empty-num { font-size: 72px; font-weight: 700; color: ${C.border}; font-family: 'Courier New', monospace; letter-spacing: -6px; line-height: 1; margin-bottom: 20px; }
+  .db-empty-icon { display: flex; justify-content: center; margin-bottom: 24px; opacity: 0.7; }
   .db-empty-title { font-size: 18px; font-weight: 500; color: ${C.text}; letter-spacing: -0.4px; margin: 0 0 6px; }
   .db-empty-sub { font-size: 14px; color: ${C.sec}; margin: 0 0 24px; }
   .db-btn-start { display: inline-block; padding: 10px 22px; background: ${C.dark}; color: ${C.darkFg}; font-size: 13px; font-weight: 500; border: none; border-radius: 10px; cursor: pointer; text-decoration: none; transition: opacity 0.15s; font-family: inherit; }
@@ -161,7 +161,6 @@ const CSS = `
     .db-btn-new { padding: 7px 9px; }
     .db-menu-btn { opacity: 1 !important; }
     .db-empty { padding: 40px 16px 24px; }
-    .db-empty-num { font-size: 52px; letter-spacing: -4px; }
     .db-filters { gap: 6px; }
     .db-filter-select { font-size: 12px; padding: 5px 8px; }
     .db-proc-card { padding: 14px 16px; gap: 8px; }
@@ -256,6 +255,30 @@ const CSS = `
   .db-proc-fill { height: 100%; background: ${C.dark}; border-radius: 3px; transition: width 0.5s ease; }
   .db-proc-date { font-size: 11px; color: ${C.muted}; }
 `;
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function getGreeting() {
+    const h = new Date().getHours();
+    if (h < 12) return 'Good morning';
+    if (h < 17) return 'Good afternoon';
+    return 'Good evening';
+}
+
+// Strip markdown noise from summary preview and return a clean first sentence
+function cleanPreview(raw) {
+    if (!raw) return null;
+    const cleaned = raw
+        .split('\n')
+        .map(l => l.replace(/^#{1,3}\s*/, '').replace(/^[>→\-]\s*/, '').trim())
+        .filter(l => l.length > 10)
+        .join(' ')
+        .replace(/\*\*(.*?)\*\*/g, '$1')
+        .trim();
+    if (!cleaned) return null;
+    const dot = cleaned.search(/\.\s/);
+    if (dot > 30 && dot < 140) return cleaned.slice(0, dot + 1);
+    return cleaned.slice(0, 110);
+}
 
 // ─── Import processing constants ──────────────────────────────────────────────
 const IMPORT_STATUSES = new Set(['queued','importing','compressing','transcribing','cleaning','generating','storing','summarizing']);
@@ -440,27 +463,12 @@ function LectureCard({ lecture, onDelete, onShare, onExport }) {
         return () => document.removeEventListener('mousedown', handler);
     }, [menuOpen]);
 
-    const preview = lecture.summary_preview;
-    const hasSummary = preview && preview.trim().length > 0;
-    const displayPreview = hasSummary ? preview.slice(0, 90) : null;
-
-    const statParts = [];
-    if (lecture.total_chunks > 0) statParts.push(`${lecture.total_chunks} chunks`);
-    if (lecture.total_sections > 0) statParts.push(`${lecture.total_sections} sections`);
+    const displayPreview = cleanPreview(lecture.summary_preview);
+    const isImport = !lecture.live_session_id;
+    const sectionCount = lecture.total_sections || 0;
 
     return (
         <div className="db-card" onClick={() => navigate(`/lecture/${lecture.id}`)}>
-            {/* Processing badge */}
-            {['importing','compressing','transcribing','cleaning','generating','storing'].includes(lecture.summary_status) && (
-                <span style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 4,
-                    fontSize: 11, padding: '2px 8px', borderRadius: 5,
-                    background: '#ede9fe', color: '#7c3aed',
-                    marginBottom: 8,
-                }}>
-                    &#x27F3; Processing&hellip;
-                </span>
-            )}
 
             {/* Top row: title + date */}
             <div className="db-card-top">
@@ -473,17 +481,25 @@ function LectureCard({ lecture, onDelete, onShare, onExport }) {
                 {lecture.topic && <span className="db-pill db-pill-topic">{lecture.topic}</span>}
                 {lecture.language && <span className="db-pill db-pill-lang">{langName(lecture.language)}</span>}
                 {lecture.total_duration_seconds > 0 && <span className="db-pill db-pill-dur">{fmtDur(lecture.total_duration_seconds)}</span>}
+                {isImport && (
+                    <span className="db-pill" style={{ background: 'var(--color-bg)', color: 'var(--color-muted)', border: '1px solid var(--color-border)', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                        <svg width="9" height="9" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        Import
+                    </span>
+                )}
             </div>
 
             {/* Preview */}
-            {hasSummary
-                ? <div className="db-card-preview">{displayPreview}{preview.length > 90 ? '…' : ''}</div>
-                : <div className="db-card-preview-empty">Summary generating…</div>
+            {displayPreview
+                ? <div className="db-card-preview">{displayPreview}</div>
+                : <div className="db-card-preview-empty">Summary building…</div>
             }
 
             {/* Footer */}
             <div className="db-card-footer">
-                <div className="db-card-stat">{statParts.join(' · ')}</div>
+                <div className="db-card-stat">
+                    {sectionCount > 0 ? `${sectionCount} section${sectionCount !== 1 ? 's' : ''}` : ''}
+                </div>
                 <div className="db-menu-wrap" ref={menuRef} onClick={e => e.stopPropagation()}>
                     <button className="db-menu-btn" onClick={() => setMenuOpen(o => !o)}>
                         <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24">
@@ -862,7 +878,7 @@ export default function Dashboard({ user }) {
                             </span>
                         </div>
                     )}
-                    <h1 className="db-page-title">Your lectures</h1>
+                    <h1 className="db-page-title">{getGreeting()}</h1>
                     <p className="db-page-sub">{loading ? '' : `${lectures.length} ${lectureWord}`}</p>
 
                     {/* Beta testing banner */}
@@ -1070,10 +1086,16 @@ export default function Dashboard({ user }) {
                         </div>
                     ) : lectures.length === 0 ? (
                         <div className="db-empty">
-                            <div className="db-empty-num">00</div>
+                            <div className="db-empty-icon">
+                                <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <circle cx="20" cy="20" r="19" stroke="#e8e4df" strokeWidth="2"/>
+                                    <circle cx="20" cy="20" r="7" fill="#e8e4df"/>
+                                    <circle cx="20" cy="20" r="3" fill="#c8c4be"/>
+                                </svg>
+                            </div>
                             <p className="db-empty-title">No lectures yet</p>
-                            <p className="db-empty-sub">Start recording your first lecture</p>
-                            <button className="db-btn-start" onClick={() => navigate('/record')}>New Lecture</button>
+                            <p className="db-empty-sub">Record a lecture or upload an audio file to get started.</p>
+                            <button className="db-btn-start" onClick={() => navigate('/record')}>Start recording</button>
                         </div>
                     ) : filtered.length === 0 ? (
                         <div className="db-no-match">
