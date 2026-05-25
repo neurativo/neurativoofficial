@@ -1626,10 +1626,10 @@ function App({ user }) {
 
                     {/* Headline */}
                     <h1 className="text-[28px] font-bold text-[#1a1a1a] leading-tight mb-3 font-heading">
-                        Your AI<br />lecture assistant.
+                        Press record.<br />Your lecture becomes everything.
                     </h1>
                     <p className="text-[#6b6b6b] text-sm leading-relaxed mb-8">
-                        Record any lecture and get live transcription, real-time summaries, and instant Q&amp;A — as it happens.
+                        Live transcription, smart notes, flashcards, and instant Q&amp;A — built as your professor speaks.
                     </p>
 
                     {/* Features — 6 cards matching actual capabilities */}
@@ -1638,7 +1638,7 @@ function App({ user }) {
                             { icon: 'M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z', label: 'Live transcription', sub: 'Whisper-powered' },
                             { icon: 'M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129', label: 'Multilingual', sub: '30+ languages' },
                             { icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01', label: 'Topic-aware AI', sub: 'Smart summaries' },
-                            { icon: 'M13 10V3L4 14h7v7l9-11h-7z', label: 'N.A.S.T. scoring', sub: 'Semantic novelty' },
+                            { icon: 'M13 10V3L4 14h7v7l9-11h-7z', label: 'Topic detection', sub: 'Auto-senses subject' },
                             { icon: 'M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z', label: 'Citation Q&A', sub: 'Grounded answers' },
                             { icon: 'M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z', label: 'Export to PDF', sub: 'Full report' },
                         ].map(({ icon, label, sub }) => (
