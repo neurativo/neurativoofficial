@@ -171,13 +171,24 @@ async def add_admin(body: dict, admin: User = Depends(get_admin_user)):
     sb = _sb_client()
     if not sb:
         raise HTTPException(status_code=503, detail="Database unavailable")
-    existing = sb.table("admin_users").select("user_id").eq("user_id", user_id).maybe_single().execute()
-    if existing.data or user_id in settings.ADMIN_USER_IDS:
+    if user_id in settings.ADMIN_USER_IDS:
         raise HTTPException(status_code=409, detail="User is already an admin")
-    row = {"user_id": user_id, "added_by": admin.id, "note": body.get("note") or None}
-    res = sb.table("admin_users").insert(row).execute()
+    try:
+        existing = sb.table("admin_users").select("user_id").eq("user_id", user_id).maybe_single().execute()
+        if existing.data:
+            raise HTTPException(status_code=409, detail="User is already an admin")
+    except HTTPException:
+        raise
+    except Exception:
+        pass  # Table may not exist yet — safe to proceed with insert
+    try:
+        res = sb.table("admin_users").insert(
+            {"user_id": user_id, "added_by": admin.id, "note": body.get("note") or None}
+        ).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Insert failed — run migration 014_admin_users.sql in Supabase. ({e})")
     if not res.data:
-        raise HTTPException(status_code=500, detail="Insert failed")
+        raise HTTPException(status_code=500, detail="Insert failed — run migration 014_admin_users.sql in Supabase.")
     return res.data[0]
 
 
