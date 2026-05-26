@@ -87,48 +87,51 @@ const CSS = `
   .lv-search-input::placeholder { color: ${C.muted}; }
   .lv-seg-highlight { background: #fef08a; border-radius: 2px; }
 
-  /* Concept cards — modern borderless shadow design */
+  /* Concept cards */
   @keyframes lv-card-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
   .lv-sum-card {
-    background: ${C.card}; border: 1px solid ${C.border}; border-radius: 16px;
-    margin-bottom: 12px; overflow: hidden;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04);
+    background: ${C.card}; border: 1px solid ${C.border}; border-radius: 18px;
+    margin-bottom: 10px; overflow: hidden;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 4px 14px rgba(0,0,0,0.04);
     animation: lv-card-in 0.22s ease both;
-    transition: box-shadow 0.2s;
+    transition: box-shadow 0.18s, transform 0.18s;
   }
-  .dark .lv-sum-card { box-shadow: 0 2px 12px rgba(0,0,0,0.35); }
-  .lv-sum-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.09), 0 8px 24px rgba(0,0,0,0.07); }
-  .dark .lv-sum-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
-  /* Stagger animation for multiple cards */
+  .dark .lv-sum-card { box-shadow: 0 2px 12px rgba(0,0,0,0.3); }
+  .lv-sum-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.07), 0 8px 28px rgba(0,0,0,0.07); transform: translateY(-1px); }
+  .dark .lv-sum-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.45); transform: translateY(-1px); }
   .lv-sum-card:nth-child(1) { animation-delay: 0ms; }
   .lv-sum-card:nth-child(2) { animation-delay: 40ms; }
   .lv-sum-card:nth-child(3) { animation-delay: 80ms; }
   .lv-sum-card:nth-child(4) { animation-delay: 120ms; }
   .lv-sum-card:nth-child(n+5) { animation-delay: 160ms; }
 
-  /* Card section row — used for each content block */
-  .lv-cs { border-top: 1px solid ${C.border}; padding: 12px 16px; }
-  /* Pill chip label inside sections */
-  .lv-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 9px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: ${C.muted}; background: rgba(0,0,0,0.05); border-radius: 99px; padding: 3px 9px; margin-bottom: 9px; }
-  .dark .lv-chip { background: rgba(255,255,255,0.08); }
-  .lv-chip-amber { color: #b45309; background: #fef3c7; }
-  .dark .lv-chip-amber { color: #fbbf24; background: rgba(245,158,11,0.15); }
-  .lv-chip-green { color: #15803d; background: #dcfce7; }
-  .dark .lv-chip-green { color: #6ee7b7; background: rgba(16,185,129,0.15); }
+  /* Accent bar at top of card */
+  .lv-card-bar { height: 3px; width: 100%; }
+
+  /* Card section row */
+  .lv-cs { border-top: 1px solid ${C.border}; padding: 13px 18px; }
+
+  /* Section label — clean, minimal */
+  .lv-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 600; letter-spacing: 0.01em; color: ${C.muted}; margin-bottom: 10px; }
+  .lv-chip-amber { color: #b45309; }
+  .dark .lv-chip-amber { color: #fbbf24; }
+  .lv-chip-green { color: #15803d; }
+  .dark .lv-chip-green { color: #6ee7b7; }
+  .lv-chip-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; flex-shrink: 0; opacity: 0.7; }
 
   /* VS comparison grid */
   .lv-vs-grid { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: stretch; }
-  .lv-vs-cell { padding: 9px 11px; border: 1px solid ${C.border}; border-radius: 10px; background: ${C.bg}; font-size: 12px; color: ${C.sec}; line-height: 1.55; }
-  .lv-vs-badge { align-self: center; display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; background: ${C.bg}; border: 1px solid ${C.border}; font-size: 8px; font-weight: 800; color: ${C.muted}; flex-shrink: 0; }
-  .lv-vs-label { font-size: 9px; font-weight: 700; color: var(--color-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 5px; }
+  .lv-vs-cell { padding: 10px 12px; border: 1px solid ${C.border}; border-radius: 12px; background: ${C.bg}; font-size: 12px; color: ${C.sec}; line-height: 1.6; }
+  .lv-vs-badge { align-self: center; display: flex; align-items: center; justify-content: center; width: 28px; font-size: 9px; font-weight: 700; color: ${C.muted}; flex-shrink: 0; letter-spacing: 0.05em; }
+  .lv-vs-label { font-size: 10px; font-weight: 600; color: var(--color-muted); margin-bottom: 5px; }
 
   /* Examples list */
-  .lv-ex-row { display: flex; align-items: baseline; gap: 7px; font-size: 12px; color: ${C.sec}; line-height: 1.6; margin-bottom: 4px; }
-  .lv-ex-arrow { color: #1d9e75; font-weight: 700; flex-shrink: 0; font-size: 11px; }
+  .lv-ex-row { display: flex; align-items: baseline; gap: 8px; font-size: 12.5px; color: ${C.sec}; line-height: 1.65; margin-bottom: 5px; }
+  .lv-ex-arrow { color: #1d9e75; font-weight: 700; flex-shrink: 0; font-size: 10px; }
 
   /* Two-col bottom row (remember / mistake) */
   .lv-bottom-grid { display: grid; gap: 8px; }
-  .lv-bottom-cell { padding: 10px 12px; border-radius: 11px; font-size: 12px; line-height: 1.6; }
+  .lv-bottom-cell { padding: 11px 13px; border-radius: 12px; font-size: 12px; line-height: 1.65; }
 
   .lv-trust-note { font-size: 12px; color: ${C.muted}; margin: 0 0 14px; line-height: 1.55; }
   .lv-aid-panel { margin-top: 16px; background: ${C.card}; border: 1px dashed ${C.borderHov}; border-radius: 12px; padding: 14px 16px; }
@@ -702,7 +705,7 @@ function SummaryCard({ section, accent, index, total, topic }) {
             {/* ── Key Definitions ── */}
             {definitions.length > 0 && (
                 <div className="lv-cs">
-                    <div className="lv-chip">Definitions</div>
+                    <div className="lv-chip"><span className="lv-chip-dot" />Definitions</div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                         {definitions.map((item, i) => (
                             <div key={i} style={{
@@ -817,49 +820,43 @@ function ConceptNoteCard({ card, accent, index, total, topic }) {
     return (
         <div className="lv-sum-card">
 
+            {/* ── Accent bar ── */}
+            <div className="lv-card-bar" style={{ background: a.border }} />
+
             {/* ── Header ── */}
-            <div style={{ padding: '14px 16px 12px', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                {/* Accent dot */}
-                <div style={{
-                    width: 8, height: 8, borderRadius: '50%',
-                    background: a.border, flexShrink: 0, marginTop: 4,
-                    boxShadow: `0 0 0 3px ${isDark ? a.bg + '55' : a.bg}`,
-                }} />
+            <div style={{ padding: '16px 18px 14px', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{
-                        fontSize: 14, fontWeight: 700, color: a.title,
-                        letterSpacing: '-0.25px', lineHeight: 1.25,
-                        marginBottom: card.summary ? 6 : 0,
+                        fontSize: 15, fontWeight: 700, color: a.title,
+                        letterSpacing: '-0.3px', lineHeight: 1.3,
+                        marginBottom: card.summary ? 7 : 0,
                     }}>
                         {card.concept_name || ''}
                     </div>
                     {card.summary && (
-                        <div style={{ fontSize: 13, color: 'var(--color-sec)', lineHeight: 1.65 }}>
+                        <div style={{ fontSize: 13, color: 'var(--color-sec)', lineHeight: 1.7 }}>
                             {renderDomainContent(card.summary, topic) || card.summary}
                         </div>
                     )}
                 </div>
                 {total > 1 && (
                     <span style={{
-                        fontFamily: "'JetBrains Mono', monospace",
-                        fontSize: 9, color: 'var(--color-muted)',
-                        flexShrink: 0,
-                        background: 'var(--color-bg)', border: '1px solid var(--color-border)',
-                        borderRadius: 6, padding: '2px 6px',
-                    }}>{index + 1}/{total}</span>
+                        fontSize: 11, color: 'var(--color-muted)',
+                        flexShrink: 0, marginTop: 2,
+                    }}>{index + 1}<span style={{ opacity: 0.4 }}>/{total}</span></span>
                 )}
             </div>
 
             {/* ── Key Distinction (VS grid) ── */}
             {distLeft && distRight && (
                 <div className="lv-cs">
-                    <div className="lv-chip">Key Distinction</div>
+                    <div className="lv-chip"><span className="lv-chip-dot" />Key Distinction</div>
                     <div className="lv-vs-grid">
                         <div className="lv-vs-cell">
                             {distLeftLabel && <div className="lv-vs-label" style={{ color: a.title }}>{distLeftLabel}</div>}
                             {renderDomainContent(distLeft, topic) || distLeft}
                         </div>
-                        <div className="lv-vs-badge">VS</div>
+                        <div className="lv-vs-badge">vs</div>
                         <div className="lv-vs-cell">
                             {distRightLabel && <div className="lv-vs-label" style={{ color: a.title }}>{distRightLabel}</div>}
                             {renderDomainContent(distRight, topic) || distRight}
@@ -873,7 +870,7 @@ function ConceptNoteCard({ card, accent, index, total, topic }) {
                 <div className="lv-cs" style={{
                     background: isDark ? 'rgba(245,158,11,0.06)' : '#fffdf5',
                 }}>
-                    <div className="lv-chip lv-chip-amber">⚠ Exam Trap</div>
+                    <div className="lv-chip lv-chip-amber"><span className="lv-chip-dot" />Exam Trap</div>
                     {trapMisconception && (
                         <div style={{
                             fontSize: 12, color: isDark ? '#fcd34d' : '#92400e',
@@ -902,7 +899,7 @@ function ConceptNoteCard({ card, accent, index, total, topic }) {
                 <div className="lv-cs" style={{
                     background: isDark ? 'rgba(16,185,129,0.05)' : '#f6fef9',
                 }}>
-                    <div className="lv-chip lv-chip-green">Real-World Analogy</div>
+                    <div className="lv-chip lv-chip-green"><span className="lv-chip-dot" />Analogy</div>
                     <div style={{ fontSize: 12, color: isDark ? '#a7f3d0' : '#166534',
                         lineHeight: 1.65, fontStyle: 'italic' }}>
                         {renderDomainContent(analogy, topic) || analogy}
@@ -913,7 +910,7 @@ function ConceptNoteCard({ card, accent, index, total, topic }) {
             {/* ── Examples ── */}
             {examples.length > 0 && (
                 <div className="lv-cs">
-                    <div className="lv-chip lv-chip-green">Professor's Examples</div>
+                    <div className="lv-chip lv-chip-green"><span className="lv-chip-dot" />Examples</div>
                     {examples.map((item, i) => (
                         <div key={i} className="lv-ex-row">
                             <span className="lv-ex-arrow">→</span>
@@ -926,7 +923,7 @@ function ConceptNoteCard({ card, accent, index, total, topic }) {
             {/* ── Key Definitions ── */}
             {definitions.length > 0 && (
                 <div className="lv-cs">
-                    <div className="lv-chip">Definitions</div>
+                    <div className="lv-chip"><span className="lv-chip-dot" />Definitions</div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                         {definitions.map((item, i) => (
                             <div key={i} style={{
@@ -992,18 +989,17 @@ function ConceptNoteCard({ card, accent, index, total, topic }) {
             {/* ── Footer: source timestamp ── */}
             {sourceLabel && (
                 <div style={{
-                    padding: '8px 16px',
+                    padding: '8px 18px',
                     borderTop: '1px solid var(--color-border)',
-                    display: 'flex', alignItems: 'center', gap: 6,
+                    display: 'flex', alignItems: 'center', gap: 5,
                 }}>
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" strokeWidth="2" strokeLinecap="round"
-                        style={{ color: 'var(--color-muted)', flexShrink: 0 }}>
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
+                        style={{ color: 'var(--color-muted)', flexShrink: 0, opacity: 0.6 }}>
                         <circle cx="12" cy="12" r="10"/>
                         <polyline points="12 6 12 12 16 14"/>
                     </svg>
-                    <span style={{ fontSize: 10, color: 'var(--color-muted)',
-                        fontFamily: "'JetBrains Mono', monospace" }}>
+                    <span style={{ fontSize: 10, color: 'var(--color-muted)', opacity: 0.7 }}>
                         {sourceLabel}
                     </span>
                 </div>
