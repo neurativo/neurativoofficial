@@ -151,20 +151,54 @@ const CSS = `
   .db-usage-upgrade { font-size: 12px; color: var(--color-text); font-weight: 500; text-decoration: none; white-space: nowrap; }
   .db-usage-upgrade:hover { text-decoration: underline; }
 
+  /* ── Mobile action bar (replaces header buttons) ── */
+  .db-header-actions { display: flex; align-items: center; gap: 10px; }
+  .db-mobile-bar { display: none; }
+
   /* ── Mobile ── */
   @media (max-width: 600px) {
     .db-header { padding: 0 16px; gap: 8px; }
-    .db-main { padding: 20px 16px 60px; }
-    .db-page-title { font-size: 18px; }
-    .db-btn-text { display: none; }
-    .db-btn-import { padding: 7px 9px; }
-    .db-btn-new { padding: 7px 9px; }
+    .db-header-actions { display: none; }
+    .db-main { padding: 20px 16px 100px; }
+    .db-page-title { font-size: 20px; }
     .db-menu-btn { opacity: 1 !important; }
     .db-empty { padding: 40px 16px 24px; }
     .db-filters { gap: 6px; }
     .db-filter-select { font-size: 12px; padding: 5px 8px; }
     .db-proc-card { padding: 14px 16px; gap: 8px; }
     .db-proc-section { margin-bottom: 20px; }
+    .db-usage-bar { display: none; }
+    .db-usage-row { flex: none; }
+    .db-usage-resets { display: none; }
+
+    .db-mobile-bar {
+      display: flex;
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      padding: 10px 16px;
+      padding-bottom: max(10px, env(safe-area-inset-bottom, 10px));
+      background: var(--color-card);
+      border-top: 1px solid var(--color-border);
+      gap: 10px;
+      z-index: 40;
+    }
+    .db-mobile-bar-record {
+      flex: 1;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 13px;
+      background: ${C.dark}; color: ${C.darkFg};
+      font-size: 14px; font-weight: 500;
+      border: none; border-radius: 12px;
+      cursor: pointer; font-family: inherit; text-decoration: none;
+    }
+    .db-mobile-bar-import {
+      display: flex; align-items: center; justify-content: center; gap: 7px;
+      padding: 13px 20px;
+      background: none; color: ${C.sec};
+      font-size: 14px; font-weight: 500;
+      border: 1px solid ${C.border}; border-radius: 12px;
+      cursor: pointer; font-family: inherit;
+    }
   }
 
   /* Onboarding modal */
@@ -762,18 +796,20 @@ export default function Dashboard({ user }) {
                                 </Link>
                             );
                         })()}
-                        <button className="db-btn-import" onClick={() => setImportOpen(true)}>
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-                            </svg>
-                            <span className="db-btn-text">Import</span>
-                        </button>
-                        <button className="db-btn-new" onClick={() => navigate('/record')}>
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                                <line x1="12" y1="4" x2="12" y2="20"/><line x1="4" y1="12" x2="20" y2="12"/>
-                            </svg>
-                            <span className="db-btn-text">New Lecture</span>
-                        </button>
+                        <div className="db-header-actions">
+                            <button className="db-btn-import" onClick={() => setImportOpen(true)}>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                                </svg>
+                                Import
+                            </button>
+                            <button className="db-btn-new" onClick={() => navigate('/record')}>
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                                    <line x1="12" y1="4" x2="12" y2="20"/><line x1="4" y1="12" x2="20" y2="12"/>
+                                </svg>
+                                New Lecture
+                            </button>
+                        </div>
                         <UserMenu user={user} onSignOut={handleSignOut} />
                     </div>
                 </header>
@@ -1118,6 +1154,22 @@ export default function Dashboard({ user }) {
                         </div>
                     )}
                 </main>
+
+                {/* Mobile bottom action bar */}
+                <div className="db-mobile-bar">
+                    <button className="db-mobile-bar-record" onClick={() => navigate('/record')}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
+                        </svg>
+                        Record
+                    </button>
+                    <button className="db-mobile-bar-import" onClick={() => setImportOpen(true)}>
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                        </svg>
+                        Import
+                    </button>
+                </div>
 
                 {/* Onboarding modal */}
                 {showOnboarding && (
