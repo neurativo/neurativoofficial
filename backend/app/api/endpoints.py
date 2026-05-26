@@ -1905,6 +1905,7 @@ def get_usage(user=Depends(get_active_user)):
             "uploads_remaining":         max(0, upload_limit - uploads_count) if upload_limit is not None else None,
             "live_max_duration_seconds": max_live_dur,
             "live_max_duration_label":   _dur_label(max_live_dur),
+            "upload_max_duration_seconds": max_up_dur,
             "upload_max_duration_label": _dur_label(max_up_dur),
             "total_minutes_used":        total_minutes_used,
             "total_hours_used":          round(total_minutes_used / 60, 1),

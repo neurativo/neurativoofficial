@@ -213,7 +213,26 @@ export default function ImportModal({ onClose, onImportStarted }) {
             return;
         }
         setFile(f);
-    }, []);
+
+        // Client-side duration pre-check using Audio API
+        const maxSecs = usage?.upload_max_duration_seconds;
+        if (maxSecs) {
+            const url = URL.createObjectURL(f);
+            const audio = document.createElement('audio');
+            audio.preload = 'metadata';
+            audio.onloadedmetadata = () => {
+                URL.revokeObjectURL(url);
+                if (isFinite(audio.duration) && audio.duration > maxSecs) {
+                    const limitMins = Math.round(maxSecs / 60);
+                    const fileMins = Math.round(audio.duration / 60);
+                    setFile(null);
+                    setError(`This file is ${fileMins} min — your plan supports up to ${limitMins} min per file. Upgrade for longer recordings.`);
+                }
+            };
+            audio.onerror = () => URL.revokeObjectURL(url);
+            audio.src = url;
+        }
+    }, [usage]);
 
     const onDrop = (e) => {
         e.preventDefault();
@@ -244,7 +263,7 @@ export default function ImportModal({ onClose, onImportStarted }) {
                     }
                     if (e.loaded >= e.total) applyStatus('queued');
                 },
-                timeout: 120_000,
+                timeout: 300_000,
             });
 
             const id = res.data?.lecture_id;
@@ -321,6 +340,10 @@ export default function ImportModal({ onClose, onImportStarted }) {
             } else if (status === 413 && detail?.error === 'file_too_large') {
                 const mb = detail.max_bytes ? Math.round(detail.max_bytes / (1024 * 1024)) : 500;
                 msg = `This file exceeds your plan limit of ${mb} MB. Upgrade to import larger files.`;
+            } else if (status === 413 && detail?.error === 'duration_too_long') {
+                const limitMins = detail.limit_seconds ? Math.round(detail.limit_seconds / 60) : 60;
+                const fileMins  = detail.duration_seconds ? Math.round(detail.duration_seconds / 60) : null;
+                msg = `This file is too long${fileMins ? ` (${fileMins} min)` : ''} — your plan supports up to ${limitMins} min per file. Upgrade for longer recordings.`;
             } else {
                 msg = (typeof detail === 'string' ? detail : null) || err?.message || 'Import failed. Please try again.';
             }
