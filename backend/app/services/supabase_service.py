@@ -727,7 +727,7 @@ def get_recent_lectures(limit: int = 5, offset: int = 0, user_id: str = None, q:
         .select(
             "id, title, topic, language, total_chunks, total_sections, "
             "total_duration_seconds, created_at, master_summary, summary, "
-            "live_sessions(id)"
+            "processing_jobs(lecture_id)"
         )
         .order("created_at", desc=True)
         .range(offset, offset + limit - 1)
@@ -774,7 +774,7 @@ def get_recent_lectures(limit: int = 5, offset: int = 0, user_id: str = None, q:
             "total_duration_seconds": row.get("total_duration_seconds") or 0,
             "created_at":             row.get("created_at"),
             "summary_preview":        summary_preview,
-            "is_live":                bool(row.get("live_sessions")),
+            "is_live":                not bool(row.get("processing_jobs")),
         })
     return rows
 
