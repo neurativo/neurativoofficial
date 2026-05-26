@@ -288,12 +288,17 @@ def refund_credit(user_id: str, lecture_id: str) -> None:
     """
     db = _fresh_db()
 
-    # Only refund if credit was actually deducted for this lecture
     lec_resp = db.table("lectures").select("credit_deducted,total_duration_seconds").eq("id", lecture_id).execute()
-    if not lec_resp.data or not lec_resp.data[0].get("credit_deducted"):
+    if not lec_resp.data:
         return
 
+    credit_deducted = lec_resp.data[0].get("credit_deducted", False)
     refund_amount = _reserved_amount(db, user_id, lecture_id)
+
+    # Nothing to refund if credit was never deducted or reserved
+    if not credit_deducted and refund_amount <= 0:
+        return
+
     if refund_amount <= 0:
         duration_seconds = lec_resp.data[0].get("total_duration_seconds") or 0
         refund_amount = credits_for_duration(duration_seconds)
@@ -304,7 +309,8 @@ def refund_credit(user_id: str, lecture_id: str) -> None:
 
     new_balance = bal_resp.data[0]["credits"] + refund_amount
     db.table("profiles").update({"credits": new_balance}).eq("id", user_id).execute()
-    db.table("lectures").update({"credit_deducted": False}).eq("id", lecture_id).execute()
+    if credit_deducted:
+        db.table("lectures").update({"credit_deducted": False}).eq("id", lecture_id).execute()
 
     _log_transaction(
         db,

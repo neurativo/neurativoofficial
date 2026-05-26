@@ -137,6 +137,18 @@ def _complete_live_session_end(lecture_id: str, user_id: str, background_tasks: 
     if not session_closed:
         end_live_session(lecture_id)
 
+    # 1. Settle credits FIRST — fast DB op, must not be skipped by slow GPT
+    if session_closed:
+        try:
+            lec_live = get_lecture_for_summarization(lecture_id)
+            live_dur = (lec_live or {}).get("total_duration_seconds") or 0
+            finalize_reserved_credits(user_id, lecture_id, actual_duration_seconds=live_dur)
+            add_monthly_usage_minutes(user_id, max(0, ((live_dur + 59) // 60) - 1))
+        except Exception as e:
+            print(f"[live/end] credit finalization failed: {e}")
+            # Don't raise — session end must still complete
+
+    # 2. GPT work — non-fatal if slow or fails (beacon connections may drop)
     try:
         lecture_data = get_lecture_for_summarization(lecture_id)
         language     = get_lecture_language(lecture_id) or "en"
@@ -165,22 +177,13 @@ def _complete_live_session_end(lecture_id: str, user_id: str, background_tasks: 
     except Exception as e:
         print(f"Final summary on end (non-fatal): {e}")
 
+    # 3. Lock cleanup + background tasks
     if lecture_id in _lecture_locks:
         del _lecture_locks[lecture_id]
 
     background_tasks.add_task(cleanup_old_chunks, 30)
     set_summary_status(lecture_id, "recomputing")
     background_tasks.add_task(recompute_final_summary, lecture_id)
-
-    if session_closed:
-        try:
-            lec_live = get_lecture_for_summarization(lecture_id)
-            live_dur = (lec_live or {}).get("total_duration_seconds") or 0
-            finalize_reserved_credits(user_id, lecture_id, actual_duration_seconds=live_dur)
-            add_monthly_usage_minutes(user_id, max(0, ((live_dur + 59) // 60) - 1))
-        except Exception as e:
-            print(f"[live/end] credit finalization failed: {e}")
-            raise HTTPException(status_code=500, detail="Failed to finalize credits")
 
     return {"status": "ended", "lecture_id": lecture_id}
 

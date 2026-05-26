@@ -185,8 +185,9 @@ export default function ImportModal({ onClose, onImportStarted }) {
     const [error, setError]                 = useState('');
     const [usage, setUsage]                 = useState(null);
     const [selectedDomain, setSelectedDomain] = useState('');
-    const inputRef  = useRef(null);
-    const pollingRef = useRef(false);
+    const inputRef     = useRef(null);
+    const pollingRef   = useRef(false);
+    const submittingRef = useRef(false);
 
     useEffect(() => {
         api.get('/api/v1/usage').then(res => setUsage(res.data)).catch(() => {});
@@ -242,8 +243,18 @@ export default function ImportModal({ onClose, onImportStarted }) {
 
     const onInputChange = (e) => pickFile(e.target.files[0]);
 
+    const handleRetry = () => {
+        setJobStatus(null);
+        setError('');
+        setPct(0);
+        setUploadDone(false);
+        setLectureId(null);
+        submittingRef.current = false;
+    };
+
     const handleSubmit = async () => {
-        if (!file || jobStatus) return;
+        if (!file || jobStatus || submittingRef.current) return;
+        submittingRef.current = true;
         setError('');
 
         const formData = new FormData();
@@ -287,6 +298,7 @@ export default function ImportModal({ onClose, onImportStarted }) {
                         const s = job.data?.status;
                         if (s && STATUS_MAP[s]) applyStatus(s);
                         if (s === 'failed') {
+                            submittingRef.current = false;
                             setError(job.data?.error || 'Processing failed. Please try again.');
                             setJobStatus('failed');
                             return;
@@ -320,11 +332,13 @@ export default function ImportModal({ onClose, onImportStarted }) {
             }
 
             // Timed out — tell user to check dashboard
+            submittingRef.current = false;
             setError('Transcription is taking longer than expected. Your lecture will appear in the dashboard once it finishes.');
             setJobStatus(null);
             setPct(0);
 
         } catch (err) {
+            submittingRef.current = false;
             const status = err?.response?.status;
             const detail = err?.response?.data?.detail;
             let msg;
@@ -522,7 +536,19 @@ export default function ImportModal({ onClose, onImportStarted }) {
                                             </div>
                                         );
                                     }
-                                    return <div className="im-error">{error}</div>;
+                                    return (
+                                        <>
+                                            <div className="im-error">{error}</div>
+                                            {jobStatus === 'failed' && (
+                                                <button
+                                                    style={{ marginTop: 8, width: '100%', padding: '8px', background: 'none', border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 12, fontWeight: 500, color: C.text, cursor: 'pointer', fontFamily: 'inherit' }}
+                                                    onClick={handleRetry}
+                                                >
+                                                    Try again
+                                                </button>
+                                            )}
+                                        </>
+                                    );
                                 })()}
 
                                 {/* Footer */}
