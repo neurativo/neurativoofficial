@@ -192,9 +192,13 @@ def _question_count(duration_sec: int) -> int:
 
 def format_duration(seconds: int) -> str:
     if not seconds:
-        return "0m 0s"
+        return "—"
     m = seconds // 60
     s = seconds % 60
+    if m >= 60:
+        h = m // 60
+        m = m % 60
+        return f"{h}h {m}m"
     return f"{m}m {s}s"
 
 
@@ -2028,7 +2032,7 @@ async def generate_lecture_pdf(
             for note in (concept_sections or grounded_notes)
         ).strip()
 
-        duration_sec = total_chunks * 12
+        duration_sec = lecture_data.get("total_duration_seconds") or (total_chunks * 12)
         word_count = len(cleaned_transcript.split()) if cleaned_transcript else 0
         if word_count == 0 and transcript:
             word_count = len(transcript.split())
