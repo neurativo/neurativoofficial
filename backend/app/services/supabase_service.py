@@ -726,8 +726,7 @@ def get_recent_lectures(limit: int = 5, offset: int = 0, user_id: str = None, q:
         supabase.table("lectures")
         .select(
             "id, title, topic, language, total_chunks, total_sections, "
-            "total_duration_seconds, created_at, master_summary, summary, "
-            "processing_jobs(lecture_id)"
+            "total_duration_seconds, created_at, master_summary, summary"
         )
         .order("created_at", desc=True)
         .range(offset, offset + limit - 1)
@@ -745,6 +744,21 @@ def get_recent_lectures(limit: int = 5, offset: int = 0, user_id: str = None, q:
     response = query.execute()
     if not hasattr(response, "data"):
         return []
+    lecture_ids = [r["id"] for r in response.data]
+    # Fetch which of these lectures were created via file import (have a processing_job)
+    import_ids: set = set()
+    if lecture_ids:
+        try:
+            pj_resp = (
+                supabase.table("processing_jobs")
+                .select("lecture_id")
+                .in_("lecture_id", lecture_ids)
+                .execute()
+            )
+            if hasattr(pj_resp, "data"):
+                import_ids = {r["lecture_id"] for r in pj_resp.data}
+        except Exception:
+            pass  # Non-critical — fall back to treating everything as live
     rows = []
     for row in response.data:
         preview_src = row.get("master_summary") or row.get("summary") or ""
@@ -774,7 +788,7 @@ def get_recent_lectures(limit: int = 5, offset: int = 0, user_id: str = None, q:
             "total_duration_seconds": row.get("total_duration_seconds") or 0,
             "created_at":             row.get("created_at"),
             "summary_preview":        summary_preview,
-            "is_live":                not bool(row.get("processing_jobs")),
+            "is_live":                row["id"] not in import_ids,
         })
     return rows
 
