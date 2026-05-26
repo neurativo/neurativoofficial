@@ -105,7 +105,7 @@ from app.services.supabase_service import (
     set_summary_status,
     get_announcements,
 )
-from app.services.trust_service import enrich_lecture_payload, sanitize_generated_content_bundle
+from app.services.trust_service import enrich_lecture_payload, sanitize_generated_content_bundle, build_concept_note_cards
 from app.services.exam_prep_service import generate_exam_prep
 from app.services.concept_map_service import generate_concept_map
 from app.services.feature_flags_service import get_flags_for_user, get_unseen_releases, dismiss_release
@@ -559,6 +559,16 @@ async def _process_from_transcript(
             fallback_summary = await _asyncio.to_thread(_build_strict_fallback_summary, cleaned, topic, language)
             if fallback_summary:
                 await _asyncio.to_thread(update_lecture_summary_only, lecture_id, fallback_summary)
+        # Pre-generate concept note cards so first /full load doesn't trigger GPT on-demand
+        try:
+            await _asyncio.to_thread(
+                build_concept_note_cards,
+                transcript=cleaned,
+                lecture_id=lecture_id,
+            )
+        except Exception as _card_err:
+            print(f"[pipeline] {lecture_id}: concept card pre-generation failed (non-fatal): {_card_err}")
+
         # Mark done
         set_summary_status(lecture_id, "final")
         await _asyncio.to_thread(update_job_status, lecture_id, "done")
@@ -1644,7 +1654,11 @@ def get_lecture_full_endpoint(lecture_id: str, user=Depends(get_active_user)):
                 lecture_data[field] = []
         elif val is None:
             lecture_data[field] = []
-    return enrich_lecture_payload(lecture_data, section_rows=get_lecture_sections(lecture_id))
+    try:
+        return enrich_lecture_payload(lecture_data, section_rows=get_lecture_sections(lecture_id))
+    except Exception as exc:
+        print(f"[full] enrich failed for {lecture_id}: {exc}")
+        raise HTTPException(status_code=500, detail="Failed to load lecture details")
 
 
 @router.get("/lectures/{lecture_id}/visual-frames")
