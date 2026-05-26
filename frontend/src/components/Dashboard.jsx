@@ -192,8 +192,9 @@ const CSS = `
       cursor: pointer; font-family: inherit; text-decoration: none;
     }
     .db-mobile-bar-import {
+      flex: 1;
       display: flex; align-items: center; justify-content: center; gap: 7px;
-      padding: 13px 20px;
+      padding: 13px;
       background: none; color: ${C.sec};
       font-size: 14px; font-weight: 500;
       border: 1px solid ${C.border}; border-radius: 12px;
