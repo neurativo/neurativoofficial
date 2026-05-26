@@ -151,15 +151,18 @@ const CSS = `
   .db-usage-upgrade { font-size: 12px; color: var(--color-text); font-weight: 500; text-decoration: none; white-space: nowrap; }
   .db-usage-upgrade:hover { text-decoration: underline; }
 
-  /* ── Mobile action bar (replaces header buttons) ── */
+  /* ── Mobile header actions (hidden on mobile, inline buttons used instead) ── */
   .db-header-actions { display: flex; align-items: center; gap: 10px; }
   .db-mobile-bar { display: none; }
+
+  /* ── Inline quick actions (mobile only, below greeting) ── */
+  .db-quick-actions { display: none; }
 
   /* ── Mobile ── */
   @media (max-width: 600px) {
     .db-header { padding: 0 16px; gap: 8px; }
     .db-header-actions { display: none; }
-    .db-main { padding: 20px 16px 100px; }
+    .db-main { padding: 20px 16px 60px; }
     .db-page-title { font-size: 20px; }
     .db-menu-btn { opacity: 1 !important; }
     .db-empty { padding: 40px 16px 24px; }
@@ -171,27 +174,19 @@ const CSS = `
     .db-usage-row { flex: none; }
     .db-usage-resets { display: none; }
 
-    .db-mobile-bar {
-      display: flex;
-      position: fixed;
-      bottom: 0; left: 0; right: 0;
-      padding: 10px 16px;
-      padding-bottom: max(10px, env(safe-area-inset-bottom, 10px));
-      background: var(--color-card);
-      border-top: 1px solid var(--color-border);
-      gap: 10px;
-      z-index: 40;
+    .db-quick-actions {
+      display: flex; gap: 10px; margin-bottom: 20px;
     }
-    .db-mobile-bar-record {
+    .db-qa-record {
       flex: 1;
       display: flex; align-items: center; justify-content: center; gap: 8px;
       padding: 13px;
       background: ${C.dark}; color: ${C.darkFg};
       font-size: 14px; font-weight: 500;
       border: none; border-radius: 12px;
-      cursor: pointer; font-family: inherit; text-decoration: none;
+      cursor: pointer; font-family: inherit;
     }
-    .db-mobile-bar-import {
+    .db-qa-import {
       flex: 1;
       display: flex; align-items: center; justify-content: center; gap: 7px;
       padding: 13px;
@@ -918,6 +913,22 @@ export default function Dashboard({ user }) {
                     <h1 className="db-page-title">{getGreeting()}</h1>
                     <p className="db-page-sub">{loading ? '' : `${lectures.length} ${lectureWord}`}</p>
 
+                    {/* Mobile quick actions — inline, avoids fixed bar conflicts */}
+                    <div className="db-quick-actions">
+                        <button className="db-qa-record" onClick={() => navigate('/record')}>
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
+                            </svg>
+                            Record
+                        </button>
+                        <button className="db-qa-import" onClick={() => setImportOpen(true)}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                            </svg>
+                            Import
+                        </button>
+                    </div>
+
                     {/* Beta testing banner */}
                     {(() => {
                         const appStatus = betaApplication?.status;
@@ -1155,22 +1166,6 @@ export default function Dashboard({ user }) {
                         </div>
                     )}
                 </main>
-
-                {/* Mobile bottom action bar */}
-                <div className="db-mobile-bar">
-                    <button className="db-mobile-bar-record" onClick={() => navigate('/record')}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
-                        </svg>
-                        Record
-                    </button>
-                    <button className="db-mobile-bar-import" onClick={() => setImportOpen(true)}>
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-                        </svg>
-                        Import
-                    </button>
-                </div>
 
                 {/* Onboarding modal */}
                 {showOnboarding && (
