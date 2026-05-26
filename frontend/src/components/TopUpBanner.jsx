@@ -94,8 +94,9 @@ export default function TopUpBanner({ recordingSeconds, creditBalance, onTopUp, 
                 }
                 @media (max-width: 639px) {
                     .topup-banner {
-                        bottom: 64px;
+                        bottom: 0;
                         border-radius: 16px 16px 0 0;
+                        padding-bottom: max(12px, env(safe-area-inset-bottom, 12px));
                         flex-wrap: wrap;
                         animation: slideUpBanner 0.25s ease;
                     }

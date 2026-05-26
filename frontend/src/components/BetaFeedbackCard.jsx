@@ -3,7 +3,7 @@ import api from '../lib/api';
 
 const CSS = `
   .bfc-wrap {
-    position: fixed; bottom: 24px; right: 24px; z-index: 80;
+    position: fixed; bottom: 24px; right: 24px; z-index: 820;
     width: 300px;
     background: var(--color-card, #fff);
     border: 1px solid var(--color-border, #f0ede8);
