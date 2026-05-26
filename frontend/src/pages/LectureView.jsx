@@ -1459,15 +1459,19 @@ export default function LectureView() {
     onHandleDragRef.current = onHandleDrag;
 
     // Split transcript into readable segments.
-    // Live recordings: already newline-separated 12-second chunks → keep as-is.
-    // Imported recordings: arrive as one big paragraph → split into sentence groups.
+    // Live recordings: many short newline-separated chunks (~150 chars each, 12s per chunk).
+    // Imported recordings: one blob or a few long paragraphs → sentence-group split.
     const { segments, isSentenceSplit } = (() => {
         const raw = lecture?.transcript || '';
         if (!raw) return { segments: [], isSentenceSplit: false };
         const lines = raw.split('\n').filter(s => s.trim());
-        if (lines.length > 2) return { segments: lines, isSentenceSplit: false };
-        // Single blob — split on sentence boundaries, group 3 per chunk
-        const sentences = raw.match(/[^.!?]+(?:[.!?]+(?:\s|$)|\s*$)/g) || [raw];
+        // Live chunks are short — average < 400 chars and many of them.
+        // Long paragraphs (imports) fail both conditions even if split by newlines.
+        const avgLen = raw.replace(/\n/g, '').length / (lines.length || 1);
+        if (lines.length > 4 && avgLen < 400) return { segments: lines, isSentenceSplit: false };
+        // Blob or long paragraphs: flatten newlines then split on sentence boundaries
+        const flat = raw.replace(/\n+/g, ' ');
+        const sentences = flat.match(/[^.!?]+(?:[.!?]+(?:\s|$)|\s*$)/g) || [flat];
         const chunks = [];
         for (let i = 0; i < sentences.length; i += 3) {
             const chunk = sentences.slice(i, i + 3).join(' ').trim();
