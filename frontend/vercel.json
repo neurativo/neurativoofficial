@@ -1,11 +1,12 @@
 {
-  "rewrites": [
-    { "source": "/features", "destination": "/features/index.html" },
-    { "source": "/pricing",  "destination": "/pricing/index.html" },
-    { "source": "/faq",      "destination": "/faq/index.html" },
-    { "source": "/about",    "destination": "/about/index.html" },
-    { "source": "/terms",    "destination": "/terms/index.html" },
-    { "source": "/privacy",  "destination": "/privacy/index.html" },
-    { "source": "/:path((?!.*\\.).*)", "destination": "/index.html" }
+  "routes": [
+    { "src": "/features", "dest": "/features/index.html" },
+    { "src": "/pricing",  "dest": "/pricing/index.html" },
+    { "src": "/faq",      "dest": "/faq/index.html" },
+    { "src": "/about",    "dest": "/about/index.html" },
+    { "src": "/terms",    "dest": "/terms/index.html" },
+    { "src": "/privacy",  "dest": "/privacy/index.html" },
+    { "handle": "filesystem" },
+    { "src": "/(.*)", "dest": "/index.html" }
   ]
 }
