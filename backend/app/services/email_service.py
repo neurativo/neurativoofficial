@@ -117,15 +117,16 @@ def send_payment_failed_email(to: str, org_name: str) -> bool:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def _base_template(header_sub: str, body_html: str) -> str:
-    # Logo: diamond accent mark + Neurativo wordmark, matching brand identity
-    # All table-based — works in Gmail, Outlook, Apple Mail
-    logo = """
+    # Logo: official logo.png hosted on neurativo.com + wordmark fallback text
+    # img + alt text so it degrades gracefully when images are blocked
+    logo = f"""
       <table cellpadding="0" cellspacing="0" border="0">
         <tr>
-          <td width="34" height="34" style="width:34px;height:34px;background:#2563eb;
-              border-radius:7px;text-align:center;vertical-align:middle;
-              font-size:17px;color:#ffffff;line-height:34px;">
-            &#9670;
+          <td style="vertical-align:middle;">
+            <img src="https://www.neurativo.com/logo.png"
+                 alt="Neurativo"
+                 width="36" height="36"
+                 style="width:36px;height:36px;display:block;border:0;outline:none;">
           </td>
           <td style="padding-left:10px;vertical-align:middle;">
             <span style="font-size:17px;font-weight:700;color:#111827;
