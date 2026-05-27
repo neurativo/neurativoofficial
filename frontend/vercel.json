@@ -6,6 +6,6 @@
     { "source": "/about",    "destination": "/about/index.html" },
     { "source": "/terms",    "destination": "/terms/index.html" },
     { "source": "/privacy",  "destination": "/privacy/index.html" },
-    { "source": "/(.*)",     "destination": "/index.html" }
+    { "source": "/:path((?!.*\\.).*)", "destination": "/index.html" }
   ]
 }
