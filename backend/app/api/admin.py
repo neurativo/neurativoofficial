@@ -51,6 +51,7 @@ from app.services.supabase_service import (
     get_lecture_full,
 )
 from app.services.cost_tracker import PRICING, LKR_RATE
+from app.services.credits_service import grant_plan_credits
 from app.services.recompute_service import recompute_final_summary
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -329,6 +330,13 @@ async def update_user_plan(
         set_user_plan(user_id, body.plan_tier)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update plan: {e}")
+    # Grant monthly credits when upgrading to a paid tier (same as billing webhook)
+    if body.plan_tier in ("student", "pro"):
+        try:
+            grant_plan_credits(user_id, body.plan_tier)
+        except Exception as e:
+            print(f"[admin] grant_plan_credits failed for {user_id}: {e}")
+            # Don't fail the request — plan is already set
     _audit(admin.id, "update_plan", user_id, f"plan={body.plan_tier}")
     return {"ok": True, "user_id": user_id, "plan_tier": body.plan_tier}
 
