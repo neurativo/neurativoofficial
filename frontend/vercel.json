@@ -1,6 +1,11 @@
 {
   "rewrites": [
-    { "source": "/", "destination": "/index.html" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/features", "destination": "/features/index.html" },
+    { "source": "/pricing",  "destination": "/pricing/index.html" },
+    { "source": "/faq",      "destination": "/faq/index.html" },
+    { "source": "/about",    "destination": "/about/index.html" },
+    { "source": "/terms",    "destination": "/terms/index.html" },
+    { "source": "/privacy",  "destination": "/privacy/index.html" },
+    { "source": "/(.*)",     "destination": "/index.html" }
   ]
 }
