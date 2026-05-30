@@ -19,23 +19,23 @@
 
         /* ─── 1. TOKENS ─────────────────────────────────────────── */
         :root {
-            --ink:    #111827;
-            --ink-2:  #374151;
-            --ink-3:  #6b7280;
+            --ink:    #0d1117;
+            --ink-2:  #1f2937;
+            --ink-3:  #4b5563;
             --ink-4:  #9ca3af;
             --ink-5:  #d1d5db;
             --ink-6:  #e5e7eb;
-            --ink-7:  #f3f4f6;
+            --ink-7:  #f5f5f3;
             --paper:  #ffffff;
-            --paper-2:#fafaf7;
+            --paper-2:#faf9f6;
 
             /* Accent — injected via body style attribute */
             --accent:      #2563eb;
             --accent-dark: color-mix(in oklab, var(--accent) 70%, #000);
-            --accent-text: color-mix(in oklab, var(--accent) 85%, #000 15%);
-            --accent-lt:   color-mix(in oklab, var(--accent) 8%,  #fff 92%);
-            --accent-mid:  color-mix(in oklab, var(--accent) 28%, #fff 72%);
-            --accent-rule: color-mix(in oklab, var(--accent) 55%, #fff 45%);
+            --accent-text: color-mix(in oklab, var(--accent) 82%, #000 18%);
+            --accent-lt:   color-mix(in oklab, var(--accent) 7%,  #fff 93%);
+            --accent-mid:  color-mix(in oklab, var(--accent) 22%, #fff 78%);
+            --accent-rule: color-mix(in oklab, var(--accent) 45%, #fff 55%);
 
             --serif: 'Lora', 'Iowan Old Style', Georgia, serif;
             --sans:  'Inter', -apple-system, 'Segoe UI', sans-serif;
@@ -44,7 +44,8 @@
             --rule:     0.5pt solid var(--ink-5);
             --rule-2:   0.75pt solid var(--ink-4);
             --hairline: 0.25pt solid var(--ink-6);
-            --radius:   4px;
+            --radius:   5px;
+            --radius-lg: 10px;
         }
 
         /* ─── 2. PAGE / RESET ───────────────────────────────────── */
@@ -154,40 +155,41 @@
         /* Top bar: wordmark + report type */
         .cover-mark {
             display: flex;
-            align-items: baseline;
+            align-items: center;
             justify-content: space-between;
-            border-bottom: var(--rule);
+            border-bottom: 1.25pt solid var(--ink-5);
             padding-bottom: 7mm;
         }
         .cover-mark .wordmark {
             font-family: var(--serif);
-            font-size: 15pt;
-            font-weight: 600;
-            letter-spacing: -0.015em;
+            font-size: 16.5pt;
+            font-weight: 700;
+            letter-spacing: -0.02em;
             color: var(--ink);
             display: flex;
             align-items: center;
-            gap: 9px;
+            gap: 10px;
         }
         .cover-mark .wordmark::before {
             content: "";
-            width: 10px;
-            height: 10px;
+            width: 11px;
+            height: 11px;
             background: var(--accent);
             display: inline-block;
             transform: rotate(45deg);
+            flex-shrink: 0;
         }
         .cover-mark .label {
             font-family: var(--sans);
-            font-size: 7.5pt;
-            font-weight: 500;
-            letter-spacing: 0.22em;
+            font-size: 7pt;
+            font-weight: 600;
+            letter-spacing: 0.24em;
             text-transform: uppercase;
-            color: var(--ink-3);
+            color: var(--ink-4);
         }
         .cover-mark .label .sep {
             display: inline-block;
-            width: 16px;
+            width: 18px;
             border-top: var(--rule);
             margin: 0 10px 3px;
             vertical-align: middle;
@@ -201,56 +203,54 @@
             padding: 0 6mm 4mm;
         }
         .cover-accent {
-            width: 40mm;
-            height: 1pt;
-            background: var(--accent);
-            margin: 0 0 6mm;
+            width: 100%;
+            height: 1.5pt;
+            background: linear-gradient(90deg, var(--accent) 0%, var(--accent-rule) 75%, transparent 100%);
+            margin: 0 0 8mm;
             flex: 0 0 auto;
+            border-radius: 1pt;
         }
         .cover-meta {
             font-family: var(--sans);
-            font-size: 8pt;
-            letter-spacing: 0.16em;
+            font-size: 7.5pt;
+            letter-spacing: 0.18em;
             text-transform: uppercase;
-            color: var(--ink-3);
-            margin-bottom: 10mm;
+            color: var(--ink-4);
+            margin-bottom: 9mm;
             display: flex;
-            gap: 14mm;
+            gap: 12mm;
             align-items: baseline;
             padding-bottom: 4mm;
             border-bottom: var(--hairline);
         }
-        .cover-meta b { color: var(--ink); font-weight: 600; }
+        .cover-meta b { color: var(--ink-2); font-weight: 700; }
         .cover-title {
             font-family: var(--serif);
-            font-size: 40pt;
-            font-weight: 500;
-            line-height: 1.08;
-            letter-spacing: -0.025em;
+            font-size: 42pt;
+            font-weight: 600;
+            line-height: 1.07;
+            letter-spacing: -0.03em;
             color: var(--ink);
             max-width: 17cm;
-            margin: 0 0 10mm;
+            margin: 0 0 9mm;
         }
         .cover-deck {
             font-family: var(--serif);
             font-style: italic;
-            font-size: 12pt;
-            color: var(--ink-2);
-            line-height: 1.45;
+            font-size: 12.5pt;
+            color: var(--ink-3);
+            line-height: 1.5;
             max-width: 14cm;
-            margin: 0 0 14mm;
+            margin: 0 0 13mm;
             font-weight: 400;
             overflow: hidden;
         }
 
         /* Horizontal 4-tile stat strip */
         .cover-strip {
-            border-top: var(--rule-2);
+            border-top: 1.5pt solid var(--ink-5);
             border-bottom: var(--hairline);
-            background:
-                linear-gradient(var(--paper-2), var(--paper-2)),
-                repeating-linear-gradient(135deg, transparent 0 9px, rgba(0,0,0,0.018) 9px 10px);
-            background-blend-mode: multiply;
+            background: var(--paper-2);
             display: grid;
             grid-template-columns: repeat(4, 1fr);
         }
@@ -258,71 +258,82 @@
             padding: 7mm 6mm 6mm;
             border-right: var(--hairline);
             display: grid;
-            gap: 3mm;
+            gap: 2.5mm;
+            position: relative;
         }
         .cover-strip .tile:last-child { border-right: 0; }
+        .cover-strip .tile::before {
+            content: "";
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 2pt;
+            background: var(--accent);
+            opacity: 0.18;
+        }
+        .cover-strip .tile:first-child::before { opacity: 0.5; }
         .cover-strip .tile .k {
             font-family: var(--sans);
-            font-size: 6.75pt;
-            letter-spacing: 0.2em;
+            font-size: 6.5pt;
+            letter-spacing: 0.22em;
             text-transform: uppercase;
-            color: var(--ink-3);
-            font-weight: 600;
+            color: var(--ink-4);
+            font-weight: 700;
         }
         .cover-strip .tile .v {
             font-family: var(--serif);
-            font-size: 24pt;
-            font-weight: 500;
+            font-size: 26pt;
+            font-weight: 600;
             color: var(--ink);
             line-height: 1;
-            letter-spacing: -0.01em;
+            letter-spacing: -0.02em;
         }
         .cover-strip .tile .v sup {
             font-size: 11pt;
-            color: var(--ink-3);
+            color: var(--ink-4);
             font-weight: 400;
             margin-left: 2px;
         }
         .cover-strip .tile .u {
             font-family: var(--sans);
-            font-size: 7.5pt;
-            color: var(--ink-3);
+            font-size: 7pt;
+            color: var(--ink-4);
         }
 
         /* Footer: brand + issue info */
         .cover-foot {
-            border-top: var(--rule);
+            border-top: 1.25pt solid var(--ink-5);
             padding-top: 6mm;
             display: flex;
             justify-content: space-between;
             align-items: baseline;
             gap: 10mm;
             font-family: var(--sans);
-            font-size: 7.5pt;
-            letter-spacing: 0.15em;
+            font-size: 7pt;
+            letter-spacing: 0.18em;
             text-transform: uppercase;
-            color: var(--ink-3);
+            color: var(--ink-4);
         }
         .cover-foot .brand {
             font-family: var(--serif);
             font-style: italic;
-            font-size: 10.5pt;
-            color: var(--ink-2);
+            font-size: 11pt;
+            color: var(--ink-3);
             letter-spacing: 0;
             text-transform: none;
+            font-weight: 500;
         }
         .cover-foot .issue { font-variant-numeric: tabular-nums; white-space: nowrap; }
 
         /* ─── 5. TABLE OF CONTENTS ──────────────────────────────── */
         .toc-page { padding-top: 4mm; }
-        .toc-h { font-family: var(--serif); font-size: 22pt; font-weight: 600; color: var(--ink); margin: 0 0 6mm; }
-        .toc-row { display: flex; align-items: baseline; gap: 4px; margin-bottom: 2.4mm; page-break-inside: avoid; }
-        .toc-row.depth-1 { margin-left: 10mm; margin-bottom: 1.6mm; }
-        .toc-num { font-family: var(--serif); font-style: italic; font-size: 8pt; font-weight: 500; color: var(--accent-text); min-width: 26px; }
-        .toc-row.depth-1 .toc-num { min-width: 32px; font-size: 7.2pt; color: var(--ink-4); }
-        .toc-sec-title { font-family: var(--serif); font-size: 10.5pt; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 420px; }
-        .toc-row.depth-1 .toc-sec-title { font-family: var(--sans); font-size: 8.6pt; color: var(--ink-2); }
-        .toc-dots { flex: 1; border-bottom: 0.4pt dotted var(--ink-5); margin: 0 4px 3px; }
+        .toc-h { font-family: var(--serif); font-size: 22pt; font-weight: 600; color: var(--ink); margin: 0 0 7mm; letter-spacing: -0.015em; }
+        .toc-row { display: flex; align-items: baseline; gap: 4px; margin-bottom: 2.8mm; page-break-inside: avoid; }
+        .toc-row.depth-1 { margin-left: 10mm; margin-bottom: 1.8mm; }
+        .toc-num { font-family: var(--sans); font-style: normal; font-size: 7.5pt; font-weight: 700; color: var(--accent-text); min-width: 26px; letter-spacing: 0.04em; }
+        .toc-row.depth-1 .toc-num { min-width: 32px; font-size: 7pt; color: var(--ink-4); }
+        .toc-sec-title { font-family: var(--serif); font-size: 11pt; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 420px; font-weight: 500; }
+        .toc-row.depth-1 .toc-sec-title { font-family: var(--sans); font-size: 8.8pt; color: var(--ink-3); font-weight: 400; }
+        .toc-dots { flex: 1; border-bottom: 0.4pt dotted var(--ink-5); margin: 0 5px 3px; }
         .toc-page-num { font-size: 7.5pt; color: var(--ink-4); font-family: var(--mono); white-space: nowrap; }
 
         .preview-page { padding-top: 4mm; }
@@ -451,23 +462,26 @@
 
         /* ─── 6. EXECUTIVE SUMMARY ──────────────────────────────── */
         .exec-card {
-            background: var(--accent-lt);
-            border-radius: 8px;
-            padding: 6mm 7mm;
+            background: linear-gradient(160deg, var(--accent-lt) 0%, var(--paper-2) 55%, #fff 100%);
+            border-radius: 10px;
+            padding: 6.5mm 8mm;
             margin-bottom: 8mm;
-            border-top: 1.5pt solid var(--accent-rule);
+            border-top: 2pt solid var(--accent);
+            border-left: 0.5pt solid var(--accent-mid);
+            border-right: 0.5pt solid var(--accent-mid);
+            border-bottom: 0.5pt solid var(--accent-mid);
         }
-        .exec-card p { margin: 0 0 4mm; font-size: 10.5pt; line-height: 1.8; color: var(--ink-2); }
+        .exec-card p { margin: 0 0 4mm; font-size: 10.5pt; line-height: 1.82; color: var(--ink-2); }
         .exec-card p:last-child { margin-bottom: 0; }
         .exec-card .drop-cap::first-letter {
             float: left;
             font-family: var(--serif);
-            font-size: 3.2em;
-            line-height: 0.82;
-            padding-right: 5px;
-            padding-top: 4px;
-            color: var(--accent-text);
-            font-weight: 500;
+            font-size: 3.4em;
+            line-height: 0.80;
+            padding-right: 6px;
+            padding-top: 3px;
+            color: var(--accent);
+            font-weight: 600;
         }
 
         /* Key stats row (below exec summary) */
@@ -476,11 +490,12 @@
             grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
             gap: 0;
             margin: 4mm 0 8mm;
-            border-top: var(--rule);
-            border-bottom: var(--rule);
+            border-top: 1.25pt solid var(--ink-5);
+            border-bottom: 1.25pt solid var(--ink-5);
+            background: var(--paper-2);
         }
         .stat-row .stat {
-            padding: 4mm 5mm;
+            padding: 5mm 6mm;
             border-right: var(--hairline);
             display: flex;
             align-items: baseline;
@@ -489,17 +504,17 @@
         .stat-row .stat:last-child { border-right: 0; }
         .stat-row .stat .num {
             font-family: var(--serif);
-            font-size: 22pt;
-            font-weight: 500;
+            font-size: 24pt;
+            font-weight: 600;
             color: var(--ink);
-            letter-spacing: -0.02em;
+            letter-spacing: -0.025em;
             line-height: 1;
             font-variant-numeric: tabular-nums;
             white-space: nowrap;
         }
-        .stat-row .stat .num small { font-size: 10pt; color: var(--ink-3); margin-left: 2px; font-weight: 400; }
-        .stat-row .stat .lbl { font-family: var(--sans); font-size: 8.25pt; color: var(--ink-3); line-height: 1.35; }
-        .stat-row .stat .lbl b { display: block; color: var(--ink-2); font-weight: 600; font-size: 9pt; margin-bottom: 1pt; }
+        .stat-row .stat .num small { font-size: 10pt; color: var(--ink-4); margin-left: 2px; font-weight: 400; }
+        .stat-row .stat .lbl { font-family: var(--sans); font-size: 8.25pt; color: var(--ink-3); line-height: 1.38; }
+        .stat-row .stat .lbl b { display: block; color: var(--ink-2); font-weight: 700; font-size: 9pt; margin-bottom: 1pt; }
         .revision-focus-strip {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -507,10 +522,13 @@
             margin: 0 0 7mm;
         }
         .revision-focus-card {
-            border-top: 1.4pt solid var(--accent-rule);
-            background: linear-gradient(180deg, var(--accent-lt), #fff 78%);
-            padding: 3.2mm 3.5mm;
-            border-radius: 5px;
+            border-top: 2pt solid var(--accent);
+            background: linear-gradient(160deg, var(--accent-lt), #fff 70%);
+            padding: 3.5mm 4mm;
+            border-radius: 7px;
+            border-left: 0.4pt solid var(--accent-mid);
+            border-right: 0.4pt solid var(--accent-mid);
+            border-bottom: 0.4pt solid var(--accent-mid);
         }
         .revision-focus-card .label {
             font-size: 6.8pt;
@@ -535,13 +553,13 @@
         /* ─── 7. SECTION CARD ───────────────────────────────────── */
         .section {
             position: relative;
-            padding: 7mm 0 5mm;
-            border-top: var(--rule-2);
+            padding: 8mm 0 5mm;
+            border-top: 1.5pt solid var(--accent-rule);
             page-break-inside: avoid;
             break-inside: avoid;
         }
         .section + .section {
-            padding-top: 6mm;
+            padding-top: 7mm;
             page-break-before: always;
             break-before: page;
         }
@@ -556,23 +574,31 @@
         }
         .section-spacer { grid-column: 3; }
         .section-num {
-            font-family: var(--serif);
-            font-size: 11pt;
-            font-style: italic;
+            font-family: var(--sans);
+            font-size: 7.5pt;
+            font-style: normal;
             color: var(--accent-text);
             font-variant-numeric: tabular-nums;
-            letter-spacing: 0;
-            padding-top: 4pt;
+            letter-spacing: 0.12em;
+            padding: 2pt 6pt;
             white-space: nowrap;
-            font-weight: 500;
+            font-weight: 700;
+            text-transform: uppercase;
+            background: var(--accent-lt);
+            border: 0.4pt solid var(--accent-mid);
+            border-radius: 3pt;
+            display: inline-block;
+            line-height: 1.5;
+            margin-top: 4pt;
+            align-self: flex-start;
         }
         .section-title {
             font-family: var(--serif);
-            font-size: 17pt;
+            font-size: 18pt;
             font-weight: 600;
             color: var(--ink);
-            letter-spacing: -0.015em;
-            line-height: 1.2;
+            letter-spacing: -0.018em;
+            line-height: 1.18;
         }
         .chapter-kicker {
             font-family: var(--sans);
@@ -594,14 +620,14 @@
         /* Large faint watermark numeral */
         .section-watermark {
             position: absolute;
-            top: 8mm;
+            top: 6mm;
             right: 0;
             font-family: var(--sans) !important;
-            font-size: 60pt;
-            font-weight: 500;
+            font-size: 64pt;
+            font-weight: 700;
             line-height: 1;
-            color: var(--ink-7);
-            letter-spacing: -0.04em;
+            color: color-mix(in oklab, var(--accent) 5%, var(--ink-7) 95%);
+            letter-spacing: -0.05em;
             pointer-events: none;
             z-index: 0;
             font-variant-numeric: tabular-nums;
@@ -705,19 +731,20 @@
         .section-bullets { list-style: none; padding: 0; margin: 3mm 0 0; }
         .section-bullets li {
             display: flex;
-            gap: 7px;
+            gap: 8px;
             align-items: flex-start;
-            margin-bottom: 2mm;
+            margin-bottom: 2.2mm;
             font-size: 9.5pt;
             color: var(--ink-2);
-            line-height: 1.6;
+            line-height: 1.62;
         }
         .section-bullets li::before {
-            content: "→";
-            color: var(--accent-text);
-            font-size: 8pt;
+            content: "▸";
+            color: var(--accent);
+            font-size: 8.5pt;
             flex-shrink: 0;
             margin-top: 2px;
+            opacity: 0.7;
         }
 
         /* Concept pills */
@@ -804,11 +831,11 @@
             grid-template-columns: 1fr 1fr;
             margin-bottom: 4mm;
             border: var(--hairline);
-            border-radius: 6px;
+            border-radius: 8px;
             overflow: hidden;
         }
-        .analogy-left  { padding: 3.5mm 4mm; background: var(--paper-2); border-right: var(--hairline); }
-        .analogy-right { padding: 3.5mm 4mm; background: #f0fff4; }
+        .analogy-left  { padding: 4mm 5mm; background: var(--paper-2); border-right: var(--hairline); }
+        .analogy-right { padding: 4mm 5mm; background: #f0fdf4; }
         .analogy-col-label {
             font-size: 6.5pt;
             font-weight: 700;
@@ -827,11 +854,11 @@
             grid-template-columns: 1fr 1fr;
             margin-top: 4mm;
             border: 0.5pt solid #fde68a;
-            border-radius: 7px;
+            border-radius: 8px;
             overflow: hidden;
         }
-        .mr-mistake { padding: 3mm 4mm; background: #fffbeb; border-right: 0.5pt solid #fde68a; }
-        .mr-remember { padding: 3mm 4mm; background: #f0fff4; }
+        .mr-mistake { padding: 4mm 5mm; background: #fffbeb; border-right: 0.5pt solid #fde68a; }
+        .mr-remember { padding: 4mm 5mm; background: #f0fdf4; }
         .mr-label {
             font-size: 6.5pt;
             font-weight: 700;
@@ -1135,16 +1162,17 @@
         /* ─── 12. PULL QUOTE ────────────────────────────────────── */
         .pull {
             margin: 5mm 4mm;
-            padding: 0 0 0 8mm;
-            border-left: 1.5pt solid var(--accent);
+            padding: 3mm 0 3mm 8mm;
+            border-left: 2.5pt solid var(--accent);
             font-family: var(--serif);
             font-style: italic;
             font-size: 13pt;
-            line-height: 1.45;
+            line-height: 1.5;
             color: var(--ink);
             page-break-inside: avoid;
+            background: linear-gradient(90deg, var(--accent-lt), transparent 70%);
         }
-        .pull .attr { display: block; font-family: var(--sans); font-style: normal; font-size: 8pt; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-3); margin-top: 3mm; }
+        .pull .attr { display: block; font-family: var(--sans); font-style: normal; font-size: 8pt; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-4); margin-top: 3mm; }
 
         /* ─── 13. CONCEPTUAL MAP ────────────────────────────────── */
         .connection-block {
@@ -1173,25 +1201,51 @@
         .takeaway-list { list-style: none; padding: 0; margin: 0; }
         .takeaway-list li {
             display: flex;
-            gap: 8px;
+            gap: 9px;
             align-items: flex-start;
-            padding: 3mm 4mm;
-            margin-bottom: 2mm;
-            background: var(--ink-7);
-            border-radius: 6px;
+            padding: 3.5mm 5mm;
+            margin-bottom: 2.2mm;
+            background: linear-gradient(135deg, var(--accent-lt) 0%, var(--paper-2) 100%);
+            border: 0.4pt solid var(--accent-mid);
+            border-left: 2pt solid var(--accent-rule);
+            border-radius: 7px;
             font-size: 9.5pt;
             color: var(--ink-2);
             line-height: 1.65;
             overflow: visible;
             max-height: none;
         }
-        .takeaway-num { font-weight: 700; color: var(--accent-text); min-width: 16px; font-size: 9pt; padding-top: 1px; }
+        .takeaway-num {
+            font-weight: 700;
+            color: var(--accent-text);
+            font-size: 8pt;
+            padding-top: 1px;
+            min-width: 18pt;
+            width: 18pt;
+            height: 18pt;
+            background: var(--accent-lt);
+            border: 0.5pt solid var(--accent-mid);
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            text-align: center;
+            line-height: 18pt;
+        }
 
         /* ─── 15. GLOSSARY ──────────────────────────────────────── */
         .glossary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 3mm; }
-        .glossary-item { border: var(--hairline); border-radius: 6px; padding: 3mm 4mm; page-break-inside: avoid; }
-        .glossary-term { font-size: 9pt; font-weight: 700; color: var(--ink); margin-bottom: 1.5mm; font-family: var(--serif); }
-        .glossary-def  { font-size: 8.5pt; color: var(--ink-3); line-height: 1.55; }
+        .glossary-item {
+            border: var(--hairline);
+            border-left: 2pt solid var(--accent-rule);
+            border-radius: 7px;
+            padding: 3.5mm 4.5mm;
+            page-break-inside: avoid;
+            background: var(--paper);
+        }
+        .glossary-term { font-size: 9.5pt; font-weight: 700; color: var(--ink); margin-bottom: 1.5mm; font-family: var(--serif); }
+        .glossary-def  { font-size: 8.5pt; color: var(--ink-3); line-height: 1.58; }
         .glossary-mnemonic { font-size: 8pt; color: #7c3aed; font-style: italic; margin-top: 2mm; line-height: 1.45; }
 
         /* ─── 16. VISUAL FRAMES ─────────────────────────────────── */
@@ -1204,17 +1258,17 @@
         .vf-diagram{ font-size: 9pt; color: var(--ink-3); font-style: italic; margin-bottom: 1mm; }
 
         /* ─── 17. SELF-TEST ─────────────────────────────────────── */
-        .review-item { margin-bottom: 6mm; page-break-inside: avoid; }
-        .review-header { display: flex; align-items: center; gap: 5px; margin-bottom: 2mm; }
+        .review-item { margin-bottom: 7mm; page-break-inside: avoid; }
+        .review-header { display: flex; align-items: center; gap: 6px; margin-bottom: 2.5mm; }
         .review-num  { font-weight: 700; font-size: 9.5pt; color: var(--ink); }
         .review-dot  { color: var(--ink-4); font-size: 9pt; }
-        .difficulty-badge { font-size: 7pt; font-weight: 600; padding: 1px 8px; border-radius: 10px; }
-        .diff-recall       { background: var(--ink-7); color: #475569; }
-        .diff-understanding{ background: var(--accent-lt); color: var(--accent-text); }
-        .diff-application  { background: #fffbeb; color: #b45309; }
-        .review-question-block { border-left: 2pt solid var(--accent-rule); padding: 3mm 4mm; background: var(--paper); border-radius: 0 6px 6px 0; margin-bottom: 2mm; }
-        .review-question { font-size: 10pt; font-weight: 500; color: var(--ink); margin-bottom: 2mm; line-height: 1.6; }
-        .review-answer-block { background: var(--ink-7); border: var(--hairline); border-radius: 6px; padding: 3mm 4mm; }
+        .difficulty-badge { font-size: 7pt; font-weight: 700; padding: 1.5px 8px; border-radius: 10px; }
+        .diff-recall       { background: var(--ink-7); color: var(--ink-3); }
+        .diff-understanding{ background: var(--accent-lt); color: var(--accent-text); border: 0.4pt solid var(--accent-mid); }
+        .diff-application  { background: #fffbeb; color: #b45309; border: 0.4pt solid #fde68a; }
+        .review-question-block { border-left: 2.5pt solid var(--accent-rule); padding: 3.5mm 5mm; background: var(--paper); border-radius: 0 7px 7px 0; margin-bottom: 2mm; border-top: var(--hairline); border-right: var(--hairline); border-bottom: var(--hairline); }
+        .review-question { font-size: 10.5pt; font-weight: 500; color: var(--ink); margin-bottom: 2mm; line-height: 1.6; }
+        .review-answer-block { background: linear-gradient(180deg, var(--ink-7), #fff); border: var(--hairline); border-radius: 7px; padding: 3.5mm 5mm; }
         .review-answer { font-size: 9pt; color: var(--ink-3); line-height: 1.65; }
 
         /* ─── 18. FOLD RULE ─────────────────────────────────────── */
@@ -1259,12 +1313,12 @@
             display: flex;
             align-items: baseline;
             justify-content: space-between;
-            border-bottom: var(--rule-2);
+            border-bottom: 1.5pt solid var(--ink-5);
             padding-bottom: 4mm;
             margin-bottom: 6mm;
         }
         .cheat-head h2 { font-size: 22pt; }
-        .cheat-head .meta { font-family: var(--sans); font-size: 7.5pt; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-3); }
+        .cheat-head .meta { font-family: var(--sans); font-size: 7pt; letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink-4); }
         .cheat-grid {
             display: grid;
             grid-template-columns: 1.05fr 1.65fr 1.2fr 1.15fr;
@@ -1275,55 +1329,57 @@
         }
         .cheat-grid .col-head {
             font-family: var(--sans);
-            font-size: 6.75pt;
+            font-size: 6.5pt;
             font-weight: 700;
-            letter-spacing: 0.2em;
+            letter-spacing: 0.22em;
             text-transform: uppercase;
-            color: var(--ink-3);
+            color: var(--ink-4);
             padding: 2.5mm 3.2mm;
-            background: var(--ink-7);
+            background: linear-gradient(180deg, var(--ink-7), #fff);
             border-right: var(--hairline);
-            border-bottom: var(--rule);
+            border-bottom: 1pt solid var(--ink-5);
         }
         .cheat-grid .chapter-band {
             grid-column: 1 / -1;
-            padding: 2.2mm 3.2mm 2mm;
+            padding: 2.5mm 3.5mm 2.2mm;
             border-right: var(--hairline);
             border-bottom: var(--hairline);
-            background: linear-gradient(90deg, var(--accent-lt), #fff 72%);
+            background: linear-gradient(90deg, var(--accent-lt) 0%, color-mix(in oklab, var(--accent-lt) 20%, #fff 80%) 50%, #fff 100%);
+            border-left: 2.5pt solid var(--accent);
         }
         .cheat-grid .chapter-band .chapter-label {
-            font-size: 6.6pt;
+            font-size: 6.5pt;
             font-weight: 700;
-            letter-spacing: 0.18em;
+            letter-spacing: 0.2em;
             text-transform: uppercase;
             color: var(--accent-text);
             margin-bottom: 0.8mm;
         }
         .cheat-grid .chapter-band .chapter-title {
             font-family: var(--serif);
-            font-size: 10.25pt;
+            font-size: 10.5pt;
+            font-weight: 600;
             color: var(--ink);
             line-height: 1.2;
         }
         .cheat-grid .cell {
-            padding: 2.7mm 3.2mm;
+            padding: 2.8mm 3.2mm;
             border-right: var(--hairline);
             border-bottom: var(--hairline);
             font-size: 8.35pt;
-            line-height: 1.35;
+            line-height: 1.38;
             color: var(--ink-2);
         }
         .cheat-grid .cell.term-cell {
             font-family: var(--serif);
-            font-size: 9.4pt;
+            font-size: 9.5pt;
             font-weight: 600;
             color: var(--ink);
             letter-spacing: -0.004em;
         }
         .cheat-grid .cell.trap-cell {
             color: var(--accent-dark);
-            background: color-mix(in oklab, var(--accent) 7%, white 93%);
+            background: color-mix(in oklab, var(--accent) 6%, white 94%);
         }
         .cheat-grid .cell.recall-cell {
             font-weight: 600;
@@ -1357,21 +1413,21 @@
         /* ─── 21. STATIC FOOTER ─────────────────────────────────── */
         .foot-static {
             margin-top: 12mm;
-            border-top: var(--hairline);
-            padding-top: 2mm;
+            border-top: 1pt solid var(--ink-5);
+            padding-top: 2.5mm;
             display: flex;
             justify-content: space-between;
             align-items: center;
             gap: 10mm;
             font-family: var(--sans);
-            font-size: 7pt;
-            letter-spacing: 0.16em;
+            font-size: 6.75pt;
+            letter-spacing: 0.18em;
             text-transform: uppercase;
             color: var(--ink-4);
             white-space: nowrap;
         }
         .foot-static .lhs { display: flex; gap: 10pt; align-items: center; }
-        .foot-static .lhs .dot { width: 5px; height: 5px; background: var(--accent); display: inline-block; transform: rotate(45deg); }
+        .foot-static .lhs .dot { width: 5px; height: 5px; background: var(--accent); display: inline-block; transform: rotate(45deg); opacity: 0.7; }
 
         /* Final PDF text-layer override. The :not(#id) selector deliberately
            carries ID specificity so no heading/card class can reintroduce
