@@ -141,7 +141,9 @@ def dismiss_release(user_id: str, release_id: str) -> None:
 
 def create_release(title: str, subtitle: str = "", features: list | None = None,
                    cta_label: str = "Start exploring", cta_url: str = "",
-                   target_plans: list[str] | None = None) -> dict:
+                   target_plans: list[str] | None = None,
+                   scheduled_at: str | None = None,
+                   linked_flag_keys: list[str] | None = None) -> dict:
     db = _sb()
     payload = {
         "title": title.strip(),
@@ -151,6 +153,8 @@ def create_release(title: str, subtitle: str = "", features: list | None = None,
         "cta_url": cta_url.strip(),
         "target_plans": target_plans or [],
         "published_at": None,
+        "scheduled_at": scheduled_at or None,
+        "linked_flag_keys": linked_flag_keys or [],
     }
     r = db.table("feature_releases").insert(payload).execute()
     return (r.data or [{}])[0]
@@ -165,19 +169,74 @@ def update_release(release_id: str, **fields) -> dict:
 
 
 def publish_release(release_id: str) -> dict:
-    """Set published_at to now, making it visible to users."""
+    """Set published_at to now and enable any linked feature flags."""
     from datetime import datetime, timezone
-    return update_release(release_id, published_at=datetime.now(timezone.utc).isoformat())
+    db = _sb()
+    # Fetch release to get linked_flag_keys before updating
+    r = db.table("feature_releases").select("linked_flag_keys").eq("id", release_id).maybe_single().execute()
+    linked_keys = (r.data or {}).get("linked_flag_keys") or []
+    result = update_release(release_id, published_at=datetime.now(timezone.utc).isoformat())
+    for key in linked_keys:
+        try:
+            update_flag(key, enabled=True)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"[publish_release] failed to enable flag {key!r}: {e}")
+    return result
 
 
 def unpublish_release(release_id: str) -> dict:
-    """Retract a release (set published_at back to null)."""
+    """Retract a release (set published_at back to null) and disable linked feature flags."""
     db = _sb()
     from datetime import datetime, timezone
-    r = db.table("feature_releases").update(
+    # Fetch release to get linked_flag_keys before updating
+    r = db.table("feature_releases").select("linked_flag_keys").eq("id", release_id).maybe_single().execute()
+    linked_keys = (r.data or {}).get("linked_flag_keys") or []
+    result_r = db.table("feature_releases").update(
         {"published_at": None, "updated_at": datetime.now(timezone.utc).isoformat()}
     ).eq("id", release_id).execute()
-    return (r.data or [{}])[0]
+    for key in linked_keys:
+        try:
+            update_flag(key, enabled=False)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"[unpublish_release] failed to disable flag {key!r}: {e}")
+    return (result_r.data or [{}])[0]
+
+
+def auto_publish_due_releases() -> None:
+    """Find releases where scheduled_at <= NOW() and published_at IS NULL, publish each."""
+    import logging
+    from datetime import datetime, timezone
+    logger = logging.getLogger(__name__)
+    try:
+        db = _sb()
+        now_iso = datetime.now(timezone.utc).isoformat()
+        r = db.table("feature_releases") \
+              .select("id, linked_flag_keys") \
+              .lte("scheduled_at", now_iso) \
+              .is_("published_at", "null") \
+              .execute()
+        rows = r.data or []
+        for row in rows:
+            try:
+                publish_release(row["id"])
+                logger.info(f"[release-scheduler] auto-published release {row['id']}")
+                # Write audit log entry with system actor
+                try:
+                    from app.services.supabase_service import admin_write_audit
+                    admin_write_audit(
+                        admin_id="system",
+                        action="auto_publish_release",
+                        target_id=row["id"],
+                        detail="auto-published by scheduler",
+                    )
+                except Exception:
+                    pass
+            except Exception as e:
+                logger.error(f"[release-scheduler] failed to auto-publish {row['id']}: {e}")
+    except Exception as e:
+        logger.error(f"[release-scheduler] query failed: {e}")
 
 
 def delete_release(release_id: str) -> None:

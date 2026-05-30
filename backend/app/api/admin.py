@@ -1693,21 +1693,25 @@ async def admin_delete_flag(key: str, admin: User = Depends(get_admin_user)):
 # =============================================================================
 
 class CreateReleaseRequest(BaseModel):
-    title:        str
-    subtitle:     str  = ""
-    features:     list = []
-    cta_label:    str  = "Start exploring"
-    cta_url:      str  = ""
-    target_plans: list = []
+    title:            str
+    subtitle:         str  = ""
+    features:         list = []
+    cta_label:        str  = "Start exploring"
+    cta_url:          str  = ""
+    target_plans:     list = []
+    scheduled_at:     Optional[str]  = None   # ISO datetime or None (no schedule)
+    linked_flag_keys: list = []               # feature_flags.key values to toggle on publish
 
 
 class UpdateReleaseRequest(BaseModel):
-    title:        Optional[str]  = None
-    subtitle:     Optional[str]  = None
-    features:     Optional[list] = None
-    cta_label:    Optional[str]  = None
-    cta_url:      Optional[str]  = None
-    target_plans: Optional[list] = None
+    title:            Optional[str]  = None
+    subtitle:         Optional[str]  = None
+    features:         Optional[list] = None
+    cta_label:        Optional[str]  = None
+    cta_url:          Optional[str]  = None
+    target_plans:     Optional[list] = None
+    scheduled_at:     Optional[str]  = None   # explicitly set to None to clear schedule
+    linked_flag_keys: Optional[list] = None
 
 
 @router.get("/releases")
@@ -1727,6 +1731,8 @@ async def admin_create_release(body: CreateReleaseRequest, admin: User = Depends
         cta_label=body.cta_label,
         cta_url=body.cta_url,
         target_plans=body.target_plans,
+        scheduled_at=body.scheduled_at,
+        linked_flag_keys=body.linked_flag_keys,
     )
     _audit(admin.id, "create_release", rel.get("id", ""), body.title)
     return {"release": rel}
@@ -1735,6 +1741,9 @@ async def admin_create_release(body: CreateReleaseRequest, admin: User = Depends
 @router.patch("/releases/{release_id}")
 async def admin_update_release(release_id: str, body: UpdateReleaseRequest, admin: User = Depends(get_admin_user)):
     fields = {k: v for k, v in body.model_dump().items() if v is not None}
+    # Allow explicitly clearing scheduled_at by sending null in the request body
+    if "scheduled_at" in body.model_fields_set and body.scheduled_at is None:
+        fields["scheduled_at"] = None
     rel = update_release(release_id, **fields)
     _audit(admin.id, "update_release", release_id)
     return {"release": rel}

@@ -193,12 +193,14 @@ function FeatureItemEditor({ item, onChange, onRemove }) {
 function ReleaseForm({ initial, onSave, onCancel }) {
     const isNew = !initial?.id;
     const [form, setForm] = useState({
-        title:        initial?.title        || '',
-        subtitle:     initial?.subtitle     || '',
-        cta_label:    initial?.cta_label    || 'Start exploring',
-        cta_url:      initial?.cta_url      || '',
-        target_plans: (initial?.target_plans || []).join(','),
-        features:     initial?.features     || [],
+        title:            initial?.title        || '',
+        subtitle:         initial?.subtitle     || '',
+        cta_label:        initial?.cta_label    || 'Start exploring',
+        cta_url:          initial?.cta_url      || '',
+        target_plans:     (initial?.target_plans || []).join(','),
+        features:         initial?.features     || [],
+        scheduled_at:     initial?.scheduled_at     ? initial.scheduled_at.slice(0, 16) : '',
+        linked_flag_keys: (initial?.linked_flag_keys || []).join(', '),
     });
     const [saving, setSaving] = useState(false);
     const [preview, setPreview] = useState(false);
@@ -219,13 +221,16 @@ function ReleaseForm({ initial, onSave, onCancel }) {
         setSaving(true); setErr('');
         try {
             const plans = form.target_plans.split(',').map(s => s.trim()).filter(Boolean);
+            const flagKeys = form.linked_flag_keys.split(',').map(s => s.trim()).filter(Boolean);
             await onSave({
-                title:        form.title.trim(),
-                subtitle:     form.subtitle.trim(),
-                cta_label:    form.cta_label.trim() || 'Start exploring',
-                cta_url:      form.cta_url.trim(),
-                target_plans: plans,
-                features:     form.features,
+                title:            form.title.trim(),
+                subtitle:         form.subtitle.trim(),
+                cta_label:        form.cta_label.trim() || 'Start exploring',
+                cta_url:          form.cta_url.trim(),
+                target_plans:     plans,
+                features:         form.features,
+                scheduled_at:     form.scheduled_at || null,
+                linked_flag_keys: flagKeys,
             });
         } catch (e) {
             setErr(e?.response?.data?.detail || 'Failed to save');
@@ -264,7 +269,7 @@ function ReleaseForm({ initial, onSave, onCancel }) {
                     </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 18 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
                     <div>
                         <div style={{ fontSize: 11, fontWeight: 600, color: '#9ca3af', marginBottom: 4 }}>CTA Button Label</div>
                         <input className="adm-input" placeholder="Start exploring"
@@ -282,6 +287,31 @@ function ReleaseForm({ initial, onSave, onCancel }) {
                         <input className="adm-input" placeholder="student, pro"
                             value={form.target_plans}
                             onChange={e => setForm(f => ({ ...f, target_plans: e.target.value }))} />
+                    </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 18 }}>
+                    <div>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: '#9ca3af', marginBottom: 4 }}>
+                            Schedule publish <span style={{ fontWeight: 400 }}>(optional — leave blank to publish manually)</span>
+                        </div>
+                        <input
+                            className="adm-input"
+                            type="datetime-local"
+                            value={form.scheduled_at}
+                            onChange={e => setForm(f => ({ ...f, scheduled_at: e.target.value }))}
+                        />
+                    </div>
+                    <div>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: '#9ca3af', marginBottom: 4 }}>
+                            Linked feature flags <span style={{ fontWeight: 400 }}>(comma-separated keys — enabled on publish, disabled on unpublish)</span>
+                        </div>
+                        <input
+                            className="adm-input"
+                            placeholder="e.g. noise_suppression, syllabus_preload"
+                            value={form.linked_flag_keys}
+                            onChange={e => setForm(f => ({ ...f, linked_flag_keys: e.target.value }))}
+                        />
                     </div>
                 </div>
 
@@ -324,8 +354,10 @@ function ReleaseForm({ initial, onSave, onCancel }) {
 function ReleaseCard({ release, onEdit, onPublish, onUnpublish, onDelete }) {
     const [loading, setLoading] = useState(false);
     const isPublished = Boolean(release.published_at);
+    const isScheduled = !isPublished && Boolean(release.scheduled_at);
     const featCount = (release.features || []).length;
     const dismissed = release.stats?.dismissed_count || 0;
+    const linkedFlags = release.linked_flag_keys || [];
 
     async function togglePublish() {
         setLoading(true);
@@ -338,7 +370,7 @@ function ReleaseCard({ release, onEdit, onPublish, onUnpublish, onDelete }) {
     return (
         <div style={{
             background: 'var(--adm-card)',
-            border: `1px solid ${isPublished ? 'rgba(16,185,129,0.25)' : 'var(--adm-border)'}`,
+            border: `1px solid ${isPublished ? 'rgba(16,185,129,0.25)' : isScheduled ? 'rgba(99,102,241,0.25)' : 'var(--adm-border)'}`,
             borderRadius: 14, padding: '18px 20px', marginBottom: 12,
         }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
@@ -347,14 +379,27 @@ function ReleaseCard({ release, onEdit, onPublish, onUnpublish, onDelete }) {
                         <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--adm-text)' }}>
                             {release.title}
                         </span>
-                        <span style={{
-                            padding: '2px 8px', borderRadius: 99, fontSize: 11, fontWeight: 600,
-                            color: isPublished ? '#10b981' : '#9ca3af',
-                            background: isPublished ? 'rgba(16,185,129,0.09)' : 'var(--adm-bg)',
-                            border: `1px solid ${isPublished ? 'rgba(16,185,129,0.25)' : 'var(--adm-border)'}`,
-                        }}>
-                            {isPublished ? 'Published' : 'Draft'}
-                        </span>
+                        {isPublished && (
+                            <span style={{
+                                padding: '2px 8px', borderRadius: 99, fontSize: 11, fontWeight: 600,
+                                color: '#10b981', background: 'rgba(16,185,129,0.09)',
+                                border: '1px solid rgba(16,185,129,0.25)',
+                            }}>Published</span>
+                        )}
+                        {isScheduled && (
+                            <span style={{
+                                padding: '2px 8px', borderRadius: 99, fontSize: 11, fontWeight: 600,
+                                color: '#6366f1', background: 'rgba(99,102,241,0.09)',
+                                border: '1px solid rgba(99,102,241,0.25)',
+                            }}>Scheduled for {fmtDate(release.scheduled_at)}</span>
+                        )}
+                        {!isPublished && !isScheduled && (
+                            <span style={{
+                                padding: '2px 8px', borderRadius: 99, fontSize: 11, fontWeight: 600,
+                                color: '#9ca3af', background: 'var(--adm-bg)',
+                                border: '1px solid var(--adm-border)',
+                            }}>Draft</span>
+                        )}
                     </div>
                     {release.subtitle && (
                         <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8 }}>{release.subtitle}</div>
@@ -366,6 +411,9 @@ function ReleaseCard({ release, onEdit, onPublish, onUnpublish, onDelete }) {
                         {isPublished && <span style={{ color: '#6366f1' }}>{dismissed} user{dismissed !== 1 ? 's' : ''} seen it</span>}
                         {(release.target_plans?.length > 0) && (
                             <span>Plans: {release.target_plans.join(', ')}</span>
+                        )}
+                        {linkedFlags.length > 0 && (
+                            <span>Flags: {linkedFlags.join(', ')}</span>
                         )}
                     </div>
                 </div>
@@ -446,7 +494,8 @@ export default function AdminReleases() {
     }
 
     const publishedCount = releases.filter(r => r.published_at).length;
-    const draftCount = releases.filter(r => !r.published_at).length;
+    const scheduledCount = releases.filter(r => !r.published_at && r.scheduled_at).length;
+    const draftCount = releases.filter(r => !r.published_at && !r.scheduled_at).length;
 
     return (
         <div>
@@ -464,6 +513,11 @@ export default function AdminReleases() {
                     <div className="adm-card-label">Published</div>
                     <div className="adm-card-value" style={{ color: publishedCount > 0 ? '#10b981' : undefined }}>{publishedCount}</div>
                     <div className="adm-card-sub">live to users</div>
+                </div>
+                <div className="adm-card">
+                    <div className="adm-card-label">Scheduled</div>
+                    <div className="adm-card-value" style={{ color: scheduledCount > 0 ? '#6366f1' : undefined }}>{scheduledCount}</div>
+                    <div className="adm-card-sub">auto-publish pending</div>
                 </div>
                 <div className="adm-card">
                     <div className="adm-card-label">Drafts</div>

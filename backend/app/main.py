@@ -70,6 +70,10 @@ app.include_router(beta_router, prefix="/api/v1")
 app.include_router(analytics_router, prefix="/api/v1")
 app.include_router(billing_router, prefix="/api/v1")
 
+# Start background daemon for scheduled release auto-publish
+from app.services.scheduled_releases import start_scheduler as _start_release_scheduler
+_start_release_scheduler()
+
 
 @app.get("/")
 async def root():
