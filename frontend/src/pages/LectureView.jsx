@@ -403,6 +403,11 @@ const CSS = `
   .dark .lv-quiz-opt.wrong .lv-quiz-opt-letter { background: rgba(239,68,68,0.2); border-color: rgba(239,68,68,0.4); color: #fca5a5; }
   .lv-quiz-expl { display: flex; gap: 8px; font-size: 12px; color: var(--color-sec); margin-top: 8px; padding: 9px 12px; background: var(--color-bg); border-radius: 9px; line-height: 1.6; border: 1px solid var(--color-border); }
   .lv-quiz-expl-icon { flex-shrink: 0; font-size: 13px; margin-top: 1px; }
+  .lv-quiz-feedback { display: flex; gap: 9px; margin-top: 12px; padding: 11px 13px; border-radius: 11px; font-size: 12px; line-height: 1.65; }
+  .lv-quiz-feedback.ok   { background: #f0fdf4; border: 1px solid #86efac; color: #15803d; }
+  .lv-quiz-feedback.fail { background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; }
+  .dark .lv-quiz-feedback.ok   { background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.28); color: #6ee7b7; }
+  .dark .lv-quiz-feedback.fail { background: rgba(239,68,68,0.08);  border: 1px solid rgba(239,68,68,0.28);  color: #fca5a5; }
 
   /* Glossary */
   .lv-gloss-hdr { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
@@ -1212,6 +1217,8 @@ export default function LectureView() {
     const [fcIdx, setFcIdx]         = useState(0);
     const [fcFlipped, setFcFlipped] = useState(false);
     const [quizAnswers, setQuizAnswers] = useState({});
+    const [quizIdx, setQuizIdx] = useState(0);
+    const [quizShowResults, setQuizShowResults] = useState(false);
     const [transcriptSearch, setTranscriptSearch] = useState('');
     const [cardSearch, setCardSearch] = useState('');
     const [glossarySearch, setGlossarySearch] = useState('');
@@ -2161,13 +2168,6 @@ export default function LectureView() {
                         {activeTab === 'quiz' && (() => {
                             const questions = lecture?.quiz || [];
                             if (!questions.length) return <div className="lv-empty-panel">No quiz yet</div>;
-                            const answeredCount = Object.keys(quizAnswers).length;
-                            const correctCount = questions.reduce((acc, q, qi) => {
-                                const chosen = quizAnswers[qi];
-                                const correctLetter = (q.answer || '').charAt(0).toUpperCase();
-                                return acc + (chosen === correctLetter ? 1 : 0);
-                            }, 0);
-                            const allAnswered = answeredCount === questions.length;
                             return (
                                 <div className="lv-tab-body" style={{ position: 'relative' }}>
                                     {/* Practice Mode Overlay */}
@@ -2249,71 +2249,251 @@ export default function LectureView() {
                                         </div>
                                     )}
 
-                                    {/* Regular quiz header */}
-                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                                        <div style={{ fontSize: 12, color: 'var(--color-muted)' }}>{questions.length} questions</div>
-                                        <button className="lv-btn-primary" style={{ fontSize: 11, padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 5 }}
-                                            onClick={startPractice}>
-                                            <Play size={10} /> Practice
-                                        </button>
-                                    </div>
-
-                                    {/* Score banner */}
-                                    {answeredCount > 0 && (
-                                        <div className="lv-quiz-score">
-                                            <div className="lv-quiz-score-dot" style={{
-                                                background: allAnswered
-                                                    ? (correctCount / questions.length >= 0.7 ? '#22c55e' : '#f59e0b')
-                                                    : 'var(--color-muted)'
-                                            }} />
-                                            {allAnswered
-                                                ? `${correctCount} / ${questions.length} correct${correctCount === questions.length ? ' — Perfect! 🎉' : ''}`
-                                                : `${answeredCount} / ${questions.length} answered`
-                                            }
-                                            {allAnswered && answeredCount > 0 && (
-                                                <button
-                                                    onClick={() => setQuizAnswers({})}
-                                                    style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--color-muted)', background: 'none', border: '1px solid var(--color-border)', borderRadius: 6, padding: '3px 8px', cursor: 'pointer', fontFamily: 'inherit' }}>
-                                                    Reset
-                                                </button>
-                                            )}
-                                        </div>
-                                    )}
-                                    {questions.map((q, qi) => {
-                                        const chosen = quizAnswers[qi];
+                                    {/* ── One-at-a-time quiz UI ── */}
+                                    {(() => {
+                                        const safeIdx = Math.min(quizIdx, questions.length - 1);
+                                        const q = questions[safeIdx];
+                                        const chosen = quizAnswers[safeIdx];
                                         const answered = chosen !== undefined;
-                                        const correctLetter = (q.answer || '').charAt(0).toUpperCase();
-                                        return (
-                                            <div key={qi} className="lv-quiz-q">
-                                                <div className="lv-quiz-qrow">
-                                                    <div className="lv-quiz-num">{qi + 1}</div>
-                                                    <div className="lv-quiz-qtext">{q.question}</div>
-                                                </div>
-                                                {(q.options || []).map((opt, oi) => {
-                                                    const letter = String.fromCharCode(65 + oi);
-                                                    let cls = 'lv-quiz-opt';
-                                                    if (answered) {
-                                                        if (letter === correctLetter) cls += ' correct';
-                                                        else if (letter === chosen) cls += ' wrong';
-                                                    }
-                                                    return (
-                                                        <button key={oi} className={cls}
-                                                            disabled={answered}
-                                                            onClick={() => setQuizAnswers(a => ({ ...a, [qi]: letter }))}>
-                                                            <span className="lv-quiz-opt-letter">{letter}</span>
-                                                            {opt}
-                                                        </button>
-                                                    );
-                                                })}
-                                                {answered && q.explanation && (
-                                                    <div className="lv-quiz-expl">
-                                                        <span className="lv-quiz-expl-icon">💡</span>
-                                                        {q.explanation}
+                                        const correctLetter = (q?.answer || '').charAt(0).toUpperCase();
+                                        const isCorrect = answered && chosen === correctLetter;
+                                        const isLast = safeIdx === questions.length - 1;
+                                        const answeredCount = Object.keys(quizAnswers).length;
+                                        const correctCount = questions.reduce((acc, q2, i) => acc + (quizAnswers[i] === (q2.answer || '').charAt(0).toUpperCase() ? 1 : 0), 0);
+                                        const wrongCount = answeredCount - correctCount;
+                                        const allAnswered = answeredCount === questions.length;
+                                        const pct = answeredCount > 0 ? Math.round((correctCount / questions.length) * 100) : 0;
+                                        const ringC = 2 * Math.PI * 54;
+
+                                        // ── SCOREBOARD ────────────────────────────────────────
+                                        if (quizShowResults) {
+                                            const scoreColor = pct >= 80 ? '#22c55e' : pct >= 60 ? '#f59e0b' : '#ef4444';
+                                            const label = pct === 100 ? '🎉 Perfect score!' : pct >= 80 ? '🌟 Excellent!' : pct >= 60 ? '👍 Good job!' : '💪 Keep at it!';
+                                            return (
+                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '28px 4px 0' }}>
+                                                    {/* Score ring */}
+                                                    <div style={{ position: 'relative', width: 148, height: 148, marginBottom: 14 }}>
+                                                        <svg width="148" height="148" viewBox="0 0 148 148" style={{ transform: 'rotate(-90deg)' }}>
+                                                            <circle cx="74" cy="74" r="54" fill="none" stroke="var(--color-border)" strokeWidth="10" />
+                                                            <circle cx="74" cy="74" r="54" fill="none"
+                                                                stroke={scoreColor} strokeWidth="10"
+                                                                strokeDasharray={`${(pct / 100) * ringC} ${ringC}`}
+                                                                strokeLinecap="round"
+                                                            />
+                                                        </svg>
+                                                        <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
+                                                            <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: -1.5, color: 'var(--color-text)', lineHeight: 1 }}>{correctCount}</div>
+                                                            <div style={{ fontSize: 12, color: 'var(--color-muted)', fontWeight: 500 }}>/ {questions.length}</div>
+                                                        </div>
                                                     </div>
-                                                )}
-                                            </div>
+                                                    <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-text)', marginBottom: 5, textAlign: 'center' }}>{label}</div>
+                                                    <div style={{ fontSize: 12, color: 'var(--color-muted)', marginBottom: 22, display: 'flex', gap: 12 }}>
+                                                        <span>{pct}% correct</span>
+                                                        <span style={{ color: '#22c55e', fontWeight: 600 }}>{correctCount} right</span>
+                                                        <span style={{ color: '#ef4444', fontWeight: 600 }}>{questions.length - correctCount} wrong</span>
+                                                    </div>
+                                                    {/* Buttons */}
+                                                    <div style={{ display: 'flex', gap: 8, marginBottom: 28, flexWrap: 'wrap', justifyContent: 'center' }}>
+                                                        <button className="lv-btn-primary" style={{ fontSize: 12, padding: '8px 20px' }}
+                                                            onClick={() => { setQuizAnswers({}); setQuizIdx(0); setQuizShowResults(false); }}>
+                                                            Try Again
+                                                        </button>
+                                                        <button className="lv-btn-ghost" style={{ fontSize: 12, padding: '8px 16px' }}
+                                                            onClick={() => { setQuizShowResults(false); setQuizIdx(0); }}>
+                                                            Review
+                                                        </button>
+                                                        <button className="lv-btn-ghost" style={{ fontSize: 12, padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 4 }}
+                                                            onClick={startPractice}>
+                                                            <Play size={10} /> Practice
+                                                        </button>
+                                                    </div>
+                                                    {/* Per-question review */}
+                                                    <div style={{ width: '100%' }}>
+                                                        <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Answer Review</div>
+                                                        {questions.map((q2, i) => {
+                                                            const a = quizAnswers[i];
+                                                            const cL = (q2.answer || '').charAt(0).toUpperCase();
+                                                            const ok = a === cL;
+                                                            return (
+                                                                <div key={i} style={{
+                                                                    display: 'flex', gap: 10, padding: '10px 12px',
+                                                                    border: '1px solid var(--color-border)', borderRadius: 10, marginBottom: 5,
+                                                                    background: 'var(--color-card)',
+                                                                }}>
+                                                                    <div style={{
+                                                                        width: 20, height: 20, borderRadius: '50%', flexShrink: 0, marginTop: 2,
+                                                                        background: ok ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)',
+                                                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                                    }}>
+                                                                        {ok ? <CheckCircle size={12} color="#22c55e" /> : <XCircle size={12} color="#ef4444" />}
+                                                                    </div>
+                                                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                                                        <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text)', lineHeight: 1.5, marginBottom: ok ? 0 : 4 }}>{q2.question}</div>
+                                                                        {!ok && (
+                                                                            <>
+                                                                                {a && <div style={{ fontSize: 11, color: '#ef4444', marginBottom: 2 }}>Your answer: {a} — {q2.options?.[a.charCodeAt(0) - 65] || '—'}</div>}
+                                                                                <div style={{ fontSize: 11, color: '#22c55e', marginBottom: q2.explanation ? 4 : 0 }}>Correct: {cL} — {q2.options?.[cL.charCodeAt(0) - 65] || '—'}</div>
+                                                                                {q2.explanation && (
+                                                                                    <div style={{ fontSize: 11, color: 'var(--color-sec)', paddingTop: 4, borderTop: '1px solid var(--color-border)' }}>
+                                                                                        💡 {q2.explanation}
+                                                                                    </div>
+                                                                                )}
+                                                                            </>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            );
+                                        }
+
+                                        // ── QUESTION VIEW ─────────────────────────────────────
+                                        return (
+                                            <>
+                                                {/* Progress header */}
+                                                <div style={{ marginBottom: 16 }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7 }}>
+                                                        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-text)' }}>
+                                                            Question {safeIdx + 1}
+                                                            <span style={{ fontWeight: 400, color: 'var(--color-muted)' }}> of {questions.length}</span>
+                                                        </span>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11 }}>
+                                                            {correctCount > 0 && (
+                                                                <span style={{ color: '#22c55e', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 3 }}>
+                                                                    <CheckCircle size={10} /> {correctCount}
+                                                                </span>
+                                                            )}
+                                                            {wrongCount > 0 && (
+                                                                <span style={{ color: '#ef4444', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 3 }}>
+                                                                    <XCircle size={10} /> {wrongCount}
+                                                                </span>
+                                                            )}
+                                                            <button className="lv-btn-primary" style={{ fontSize: 10, padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 3 }} onClick={startPractice}>
+                                                                <Play size={9} /> Practice
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                    {/* Progress bar */}
+                                                    <div style={{ height: 4, background: 'var(--color-border)', borderRadius: 99, overflow: 'hidden', marginBottom: 9 }}>
+                                                        <div style={{
+                                                            height: '100%', borderRadius: 99, transition: 'width 0.35s, background 0.35s',
+                                                            width: `${(answeredCount / questions.length) * 100}%`,
+                                                            background: answeredCount === 0 ? 'var(--color-border)' : pct >= 70 ? '#22c55e' : '#f59e0b',
+                                                        }} />
+                                                    </div>
+                                                    {/* Dot indicators — click to jump */}
+                                                    <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                                                        {questions.map((q2, i) => {
+                                                            const a = quizAnswers[i];
+                                                            const isCurr = i === safeIdx;
+                                                            const ok = a !== undefined && a === (q2.answer || '').charAt(0).toUpperCase();
+                                                            return (
+                                                                <button key={i} title={`Q${i + 1}`} onClick={() => setQuizIdx(i)} style={{
+                                                                    width: isCurr ? 22 : 8, height: 8, borderRadius: 99, padding: 0, border: 'none',
+                                                                    cursor: 'pointer', flexShrink: 0, transition: 'all 0.2s',
+                                                                    background: isCurr ? '#6366f1' : a !== undefined ? (ok ? '#22c55e' : '#ef4444') : 'var(--color-border)',
+                                                                }} />
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+
+                                                {/* Question card */}
+                                                <div style={{
+                                                    background: 'var(--color-card)', border: '1px solid var(--color-border)',
+                                                    borderRadius: 16, padding: '20px 18px', marginBottom: 14,
+                                                }}>
+                                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 16 }}>
+                                                        <div style={{
+                                                            width: 26, height: 26, borderRadius: 8, flexShrink: 0, marginTop: 1,
+                                                            background: 'var(--color-bg)', border: '1px solid var(--color-border)',
+                                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                            fontSize: 10, fontWeight: 700, color: 'var(--color-muted)',
+                                                            fontFamily: "'JetBrains Mono', monospace",
+                                                        }}>
+                                                            {safeIdx + 1}
+                                                        </div>
+                                                        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text)', lineHeight: 1.6, flex: 1 }}>
+                                                            {q.question}
+                                                        </div>
+                                                    </div>
+
+                                                    {(q.options || []).map((opt, oi) => {
+                                                        const letter = String.fromCharCode(65 + oi);
+                                                        let cls = 'lv-quiz-opt';
+                                                        if (answered) {
+                                                            if (letter === correctLetter) cls += ' correct';
+                                                            else if (letter === chosen) cls += ' wrong';
+                                                        }
+                                                        return (
+                                                            <button key={oi} className={cls}
+                                                                disabled={answered}
+                                                                onClick={() => setQuizAnswers(a => ({ ...a, [safeIdx]: letter }))}>
+                                                                <span className="lv-quiz-opt-letter">{letter}</span>
+                                                                {opt}
+                                                            </button>
+                                                        );
+                                                    })}
+
+                                                    {answered && q.explanation && (
+                                                        <div className={`lv-quiz-feedback ${isCorrect ? 'ok' : 'fail'}`}>
+                                                            <span style={{ fontSize: 14, flexShrink: 0 }}>{isCorrect ? '✓' : '💡'}</span>
+                                                            <span>
+                                                                <strong>{isCorrect ? 'Correct! ' : 'Not quite — '}</strong>
+                                                                {q.explanation}
+                                                            </span>
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {/* Bottom navigation */}
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                                                    <button
+                                                        disabled={safeIdx === 0}
+                                                        onClick={() => setQuizIdx(i => i - 1)}
+                                                        style={{
+                                                            display: 'flex', alignItems: 'center', gap: 5, padding: '9px 16px',
+                                                            fontSize: 12, fontWeight: 600, border: '1px solid var(--color-border)',
+                                                            borderRadius: 9, background: 'var(--color-card)',
+                                                            color: safeIdx === 0 ? 'var(--color-muted)' : 'var(--color-text)',
+                                                            cursor: safeIdx === 0 ? 'default' : 'pointer',
+                                                            opacity: safeIdx === 0 ? 0.35 : 1, fontFamily: 'inherit',
+                                                        }}>
+                                                        <ChevronLeft size={13} /> Prev
+                                                    </button>
+
+                                                    {allAnswered && (
+                                                        <button
+                                                            onClick={() => setQuizShowResults(true)}
+                                                            style={{
+                                                                display: 'flex', alignItems: 'center', gap: 5, padding: '9px 16px',
+                                                                fontSize: 12, fontWeight: 600,
+                                                                border: '1px solid rgba(99,102,241,0.4)', borderRadius: 9,
+                                                                background: 'rgba(99,102,241,0.07)', color: '#6366f1',
+                                                                cursor: 'pointer', fontFamily: 'inherit',
+                                                            }}>
+                                                            See Results ↗
+                                                        </button>
+                                                    )}
+
+                                                    <button
+                                                        disabled={isLast}
+                                                        onClick={() => { if (!isLast) setQuizIdx(i => i + 1); }}
+                                                        style={{
+                                                            display: 'flex', alignItems: 'center', gap: 5, padding: '9px 16px',
+                                                            fontSize: 12, fontWeight: 600, border: 'none', borderRadius: 9,
+                                                            background: 'var(--color-dark)', color: 'var(--color-dark-fg)',
+                                                            cursor: isLast ? 'default' : 'pointer',
+                                                            opacity: isLast ? 0.35 : 1, fontFamily: 'inherit',
+                                                        }}>
+                                                        Next <ChevronRight size={13} />
+                                                    </button>
+                                                </div>
+                                            </>
                                         );
-                                    })}
+                                    })()}
 
                                     {/* Past Attempts */}
                                     <button className="lv-past-toggle" onClick={loadPastAttempts}>
