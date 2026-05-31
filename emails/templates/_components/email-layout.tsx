@@ -103,21 +103,16 @@ export function EmailLayout({ preview, children, subtitle }: EmailLayoutProps) {
                         <table cellPadding={0} cellSpacing={0}>
                           <tbody>
                             <tr>
-                              {/* Logo orb box */}
+                              {/* Logo */}
                               <td style={{
-                                width: '46px', height: '46px',
-                                background: GRAD_SOFT,
-                                borderRadius: '14px',
-                                border: '1px solid rgba(255,255,255,0.85)',
-                                boxShadow: '0 6px 16px -8px rgba(120,110,190,0.55)',
+                                width: '44px', height: '44px',
                                 verticalAlign: 'middle',
-                                textAlign: 'center' as const,
                               }}>
                                 <Img
                                   src="https://www.neurativo.com/logo.png"
-                                  width={26} height={26}
+                                  width={44} height={44}
                                   alt="Neurativo"
-                                  style={{ display: 'block', margin: '10px auto', border: 0 }}
+                                  style={{ display: 'block', border: 0, borderRadius: '50%' }}
                                 />
                               </td>
                               {/* Wordmark */}
@@ -186,13 +181,14 @@ export function EmailLayout({ preview, children, subtitle }: EmailLayoutProps) {
                         <table cellPadding={0} cellSpacing={0} style={{ marginBottom: '12px' }}>
                           <tbody>
                             <tr>
-                              <td style={{
-                                width: '24px', height: '24px',
-                                background: GRAD_SOFT,
-                                borderRadius: '8px',
-                                border: '1px solid rgba(255,255,255,0.85)',
-                                verticalAlign: 'middle',
-                              }}>&nbsp;</td>
+                              <td style={{ width: '24px', height: '24px', verticalAlign: 'middle' }}>
+                                <Img
+                                  src="https://www.neurativo.com/logo.png"
+                                  width={24} height={24}
+                                  alt="Neurativo"
+                                  style={{ display: 'block', border: 0, borderRadius: '50%' }}
+                                />
+                              </td>
                               <td style={{ paddingLeft: '9px', verticalAlign: 'middle' }}>
                                 <Text style={{
                                   margin: 0, fontSize: '14px', fontWeight: 700,
