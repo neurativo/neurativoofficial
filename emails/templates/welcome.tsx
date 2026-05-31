@@ -237,13 +237,13 @@ export default function WelcomeEmail({ name, appUrl = 'https://www.neurativo.com
       </table>
 
       {/* H1 */}
-      <div style={{
+      <div className="em-h1" style={{
         fontSize: '34px', fontWeight: 800,
         color: INK, fontFamily: FONT,
         letterSpacing: '-0.032em', lineHeight: '1.18',
         marginBottom: '14px',
       }}>
-        Welcome to<br />Neurativo, {firstName}.
+        Welcome to Neurativo, {firstName}.
       </div>
 
       {/* Lede */}

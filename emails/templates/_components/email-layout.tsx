@@ -32,17 +32,19 @@ const HEAD_STYLES = `
   @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
   * { box-sizing: border-box; }
   body { margin: 0; padding: 0; font-family: ${FONT}; -webkit-text-size-adjust: 100%; }
-  @media only screen and (max-width: 500px) {
-    .em-wrap  { padding: 20px 12px 36px !important; }
-    .em-card  { border-radius: 20px !important; width: 100% !important; }
-    .em-hdr   { padding: 22px 24px !important; }
-    .em-body  { padding: 28px 24px 20px !important; }
-    .em-foot  { padding: 20px 24px 24px !important; }
-    .em-h1    { font-size: 30px !important; letter-spacing: -0.02em !important; }
-    .em-h2    { font-size: 20px !important; }
-    .em-btn-td { display: block !important; width: 100% !important; border-radius: 999px !important; }
-    .em-btn    { display: block !important; width: 100% !important; text-align: center !important; }
-    .em-credits { flex-direction: column !important; align-items: flex-start !important; gap: 10px !important; }
+  h1, h2, h3 { margin: 0; font-family: ${FONT}; }
+  img { border: 0; display: block; }
+  table { border-collapse: collapse; mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+  @media only screen and (max-width: 560px) {
+    .em-wrap   { padding: 16px 10px 36px !important; }
+    .em-card   { border-radius: 18px !important; width: 100% !important; max-width: 100% !important; }
+    .em-hdr    { padding: 20px 20px !important; }
+    .em-body   { padding: 24px 20px 8px !important; }
+    .em-foot   { padding: 18px 20px 22px !important; }
+    h1, .em-h1 { font-size: 26px !important; letter-spacing: -0.02em !important; line-height: 1.25 !important; }
+    h2, .em-h2 { font-size: 20px !important; line-height: 1.3 !important; }
+    .em-btn-td { display: block !important; width: 100% !important; }
+    .em-btn    { display: block !important; width: 100% !important; text-align: center !important; padding: 14px 20px !important; }
     .em-credits-num { font-size: 52px !important; }
   }
 `;
@@ -338,9 +340,9 @@ export const FONT_EXPORT = FONT;
 
 export const t = {
   h2: {
-    margin: '0 0 12px',
-    fontSize: '24px', fontWeight: 800,
-    color: INK, letterSpacing: '-0.025em', lineHeight: '1.2',
+    margin: '0 0 14px',
+    fontSize: '26px', fontWeight: 800,
+    color: INK, letterSpacing: '-0.025em', lineHeight: '1.22',
     fontFamily: FONT,
   },
   body: {
