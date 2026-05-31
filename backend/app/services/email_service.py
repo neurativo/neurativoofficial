@@ -4,10 +4,49 @@ If RESEND_API_KEY is not configured, sends are skipped with a stdout log.
 
 Existing functions (team invites) use _send() synchronously.
 New transactional emails use _fire() which is fire-and-forget (daemon thread).
+
+HTML rendering: React Email templates in emails/ at project root.
+_render_template() calls tsx render.ts via subprocess; falls back to the
+inline Python HTML builders if node_modules isn't installed.
 """
+import json
+import os
+import subprocess
+import sys
 import threading
 import httpx
 from app.core.config import settings
+
+# Path to the emails/ directory (three levels up from this file)
+_EMAILS_DIR = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), '..', '..', '..', 'emails')
+)
+_TSX_BIN = os.path.join(
+    _EMAILS_DIR, 'node_modules', '.bin',
+    'tsx.cmd' if sys.platform == 'win32' else 'tsx'
+)
+
+
+def _render_template(template: str, props: dict) -> str | None:
+    """Render a React Email template to HTML via tsx subprocess.
+    Returns None if the emails/ node_modules are not installed or render fails.
+    """
+    if not os.path.exists(_TSX_BIN):
+        return None
+    try:
+        result = subprocess.run(
+            [_TSX_BIN, 'render.ts', template, json.dumps(props)],
+            cwd=_EMAILS_DIR,
+            capture_output=True,
+            text=True,
+            timeout=12,
+        )
+        if result.returncode == 0 and result.stdout:
+            return result.stdout
+        print(f"[email] template render error ({template}): {result.stderr[:300]}")
+    except Exception as e:
+        print(f"[email] template render failed ({template}): {e}")
+    return None
 
 
 def _get_user_email(user_id: str) -> str | None:
@@ -72,42 +111,44 @@ def _fire(to: str, subject: str, html: str) -> None:
 
 def send_invite_email(to: str, org_name: str, inviter_name: str, join_url: str, seat_tier: str) -> bool:
     tier_label = "Pro" if seat_tier == "pro" else "Student"
-    body = (
-        _h(f"You're invited to join {org_name}")
-        + _p(f"{inviter_name} has invited you to join their team on Neurativo with a <strong>{tier_label}</strong> seat.")
-        + _btn("Accept invitation", join_url)
-        + _p("If you didn't expect this invite, you can ignore this email.", muted=True)
-    )
-    html = _base_template("Team Invitation", body)
+    html = (_render_template('team-invite', {
+        'orgName': org_name, 'inviterName': inviter_name,
+        'joinUrl': join_url, 'seatTier': seat_tier,
+    }) or (
+        _base_template("Team Invitation",
+            _h(f"You're invited to join {org_name}")
+            + _p(f"{inviter_name} has invited you to join their team on Neurativo with a <strong>{tier_label}</strong> seat.")
+            + _btn("Accept invitation", join_url)
+            + _p("If you didn't expect this invite, you can ignore this email.", muted=True)
+        )
+    ))
     return _send(to, f"You're invited to {org_name} on Neurativo", html)
 
 
 def send_seat_activated_email(to: str, org_name: str) -> bool:
-    body = (
-        _h(f"Welcome to {org_name}")
-        + _p("Your seat is now active. Head to Neurativo and start recording.")
-        + _btn("Open Neurativo", "https://www.neurativo.com/app")
-    )
-    html = _base_template("Seat Activated", body)
+    html = (_render_template('seat-activated', {'orgName': org_name}) or
+            _base_template("Seat Activated",
+                _h(f"Welcome to {org_name}")
+                + _p("Your seat is now active. Head to Neurativo and start recording.")
+                + _btn("Open Neurativo", "https://www.neurativo.com/app")))
     return _send(to, f"Your {org_name} seat is active", html)
 
 
 def send_seat_removed_email(to: str, org_name: str) -> bool:
-    body = (
-        _h("Seat removed")
-        + _p(f"Your <strong>{org_name}</strong> team seat on Neurativo has been removed. You can still use Neurativo on the free plan.")
-    )
-    html = _base_template("Seat Removed", body)
+    html = (_render_template('seat-removed', {'orgName': org_name}) or
+            _base_template("Seat Removed",
+                _h("Seat removed")
+                + _p(f"Your <strong>{org_name}</strong> team seat on Neurativo has been removed. You can still use Neurativo on the free plan.")))
     return _send(to, f"Your {org_name} seat has been removed", html)
 
 
 def send_payment_failed_email(to: str, org_name: str) -> bool:
-    body = (
-        _h(f"Payment failed — {org_name}")
-        + _p("We couldn't process your Neurativo Teams payment. Please update your payment method to keep your team's access.")
-        + _btn("Update billing", f"https://teams.neurativo.com/{org_name}/dashboard", bg="#dc2626")
-    )
-    html = _base_template("Payment Issue", body)
+    billing_url = f"https://teams.neurativo.com/{org_name}/dashboard"
+    html = (_render_template('team-payment-failed', {'orgName': org_name, 'billingUrl': billing_url}) or
+            _base_template("Payment Issue",
+                _h(f"Payment failed — {org_name}")
+                + _p("We couldn't process your Neurativo Teams payment. Please update your payment method to keep your team's access.")
+                + _btn("Update billing", billing_url, bg="#dc2626")))
     return _send(to, f"Action required: payment failed for {org_name}", html)
 
 
@@ -290,11 +331,12 @@ def _html_welcome() -> str:
     return _base_template("AI Lecture Assistant", body)
 
 
-def send_welcome_for_user(user_id: str) -> None:
+def send_welcome_for_user(user_id: str, name: str = "") -> None:
     def _task():
         email = _get_user_email(user_id)
         if email:
-            _send(email, "Welcome to Neurativo — you have 5 free credits", _html_welcome())
+            html = _render_template('welcome', {'name': name}) or _html_welcome()
+            _send(email, "Welcome to Neurativo — you have 5 free credits", html)
     threading.Thread(target=_task, daemon=True).start()
 
 
@@ -347,7 +389,8 @@ def send_plan_upgraded_for_user(user_id: str, plan: str) -> None:
         email = _get_user_email(user_id)
         if email:
             label = _PLAN_LABELS.get(plan, plan.title())
-            _send(email, f"You're now on Neurativo {label} — welcome!", _html_plan_upgraded(plan))
+            html = _render_template('plan-upgraded', {'plan': plan}) or _html_plan_upgraded(plan)
+            _send(email, f"You're now on Neurativo {label} — welcome!", html)
     threading.Thread(target=_task, daemon=True).start()
 
 
@@ -373,7 +416,8 @@ def send_plan_downgraded_for_user(user_id: str) -> None:
     def _task():
         email = _get_user_email(user_id)
         if email:
-            _send(email, "Your Neurativo subscription has ended", _html_plan_downgraded())
+            html = _render_template('plan-downgraded', {}) or _html_plan_downgraded()
+            _send(email, "Your Neurativo subscription has ended", html)
     threading.Thread(target=_task, daemon=True).start()
 
 
@@ -399,7 +443,8 @@ def send_subscription_payment_failed_for_user(user_id: str) -> None:
     def _task():
         email = _get_user_email(user_id)
         if email:
-            _send(email, "Action needed — Neurativo payment failed", _html_subscription_payment_failed())
+            html = _render_template('payment-failed', {}) or _html_subscription_payment_failed()
+            _send(email, "Action needed — Neurativo payment failed", html)
     threading.Thread(target=_task, daemon=True).start()
 
 
@@ -424,8 +469,9 @@ def send_credits_purchased_for_user(user_id: str, pack_label: str, credits: int,
     def _task():
         email = _get_user_email(user_id)
         if email:
-            _send(email, f"Neurativo — {credits} credits added to your account",
-                  _html_credits_purchased(pack_label, credits, price_usd))
+            html = (_render_template('credits-purchased', {'packLabel': pack_label, 'credits': credits, 'priceUsd': price_usd})
+                    or _html_credits_purchased(pack_label, credits, price_usd))
+            _send(email, f"Neurativo — {credits} credits added to your account", html)
     threading.Thread(target=_task, daemon=True).start()
 
 
@@ -451,8 +497,9 @@ def send_credits_refreshed_for_user(user_id: str, plan: str, credits: int) -> No
         email = _get_user_email(user_id)
         if email:
             label = _PLAN_LABELS.get(plan, plan.title())
-            _send(email, f"Neurativo {label} renewed — {credits} credits added",
-                  _html_credits_refreshed(plan, credits))
+            html = (_render_template('credits-refreshed', {'plan': plan, 'credits': credits})
+                    or _html_credits_refreshed(plan, credits))
+            _send(email, f"Neurativo {label} renewed — {credits} credits added", html)
     threading.Thread(target=_task, daemon=True).start()
 
 
@@ -490,7 +537,9 @@ def send_lecture_ready_for_job(lecture_id: str, user_id: str) -> None:
             print(f"[email] lecture title fetch error: {e}")
         lecture_url = f"https://www.neurativo.com/lecture/{lecture_id}"
         subject = f"Neurativo — \"{title or 'Your lecture'}\" is ready"
-        _send(email, subject, _html_lecture_ready(title, lecture_url))
+        html = (_render_template('lecture-ready', {'title': title, 'lectureUrl': lecture_url})
+                or _html_lecture_ready(title, lecture_url))
+        _send(email, subject, html)
     threading.Thread(target=_task, daemon=True).start()
 
 
@@ -516,6 +565,6 @@ def send_low_credits_for_user(user_id: str, balance: int) -> None:
         email = _get_user_email(user_id)
         if email:
             credit_word = "credit" if balance == 1 else "credits"
-            _send(email, f"Neurativo — only {balance} {credit_word} left",
-                  _html_low_credits(balance))
+            html = _render_template('low-credits', {'balance': balance}) or _html_low_credits(balance)
+            _send(email, f"Neurativo — only {balance} {credit_word} left", html)
     threading.Thread(target=_task, daemon=True).start()

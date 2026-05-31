@@ -38,3 +38,5 @@ desktop.ini
 
 # ── Unused legacy frontend ────────────────────────────────────────────────────
 neura_frontend/
+emails/node_modules/
+emails/out/
