@@ -105,12 +105,12 @@ export function EmailLayout({ preview, children, subtitle }: EmailLayoutProps) {
                             <tr>
                               {/* Logo */}
                               <td style={{
-                                width: '44px', height: '44px',
+                                width: '54px', height: '54px',
                                 verticalAlign: 'middle',
                               }}>
                                 <Img
                                   src="https://www.neurativo.com/logo.png"
-                                  width={44} height={44}
+                                  width={54} height={54}
                                   alt="Neurativo"
                                   style={{ display: 'block', border: 0, borderRadius: '50%' }}
                                 />
@@ -181,10 +181,10 @@ export function EmailLayout({ preview, children, subtitle }: EmailLayoutProps) {
                         <table cellPadding={0} cellSpacing={0} style={{ marginBottom: '12px' }}>
                           <tbody>
                             <tr>
-                              <td style={{ width: '24px', height: '24px', verticalAlign: 'middle' }}>
+                              <td style={{ width: '32px', height: '32px', verticalAlign: 'middle' }}>
                                 <Img
                                   src="https://www.neurativo.com/logo.png"
-                                  width={24} height={24}
+                                  width={32} height={32}
                                   alt="Neurativo"
                                   style={{ display: 'block', border: 0, borderRadius: '50%' }}
                                 />
