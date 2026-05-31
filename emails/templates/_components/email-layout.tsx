@@ -98,42 +98,28 @@ export function EmailLayout({ preview, children, subtitle }: EmailLayoutProps) {
                     {/* Header */}
                     <tr>
                       <td className="em-hdr" style={{
-                        padding: '28px 40px 26px',
+                        padding: '30px 40px 26px',
                         background: 'transparent',
                         borderBottom: `1px solid ${LINE}`,
+                        textAlign: 'center' as const,
                       }}>
-                        <table cellPadding={0} cellSpacing={0}>
-                          <tbody>
-                            <tr>
-                              {/* Logo */}
-                              <td style={{
-                                width: '54px', height: '54px',
-                                verticalAlign: 'middle',
-                              }}>
-                                <Img
-                                  src="https://www.neurativo.com/logo.png"
-                                  width={54} height={54}
-                                  alt="Neurativo"
-                                  style={{ display: 'block', border: 0, borderRadius: '50%' }}
-                                />
-                              </td>
-                              {/* Wordmark */}
-                              <td style={{ paddingLeft: '13px', verticalAlign: 'middle' }}>
-                                <Text style={{
-                                  margin: 0, fontSize: '18px', fontWeight: 800,
-                                  color: INK, letterSpacing: '-0.02em', lineHeight: '1.1',
-                                  fontFamily: FONT,
-                                }}>Neurativo</Text>
-                                <Text style={{
-                                  margin: 0, marginTop: '2px',
-                                  fontSize: '12.5px', fontWeight: 500,
-                                  color: MUTED, letterSpacing: '0.01em',
-                                  fontFamily: FONT,
-                                }}>Transforming education with intelligence</Text>
-                              </td>
-                            </tr>
-                          </tbody>
-                        </table>
+                        <Img
+                          src="https://www.neurativo.com/logo.png"
+                          width={56} height={56}
+                          alt="Neurativo"
+                          style={{ display: 'block', border: 0, borderRadius: '50%', margin: '0 auto 10px' }}
+                        />
+                        <Text style={{
+                          margin: 0, fontSize: '18px', fontWeight: 800,
+                          color: INK, letterSpacing: '-0.02em', lineHeight: '1.1',
+                          fontFamily: FONT, textAlign: 'center' as const,
+                        }}>Neurativo</Text>
+                        <Text style={{
+                          margin: 0, marginTop: '3px',
+                          fontSize: '12.5px', fontWeight: 500,
+                          color: MUTED, letterSpacing: '0.01em',
+                          fontFamily: FONT, textAlign: 'center' as const,
+                        }}>Transforming education with intelligence</Text>
                       </td>
                     </tr>
 
