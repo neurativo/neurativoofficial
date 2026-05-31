@@ -201,13 +201,13 @@ export function EmailLayout({ preview, children, subtitle }: EmailLayoutProps) {
                           <tbody>
                             <tr>
                               <td style={{ paddingRight: '16px' }}>
-                                <Link href="https://www.neurativo.com/help" style={footLinkStyle}>Help center</Link>
+                                <Link href="https://www.neurativo.com/faq" style={footLinkStyle}>Help center</Link>
                               </td>
                               <td style={{ paddingRight: '16px' }}>
                                 <Link href="https://www.neurativo.com/privacy" style={footLinkStyle}>Privacy</Link>
                               </td>
                               <td>
-                                <Link href="https://www.neurativo.com/unsubscribe" style={footLinkStyle}>Unsubscribe</Link>
+                                <Link href="https://www.neurativo.com/profile" style={footLinkStyle}>Unsubscribe</Link>
                               </td>
                             </tr>
                           </tbody>

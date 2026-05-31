@@ -142,8 +142,9 @@ def send_seat_removed_email(to: str, org_name: str) -> bool:
     return _send(to, f"Your {org_name} seat has been removed", html)
 
 
-def send_payment_failed_email(to: str, org_name: str) -> bool:
-    billing_url = f"https://teams.neurativo.com/{org_name}/dashboard"
+def send_payment_failed_email(to: str, org_name: str, org_slug: str = '') -> bool:
+    safe_slug = org_slug or org_name.lower().replace(' ', '-')
+    billing_url = f"https://teams.neurativo.com/{safe_slug}/dashboard"
     html = (_render_template('team-payment-failed', {'orgName': org_name, 'billingUrl': billing_url}) or
             _base_template("Payment Issue",
                 _h(f"Payment failed — {org_name}")
