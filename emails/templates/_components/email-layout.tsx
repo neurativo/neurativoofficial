@@ -35,7 +35,7 @@ const HEAD_STYLES = `
 
 interface EmailLayoutProps {
   preview: string;
-  subtitle: string;
+  subtitle?: string;
   children: React.ReactNode;
 }
 
@@ -85,20 +85,20 @@ export function EmailLayout({ preview, subtitle, children }: EmailLayoutProps) {
                           <table cellPadding={0} cellSpacing={0}>
                             <tbody>
                               <tr>
-                                {/* Logo icon box */}
-                                <td style={s.logoBox}>
+                                {/* Logo */}
+                                <td style={{ verticalAlign: 'middle' }}>
                                   <Img
                                     src="https://www.neurativo.com/logo.png"
-                                    width={22}
-                                    height={22}
+                                    width={30}
+                                    height={30}
                                     alt=""
                                     style={{ display: 'block', border: 0 }}
                                   />
                                 </td>
-                                {/* Wordmark + subtitle */}
+                                {/* Wordmark + tagline */}
                                 <td style={{ paddingLeft: '10px', verticalAlign: 'middle' }}>
                                   <Text style={s.wordmark}>Neurativo</Text>
-                                  <Text style={s.wordmarkSub}>{subtitle}</Text>
+                                  <Text style={s.wordmarkSub}>Transforming Education with Intelligence</Text>
                                 </td>
                               </tr>
                             </tbody>
@@ -290,16 +290,6 @@ const s = {
     background: 'linear-gradient(135deg, #0f0f0f 0%, #1e1a2e 55%, #0f1929 100%)',
     padding: '22px 32px',
     borderBottom: '1px solid rgba(255,255,255,0.06)',
-  },
-
-  logoBox: {
-    width: '32px',
-    height: '32px',
-    backgroundColor: '#ffffff',
-    borderRadius: '8px',
-    verticalAlign: 'middle',
-    textAlign: 'center' as const,
-    padding: '5px',
   },
 
   wordmark: {
