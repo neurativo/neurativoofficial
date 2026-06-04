@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useClerk } from '@clerk/react';
 import { useAuthModal } from '../components/AuthModal';
 import { useSEO } from '../lib/useSEO';
+import { useStructuredData } from '../lib/useStructuredData';
 import api from '../lib/api';
 import BetaApplyModal from '../components/BetaApplyModal';
 import { trackPageview } from '../lib/trackPageview';
@@ -1514,6 +1515,7 @@ function Pricing({ user }) {
             {/* Teams banner */}
             <a
                 href="https://teams.neurativo.com"
+                rel="nofollow noopener noreferrer"
                 style={{
                     display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap',
                     marginTop: 16, padding: '20px 24px',
@@ -1620,6 +1622,18 @@ export default function LandingPage({ user }) {
         canonicalPath: location.pathname,
         keywords: isRoot ? 'AI education platform, live lecture AI, AI learning platform, AI lecture notes, real-time lecture transcription, lecture summary generator, AI study tools, automatic lecture notes, student AI assistant, flashcard generator, exam prep AI, concept map AI' : undefined,
     });
+
+    // Speakable schema — helps AI engines and voice assistants identify citable content
+    useStructuredData(isRoot ? {
+        '@context': 'https://schema.org',
+        '@type': 'WebPage',
+        '@id': 'https://www.neurativo.com/#webpage',
+        'speakable': {
+            '@type': 'SpeakableSpecification',
+            'cssSelector': ['.lp-hero-h1', '.lp-hero-sub', '.lp-section-label', 'h2', 'h3']
+        },
+        'url': 'https://www.neurativo.com'
+    } : null);
 
     // Pageview beacon
     useEffect(() => { trackPageview('landing'); }, []);
