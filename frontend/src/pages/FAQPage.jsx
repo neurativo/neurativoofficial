@@ -10,14 +10,14 @@ const FAQ_SCHEMA = {
     '@id': 'https://www.neurativo.com/faq#faqpage',
     'url': 'https://www.neurativo.com/faq',
     'name': 'Neurativo FAQ — AI Lecture Assistant Help',
-    'description': 'Frequently asked questions about Neurativo — the AI lecture assistant that records, transcribes, and summarises lectures in real time.',
+    'description': 'Frequently asked questions about Neurativo — the AI-powered educational platform for students. Learn how live lecture recording, AI summaries, flashcards, and Q&A work.',
     'mainEntity': [
         {
             '@type': 'Question',
             'name': 'What is Neurativo?',
             'acceptedAnswer': {
                 '@type': 'Answer',
-                'text': 'Neurativo is an AI-powered lecture assistant that automatically records, transcribes, and summarises live lectures in real time. It generates structured AI notes, flashcards, quiz questions, a concept map, exam prep content, and an AI Q&A system grounded in your own lecture — all from a single recording session.'
+                'text': 'Neurativo is an AI-powered educational platform for students. Its flagship feature is live lecture recording — it records your lecture, transcribes it in real time using OpenAI Whisper, and automatically generates structured AI notes, flashcards, quiz questions, a concept map, exam prep content, and an AI Q&A system grounded in your own lecture content.'
             }
         },
         {

@@ -1618,7 +1618,7 @@ export default function LandingPage({ user }) {
     const isRoot = location.pathname === '/';
     useSEO({
         title: isRoot ? null : undefined,  // null = use default "Neurativo — AI Education Platform"; undefined = don't overwrite
-        description: isRoot ? 'Transforming education with intelligence. Neurativo captures live lectures and turns them into structured AI summaries, flashcards, quizzes, concept maps, and instant Q&A — the future of smarter learning. Free to start.' : undefined,
+        description: isRoot ? 'Neurativo is an AI-powered educational platform for students. Record live lectures and instantly get AI summaries, flashcards, quizzes, concept maps, and Q&A — transforming education with intelligence. Free to start.' : undefined,
         canonicalPath: location.pathname,
         keywords: isRoot ? 'AI education platform, live lecture AI, AI learning platform, AI lecture notes, real-time lecture transcription, lecture summary generator, AI study tools, automatic lecture notes, student AI assistant, flashcard generator, exam prep AI, concept map AI' : undefined,
     });

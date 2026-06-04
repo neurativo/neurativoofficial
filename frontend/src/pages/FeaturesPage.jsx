@@ -10,7 +10,7 @@ const FEATURES_SCHEMA = [
         '@id': 'https://www.neurativo.com/features#webpage',
         'url': 'https://www.neurativo.com/features',
         'name': 'Features — Neurativo AI Lecture Assistant',
-        'description': 'Complete feature list for Neurativo — live lecture capture, real-time AI summaries, flashcards, quiz, concept maps, exam prep, Smart Explain, semantic search, and PDF export.',
+        'description': 'Full feature set of Neurativo, the AI-powered educational platform — live lecture recording, real-time AI summaries, flashcards, quiz, concept maps, exam prep, Smart Explain, semantic search, and PDF export.',
         'isPartOf': { '@id': 'https://www.neurativo.com/#website' },
         'breadcrumb': {
             '@type': 'BreadcrumbList',
@@ -24,7 +24,7 @@ const FEATURES_SCHEMA = [
         '@type': 'ItemList',
         '@id': 'https://www.neurativo.com/features#featurelist',
         'name': 'Neurativo Features',
-        'description': 'AI-powered lecture tools built for students',
+        'description': 'AI-powered educational platform features built for students',
         'itemListElement': [
             {
                 '@type': 'ListItem',
@@ -119,7 +119,7 @@ export default function FeaturesPage() {
 
     useSEO({
         title: 'Features — Live Lecture AI, Study Tools & Smart Learning',
-        description: 'Live lecture capture, real-time AI summaries, flashcards, quiz, concept maps, exam prep, semantic search, Smart Explain, and PDF export — everything you need to learn smarter.',
+        description: 'Neurativo is an AI-powered educational platform. Live lecture recording, real-time AI summaries, flashcards, quiz, concept maps, exam prep, Smart Explain, semantic search, and PDF export — everything you need to learn smarter.',
         canonicalPath: '/features',
         keywords: 'AI education features, live lecture AI, lecture flashcards, AI quiz generator, concept map, exam prep AI, lecture summary, Smart Explain, AI study tools, lecture PDF export',
     });

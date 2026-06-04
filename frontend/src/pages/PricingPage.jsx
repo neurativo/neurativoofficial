@@ -10,7 +10,7 @@ const PRICING_SCHEMA = [
         '@id': 'https://www.neurativo.com/pricing#webpage',
         'url': 'https://www.neurativo.com/pricing',
         'name': 'Pricing — Neurativo Plans for Every Student',
-        'description': 'Free plan available with no credit card required. Student plan $9.99/month. Pro plan $19.99/month. Affordable AI lecture tools for every learner.',
+        'description': 'Neurativo pricing — AI-powered educational platform plans. Free plan with no credit card required. Student plan $9.99/month. Pro plan $19.99/month.',
         'isPartOf': { '@id': 'https://www.neurativo.com/#website' },
         'breadcrumb': {
             '@type': 'BreadcrumbList',
@@ -84,7 +84,7 @@ export default function PricingPage() {
         title: 'Pricing — Plans for Every Student',
         description: 'Free plan available — no credit card required. Student plan from $9.99/month. Pro plan from $19.99/month. Affordable AI education for every learner.',
         canonicalPath: '/pricing',
-        keywords: 'Neurativo pricing, AI education platform pricing, AI lecture app cost, student AI tool plans, free AI learning platform, lecture notes app pricing',
+        keywords: 'Neurativo pricing, AI educational platform pricing, AI education platform cost, student AI platform plans, free AI learning platform, AI lecture platform pricing',
     });
 
     useStructuredData(PRICING_SCHEMA);
