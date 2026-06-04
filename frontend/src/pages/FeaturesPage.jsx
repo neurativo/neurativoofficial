@@ -30,13 +30,13 @@ const FEATURES_SCHEMA = [
                 '@type': 'ListItem',
                 'position': 1,
                 'name': 'Live Lecture Recording',
-                'description': 'Record any live or online lecture in real time through your microphone or browser tab. AI processes audio every 12 seconds so summaries appear as you learn.'
+                'description': 'Record any live or online lecture in real time through your microphone or browser tab. Notes build continuously as you listen — no waiting until the lecture ends.'
             },
             {
                 '@type': 'ListItem',
                 'position': 2,
                 'name': 'Real-Time AI Summaries',
-                'description': 'Three-phase hierarchical summarisation — micro-summaries per chunk, section summaries, and a full master summary — all built automatically during recording.'
+                'description': 'Structured notes build section by section as your lecture progresses, with a complete master summary ready the moment it ends — automatically, with no effort on your part.'
             },
             {
                 '@type': 'ListItem',
@@ -66,7 +66,7 @@ const FEATURES_SCHEMA = [
                 '@type': 'ListItem',
                 'position': 7,
                 'name': 'AI Q&A (Ask Your Lecture)',
-                'description': 'Ask any question about a specific lecture and get a cited, precise answer grounded in your own notes — powered by retrieval-augmented generation.'
+                'description': 'Ask any question about a lecture and get a precise, cited answer grounded in what was actually taught — every response traces back to your own notes, not generic knowledge.'
             },
             {
                 '@type': 'ListItem',

@@ -17,7 +17,7 @@ const FAQ_SCHEMA = {
             'name': 'What is Neurativo?',
             'acceptedAnswer': {
                 '@type': 'Answer',
-                'text': 'Neurativo is an AI-powered educational platform for students. Its flagship feature is live lecture recording — it records your lecture, transcribes it in real time using OpenAI Whisper, and automatically generates structured AI notes, flashcards, quiz questions, a concept map, exam prep content, and an AI Q&A system grounded in your own lecture content.'
+                'text': 'Neurativo is an intelligent educational platform for students. Its flagship feature is live lecture recording — it listens as you learn and automatically turns every lecture into structured notes, flashcards, quiz questions, a concept map, exam prep content, and a Q&A system grounded in what was actually taught.'
             }
         },
         {
@@ -33,15 +33,15 @@ const FAQ_SCHEMA = {
             'name': 'How does Neurativo work?',
             'acceptedAnswer': {
                 '@type': 'Answer',
-                'text': 'Neurativo records your lecture audio in 12-second chunks via your microphone or any browser tab. Each chunk is transcribed using OpenAI Whisper, then a three-phase AI pipeline builds micro-summaries, section summaries, and a master summary in real time. After the lecture, it generates flashcards, quiz questions, a glossary, a concept map, and an exam prep set from the full transcript.'
+                'text': 'Neurativo listens continuously as your lecture unfolds, building structured notes section by section in real time. As each part of the lecture concludes, a section summary is formed and the overall picture grows. When the session ends, Neurativo delivers a complete study package: flashcards, a quiz, a glossary, a concept map, and exam prep questions — all from what was actually said.'
             }
         },
         {
             '@type': 'Question',
-            'name': 'What AI models does Neurativo use?',
+            'name': 'What technology powers Neurativo?',
             'acceptedAnswer': {
                 '@type': 'Answer',
-                'text': 'Neurativo uses OpenAI Whisper for real-time speech transcription, and GPT-4o-mini for summarisation, flashcard and quiz generation, Smart Explain, and Q&A. GPT-4o Vision is used for visual capture (screen and whiteboard analysis).'
+                'text': 'Neurativo is built on best-in-class speech recognition and large language model technology. Transcription is highly accurate across accents, academic vocabulary, and 20+ languages. The intelligence layer understands lecture structure, identifies key concepts, and generates study materials that reflect what was actually taught — not generic content.'
             }
         },
         {
@@ -57,7 +57,7 @@ const FAQ_SCHEMA = {
             'name': 'How accurate is the AI transcription?',
             'acceptedAnswer': {
                 '@type': 'Answer',
-                'text': 'Neurativo uses OpenAI Whisper, one of the most accurate publicly available speech recognition models. It handles diverse accents, technical and academic vocabulary, and 20+ languages with high accuracy. Performance depends on audio quality — using a headset or being close to the lecturer significantly improves results.'
+                'text': 'Neurativo\'s transcription is powered by industry-leading speech recognition technology with strong performance across accents, technical vocabulary, and 20+ languages. Clear audio gives the best results — a headset or sitting close to the speaker makes a noticeable difference.'
             }
         },
         {
@@ -97,7 +97,7 @@ const FAQ_SCHEMA = {
             'name': 'Is my audio and lecture data private?',
             'acceptedAnswer': {
                 '@type': 'Answer',
-                'text': 'Yes. Audio chunks are sent to OpenAI Whisper for transcription only and are not stored permanently by Neurativo. Your transcripts and summaries are stored securely and are only accessible by you. Neurativo never sells or shares your personal data.'
+                'text': 'Yes. Your audio is processed solely to generate your transcript and is never stored by Neurativo. Your notes, summaries, and lecture content are private to your account only. Neurativo never sells or shares your personal data.'
             }
         },
         {
@@ -113,7 +113,7 @@ const FAQ_SCHEMA = {
             'name': 'What is the AI Q&A feature in Neurativo?',
             'acceptedAnswer': {
                 '@type': 'Answer',
-                'text': 'Neurativo\'s Q&A lets you ask any question about a specific lecture and get a cited, precise answer grounded in the lecture content — not a generic AI answer. It uses retrieval-augmented generation (RAG) with query expansion and confidence scoring to find the most relevant passages from your own notes.'
+                'text': 'Neurativo\'s Q&A lets you ask any question about a lecture and get a precise, cited answer grounded in what was actually taught — not a generic response. It searches your own lecture content to surface the most relevant passage, so every answer traces back to something your lecturer said.'
             }
         },
         {
