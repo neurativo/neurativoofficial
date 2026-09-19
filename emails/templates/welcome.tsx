@@ -61,7 +61,7 @@ const FEATURES = [
   },
 ];
 
-export default function WelcomeEmail({ name, appUrl = 'https://www.neurativo.com/app' }: WelcomeEmailProps) {
+export default function WelcomeEmail({ name, appUrl = 'https://neurativo.site/app' }: WelcomeEmailProps) {
   const firstName = name || 'there';
 
   // Credits hero card
@@ -274,7 +274,7 @@ export default function WelcomeEmail({ name, appUrl = 'https://www.neurativo.com
       }}>
         Takes about a minute to set up your first lecture.{' '}
         <Link
-          href="https://www.neurativo.com/how-it-works"
+          href="https://neurativo.site/how-it-works"
           style={{ color: A1, fontWeight: 600, textDecoration: 'none', fontFamily: FONT }}
         >
           Watch the 60-sec tour →
@@ -286,5 +286,5 @@ export default function WelcomeEmail({ name, appUrl = 'https://www.neurativo.com
 
 WelcomeEmail.PreviewProps = {
   name: 'Alex',
-  appUrl: 'https://www.neurativo.com/app',
+  appUrl: 'https://neurativo.site/app',
 } satisfies WelcomeEmailProps;

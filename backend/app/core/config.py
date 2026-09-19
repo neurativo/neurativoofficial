@@ -33,7 +33,7 @@ class Settings:
         o.strip()
         for o in os.getenv(
             "ALLOWED_ORIGINS",
-            "https://neurativo.com,https://www.neurativo.com,https://teams.neurativo.com"
+            "https://neurativo.site,https://www.neurativo.site,https://teams.neurativo.site,https://neurativo.com,https://www.neurativo.com,https://teams.neurativo.com"
         ).split(",")
         if o.strip()
     ]

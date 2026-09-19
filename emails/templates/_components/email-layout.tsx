@@ -104,7 +104,7 @@ export function EmailLayout({ preview, children, subtitle }: EmailLayoutProps) {
                         textAlign: 'center' as const,
                       }}>
                         <Img
-                          src="https://www.neurativo.com/logo.png"
+                          src="https://neurativo.site/logo.png"
                           width={56} height={56}
                           alt="Neurativo"
                           style={{ display: 'block', border: 0, borderRadius: '50%', margin: '0 auto 10px' }}
@@ -171,7 +171,7 @@ export function EmailLayout({ preview, children, subtitle }: EmailLayoutProps) {
                             <tr>
                               <td style={{ width: '32px', height: '32px', verticalAlign: 'middle' }}>
                                 <Img
-                                  src="https://www.neurativo.com/logo.png"
+                                  src="https://neurativo.site/logo.png"
                                   width={32} height={32}
                                   alt="Neurativo"
                                   style={{ display: 'block', border: 0, borderRadius: '50%' }}
@@ -192,7 +192,7 @@ export function EmailLayout({ preview, children, subtitle }: EmailLayoutProps) {
                         }}>
                           You're receiving this because you created a Neurativo account.
                           Questions? Just reply to this email — a real person reads every one.{' '}
-                          <Link href="https://www.neurativo.com" style={{ color: A1, fontWeight: 600, textDecoration: 'none' }}>
+                          <Link href="https://neurativo.site" style={{ color: A1, fontWeight: 600, textDecoration: 'none' }}>
                             neurativo.com
                           </Link>
                         </Text>
@@ -201,13 +201,13 @@ export function EmailLayout({ preview, children, subtitle }: EmailLayoutProps) {
                           <tbody>
                             <tr>
                               <td style={{ paddingRight: '16px' }}>
-                                <Link href="https://www.neurativo.com/faq" style={footLinkStyle}>Help center</Link>
+                                <Link href="https://neurativo.site/faq" style={footLinkStyle}>Help center</Link>
                               </td>
                               <td style={{ paddingRight: '16px' }}>
-                                <Link href="https://www.neurativo.com/privacy" style={footLinkStyle}>Privacy</Link>
+                                <Link href="https://neurativo.site/privacy" style={footLinkStyle}>Privacy</Link>
                               </td>
                               <td>
-                                <Link href="https://www.neurativo.com/profile" style={footLinkStyle}>Unsubscribe</Link>
+                                <Link href="https://neurativo.site/profile" style={footLinkStyle}>Unsubscribe</Link>
                               </td>
                             </tr>
                           </tbody>

@@ -1750,8 +1750,8 @@ def share_preview(request: Request, token: str):
             description += f" ({topic})"
         description += " — transcript, section summaries, and key concepts via Neurativo."
 
-    share_url = f"https://www.neurativo.com/share/{token}"
-    og_image = "https://www.neurativo.com/og.png"
+    share_url = f"https://neurativo.site/share/{token}"
+    og_image = "https://neurativo.site/og.png"
     page_title = f"{title} — Neurativo Lecture Notes"
     # Escape user-supplied strings to prevent XSS in meta content
     def _esc(s: str) -> str:

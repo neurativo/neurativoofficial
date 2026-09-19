@@ -17,7 +17,7 @@ export default function PlanDowngradedEmail() {
         { label: 'Live recording & imports', value: 'Requires active plan' },
       ]} />
       <Text style={t.muted}>Resubscribe at any time to restore full access instantly.</Text>
-      <CtaButton text="Resubscribe" href="https://www.neurativo.com/app?upgrade=1" />
+      <CtaButton text="Resubscribe" href="https://neurativo.site/app?upgrade=1" />
     </EmailLayout>
   );
 }

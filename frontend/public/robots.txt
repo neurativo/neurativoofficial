@@ -9,4 +9,4 @@ Disallow: /credits
 Disallow: /admin
 Disallow: /admin/
 
-Sitemap: https://www.neurativo.com/sitemap.xml
+Sitemap: https://neurativo.site/sitemap.xml

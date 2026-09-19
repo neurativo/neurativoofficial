@@ -7,8 +7,8 @@ import LandingPage from './LandingPage';
 const FAQ_SCHEMA = {
     '@context': 'https://schema.org',
     '@type': 'FAQPage',
-    '@id': 'https://www.neurativo.com/faq#faqpage',
-    'url': 'https://www.neurativo.com/faq',
+    '@id': 'https://neurativo.site/faq#faqpage',
+    'url': 'https://neurativo.site/faq',
     'name': 'Neurativo FAQ — AI Lecture Assistant Help',
     'description': 'Frequently asked questions about Neurativo — the AI-powered educational platform for students. Learn how live lecture recording, AI summaries, flashcards, and Q&A work.',
     'mainEntity': [
@@ -65,7 +65,7 @@ const FAQ_SCHEMA = {
             'name': 'Does Neurativo work on mobile?',
             'acceptedAnswer': {
                 '@type': 'Answer',
-                'text': 'Yes. Neurativo is fully mobile-responsive and works in any modern mobile browser including Safari and Chrome on iOS and Android. No app install is required — just open neurativo.com on your phone.'
+                'text': 'Yes. Neurativo is fully mobile-responsive and works in any modern mobile browser including Safari and Chrome on iOS and Android. No app install is required — just open neurativo.site on your phone.'
             }
         },
         {
@@ -73,7 +73,7 @@ const FAQ_SCHEMA = {
             'name': 'Do I need to install anything to use Neurativo?',
             'acceptedAnswer': {
                 '@type': 'Answer',
-                'text': 'No. Neurativo runs entirely in your browser. Just open neurativo.com, sign in for free, and start recording. No downloads, extensions, or app installs are required.'
+                'text': 'No. Neurativo runs entirely in your browser. Just open neurativo.site, sign in for free, and start recording. No downloads, extensions, or app installs are required.'
             }
         },
         {

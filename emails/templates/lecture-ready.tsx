@@ -30,5 +30,5 @@ export default function LectureReadyEmail({ title, lectureUrl }: LectureReadyEma
 
 LectureReadyEmail.PreviewProps = {
   title: 'Introduction to Quantum Mechanics',
-  lectureUrl: 'https://www.neurativo.com/lecture/abc123',
+  lectureUrl: 'https://neurativo.site/lecture/abc123',
 } satisfies LectureReadyEmailProps;

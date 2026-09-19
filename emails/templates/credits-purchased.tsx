@@ -22,7 +22,7 @@ export default function CreditsPurchasedEmail({ packLabel, credits, priceUsd }: 
         { label: 'Pack', value: packLabel },
       ]} />
       <Text style={t.muted}>1 credit = 30 minutes of audio. Credits never expire.</Text>
-      <CtaButton text="Start a new lecture" href="https://www.neurativo.com/app" />
+      <CtaButton text="Start a new lecture" href="https://neurativo.site/app" />
     </EmailLayout>
   );
 }

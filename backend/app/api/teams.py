@@ -138,7 +138,7 @@ def create_invite(slug: str, body: CreateInviteBody,
         expires_at=body.expires_at,
     )
 
-    join_url = f"https://teams.neurativo.com/{slug}/join?token={invite['token']}"
+    join_url = f"https://teams.neurativo.site/{slug}/join?token={invite['token']}"
     invite["join_url"] = join_url
 
     # Send invite email in background if email specified
@@ -161,7 +161,7 @@ def list_invites(slug: str, user: User = Depends(get_active_user)):
     org = _require_org_admin(slug, user)
     invites = ts.list_invites(org["id"])
     for inv in invites:
-        inv["join_url"] = f"https://teams.neurativo.com/{slug}/join?token={inv['token']}"
+        inv["join_url"] = f"https://teams.neurativo.site/{slug}/join?token={inv['token']}"
     return invites
 
 

@@ -402,7 +402,7 @@ export default function PrivacyPolicy() {
                             <strong>Neurativo — Privacy</strong><br />
                             Email: <a href="mailto:privacy@neurativo.com">privacy@neurativo.com</a><br />
                             Legal: <a href="mailto:legal@neurativo.com">legal@neurativo.com</a><br />
-                            Website: <Link to="/" style={{color:'inherit'}}>neurativo.com</Link>
+                            Website: <Link to="/" style={{color:'inherit'}}>neurativo.site</Link>
                         </div>
                     </div>
                 </div>

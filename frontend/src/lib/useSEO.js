@@ -14,7 +14,7 @@ import { useEffect } from 'react';
  *   keywords       – comma-separated keyword string for meta[name="keywords"]
  */
 export function useSEO({ title, description, canonicalPath, ogImage, noindex, ogType, keywords } = {}) {
-    const BASE       = 'https://www.neurativo.com';
+    const BASE       = 'https://neurativo.site';
     const siteTitle  = 'Neurativo';
     // title/description/keywords === undefined means "caller passes, don't overwrite existing value"
     const fullTitle  = title === undefined ? null : (title ? `${title} | Neurativo` : `Neurativo — AI Education Platform`);

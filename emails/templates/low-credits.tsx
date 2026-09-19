@@ -20,7 +20,7 @@ export default function LowCreditsEmail({ balance }: LowCreditsEmailProps) {
         { label: 'Recording time left', value: `~${balance * 30} min` },
       ]} />
       <Text style={t.muted}>Top up now to keep recording without interruption. Packs start at $4.99.</Text>
-      <CtaButton text="Get more credits" href="https://www.neurativo.com/credits" />
+      <CtaButton text="Get more credits" href="https://neurativo.site/credits" />
     </EmailLayout>
   );
 }

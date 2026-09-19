@@ -45,6 +45,7 @@ import TeamsApp from './TeamsApp.jsx';
 import './index.css';
 
 const IS_TEAMS_DOMAIN =
+    window.location.hostname === 'teams.neurativo.site' ||
     window.location.hostname === 'teams.neurativo.com' ||
     window.location.hostname.startsWith('teams.');
 
@@ -175,8 +176,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <ClerkProvider
                 publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY}
                 afterSignOutUrl="/"
-                signInUrl="https://accounts.neurativo.com/sign-in"
-                signUpUrl="https://accounts.neurativo.com/sign-up"
+                signInUrl="https://accounts.neurativo.site/sign-in"
+                signUpUrl="https://accounts.neurativo.site/sign-up"
                 afterSignInUrl="/app"
                 afterSignUpUrl="/app"
             >

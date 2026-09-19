@@ -343,7 +343,7 @@ export default function AuthScreen() {
                 <div className="au-right">
                     <Link to="/" className="au-back">
                         <BackIcon />
-                        neurativo.com
+                        neurativo.site
                     </Link>
 
                     {/* Mobile logo — hidden on desktop */}

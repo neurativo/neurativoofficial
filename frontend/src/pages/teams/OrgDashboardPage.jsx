@@ -184,7 +184,7 @@ export default function OrgDashboardPage() {
             <TeamsNav orgName={org.name} right={
                 <>
                     <Link to={`/${slug}/settings`} className="tn-btn-ghost">Settings</Link>
-                    <a href="https://neurativo.com/app" className="tn-btn-dark">Open app</a>
+                    <a href="https://neurativo.site/app" className="tn-btn-dark">Open app</a>
                 </>
             } />
 

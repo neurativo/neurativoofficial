@@ -152,7 +152,7 @@ export default function NotFoundPage() {
                         </Link>
                     </div>
 
-                    <p className="nf-note">neurativo.com</p>
+                    <p className="nf-note">neurativo.site</p>
                 </div>
             </div>
             <Footer />

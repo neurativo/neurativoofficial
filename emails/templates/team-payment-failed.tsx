@@ -29,5 +29,5 @@ export default function TeamPaymentFailedEmail({ orgName, billingUrl }: TeamPaym
 
 TeamPaymentFailedEmail.PreviewProps = {
   orgName: 'MIT Engineering',
-  billingUrl: 'https://teams.neurativo.com/mit-engineering/dashboard',
+  billingUrl: 'https://teams.neurativo.site/mit-engineering/dashboard',
 } satisfies TeamPaymentFailedEmailProps;

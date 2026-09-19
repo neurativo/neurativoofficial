@@ -7,28 +7,28 @@ import LandingPage from './LandingPage';
 const ABOUT_SCHEMA = [
     {
         '@type': 'AboutPage',
-        '@id': 'https://www.neurativo.com/about#webpage',
-        'url': 'https://www.neurativo.com/about',
+        '@id': 'https://neurativo.site/about#webpage',
+        'url': 'https://neurativo.site/about',
         'name': 'About Neurativo — Mission to Transform Education with AI',
         'description': 'Neurativo is an AI education platform founded in Sri Lanka, on a mission to transform how students learn by automating the most time-consuming parts of studying.',
-        'isPartOf': { '@id': 'https://www.neurativo.com/#website' },
-        'about': { '@id': 'https://www.neurativo.com/#organization' },
+        'isPartOf': { '@id': 'https://neurativo.site/#website' },
+        'about': { '@id': 'https://neurativo.site/#organization' },
         'breadcrumb': {
             '@type': 'BreadcrumbList',
             'itemListElement': [
-                { '@type': 'ListItem', 'position': 1, 'name': 'Home', 'item': 'https://www.neurativo.com' },
-                { '@type': 'ListItem', 'position': 2, 'name': 'About', 'item': 'https://www.neurativo.com/about' }
+                { '@type': 'ListItem', 'position': 1, 'name': 'Home', 'item': 'https://neurativo.site' },
+                { '@type': 'ListItem', 'position': 2, 'name': 'About', 'item': 'https://neurativo.site/about' }
             ]
         }
     },
     {
         '@type': 'Organization',
-        '@id': 'https://www.neurativo.com/#organization',
+        '@id': 'https://neurativo.site/#organization',
         'name': 'Neurativo',
-        'url': 'https://www.neurativo.com',
+        'url': 'https://neurativo.site',
         'logo': {
             '@type': 'ImageObject',
-            'url': 'https://www.neurativo.com/logo.png',
+            'url': 'https://neurativo.site/logo.png',
             'width': 500,
             'height': 500
         },
@@ -44,18 +44,18 @@ const ABOUT_SCHEMA = [
         'founder': [
             {
                 '@type': 'Person',
-                '@id': 'https://www.neurativo.com/about#shazad',
+                '@id': 'https://neurativo.site/about#shazad',
                 'name': 'Shazad Arshad',
                 'jobTitle': 'Co-Founder',
-                'worksFor': { '@id': 'https://www.neurativo.com/#organization' },
+                'worksFor': { '@id': 'https://neurativo.site/#organization' },
                 'sameAs': ['https://www.linkedin.com/in/shazadarshad']
             },
             {
                 '@type': 'Person',
-                '@id': 'https://www.neurativo.com/about#shariff',
+                '@id': 'https://neurativo.site/about#shariff',
                 'name': 'Shariff Ahamed',
                 'jobTitle': 'Co-Founder',
-                'worksFor': { '@id': 'https://www.neurativo.com/#organization' },
+                'worksFor': { '@id': 'https://neurativo.site/#organization' },
                 'sameAs': ['https://www.linkedin.com/in/shariffahamed']
             }
         ],

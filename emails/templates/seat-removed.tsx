@@ -18,7 +18,7 @@ export default function SeatRemovedEmail({ orgName }: SeatRemovedEmailProps) {
         You can still use Neurativo on the free plan — your lecture library is kept and all your existing notes
         remain accessible.
       </Text>
-      <CtaButton text="Go to Neurativo" href="https://www.neurativo.com/app" />
+      <CtaButton text="Go to Neurativo" href="https://neurativo.site/app" />
     </EmailLayout>
   );
 }

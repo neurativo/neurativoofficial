@@ -7,25 +7,25 @@ import LandingPage from './LandingPage';
 const PRICING_SCHEMA = [
     {
         '@type': 'WebPage',
-        '@id': 'https://www.neurativo.com/pricing#webpage',
-        'url': 'https://www.neurativo.com/pricing',
+        '@id': 'https://neurativo.site/pricing#webpage',
+        'url': 'https://neurativo.site/pricing',
         'name': 'Pricing — Neurativo Plans for Every Student',
         'description': 'Neurativo pricing — AI-powered educational platform plans. Free plan with no credit card required. Student plan $9.99/month. Pro plan $19.99/month.',
-        'isPartOf': { '@id': 'https://www.neurativo.com/#website' },
+        'isPartOf': { '@id': 'https://neurativo.site/#website' },
         'breadcrumb': {
             '@type': 'BreadcrumbList',
             'itemListElement': [
-                { '@type': 'ListItem', 'position': 1, 'name': 'Home', 'item': 'https://www.neurativo.com' },
-                { '@type': 'ListItem', 'position': 2, 'name': 'Pricing', 'item': 'https://www.neurativo.com/pricing' }
+                { '@type': 'ListItem', 'position': 1, 'name': 'Home', 'item': 'https://neurativo.site' },
+                { '@type': 'ListItem', 'position': 2, 'name': 'Pricing', 'item': 'https://neurativo.site/pricing' }
             ]
         }
     },
     {
         '@type': 'SoftwareApplication',
-        '@id': 'https://www.neurativo.com/pricing#app-offers',
+        '@id': 'https://neurativo.site/pricing#app-offers',
         'name': 'Neurativo',
         'applicationCategory': 'EducationApplication',
-        'url': 'https://www.neurativo.com',
+        'url': 'https://neurativo.site',
         'offers': [
             {
                 '@type': 'Offer',

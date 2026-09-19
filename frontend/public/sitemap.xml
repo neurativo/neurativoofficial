@@ -6,7 +6,7 @@
 
   <!-- ── Tier 1 — Homepage ──────────────────────────────────────────────── -->
   <url>
-    <loc>https://www.neurativo.com/</loc>
+    <loc>https://neurativo.site/</loc>
     <lastmod>2026-06-04</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
@@ -14,14 +14,14 @@
 
   <!-- ── Tier 2 — Key conversion pages ─────────────────────────────────── -->
   <url>
-    <loc>https://www.neurativo.com/pricing</loc>
+    <loc>https://neurativo.site/pricing</loc>
     <lastmod>2026-06-04</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
   </url>
 
   <url>
-    <loc>https://www.neurativo.com/features</loc>
+    <loc>https://neurativo.site/features</loc>
     <lastmod>2026-06-04</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
@@ -29,14 +29,14 @@
 
   <!-- ── Tier 3 — Supporting pages ──────────────────────────────────────── -->
   <url>
-    <loc>https://www.neurativo.com/faq</loc>
+    <loc>https://neurativo.site/faq</loc>
     <lastmod>2026-06-04</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
 
   <url>
-    <loc>https://www.neurativo.com/about</loc>
+    <loc>https://neurativo.site/about</loc>
     <lastmod>2026-06-04</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
@@ -44,14 +44,14 @@
 
   <!-- ── Tier 4 — Legal ────────────────────────────────────────────────── -->
   <url>
-    <loc>https://www.neurativo.com/terms</loc>
+    <loc>https://neurativo.site/terms</loc>
     <lastmod>2026-05-07</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
 
   <url>
-    <loc>https://www.neurativo.com/privacy</loc>
+    <loc>https://neurativo.site/privacy</loc>
     <lastmod>2026-05-07</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>

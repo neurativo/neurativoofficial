@@ -23,7 +23,7 @@ export default function CreditsRefreshedEmail({ plan, credits }: CreditsRefreshe
         { label: 'Plan', value: label },
         { label: 'Next refresh', value: 'Next billing cycle' },
       ]} />
-      <CtaButton text="Open Neurativo" href="https://www.neurativo.com/app" />
+      <CtaButton text="Open Neurativo" href="https://neurativo.site/app" />
     </EmailLayout>
   );
 }

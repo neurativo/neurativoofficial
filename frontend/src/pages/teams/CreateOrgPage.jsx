@@ -122,10 +122,10 @@ export default function CreateOrgPage() {
                         <div className="co-field">
                             <label className="co-label">
                                 URL slug
-                                <span className="co-label-hint">teams.neurativo.com/your-slug</span>
+                                <span className="co-label-hint">teams.neurativo.site/your-slug</span>
                             </label>
                             <div className="co-slug-row">
-                                <span className="co-slug-prefix">teams.neurativo.com/</span>
+                                <span className="co-slug-prefix">teams.neurativo.site/</span>
                                 <input
                                     className="co-slug-input"
                                     placeholder="acme-corp"

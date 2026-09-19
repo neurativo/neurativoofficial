@@ -1129,7 +1129,7 @@ function Mockup() {
                     </div>
                     <div className="lp-url-bar">
                         <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#a3a3a3" strokeWidth="2.5" strokeLinecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                        <span className="lp-url-text">neurativo.com/record</span>
+                        <span className="lp-url-text">neurativo.site/record</span>
                     </div>
                 </div>
                 {/* Body */}
@@ -1514,7 +1514,7 @@ function Pricing({ user }) {
 
             {/* Teams banner */}
             <a
-                href="https://teams.neurativo.com"
+                href="https://teams.neurativo.site"
                 rel="nofollow noopener noreferrer"
                 style={{
                     display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap',
@@ -1627,12 +1627,12 @@ export default function LandingPage({ user }) {
     useStructuredData(isRoot ? {
         '@context': 'https://schema.org',
         '@type': 'WebPage',
-        '@id': 'https://www.neurativo.com/#webpage',
+        '@id': 'https://neurativo.site/#webpage',
         'speakable': {
             '@type': 'SpeakableSpecification',
             'cssSelector': ['.lp-hero-h1', '.lp-hero-sub', '.lp-section-label', 'h2', 'h3']
         },
-        'url': 'https://www.neurativo.com'
+        'url': 'https://neurativo.site'
     } : null);
 
     // Pageview beacon

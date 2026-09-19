@@ -19,7 +19,7 @@ from app.services.credits_service import (
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 
-_RETURN_URL = "https://www.neurativo.com/app?subscribed=1"
+_RETURN_URL = "https://neurativo.site/app?subscribed=1"
 
 
 class CheckoutBody(BaseModel):
@@ -159,7 +159,7 @@ async def create_credits_checkout(body: CreditsCheckoutBody, user=Depends(get_ac
     if not product_info:
         raise HTTPException(status_code=400, detail=f"Unknown pack: {pack}")
 
-    return_url = f"https://www.neurativo.com/credits?purchased=1"
+    return_url = f"https://neurativo.site/credits?purchased=1"
 
     # Create a pending intent first so webhook can find it
     try:
@@ -242,7 +242,7 @@ async def get_customer_portal(user=Depends(get_active_user)):
     try:
         result = dodo_service.create_customer_portal(
             customer_id=customer_id,
-            return_url="https://www.neurativo.com/profile",
+            return_url="https://neurativo.site/profile",
         )
     except Exception as e:
         print(f"[billing] portal error: {e}")

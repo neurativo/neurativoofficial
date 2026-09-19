@@ -7,22 +7,22 @@ import LandingPage from './LandingPage';
 const FEATURES_SCHEMA = [
     {
         '@type': 'WebPage',
-        '@id': 'https://www.neurativo.com/features#webpage',
-        'url': 'https://www.neurativo.com/features',
+        '@id': 'https://neurativo.site/features#webpage',
+        'url': 'https://neurativo.site/features',
         'name': 'Features — Neurativo AI Lecture Assistant',
         'description': 'Full feature set of Neurativo, the AI-powered educational platform — live lecture recording, real-time AI summaries, flashcards, quiz, concept maps, exam prep, Smart Explain, semantic search, and PDF export.',
-        'isPartOf': { '@id': 'https://www.neurativo.com/#website' },
+        'isPartOf': { '@id': 'https://neurativo.site/#website' },
         'breadcrumb': {
             '@type': 'BreadcrumbList',
             'itemListElement': [
-                { '@type': 'ListItem', 'position': 1, 'name': 'Home', 'item': 'https://www.neurativo.com' },
-                { '@type': 'ListItem', 'position': 2, 'name': 'Features', 'item': 'https://www.neurativo.com/features' }
+                { '@type': 'ListItem', 'position': 1, 'name': 'Home', 'item': 'https://neurativo.site' },
+                { '@type': 'ListItem', 'position': 2, 'name': 'Features', 'item': 'https://neurativo.site/features' }
             ]
         }
     },
     {
         '@type': 'ItemList',
-        '@id': 'https://www.neurativo.com/features#featurelist',
+        '@id': 'https://neurativo.site/features#featurelist',
         'name': 'Neurativo Features',
         'description': 'AI-powered educational platform features built for students',
         'itemListElement': [
@@ -102,12 +102,12 @@ const FEATURES_SCHEMA = [
     },
     {
         '@type': 'SoftwareApplication',
-        '@id': 'https://www.neurativo.com/#app',
+        '@id': 'https://neurativo.site/#app',
         'name': 'Neurativo',
         'applicationCategory': 'EducationApplication',
         'operatingSystem': 'Web, iOS, Android',
-        'url': 'https://www.neurativo.com',
-        'creator': { '@id': 'https://www.neurativo.com/#organization' }
+        'url': 'https://neurativo.site',
+        'creator': { '@id': 'https://neurativo.site/#organization' }
     }
 ];
 

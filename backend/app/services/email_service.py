@@ -130,7 +130,7 @@ def send_seat_activated_email(to: str, org_name: str) -> bool:
             _base_template("Seat Activated",
                 _h(f"Welcome to {org_name}")
                 + _p("Your seat is now active. Head to Neurativo and start recording.")
-                + _btn("Open Neurativo", "https://www.neurativo.com/app")))
+                + _btn("Open Neurativo", "https://neurativo.site/app")))
     return _send(to, f"Your {org_name} seat is active", html)
 
 
@@ -144,7 +144,7 @@ def send_seat_removed_email(to: str, org_name: str) -> bool:
 
 def send_payment_failed_email(to: str, org_name: str, org_slug: str = '') -> bool:
     safe_slug = org_slug or org_name.lower().replace(' ', '-')
-    billing_url = f"https://teams.neurativo.com/{safe_slug}/dashboard"
+    billing_url = f"https://teams.neurativo.site/{safe_slug}/dashboard"
     html = (_render_template('team-payment-failed', {'orgName': org_name, 'billingUrl': billing_url}) or
             _base_template("Payment Issue",
                 _h(f"Payment failed — {org_name}")
@@ -165,7 +165,7 @@ def _base_template(header_sub: str, body_html: str) -> str:
       <table cellpadding="0" cellspacing="0" border="0">
         <tr>
           <td style="vertical-align:middle;">
-            <img src="https://www.neurativo.com/logo.png"
+            <img src="https://neurativo.site/logo.png"
                  alt="Neurativo"
                  width="36" height="36"
                  style="width:36px;height:36px;display:block;border:0;outline:none;">
@@ -236,7 +236,7 @@ def _base_template(header_sub: str, body_html: str) -> str:
                       font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
               You're receiving this because you have a Neurativo account.
               Questions? Just reply to this email.&nbsp;&nbsp;
-              <a href="https://www.neurativo.com" style="color:#9ca3af;text-decoration:underline;">neurativo.com</a>
+              <a href="https://neurativo.site" style="color:#9ca3af;text-decoration:underline;">neurativo.com</a>
             </p>
           </td>
         </tr>
@@ -327,7 +327,7 @@ def _html_welcome() -> str:
             + _row("Q&amp;A", "Ask your lecture anything")
         )
         + _p("1 credit = 30 minutes of audio. Credits never expire.", muted=True)
-        + _btn("Open Neurativo", "https://www.neurativo.com/app")
+        + _btn("Open Neurativo", "https://neurativo.site/app")
     )
     return _base_template("AI Lecture Assistant", body)
 
@@ -379,8 +379,8 @@ def _html_plan_upgraded(plan: str) -> str:
         + _p(f"Your subscription is active. Here's everything included in your <strong>{label}</strong> plan:")
         + _info_table(feature_rows)
         + _p("Your monthly credits have been added to your balance.", muted=True)
-        + _btn("Go to your dashboard", "https://www.neurativo.com/app")
-        + _p('Manage your subscription from <a href="https://www.neurativo.com/profile" style="color:#9ca3af;">your profile</a>.', muted=True)
+        + _btn("Go to your dashboard", "https://neurativo.site/app")
+        + _p('Manage your subscription from <a href="https://neurativo.site/profile" style="color:#9ca3af;">your profile</a>.', muted=True)
     )
     return _base_template(f"{label} Plan — Active", body)
 
@@ -408,7 +408,7 @@ def _html_plan_downgraded() -> str:
             + _row("Live recording &amp; imports", "Requires active plan")
         )
         + _p("Resubscribe at any time to restore full access instantly.", muted=True)
-        + _btn("Resubscribe", "https://www.neurativo.com/app?upgrade=1")
+        + _btn("Resubscribe", "https://neurativo.site/app?upgrade=1")
     )
     return _base_template("Subscription Ended", body)
 
@@ -434,7 +434,7 @@ def _html_subscription_payment_failed() -> str:
             + _row("Recording &amp; imports", "Paused until resolved")
         )
         + _p("Update your payment method to restore your plan instantly.", muted=True)
-        + _btn("Update payment method", "https://www.neurativo.com/profile?billing=1", bg="#dc2626")
+        + _btn("Update payment method", "https://neurativo.site/profile?billing=1", bg="#dc2626")
         + _p("If you believe this is an error, just reply to this email.", muted=True)
     )
     return _base_template("Payment Issue", body)
@@ -461,7 +461,7 @@ def _html_credits_purchased(pack_label: str, credits: int, price_usd: float) -> 
             + _row("Pack", pack_label)
         )
         + _p("1 credit = 30 minutes of audio. Credits never expire.", muted=True)
-        + _btn("Start a new lecture", "https://www.neurativo.com/app")
+        + _btn("Start a new lecture", "https://neurativo.site/app")
     )
     return _base_template("Purchase Confirmed", body)
 
@@ -488,7 +488,7 @@ def _html_credits_refreshed(plan: str, credits: int) -> str:
             + _row("Plan", label)
             + _row("Next refresh", "Next billing cycle")
         )
-        + _btn("Open Neurativo", "https://www.neurativo.com/app")
+        + _btn("Open Neurativo", "https://neurativo.site/app")
     )
     return _base_template(f"{label} Plan — Renewed", body)
 
@@ -536,7 +536,7 @@ def send_lecture_ready_for_job(lecture_id: str, user_id: str) -> None:
                 title = resp.data[0].get("title") or ""
         except Exception as e:
             print(f"[email] lecture title fetch error: {e}")
-        lecture_url = f"https://www.neurativo.com/lecture/{lecture_id}"
+        lecture_url = f"https://neurativo.site/lecture/{lecture_id}"
         subject = f"Neurativo — \"{title or 'Your lecture'}\" is ready"
         html = (_render_template('lecture-ready', {'title': title, 'lectureUrl': lecture_url})
                 or _html_lecture_ready(title, lecture_url))
@@ -556,7 +556,7 @@ def _html_low_credits(balance: int) -> str:
             + _row("Recording time left", f"~{balance * 30} min")
         )
         + _p("Top up now to keep recording without interruption. Packs start at $4.99.", muted=True)
-        + _btn("Get more credits", "https://www.neurativo.com/credits")
+        + _btn("Get more credits", "https://neurativo.site/credits")
     )
     return _base_template("Low Credits", body)
 

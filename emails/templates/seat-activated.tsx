@@ -14,7 +14,7 @@ export default function SeatActivatedEmail({ orgName }: SeatActivatedEmailProps)
         Your seat is now active. You have full access to Neurativo through your team — start recording and studying
         right away.
       </Text>
-      <CtaButton text="Open Neurativo" href="https://www.neurativo.com/app" />
+      <CtaButton text="Open Neurativo" href="https://neurativo.site/app" />
     </EmailLayout>
   );
 }

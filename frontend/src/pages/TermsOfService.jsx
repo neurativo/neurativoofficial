@@ -358,7 +358,7 @@ export default function TermsOfService() {
                         <div className="legal-contact">
                             <strong>Neurativo</strong><br />
                             Email: <a href="mailto:legal@neurativo.com">legal@neurativo.com</a><br />
-                            Website: <Link to="/" style={{color:'inherit'}}>neurativo.com</Link>
+                            Website: <Link to="/" style={{color:'inherit'}}>neurativo.site</Link>
                         </div>
                     </div>
                 </div>

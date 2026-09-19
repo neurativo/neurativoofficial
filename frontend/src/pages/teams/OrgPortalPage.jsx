@@ -81,7 +81,7 @@ export default function OrgPortalPage() {
                             You're a member · {myOrg.seat_tier === 'pro' ? 'Pro' : 'Student'} seat
                         </div>
                         <div className="op-actions">
-                            <a href="https://neurativo.com/app" className="op-btn op-btn-dark">Open Neurativo</a>
+                            <a href="https://neurativo.site/app" className="op-btn op-btn-dark">Open Neurativo</a>
                             {isAdmin && (
                                 <Link to={`/${slug}/dashboard`} className="op-btn op-btn-outline">Manage team</Link>
                             )}

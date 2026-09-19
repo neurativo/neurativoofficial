@@ -38,10 +38,10 @@ export default function PlanUpgradedEmail({ plan }: PlanUpgradedEmailProps) {
       </Text>
       <FeatureList items={features} />
       <Text style={t.muted}>Your monthly credits have been added to your balance.</Text>
-      <CtaButton text="Go to your dashboard" href="https://www.neurativo.com/app" />
+      <CtaButton text="Go to your dashboard" href="https://neurativo.site/app" />
       <Text style={{ ...t.muted, marginTop: '14px' }}>
         Manage your subscription from{' '}
-        <Link href="https://www.neurativo.com/profile" style={{ color: '#a3a3a3', textDecoration: 'underline' }}>
+        <Link href="https://neurativo.site/profile" style={{ color: '#a3a3a3', textDecoration: 'underline' }}>
           your profile
         </Link>.
       </Text>

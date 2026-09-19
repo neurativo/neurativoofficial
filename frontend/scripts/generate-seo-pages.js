@@ -44,7 +44,7 @@ const ROUTES = [
   },
 ];
 
-const BASE_URL = 'https://www.neurativo.com';
+const BASE_URL = 'https://neurativo.site';
 
 const template = readFileSync(join(distDir, 'index.html'), 'utf8');
 

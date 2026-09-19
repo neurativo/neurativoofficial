@@ -489,7 +489,7 @@ export default function ProfilePage({ user }) {
                                 )}
                             </div>
                             <a
-                                href="https://accounts.neurativo.com/user"
+                                href="https://accounts.neurativo.site/user"
                                 target="_blank"
                                 rel="noreferrer"
                                 className="pp-manage-link"

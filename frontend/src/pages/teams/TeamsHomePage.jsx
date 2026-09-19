@@ -82,7 +82,7 @@ export default function TeamsHomePage() {
                     <Link to="/new" className="tn-btn-dark">Create organization</Link>
                 ) : (
                     <>
-                        <a href="https://neurativo.com" className="tn-btn-ghost">Back to Neurativo</a>
+                        <a href="https://neurativo.site" className="tn-btn-ghost">Back to Neurativo</a>
                         <Link to="/new" className="tn-btn-dark">Get started</Link>
                     </>
                 )
@@ -98,7 +98,7 @@ export default function TeamsHomePage() {
                 </p>
                 <div className="th-hero-cta">
                     <Link to="/new" className="th-btn-lg th-btn-lg-dark">Create your organization</Link>
-                    <a href="https://neurativo.com" className="th-btn-lg th-btn-lg-outline">See individual plans</a>
+                    <a href="https://neurativo.site" className="th-btn-lg th-btn-lg-outline">See individual plans</a>
                 </div>
             </section>
 
@@ -191,9 +191,9 @@ export default function TeamsHomePage() {
 
             <footer className="th-footer">
                 <p>
-                    <a href="https://neurativo.com">neurativo.com</a> &nbsp;·&nbsp;
-                    <a href="https://neurativo.com/terms">Terms</a> &nbsp;·&nbsp;
-                    <a href="https://neurativo.com/privacy">Privacy</a> &nbsp;·&nbsp;
+                    <a href="https://neurativo.site">neurativo.com</a> &nbsp;·&nbsp;
+                    <a href="https://neurativo.site/terms">Terms</a> &nbsp;·&nbsp;
+                    <a href="https://neurativo.site/privacy">Privacy</a> &nbsp;·&nbsp;
                     <a href="mailto:support@neurativo.com">support@neurativo.com</a>
                 </p>
             </footer>

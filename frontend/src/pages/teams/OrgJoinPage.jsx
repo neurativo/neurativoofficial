@@ -80,7 +80,7 @@ export default function OrgJoinPage() {
                         <div className="oj-success">
                             Your {success.seat_tier === 'pro' ? 'Pro' : 'Student'} seat is now active.
                         </div>
-                        <a href="https://neurativo.com/app" className="oj-btn">Open Neurativo</a>
+                        <a href="https://neurativo.site/app" className="oj-btn">Open Neurativo</a>
                     </div>
                 </div>
             </div>

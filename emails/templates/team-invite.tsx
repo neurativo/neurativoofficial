@@ -33,6 +33,6 @@ export default function TeamInviteEmail({ orgName, inviterName, joinUrl, seatTie
 TeamInviteEmail.PreviewProps = {
   orgName: 'MIT Engineering',
   inviterName: 'Dr. Sarah Chen',
-  joinUrl: 'https://teams.neurativo.com/join/abc123',
+  joinUrl: 'https://teams.neurativo.site/join/abc123',
   seatTier: 'pro',
 } satisfies TeamInviteEmailProps;

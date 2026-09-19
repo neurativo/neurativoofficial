@@ -16,7 +16,7 @@ export default function PaymentFailedEmail() {
         { label: 'Recording & imports', value: 'Paused until resolved' },
       ]} />
       <Text style={t.muted}>Update your payment method to restore your plan instantly.</Text>
-      <CtaButton text="Update payment method" href="https://www.neurativo.com/profile?billing=1" danger />
+      <CtaButton text="Update payment method" href="https://neurativo.site/profile?billing=1" danger />
       <Text style={{ ...t.muted, marginTop: '14px' }}>
         If you believe this is an error, just reply to this email.
       </Text>
