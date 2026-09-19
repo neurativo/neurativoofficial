@@ -98,10 +98,22 @@ function SectionRedirect({ sectionId }) {
     return <LandingPage user={user} />;
 }
 
+function AuthLoadingScreen() {
+    return (
+        <div style={{
+            minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontFamily: 'Inter, system-ui, sans-serif', background: 'var(--color-bg, #fafaf9)',
+            color: 'var(--color-muted, #a3a3a3)', fontSize: 14,
+        }}>
+            Loading your account…
+        </div>
+    );
+}
+
 // ─── Route guard ────────────────────────────────────────────────────────────
 function ProtectedRoute({ children }) {
     const { isLoaded, isSignedIn } = useUser();
-    if (!isLoaded) return null;
+    if (!isLoaded) return <AuthLoadingScreen />;
     if (!isSignedIn) return <Navigate to="/" replace />;
     return children;
 }
@@ -171,10 +183,17 @@ function GradientOrbs() {
     );
 }
 
+const CLERK_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+
 ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>
+        {!CLERK_KEY ? (
+            <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Inter, system-ui, sans-serif', padding: 24, textAlign: 'center' }}>
+                Clerk publishable key is missing. Set VITE_CLERK_PUBLISHABLE_KEY on Vercel and redeploy.
+            </div>
+        ) : (
         <ClerkProvider
-                publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY}
+                publishableKey={CLERK_KEY}
                 afterSignOutUrl="/"
                 signInUrl="https://accounts.neurativo.site/sign-in"
                 signUpUrl="https://accounts.neurativo.site/sign-up"
@@ -197,5 +216,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 )}
             </BrowserRouter>
         </ClerkProvider>
+        )}
     </React.StrictMode>
 );
