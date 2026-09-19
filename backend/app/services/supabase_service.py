@@ -52,7 +52,8 @@ def save_lecture(title: str, transcript: str, duration_seconds: int = None, lang
         "title": title,
         "transcript": transcript,
         "duration_seconds": duration_seconds,
-        "language": language,
+        # Empty string → NULL so live sessions do not start pre-locked to "en".
+        "language": language or None,
     }
     if user_id:
         data["user_id"] = user_id
@@ -147,7 +148,7 @@ def update_lecture_summary(lecture_id: str, summary: str):
          raise Exception(f"Failed to update summary. Lecture ID {lecture_id} might not exist.")
 
 
-def create_lecture(title: str = "Live Session", transcript: str = "", language: str = "en", user_id: str = None) -> str:
+def create_lecture(title: str = "Live Session", transcript: str = "", language: str = None, user_id: str = None) -> str:
     """
     Creates a new lecture record, useful for initializing live sessions.
     Defaults to empty transcript. Language is updated on first chunk arrival.

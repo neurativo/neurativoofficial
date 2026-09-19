@@ -15,7 +15,8 @@ from app.core.config import settings
 from app.core.auth import get_current_user, get_active_user
 from app.core.plans import get_limits, is_unlimited
 from app.core.rate_limit import limiter
-from app.services.openai_service import transcribe_audio, transcribe_audio_bytes, transcribe_live_chunk, _bg_client, filter_segments_by_confidence, _HALLUCINATION_LANGS
+from app.services.openai_service import transcribe_audio, transcribe_audio_bytes, transcribe_live_chunk, _bg_client, filter_segments_by_confidence
+from app.services.transcript_guard import evaluate_live_chunk, whisper_prompt_from_transcript
 from app.services.explanation_service import generate_explanation
 from app.services.qa_service import answer_lecture_question
 from app.services.pdf_service import generate_lecture_pdf
@@ -849,7 +850,9 @@ def start_live_session(request: Request, body: StartSessionBody = StartSessionBo
                     "resets_at": _next_month_iso(),
                 })
 
-        lecture_id = create_lecture(title="Live Session", transcript="", user_id=str(user.id))
+        # language left empty until the first accepted chunk — a default of "en"
+        # would make real Japanese lectures look like CJK-vs-English mismatches.
+        lecture_id = create_lecture(title="Live Session", transcript="", user_id=str(user.id), language="")
         try:
             reserve_credits(str(user.id), lecture_id, required_credits)
             mark_credit_deducted(lecture_id)
@@ -1202,22 +1205,18 @@ async def process_live_chunk(
                     "required": projected_required,
                 }
 
-        # Build Whisper context from last ~200 words of transcript to prevent
-        # duplicate transcription at chunk boundaries.
+        stored_language = get_lecture_language(lecture_id)
+
+        # Build Whisper context from last ~50 words. Skip if that tail is CJK
+        # on a non-CJK lecture — that is how Japanese outros used to lock in.
         whisper_prompt = None
         try:
             transcript_so_far = get_lecture_transcript(lecture_id)
-            if transcript_so_far:
-                # 50 words is enough context to prevent boundary duplication.
-                # 200 words risks Whisper looping the prompt content into output.
-                words = transcript_so_far.split()
-                whisper_prompt = " ".join(words[-50:])
+            whisper_prompt = whisper_prompt_from_transcript(transcript_so_far, stored_language)
         except Exception:
             pass
 
         # 2. Transcribe — no language pin so Whisper handles code-switching.
-        #    Each chunk is detected independently. no_speech_prob filtering
-        #    handles silence hallucinations (no need for language pinning).
         try:
             chunk_text, detected_language = await transcribe_live_chunk(
                 chunk_bytes,
@@ -1234,16 +1233,25 @@ async def process_live_chunk(
         if not chunk_text:
             return {"lecture_id": lecture_id, "chunk_transcript": "", "message": "Empty transcription"}
 
-        # 3. Discard chunks detected in known hallucination languages (Odia ୧, etc.)
-        #    and don't update the lecture language from them either.
-        stored_language = get_lecture_language(lecture_id)
-        if detected_language and detected_language in _HALLUCINATION_LANGS:
-            print(f"[chunk] Hallucination language '{detected_language}' discarded for lecture {lecture_id}")
-            return {"lecture_id": lecture_id, "chunk_transcript": "", "message": "Hallucination language discarded"}
-        if detected_language:
-            update_lecture_language(lecture_id, detected_language)
-            stored_language = detected_language
-        language = stored_language or 'en'
+        # 3. Drop YouTube-outro hallucinations and CJK text that Whisper labelled
+        #    as English. Do not persist language from rejected chunks.
+        decision = evaluate_live_chunk(chunk_text, detected_language, stored_language)
+        if not decision.accept:
+            print(
+                f"[chunk] Discarded lecture={lecture_id} reason={decision.reason} "
+                f"detected={detected_language!r} stored={stored_language!r}"
+            )
+            return {
+                "lecture_id": lecture_id,
+                "chunk_transcript": "",
+                "message": f"Chunk discarded ({decision.reason})",
+            }
+
+        chunk_text = decision.text
+        if decision.lock_language and decision.language:
+            update_lecture_language(lecture_id, decision.language)
+            stored_language = decision.language
+        language = stored_language or decision.language or "en"
 
         # 4. Append transcript + update session analytics
         try:

@@ -1,11 +1,14 @@
 import asyncio
 import httpx
-from collections import Counter
 from openai import OpenAI
 from fastapi import UploadFile, HTTPException
 from app.core.config import settings
 from io import BytesIO
 from app.services.cost_tracker import log_cost_async, log_cost
+from app.services.transcript_guard import (
+    GARBAGE_LANGS,
+    is_hallucinated_transcript,
+)
 
 # Language code → display name map for the frontend badge
 LANGUAGE_NAMES = {
@@ -31,75 +34,12 @@ _bg_client = OpenAI(
 ) if settings.OPENAI_API_KEY else None
 
 
-# Whisper hallucination phrases — emitted when audio is near-silent or muffled.
-# These pass the no_speech_prob filter (Whisper "thinks" it heard speech) but are
-# fake. Matching is case-insensitive and checks the entire normalised text.
-_HALLUCINATION_PHRASES = {
-    "thank you for watching",
-    "thank you for watching my video",
-    "thank you for watching this video",
-    "thanks for watching",
-    "thanks for watching my video",
-    "thank you for listening",
-    "thanks for listening",
-    "please subscribe",
-    "like and subscribe",
-    "subscribe to my channel",
-    "don't forget to subscribe",
-    "see you in the next video",
-    "see you next time",
-    "i'll see you in the next one",
-    "bye",
-    "bye bye",
-}
-
-# Languages Whisper commonly hallucinates on near-silent audio.
-# Transcripts detected in these languages are discarded entirely.
-# Odia (or) is the most common: Whisper emits rows of ୧ characters on silence.
-_HALLUCINATION_LANGS = {"ja", "zh", "or", "bo", "km", "lo", "my", "si", "ne", "am"}
+# Kept as aliases so existing imports / tests keep working.
+_HALLUCINATION_LANGS = set(GARBAGE_LANGS)
 
 
 def _is_hallucinated(text: str) -> bool:
-    """
-    Return True if text is a known Whisper hallucination.
-    Catches both:
-      - Known filler phrases ("thank you for watching")
-      - Repetitive-character noise (Odia ୧୧୧..., Devanagari वदवयल repeating, etc.)
-    """
-    if not text or not text.strip():
-        return False
-    normalised = text.strip().lower().rstrip("!.").strip()
-    if normalised in _HALLUCINATION_PHRASES:
-        return True
-
-    # Repetition check: if unique characters make up ≤10% of the string
-    # (ignoring spaces/punctuation), the text is almost certainly a loop.
-    chars = [c for c in text if not c.isspace() and c not in ".,!?;:-"]
-    if len(chars) >= 20:
-        unique_ratio = len(set(chars)) / len(chars)
-        if unique_ratio <= 0.10:
-            return True
-
-    # Word repetition: if the most common word accounts for ≥60% of all words
-    words = text.split()
-    if len(words) >= 6:
-        top_word_count = Counter(words).most_common(1)[0][1]
-        if top_word_count / len(words) >= 0.60:
-            return True
-
-    # Phrase/sentence repetition loop: if a 3–5 word N-gram repeats ≥4 times,
-    # Whisper is stuck in a loop (e.g. "you have money" × 30).
-    if len(words) >= 12:
-        for n in (3, 4, 5):
-            if len(words) < n:
-                break
-            ngrams = [' '.join(words[i:i+n]) for i in range(len(words) - n + 1)]
-            if ngrams:
-                top_count = Counter(ngrams).most_common(1)[0][1]
-                if top_count >= 4:
-                    return True
-
-    return False
+    return is_hallucinated_transcript(text)
 
 
 def filter_segments_by_confidence(segments: list, threshold: float = 0.6) -> str:
