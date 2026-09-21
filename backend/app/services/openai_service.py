@@ -7,6 +7,7 @@ from io import BytesIO
 from app.services.cost_tracker import log_cost_async, log_cost
 from app.services.transcript_guard import (
     GARBAGE_LANGS,
+    evaluate_live_chunk,
     is_hallucinated_transcript,
 )
 
@@ -194,6 +195,14 @@ async def transcribe_audio_bytes(file_bytes: bytes, filename: str) -> tuple[str,
         text = filter_segments_by_confidence(segments)
     else:
         text = transcript_response.text or ""
+
+    decision = evaluate_live_chunk(text, detected_language, None)
+    if not decision.accept:
+        text = ""
+    else:
+        text = decision.text
+        if decision.language:
+            detected_language = decision.language
 
     audio_seconds = segments[-1].end if segments else 0.0
     log_cost("whisper_import", "whisper-1", audio_seconds=audio_seconds)

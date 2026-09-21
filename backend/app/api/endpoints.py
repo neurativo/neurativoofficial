@@ -16,7 +16,7 @@ from app.core.auth import get_current_user, get_active_user
 from app.core.plans import get_limits, is_unlimited
 from app.core.rate_limit import limiter
 from app.services.openai_service import transcribe_audio, transcribe_audio_bytes, transcribe_live_chunk, _bg_client, filter_segments_by_confidence
-from app.services.transcript_guard import evaluate_live_chunk, whisper_prompt_from_transcript
+from app.services.transcript_guard import evaluate_live_chunk, filter_transcript_parts, whisper_prompt_from_transcript
 from app.services.explanation_service import generate_explanation
 from app.services.qa_service import answer_lecture_question
 from app.services.pdf_service import generate_lecture_pdf
@@ -442,8 +442,7 @@ async def _process_lecture_job(
     await _step("transcribing")
     try:
         chunks = split_for_whisper(compressed, filename.rsplit(".", 1)[0] + ".mp3")
-        transcript_parts = []
-        detected_language = "en"
+        raw_parts: list[tuple[str, str | None]] = []
 
         for chunk_bytes, chunk_name in chunks:
             from io import BytesIO
@@ -465,10 +464,10 @@ async def _process_lecture_job(
                 audio_sec = 0.0
             from app.services.cost_tracker import log_cost as _log_cost
             _log_cost("whisper_import", WHISPER_MODEL, audio_seconds=audio_sec)
-            transcript_parts.append(text)
-            detected_language = getattr(chunk_resp, "language", None) or detected_language
+            claimed = getattr(chunk_resp, "language", None)
+            raw_parts.append((text, claimed))
 
-        transcript_text = " ".join(transcript_parts).strip()
+        transcript_text, detected_language = filter_transcript_parts(raw_parts)
         word_count = len(transcript_text.split())
         estimated_minutes = max(1, word_count // 150)
         if not duration_verified:

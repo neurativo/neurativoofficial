@@ -263,6 +263,25 @@ def evaluate_live_chunk(
     return ChunkDecision(True, cleaned, lock_lang, "accepted_first", lock_language=bool(lock_lang))
 
 
+def filter_transcript_parts(parts: list[tuple[str, str | None]]) -> tuple[str, str]:
+    """
+    Apply live-chunk rules across import / file-transcription pieces.
+    Returns (joined_transcript, locked_language).
+    """
+    locked: str | None = None
+    kept: list[str] = []
+    for text, claimed in parts:
+        decision = evaluate_live_chunk(text or "", claimed, locked)
+        if not decision.accept:
+            continue
+        kept.append(decision.text)
+        if decision.lock_language and decision.language:
+            locked = decision.language
+        elif locked is None and decision.language:
+            locked = decision.language
+    return " ".join(kept).strip(), locked or "en"
+
+
 def whisper_prompt_from_transcript(transcript: str | None, stored_language: str | None) -> str | None:
     """Last ~50 words, omitted when they would re-seed a CJK hallucination."""
     if not transcript or not transcript.strip():

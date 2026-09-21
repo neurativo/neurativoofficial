@@ -1,6 +1,7 @@
 """Live-chunk language / YouTube-outro guards."""
 from app.services.transcript_guard import (
     evaluate_live_chunk,
+    filter_transcript_parts,
     infer_script_language,
     is_hallucinated_transcript,
     is_youtube_outro,
@@ -112,3 +113,14 @@ def test_whisper_prompt_keeps_english_tail():
 def test_odia_garbage_lang_dropped():
     d = evaluate_live_chunk("୧୧୧୧୧୧୧୧୧୧୧୧୧୧୧୧୧୧୧୧", detected_language="or", stored_language=None)
     assert d.accept is False
+
+
+def test_import_drops_japanese_outro_then_keeps_english():
+    text, lang = filter_transcript_parts([
+        (JA_OUTRO, "en"),
+        (JA_PYTHON, "en"),
+        (EN_PYTHON, "en"),
+    ])
+    assert "本日は" not in text
+    assert "Guido" in text
+    assert lang == "en"
