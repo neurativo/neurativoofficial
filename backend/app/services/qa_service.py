@@ -136,10 +136,16 @@ def answer_lecture_question(lecture_id: str, question: str, topic: str | None = 
             "DETAIL: 2-3 sentences with explanation, context, or elaboration from the lecture.\n"
             "SOURCE: A brief phrase quoted from the lecture that supports the answer "
             "(wrap in quotation marks).\n"
+            "Formatting rules for each part: write in plain sentences. "
+            "Do NOT use markdown bold (**), headings (#), or bullet lists. "
+            "Use `backticks` only around code identifiers, and $...$ only for math expressions. "
+            "Keep the three labels ANSWER:, DETAIL:, and SOURCE: exactly as written, each on its own line.\n"
             "Prefer the most directly relevant excerpt. If visuals are included, use them only "
             "when they materially support the answer.\n"
             "If the answer is not clearly covered, say so in the ANSWER line - "
-            "do not guess or use outside knowledge."
+            "do not guess or use outside knowledge.\n"
+            "Write in plain sentences. Do NOT use markdown bold (**) or headings (##). "
+            "Use `backticks` only around code identifiers and $...$ only for mathematical expressions."
         )
 
         conversation = [{"role": "system", "content": system_prompt}]

@@ -3,16 +3,27 @@ import { renderDomainContent } from '../lib/renderDomainContent.jsx';
 
 // Parses the structured ANSWER / DETAIL / SOURCE format from the backend.
 // Falls back to plain text if the format isn't detected.
+function stripBold(s) {
+    // Remove markdown bold/italic markers that renderDomainContent does not handle,
+    // so they never leak as literal asterisks. Backticks/$math$ are left for the
+    // shared domain renderer to convert into styled <code>/KaTeX spans.
+    return String(s || '')
+        .replace(/\*\*([^*]+)\*\*/g, '$1')
+        .replace(/__([^_]+)__/g, '$1');
+}
+
 function parse(text) {
     if (!text) return { raw: text };
     const a = text.match(/ANSWER:\s*([\s\S]+?)(?=\nDETAIL:|\nSOURCE:|$)/);
     const d = text.match(/DETAIL:\s*([\s\S]+?)(?=\nSOURCE:|$)/);
     const s = text.match(/SOURCE:\s*([\s\S]+?)$/);
-    if (!a) return { raw: text };
+    if (!a) return { raw: stripBold(text) };
+    // Strip surrounding quotation marks the model may wrap the source phrase in.
+    const rawSource = (s?.[1] || '').trim().replace(/^["'“”]+|["'“”]+$/g, '');
     return {
-        answer: a[1].trim(),
-        detail: d?.[1].trim() || '',
-        source: s?.[1].trim() || '',
+        answer: stripBold(a[1].trim()),
+        detail: stripBold(d?.[1].trim() || ''),
+        source: stripBold(rawSource),
     };
 }
 
@@ -90,7 +101,7 @@ export default function QAAnswer({ text, dark = false, topic = null }) {
                         fontStyle: 'italic',
                         lineHeight: 1.6,
                     }}>
-                        {p.source}
+                        {renderDomainContent(p.source, topic) || p.source}
                     </span>
                 </div>
             )}

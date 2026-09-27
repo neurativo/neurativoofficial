@@ -5,6 +5,7 @@ import { trackPageview } from './lib/trackPageview';
 import { useClerk } from '@clerk/react';
 import QAAnswer from './components/QAAnswer';
 import { renderDomainContent } from './lib/renderDomainContent.jsx';
+import { parseSummary } from './lib/summaryRenderer.jsx';
 import TopUpBanner from './components/TopUpBanner.jsx';
 
 const LANGUAGE_NAMES = {
@@ -39,99 +40,8 @@ function fmtTs(seconds) {
 }
 
 // ── Summary parser ─────────────────────────────────────────────────────────
-// Converts the master_summary string (## sections) into structured objects
-// for the redesigned summary panel cards.
-// Handles both the new structured format and old legacy format as fallback.
-function parseSummary(text) {
-    if (!text) return [];
-    return text.split('## ').filter(s => s.trim()).map((block) => {
-        const lines = block.split('\n');
-        const title = lines[0].trim();
-        const highlights = [];
-        const concepts = [];
-        const examples = [];
-        const proseLines = [];
-
-        for (const line of lines.slice(1)) {
-            const l = line.trim();
-            // Skip empty lines and section separators
-            if (!l || l === '---') continue;
-
-            // Highlight lines: start with ">" (new and old format)
-            if (l.startsWith('>')) {
-                highlights.push(l.replace(/^>\s*/, ''));
-                continue;
-            }
-
-            // New format: "Key concepts: `term`, `term`, ..."
-            if (/^key concepts:/i.test(l)) {
-                const matches = l.match(/`([^`]+)`/g);
-                if (matches) matches.forEach(m => concepts.push(m.replace(/`/g, '').trim()));
-                continue;
-            }
-
-            // New format: "Examples:" header line — skip, the → lines below are handled
-            if (/^examples:$/i.test(l)) continue;
-
-            // New format: lines starting with "→" are example items
-            if (l.startsWith('→')) {
-                examples.push(l.replace(/^→\s*/, '').trim());
-                continue;
-            }
-
-            // Old format: "- " bullet lines
-            if (l.startsWith('- ')) {
-                const content = l.slice(2).trim();
-                const lc = content.toLowerCase();
-                if (content.startsWith('→') || lc.includes('example') || lc.includes('e.g.')) {
-                    examples.push(content.replace(/^→\s*/, ''));
-                } else if (/`[^`]+`/.test(content) || content.split(/\s+/).length < 5) {
-                    concepts.push(content.replace(/`/g, '').trim());
-                } else {
-                    proseLines.push(content);
-                }
-                continue;
-            }
-
-            proseLines.push(l);
-        }
-
-        // Strip **bold** markdown so asterisks never appear as literal characters
-        const fullProse = proseLines
-            .map(l => l.replace(/\*\*(.*?)\*\*/g, '$1'))
-            .join(' ')
-            .trim();
-
-        // Lead sentence: first sentence (up to '. ') that is >= 40 chars.
-        // If no sentence reaches 40 chars, use the whole prose as lead.
-        let lead_sentence = fullProse;
-        let prose = '';
-        let searchFrom = 0;
-        let found = false;
-        while (searchFrom < fullProse.length) {
-            const idx = fullProse.indexOf('. ', searchFrom);
-            if (idx === -1) break;
-            if (idx + 1 >= 40) {             // sentence including period is >= 40 chars
-                lead_sentence = fullProse.slice(0, idx + 1);
-                prose = fullProse.slice(idx + 2).trim();
-                found = true;
-                break;
-            }
-            searchFrom = idx + 2;
-        }
-        // If nothing met the 40-char bar, fall back to the first '. ' split
-        if (!found) {
-            const fallbackDot = fullProse.indexOf('. ');
-            if (fallbackDot !== -1) {
-                lead_sentence = fullProse.slice(0, fallbackDot + 1);
-                prose = fullProse.slice(fallbackDot + 2).trim();
-            }
-        }
-
-        return { title, lead_sentence, prose, concepts, examples, highlights };
-    });
-}
-
+// Uses the SHARED parser in lib/summaryRenderer.jsx so live cards, LectureView,
+// and ShareView all parse identically. See that file for the full contract.
 function App({ user }) {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
@@ -2225,11 +2135,15 @@ function App({ user }) {
                                                         }}>
                                                             {String(idx + 1).padStart(2, '0')}
                                                         </span>
-                                                        <span style={{
+                                                        <span title={sec.title} style={{
                                                             flex: 1, fontSize: 13, fontWeight: 600,
                                                             color: '#1a1a1a', lineHeight: 1.3,
                                                             letterSpacing: '-0.2px',
-                                                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                                            overflow: 'hidden',
+                                                            display: '-webkit-box',
+                                                            WebkitLineClamp: 2,
+                                                            WebkitBoxOrient: 'vertical',
+                                                            whiteSpace: 'normal', wordBreak: 'break-word',
                                                         }}>
                                                             {sec.title}
                                                         </span>
@@ -2294,6 +2208,15 @@ function App({ user }) {
                                                             <p style={{ fontSize: 12, color: '#6b6b6b', lineHeight: 1.7, margin: 0 }}>
                                                                 {renderDomainContent(sec.prose, detectedTopic) || sec.prose}
                                                             </p>
+                                                        )}
+
+                                                        {/* Code blocks (rendered as real <pre> via renderDomainContent) */}
+                                                        {sec.codeBlocks && sec.codeBlocks.length > 0 && (
+                                                            <div>
+                                                                {sec.codeBlocks.map((cb, cbi) => (
+                                                                    <div key={cbi}>{renderDomainContent(cb, detectedTopic)}</div>
+                                                                ))}
+                                                            </div>
                                                         )}
 
                                                         {/* Concepts */}

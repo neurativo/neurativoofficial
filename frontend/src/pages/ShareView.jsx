@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useSEO } from '../lib/useSEO';
+import { renderDomainContent } from '../lib/renderDomainContent.jsx';
+import { parseSummary } from '../lib/summaryRenderer.jsx';
 
 function useIsDark() {
     const [dark, setDark] = React.useState(() => document.documentElement.classList.contains('dark'));
@@ -92,49 +94,7 @@ const CSS = `
   .dark .sv-btn-home { background: var(--color-dark); color: var(--color-dark-fg); }
 `;
 
-function parseSummary(text) {
-    if (!text) return [];
-    const trimmed = text.trim();
-    if (!trimmed || /^processing/i.test(trimmed)) return [];
-    const hasStructuredSections = trimmed.includes('## ');
-    const blocks = hasStructuredSections
-        ? trimmed.split('## ').filter(s => s.trim())
-        : [trimmed];
-    return blocks.map((block, idx) => {
-        const lines = block.split('\n');
-        const title = hasStructuredSections ? lines[0].trim() : (idx === 0 ? 'Summary' : `Section ${idx + 1}`);
-        const highlights = [], concepts = [], examples = [], proseLines = [];
-        const contentLines = hasStructuredSections ? lines.slice(1) : lines;
-        for (const line of contentLines) {
-            const l = line.trim();
-            if (!l || l === '---') continue;
-            if (l.startsWith('>')) { highlights.push(l.replace(/^>\s*/, '')); continue; }
-            if (/^key concepts:/i.test(l)) {
-                const m = l.match(/`([^`]+)`/g);
-                if (m) m.forEach(x => concepts.push(x.replace(/`/g, '').trim()));
-                continue;
-            }
-            if (/^examples:$/i.test(l)) continue;
-            if (l.startsWith('→')) { examples.push(l.replace(/^→\s*/, '').trim()); continue; }
-            if (l.startsWith('- ')) {
-                const c = l.slice(2).trim();
-                if (/`[^`]+`/.test(c) || c.split(/\s+/).length < 5) concepts.push(c.replace(/`/g, '').trim());
-                else proseLines.push(c);
-                continue;
-            }
-            proseLines.push(l);
-        }
-        const fullProse = proseLines.map(l => l.replace(/\*\*(.*?)\*\*/g, '$1')).join(' ').trim();
-        let lead_sentence = fullProse, prose = '';
-        const fb = fullProse.indexOf('. ');
-        if (fb !== -1 && fb + 1 >= 40) { lead_sentence = fullProse.slice(0, fb + 1); prose = fullProse.slice(fb + 2).trim(); }
-        if (!hasStructuredSections && !fullProse) {
-            lead_sentence = lines.map(l => l.trim()).filter(Boolean).join(' ');
-            prose = '';
-        }
-        return { title, lead_sentence, prose, concepts, highlights };
-    });
-}
+// parseSummary now imported from lib/summaryRenderer.jsx (shared, with examples + code)
 
 const LANG = { en: 'English', ar: 'Arabic', zh: 'Chinese', fr: 'French', de: 'German', hi: 'Hindi', es: 'Spanish', it: 'Italian', ja: 'Japanese', ko: 'Korean', pt: 'Portuguese', ru: 'Russian' };
 
@@ -319,10 +279,15 @@ export default function ShareView() {
                                     <div key={i} className="sv-sum-card" style={{ borderLeft: `3px solid ${a.border}` }}>
                                         <div className="sv-sum-title" style={{ color: a.title }}>{s.title}</div>
                                         {(s.highlights || []).map((h, j) => (
-                                            <div key={j} className="sv-sum-highlight" style={{ background: a.bg, borderLeftColor: a.border }}>{h}</div>
+                                            <div key={j} className="sv-sum-highlight" style={{ background: a.bg, borderLeftColor: a.border }}>{renderDomainContent(h, lecture.topic) || h}</div>
                                         ))}
-                                        {(s.core_explanation || s.lead_sentence) && <div className="sv-sum-lead">{s.core_explanation || s.lead_sentence}</div>}
-                                        {s.prose && <div className="sv-sum-prose">{s.prose}</div>}
+                                        {(s.core_explanation || s.lead_sentence) && <div className="sv-sum-lead">{renderDomainContent(s.core_explanation || s.lead_sentence, lecture.topic) || s.core_explanation || s.lead_sentence}</div>}
+                                        {s.prose && <div className="sv-sum-prose">{renderDomainContent(s.prose, lecture.topic) || s.prose}</div>}
+                                        {(s.codeBlocks || []).length > 0 && (
+                                            <div className="sv-sum-code">
+                                                {(s.codeBlocks || []).map((cb, j) => <div key={j}>{renderDomainContent(cb, lecture.topic)}</div>)}
+                                            </div>
+                                        )}
                                         {(s.concepts || []).length > 0 && (
                                             <div className="sv-sum-concepts">
                                                 {(s.concepts || []).map((c, j) => (
@@ -351,7 +316,7 @@ export default function ShareView() {
                                         {(s.examples || []).length > 0 && (
                                             <div className="sv-sum-group">
                                                 <div className="sv-sum-group-label">Examples Mentioned</div>
-                                                {(s.examples || []).map((item, j) => <div key={j} className="sv-sum-group-item">{item}</div>)}
+                                                {(s.examples || []).map((item, j) => <div key={j} className="sv-sum-group-item">{renderDomainContent(item, lecture.topic) || item}</div>)}
                                             </div>
                                         )}
                                         {s.citations?.length > 0 && (

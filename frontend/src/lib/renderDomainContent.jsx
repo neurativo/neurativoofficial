@@ -25,6 +25,16 @@ function hasFencedCode(text) {
     return /```[\s\S]*?```/.test(text);
 }
 
+function hasMath(text) {
+    // Detect $...$ or $$...$$ LaTeX regardless of topic so stray math never leaks.
+    return /\$[^$]+\$/.test(text);
+}
+
+function hasInlineCode(text) {
+    // Detect single-backtick inline code (but not a fenced ``` block on its own).
+    return /`[^`\n]+`/.test(text);
+}
+
 /**
  * Renders a block of text with domain-appropriate formatting:
  * - KaTeX for math equations ($$...$$  and  $...$) when topic is math/physics/engineering/chemistry
@@ -38,6 +48,8 @@ export function renderDomainContent(text, topic) {
 
     let parts = [text];
 
+    // Fenced code blocks — run whenever the text actually contains a fence,
+    // regardless of topic, so ```python ...``` never leaks as literal text.
     if (isCodeTopic(topic) || hasFencedCode(text)) {
         parts = parts.flatMap(part => {
             if (typeof part !== 'string') return [part];
@@ -45,12 +57,20 @@ export function renderDomainContent(text, topic) {
         });
     }
 
-    if (isMathTopic(topic)) {
+    // Math — run whenever the text contains $...$ / $$...$$, regardless of topic.
+    if (isMathTopic(topic) || hasMath(text)) {
         parts = parts.flatMap(part => {
             if (typeof part !== 'string') return [part];
             return renderMath(part);
         });
     }
+
+    // Inline `code` — ALWAYS run (topic-independent) so single backticks never
+    // appear as literal characters in any card, prose line, or QA answer.
+    parts = parts.flatMap(part => {
+        if (typeof part !== 'string') return [part];
+        return renderInlineCode(part);
+    });
 
     // Remaining plain strings stay as-is
     return parts.map((part, i) =>
@@ -60,10 +80,40 @@ export function renderDomainContent(text, topic) {
     );
 }
 
+// ── Inline code rendering ────────────────────────────────────────────────────
+
+function renderInlineCode(text) {
+    const INLINE_CODE = /`([^`\n]+)`/g;
+    const parts = [];
+    let last = 0;
+    let match;
+    while ((match = INLINE_CODE.exec(text)) !== null) {
+        if (match.index > last) parts.push(text.slice(last, match.index));
+        parts.push(
+            <code
+                key={`ic-${match.index}`}
+                style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: '0.88em',
+                    padding: '1px 5px',
+                    borderRadius: 4,
+                    background: 'rgba(124,58,237,0.10)',
+                    color: '#7c3aed',
+                    border: '1px solid rgba(124,58,237,0.18)',
+                    whiteSpace: 'nowrap',
+                }}
+            >{match[1]}</code>
+        );
+        last = match.index + match[0].length;
+    }
+    if (last < text.length) parts.push(text.slice(last));
+    return parts.length ? parts : [text];
+}
+
 // ── Code rendering ─────────────────────────────────────────────────────────
 
 function renderCodeBlocks(text) {
-    const CODE_FENCE = /```(\w*)\n([\s\S]*?)```/g;
+    const CODE_FENCE = /```(\w*)[ \t]*\n?([\s\S]*?)```/g;
     const parts = [];
     let last = 0;
     let match;

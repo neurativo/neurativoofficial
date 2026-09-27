@@ -261,6 +261,28 @@ def generate_section_summary(micro_summaries: list, language: str = "en", topic:
     lang_note      = _multilingual_instruction()
     topic_note     = _section_guidance(topic)
     fmt            = _format_guidance(topic)
+    title          = (topic.strip().title() if topic and topic.strip() and topic.strip() != "general"
+                      else "Section Summary")
+    # Structured template — IDENTICAL contract to summarize_topic_segment /
+    # generate_master_summary so the LIVE card and the FINAL master summary parse
+    # and render the same way (## title / lead / prose / > insight /
+    # Key concepts: `term` / Examples: → ...). Optional parts are omitted when
+    # the content is sparse, preserving anti-hallucination behaviour.
+    section_format = (
+        "Use exactly this markdown structure (omit any optional part that has no "
+        "content in the micro-summaries — never invent content to fill it):\n\n"
+        f"## {title}\n\n"
+        "{{One sentence capturing the single most important idea present in these micro-summaries.}}\n\n"
+        "{{2-3 sentences of prose explaining what was covered.}}\n\n"
+        "[Include ONLY if a key point, contrast, or conclusion was emphasised:\n"
+        "> {{One sentence restating that point}}]\n\n"
+        "[Include ONLY if specific terms were named or defined:\n"
+        "Key concepts: `term1`, `term2`, `term3`]\n\n"
+        "[Include ONLY if explicit examples were given:\n"
+        "Examples:\n"
+        "→ {{example that was given}}]\n\n"
+        "---"
+    )
     last_err = None
     for attempt in range(3):
         try:
@@ -271,9 +293,16 @@ def generate_section_summary(micro_summaries: list, language: str = "en", topic:
                         "role": "system",
                         "content": (
                             "You are Neurativo. Create a unified section summary "
-                            "from these micro-summaries. Use clear paragraph form. "
+                            "from these micro-summaries. "
                             "Synthesise ONLY what is explicitly present in the micro-summaries — "
-                            "do not introduce concepts, context, or background not mentioned."
+                            "do not introduce concepts, context, or background not mentioned.\n\n"
+                            "FORMATTING RULES:\n"
+                            "- Do NOT use **bold** anywhere. Use `backticks` for key terms ONLY on the "
+                            "'Key concepts:' line — never put bare backticks in the lead or prose sentences.\n"
+                            "- Do NOT place fenced code blocks or $...$ math inside the lead or prose "
+                            "sentences; when code or math is warranted it must be on its own line.\n"
+                            "- Use the Unicode arrow → (not ->) for example lines.\n\n"
+                            + section_format + "\n\n"
                             + topic_note + _DEPTH_INSTRUCTION + _TRANSCRIPT_ONLY_RULE + fmt + lang_note
                         )
                     },
@@ -333,6 +362,8 @@ def generate_master_summary(section_summaries: list, language: str = "en", topic
         "- Every section MUST have a '> blockquote' insight line — this is not optional.\n"
         "- The lead sentence must be exactly ONE sentence ending with a period.\n"
         "- Do NOT use **bold** anywhere. Use `backticks` for key terms only.\n"
+        "- Do NOT place fenced code blocks or $...$ math inside the lead/prose sentences "
+        "unless this is a CS/math lecture; when used, they must be on their own line.\n"
         "- Do NOT write a section titled 'Key Takeaways' — every section must cover real content.\n"
         "- Do not repeat information across sections. Prioritize high-signal concepts.\n"
     )
@@ -580,7 +611,9 @@ def summarize_topic_segment(
                             "5. Write content directly — do not use 'the speaker says' or 'in this section'.\n"
                             "6. No filler phrases: no 'it is important to note', "
                             "'in conclusion', 'as we can see', 'as mentioned above'.\n"
-                            "7. Do NOT use **bold**. Use `backticks` for key terms only.\n"
+                            "7. Do NOT use **bold**. Use `backticks` for key terms only. "
+                            "Do NOT place fenced code blocks or $...$ math inside the lead/prose "
+                            "sentences unless this is a CS/math lecture; when used, they must be on their own line.\n"
                             "8. Preserve the exact technical depth of the speaker. "
                             "Do not simplify graduate-level terminology or notation.\n\n"
                             + section_format

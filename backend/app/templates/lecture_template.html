@@ -727,6 +727,48 @@
         /* Section prose */
         .section-body p { font-size: 9.2pt; color: var(--ink-3); margin: 0 0 1.8mm; line-height: 1.58; }
 
+        /* Sanitized markdown artifacts (from _strip_markdown_artifacts) */
+        code.md-inline {
+            font-family: var(--mono, "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace);
+            font-size: 8.4pt;
+            background: #f1f0ec;
+            color: #b8336a;
+            padding: 0.4mm 1.2mm;
+            border-radius: 2px;
+            border: 0.4px solid #e2ded6;
+        }
+        pre.md-code {
+            font-family: var(--mono, "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace);
+            font-size: 8.2pt;
+            line-height: 1.5;
+            background: #1e1e2e;
+            color: #e6e6f0;
+            padding: 2.5mm 3mm;
+            border-radius: 4px;
+            margin: 2mm 0;
+            white-space: pre-wrap;
+            word-break: break-word;
+            overflow-x: auto;
+        }
+        pre.md-code code {
+            font-family: inherit;
+            color: inherit;
+            background: none;
+            border: none;
+            padding: 0;
+        }
+        .md-math {
+            font-family: var(--mono, "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace);
+            font-size: 8.8pt;
+            font-style: italic;
+            color: #0d5c63;
+        }
+        .md-math-block {
+            display: block;
+            text-align: center;
+            margin: 2mm 0;
+        }
+
         /* Bullet list */
         .section-bullets { list-style: none; padding: 0; margin: 3mm 0 0; }
         .section-bullets li {

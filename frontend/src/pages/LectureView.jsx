@@ -13,6 +13,7 @@ import ExportModal from '../components/ExportModal';
 import QAAnswer from '../components/QAAnswer';
 import { useSEO } from '../lib/useSEO';
 import { renderDomainContent } from '../lib/renderDomainContent.jsx';
+import { parseSummary } from '../lib/summaryRenderer.jsx';
 import JobProgress from '../components/JobProgress.jsx';
 import { useCreditsApi } from '../lib/creditsApi.js';
 import BetaFeedbackCard from '../components/BetaFeedbackCard.jsx';
@@ -496,59 +497,7 @@ function useIsDark() {
     return dark;
 }
 
-// ─── parseSummary (mirrors App.jsx) ───────────────────────────────────────────
-function parseSummary(text) {
-    if (!text) return [];
-    const trimmed = text.trim();
-    if (!trimmed || /^processing/i.test(trimmed)) return [];
-    const hasStructuredSections = trimmed.includes('## ');
-    const blocks = hasStructuredSections
-        ? trimmed.split('## ').filter(s => s.trim())
-        : [trimmed];
-    return blocks.map((block, idx) => {
-        const lines = block.split('\n');
-        const title = hasStructuredSections ? lines[0].trim() : (idx === 0 ? 'Summary' : `Section ${idx + 1}`);
-        const highlights = [], concepts = [], examples = [], proseLines = [];
-        const contentLines = hasStructuredSections ? lines.slice(1) : lines;
-        for (const line of contentLines) {
-            const l = line.trim();
-            if (!l || l === '---') continue;
-            if (l.startsWith('>')) { highlights.push(l.replace(/^>\s*/, '')); continue; }
-            if (/^key concepts:/i.test(l)) {
-                const m = l.match(/`([^`]+)`/g);
-                if (m) m.forEach(x => concepts.push(x.replace(/`/g, '').trim()));
-                continue;
-            }
-            if (/^examples:$/i.test(l)) continue;
-            if (l.startsWith('→')) { examples.push(l.replace(/^→\s*/, '').trim()); continue; }
-            if (l.startsWith('- ')) {
-                const c = l.slice(2).trim();
-                if (c.startsWith('→') || c.toLowerCase().includes('example') || c.toLowerCase().includes('e.g.')) {
-                    examples.push(c.replace(/^→\s*/, ''));
-                } else if (/`[^`]+`/.test(c) || c.split(/\s+/).length < 5) {
-                    concepts.push(c.replace(/`/g, '').trim());
-                } else { proseLines.push(c); }
-                continue;
-            }
-            proseLines.push(l);
-        }
-        const fullProse = proseLines.map(l => l.replace(/\*\*(.*?)\*\*/g, '$1')).join(' ').trim();
-        let lead_sentence = fullProse, prose = '';
-        let from = 0, found = false;
-        while (from < fullProse.length) {
-            const idx = fullProse.indexOf('. ', from);
-            if (idx === -1) break;
-            if (idx + 1 >= 40) { lead_sentence = fullProse.slice(0, idx + 1); prose = fullProse.slice(idx + 2).trim(); found = true; break; }
-            from = idx + 2;
-        }
-        if (!found) { const fb = fullProse.indexOf('. '); if (fb !== -1) { lead_sentence = fullProse.slice(0, fb + 1); prose = fullProse.slice(fb + 2).trim(); } }
-        if (!hasStructuredSections && !fullProse) {
-            lead_sentence = lines.map(l => l.trim()).filter(Boolean).join(' ');
-            prose = '';
-        }
-        return { title, lead_sentence, prose, concepts, examples, highlights };
-    });
-}
+// ─── parseSummary now lives in lib/summaryRenderer.jsx (shared) ──────────────
 
 function SummaryCard({ section, accent, index, total, topic }) {
     const isDark = useIsDark();
@@ -2115,7 +2064,8 @@ export default function LectureView() {
 
                         {/* Flashcards */}
                         {activeTab === 'flashcards' && (() => {
-                            const cards = lecture?.flashcards || [];
+                            const cards = (Array.isArray(lecture?.flashcards) ? lecture.flashcards : [])
+                                .filter(c => c && typeof c === 'object' && (c.front || c.back));
                             if (!cards.length) return <div className="lv-empty-panel">No flashcards yet</div>;
                             const card = cards[fcIdx];
                             const pct = ((fcIdx + 1) / cards.length * 100).toFixed(1);
@@ -2131,11 +2081,11 @@ export default function LectureView() {
                                             <div className="lv-card-inner">
                                                 <div className="lv-card-face">
                                                     <div className="lv-fc-side-label">Question</div>
-                                                    <div className="lv-card-text">{card.front}</div>
+                                                    <div className="lv-card-text">{renderDomainContent(card.front, topic) || card.front}</div>
                                                 </div>
                                                 <div className="lv-card-face lv-card-back">
                                                     <div className="lv-fc-side-label">Answer</div>
-                                                    <div className="lv-card-text">{card.back}</div>
+                                                    <div className="lv-card-text">{renderDomainContent(card.back, topic) || card.back}</div>
                                                 </div>
                                             </div>
                                         </div>
@@ -2166,7 +2116,8 @@ export default function LectureView() {
 
                         {/* Quiz */}
                         {activeTab === 'quiz' && (() => {
-                            const questions = lecture?.quiz || [];
+                            const questions = (Array.isArray(lecture?.quiz) ? lecture.quiz : [])
+                                .filter(q => q && typeof q === 'object' && q.question && Array.isArray(q.options) && q.options.length >= 2);
                             if (!questions.length) return <div className="lv-empty-panel">No quiz yet</div>;
                             return (
                                 <div className="lv-tab-body" style={{ position: 'relative' }}>
@@ -2210,9 +2161,10 @@ export default function LectureView() {
                                                         const answered = chosen !== undefined;
                                                         return (
                                                             <>
-                                                                <div className="lv-practice-q-text">{q.question}</div>
+                                                                <div className="lv-practice-q-text">{renderDomainContent(q.question, topic) || q.question}</div>
                                                                 {(q.options || []).map((opt, oi) => {
                                                                     const letter = String.fromCharCode(65 + oi);
+                                                                    const optText = String(opt ?? '').replace(/^\s*[A-D][:.\)]\s*/, '');
                                                                     let cls = 'lv-quiz-opt';
                                                                     if (answered) {
                                                                         if (letter === correctLetter) cls += ' correct';
@@ -2223,7 +2175,7 @@ export default function LectureView() {
                                                                             disabled={answered}
                                                                             onClick={() => handlePracticeAnswer(practiceIdx, letter, questions)}>
                                                                             <span className="lv-quiz-opt-letter">{letter}</span>
-                                                                            {opt}
+                                                                            <span>{renderDomainContent(optText, topic) || optText}</span>
                                                                         </button>
                                                                     );
                                                                 })}
@@ -2232,7 +2184,7 @@ export default function LectureView() {
                                                                         {q.explanation && (
                                                                             <div className="lv-quiz-expl">
                                                                                 <span className="lv-quiz-expl-icon">💡</span>
-                                                                                {q.explanation}
+                                                                                {renderDomainContent(q.explanation, topic) || q.explanation}
                                                                             </div>
                                                                         )}
                                                                         {practiceIdx < questions.length - 1 && (
@@ -2331,11 +2283,11 @@ export default function LectureView() {
                                                                         <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text)', lineHeight: 1.5, marginBottom: ok ? 0 : 4 }}>{q2.question}</div>
                                                                         {!ok && (
                                                                             <>
-                                                                                {a && <div style={{ fontSize: 11, color: '#ef4444', marginBottom: 2 }}>Your answer: {a} — {q2.options?.[a.charCodeAt(0) - 65] || '—'}</div>}
-                                                                                <div style={{ fontSize: 11, color: '#22c55e', marginBottom: q2.explanation ? 4 : 0 }}>Correct: {cL} — {q2.options?.[cL.charCodeAt(0) - 65] || '—'}</div>
+                                                                                {a && <div style={{ fontSize: 11, color: '#ef4444', marginBottom: 2 }}>Your answer: {a} — {renderDomainContent(q2.options?.[a.charCodeAt(0) - 65] || '—', topic) || q2.options?.[a.charCodeAt(0) - 65] || '—'}</div>}
+                                                                                <div style={{ fontSize: 11, color: '#22c55e', marginBottom: q2.explanation ? 4 : 0 }}>Correct: {cL} — {renderDomainContent(q2.options?.[cL.charCodeAt(0) - 65] || '—', topic) || q2.options?.[cL.charCodeAt(0) - 65] || '—'}</div>
                                                                                 {q2.explanation && (
                                                                                     <div style={{ fontSize: 11, color: 'var(--color-sec)', paddingTop: 4, borderTop: '1px solid var(--color-border)' }}>
-                                                                                        💡 {q2.explanation}
+                                                                                        💡 {renderDomainContent(q2.explanation, topic) || q2.explanation}
                                                                                     </div>
                                                                                 )}
                                                                             </>
@@ -2416,12 +2368,13 @@ export default function LectureView() {
                                                             {safeIdx + 1}
                                                         </div>
                                                         <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text)', lineHeight: 1.6, flex: 1 }}>
-                                                            {q.question}
+                                                            {renderDomainContent(q.question, topic) || q.question}
                                                         </div>
                                                     </div>
 
                                                     {(q.options || []).map((opt, oi) => {
                                                         const letter = String.fromCharCode(65 + oi);
+                                                        const optText = String(opt ?? '').replace(/^\s*[A-D][:.\)]\s*/, '');
                                                         let cls = 'lv-quiz-opt';
                                                         if (answered) {
                                                             if (letter === correctLetter) cls += ' correct';
@@ -2432,7 +2385,7 @@ export default function LectureView() {
                                                                 disabled={answered}
                                                                 onClick={() => setQuizAnswers(a => ({ ...a, [safeIdx]: letter }))}>
                                                                 <span className="lv-quiz-opt-letter">{letter}</span>
-                                                                {opt}
+                                                                <span>{renderDomainContent(optText, topic) || optText}</span>
                                                             </button>
                                                         );
                                                     })}
@@ -2442,7 +2395,7 @@ export default function LectureView() {
                                                             <span style={{ fontSize: 14, flexShrink: 0 }}>{isCorrect ? '✓' : '💡'}</span>
                                                             <span>
                                                                 <strong>{isCorrect ? 'Correct! ' : 'Not quite — '}</strong>
-                                                                {q.explanation}
+                                                                {renderDomainContent(q.explanation, topic) || q.explanation}
                                                             </span>
                                                         </div>
                                                     )}
@@ -2530,7 +2483,8 @@ export default function LectureView() {
 
                         {/* Terms (Glossary) */}
                         {activeTab === 'glossary' && (() => {
-                            const terms = lecture?.glossary || [];
+                            const terms = (Array.isArray(lecture?.glossary) ? lecture.glossary : [])
+                                .filter(t => t && typeof t === 'object' && (t.term || t.definition));
                             if (!terms.length) return <div className="lv-empty-panel">No glossary yet</div>;
                             const sorted = [...terms].sort((a, b) => (a.term || '').localeCompare(b.term || ''));
                             const q = glossarySearch.trim().toLowerCase();
@@ -2562,8 +2516,8 @@ export default function LectureView() {
                                         : q
                                             ? filtered.map((g, i) => (
                                                 <div key={i} className="lv-gloss-row">
-                                                    <div className="lv-gloss-term">{g.term}</div>
-                                                    <div className="lv-gloss-def">{g.definition}</div>
+                                                    <div className="lv-gloss-term">{renderDomainContent(g.term, topic) || g.term}</div>
+                                                    <div className="lv-gloss-def">{renderDomainContent(g.definition, topic) || g.definition}</div>
                                                 </div>
                                             ))
                                             : Object.keys(groups).sort().map(letter => (
@@ -2571,8 +2525,8 @@ export default function LectureView() {
                                                     <div className="lv-gloss-group-letter">{letter}</div>
                                                     {groups[letter].map((g, i) => (
                                                         <div key={i} className="lv-gloss-row">
-                                                            <div className="lv-gloss-term">{g.term}</div>
-                                                            <div className="lv-gloss-def">{g.definition}</div>
+                                                            <div className="lv-gloss-term">{renderDomainContent(g.term, topic) || g.term}</div>
+                                                            <div className="lv-gloss-def">{renderDomainContent(g.definition, topic) || g.definition}</div>
                                                         </div>
                                                     ))}
                                                 </div>

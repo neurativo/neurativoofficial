@@ -203,11 +203,15 @@ def format_duration(seconds: int) -> str:
 
 
 def clean_markdown_to_html(text: str) -> str:
-    """Simple markdown → HTML for the legacy summary_html context variable."""
+    """Simple markdown → HTML for the legacy summary_html context variable.
+
+    Runs each line through _strip_markdown_artifacts so fenced code, inline
+    backticks, $math$, and ->/→ arrows are converted to styled HTML instead of
+    leaking as literal characters."""
     if not text:
         return ""
-    html = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', text)
-    lines = html.split('\n')
+    # Pull fenced code blocks out first so they are not split line-by-line.
+    lines = text.split('\n')
     out, in_list = [], False
     for line in lines:
         stripped = line.strip()
@@ -219,20 +223,186 @@ def clean_markdown_to_html(text: str) -> str:
         if stripped.startswith("## "):
             if in_list:
                 out.append("</ul>"); in_list = False
-            out.append(f"<h3>{stripped[3:]}</h3>")
+            out.append(f"<h3>{_strip_markdown_artifacts(stripped[3:], block=False)}</h3>")
         elif stripped.startswith("- "):
             if not in_list:
                 out.append("<ul>"); in_list = True
-            content = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', stripped[2:])
-            out.append(f"<li>{content}</li>")
+            out.append(f"<li>{_strip_markdown_artifacts(stripped[2:], block=False)}</li>")
         else:
             if in_list:
                 out.append("</ul>"); in_list = False
-            content = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', stripped)
-            out.append(f"<p>{content}</p>")
+            out.append(f"<p>{_strip_markdown_artifacts(stripped, block=False)}</p>")
     if in_list:
         out.append("</ul>")
     return "\n".join(out)
+
+
+import html as _html_lib
+
+
+def _html_escape(text: str) -> str:
+    """Escape HTML-significant characters. `quote=False` keeps quotes readable
+    inside prose (the template renders into element text, not attributes)."""
+    return _html_lib.escape(str(text or ""), quote=False)
+
+
+def _normalise_arrows(text: str) -> str:
+    """Collapse mixed ASCII/Unicode arrows into a single styled glyph."""
+    if not text:
+        return text
+    # Order matters: handle the two-char ASCII arrow before single chars.
+    text = re.sub(r'-+>', '\u2192', text)
+    text = text.replace('=>', '\u2192')
+    return text
+
+
+def _strip_markdown_artifacts(text: str, *, block: bool = True) -> str:
+    """Convert markdown/code/LaTeX artifacts into PDF-safe HTML.
+
+    Never lets raw ```fences```, single `backticks`, $...$ math, ** bold, or
+    mixed ->/→ arrows leak into the rendered PDF. Because the Jinja templates
+    render these fields with autoescape OFF, this helper is responsible for
+    escaping the surrounding text itself and only emitting the intentional
+    HTML tags below.
+
+    block=True  -> fenced code becomes a <pre class="md-code"> block.
+    block=False -> fenced code is linearised into inline <code> (used for
+                   compact fields like glossary terms or single-line labels).
+    """
+    if text is None:
+        return ""
+    raw = str(text)
+    if not raw.strip():
+        return ""
+
+    placeholders: list[str] = []
+
+    def _stash(html_fragment: str) -> str:
+        token = f"\x00MD{len(placeholders)}\x00"
+        placeholders.append(html_fragment)
+        return token
+
+    # 1) Fenced code blocks ```lang\n...``` (also tolerate no newline).
+    def _fence_repl(m):
+        code_body = m.group(2)
+        code_body = code_body.strip("\n")
+        escaped = _html_lib.escape(code_body, quote=False)
+        if block:
+            return _stash(f'<pre class="md-code"><code>{escaped}</code></pre>')
+        # Inline linearisation: single-line, spaces preserved.
+        inline = " ".join(escaped.split())
+        return _stash(f'<code class="md-inline">{inline}</code>')
+
+    raw = re.sub(r'```(\w*)[ \t]*\n?([\s\S]*?)```', _fence_repl, raw)
+
+    # 2) Block math $$...$$ and inline math $...$ -> keep the expression,
+    #    drop the delimiters, style it monospace so it reads cleanly.
+    def _block_math_repl(m):
+        expr = _html_lib.escape(m.group(1).strip(), quote=False)
+        return _stash(f'<span class="md-math md-math-block">{expr}</span>')
+
+    def _inline_math_repl(m):
+        expr = _html_lib.escape(m.group(1).strip(), quote=False)
+        return _stash(f'<span class="md-math">{expr}</span>')
+
+    raw = re.sub(r'\$\$([\s\S]+?)\$\$', _block_math_repl, raw)
+    raw = re.sub(r'(?<!\$)\$(?!\$)((?:[^$\\]|\\.)+?)\$(?!\$)', _inline_math_repl, raw)
+
+    # 3) Inline `code` -> styled <code>.
+    def _inline_code_repl(m):
+        return _stash(f'<code class="md-inline">{_html_lib.escape(m.group(1), quote=False)}</code>')
+
+    raw = re.sub(r'`([^`\n]+?)`', _inline_code_repl, raw)
+
+    # 4) Bold / italic markers -> strip the markers (keep the words).
+    raw = re.sub(r'\*\*([^*]+)\*\*', r'\1', raw)
+    raw = re.sub(r'__([^_]+)__', r'\1', raw)
+
+    # 5) Normalise arrows to a single glyph.
+    raw = _normalise_arrows(raw)
+
+    # 6) Escape everything that remains (the real prose), then restore the
+    #    intentional HTML fragments stashed above.
+    raw = _html_lib.escape(raw, quote=False)
+    for i, fragment in enumerate(placeholders):
+        raw = raw.replace(_html_lib.escape(f"\x00MD{i}\x00", quote=False), fragment)
+        raw = raw.replace(f"\x00MD{i}\x00", fragment)
+    return raw
+
+
+def _clean_plain_text(text: str) -> str:
+    """Strip markdown artifacts but return plain text (no HTML tags) for fields
+    that must remain plain strings (e.g. code_examples that render inside a
+    dedicated <pre>, or values reused in logic)."""
+    if text is None:
+        return ""
+    raw = str(text)
+    raw = re.sub(r'```(\w*)[ \t]*\n?([\s\S]*?)```', lambda m: m.group(2).strip("\n"), raw)
+    raw = re.sub(r'\$\$([\s\S]+?)\$\$', lambda m: m.group(1).strip(), raw)
+    raw = re.sub(r'(?<!\$)\$(?!\$)((?:[^$\\]|\\.)+?)\$(?!\$)', lambda m: m.group(1).strip(), raw)
+    raw = re.sub(r'`([^`\n]+?)`', r'\1', raw)
+    raw = re.sub(r'\*\*([^*]+)\*\*', r'\1', raw)
+    raw = re.sub(r'__([^_]+)__', r'\1', raw)
+    raw = _normalise_arrows(raw)
+    return raw
+
+
+def _sanitize_section_fields(section: dict) -> None:
+    """In-place: convert every human-visible text field of an enriched section
+    into PDF-safe HTML (or clean plain text for code). Idempotent-safe because
+    escaped/placeholder output no longer contains raw markdown tokens."""
+    if not isinstance(section, dict):
+        return
+
+    for key in ("lead_sentence", "prose"):
+        if section.get(key):
+            section[key] = _strip_markdown_artifacts(section[key])
+
+    for key in ("bullets", "definitions", "distinctions", "examples", "prose_examples", "concepts"):
+        values = section.get(key)
+        if isinstance(values, list) and values:
+            section[key] = [_strip_markdown_artifacts(v) for v in values]
+
+    # Code examples render inside their own <pre>; keep them as clean plain text
+    # (the template escapes nothing, so strip markdown fences but leave code intact).
+    if isinstance(section.get("code_examples"), list) and section["code_examples"]:
+        section["code_examples"] = [_clean_plain_text(c) for c in section["code_examples"]]
+
+    # Structured exam trap (two short phrases).
+    trap = section.get("exam_trap_structured")
+    if isinstance(trap, dict):
+        if trap.get("misconception"):
+            trap["misconception"] = _strip_markdown_artifacts(trap["misconception"], block=False)
+        if trap.get("correct"):
+            trap["correct"] = _strip_markdown_artifacts(trap["correct"], block=False)
+
+    traps = section.get("exam_traps")
+    if isinstance(traps, list) and traps:
+        cleaned_traps = []
+        for t in traps:
+            if isinstance(t, dict):
+                nt = dict(t)
+                if nt.get("misconception"):
+                    nt["misconception"] = _strip_markdown_artifacts(nt["misconception"], block=False)
+                if nt.get("correct"):
+                    nt["correct"] = _strip_markdown_artifacts(nt["correct"], block=False)
+                cleaned_traps.append(nt)
+            else:
+                cleaned_traps.append(_strip_markdown_artifacts(t, block=False))
+        section["exam_traps"] = cleaned_traps
+
+    # Versus items (short labels/values).
+    vitems = section.get("versus_items")
+    if isinstance(vitems, list) and vitems:
+        for item in vitems:
+            if isinstance(item, dict):
+                for vk in ("left", "right", "detail", "left_label", "right_label"):
+                    if item.get(vk):
+                        item[vk] = _strip_markdown_artifacts(item[vk], block=False)
+
+    for key in ("analogy", "mistake", "remember"):
+        if section.get(key):
+            section[key] = _strip_markdown_artifacts(section[key])
 
 
 def _extract_lead_sentence(prose: str) -> tuple[str, str]:
@@ -1835,6 +2005,9 @@ async def _generate_lite_pdf(
         "cheat_sheet_chapter_count": 0,
     }
 
+    for _sec in sections_data:
+        _sanitize_section_fields(_sec)
+
     html_content = template.render(**context)
     title_short = title[:50] + ("…" if len(title) > 50 else "")
     return await asyncio.to_thread(_render_pdf, html_content, title_short, watermark)
@@ -2510,6 +2683,66 @@ async def generate_lecture_pdf(
             if isinstance(c, dict) and not str(c.get("concept_name", "")).startswith("__")
         ])
         cover_stats = _get_cover_stats(topic, enriched_sections, concept_note_cards, quick_review)
+
+        # ── Final markdown-artifact sweep ─────────────────────────────────────
+        # Convert any ```fences```, inline `backticks`, $math$, **bold**, and
+        # mixed ->/→ arrows into PDF-safe HTML so nothing leaks as literal text.
+        for _sec in enriched_sections:
+            _sanitize_section_fields(_sec)
+
+        for _g in glossary:
+            if isinstance(_g, dict):
+                if _g.get("term"):
+                    _g["term"] = _strip_markdown_artifacts(_g["term"], block=False)
+                if _g.get("definition"):
+                    _g["definition"] = _strip_markdown_artifacts(_g["definition"])
+                if _g.get("mnemonic"):
+                    _g["mnemonic"] = _strip_markdown_artifacts(_g["mnemonic"], block=False)
+
+        takeaways = [_strip_markdown_artifacts(t, block=False) for t in takeaways]
+
+        for _q in quick_review:
+            if isinstance(_q, dict):
+                if _q.get("question"):
+                    _q["question"] = _strip_markdown_artifacts(_q["question"], block=False)
+                if _q.get("answer"):
+                    _q["answer"] = _strip_markdown_artifacts(_q["answer"])
+                if _q.get("explanation"):
+                    _q["explanation"] = _strip_markdown_artifacts(_q["explanation"])
+
+        for _c in conceptual_map:
+            if isinstance(_c, dict):
+                if _c.get("heading"):
+                    _c["heading"] = _strip_markdown_artifacts(_c["heading"], block=False)
+                if _c.get("paragraph"):
+                    _c["paragraph"] = _strip_markdown_artifacts(_c["paragraph"])
+
+        for _day in study_roadmap.get("days", []) or []:
+            if isinstance(_day, dict):
+                if _day.get("label"):
+                    _day["label"] = _strip_markdown_artifacts(_day["label"], block=False)
+                if _day.get("task"):
+                    _day["task"] = _strip_markdown_artifacts(_day["task"], block=False)
+                if isinstance(_day.get("chapters"), list):
+                    _day["chapters"] = [_strip_markdown_artifacts(c, block=False) for c in _day["chapters"]]
+        study_roadmap["reminders"] = [
+            _strip_markdown_artifacts(r, block=False) for r in (study_roadmap.get("reminders") or [])
+        ]
+        for _list_key in ("next_topics", "prerequisites"):
+            for _item in study_roadmap.get(_list_key, []) or []:
+                if isinstance(_item, dict):
+                    for _fk in ("topic", "concept", "reason"):
+                        if _item.get(_fk):
+                            _item[_fk] = _strip_markdown_artifacts(_item[_fk], block=False)
+
+        for _cs in verified_cheat_sheet or []:
+            if isinstance(_cs, dict):
+                for _row in _cs.get("rows", []) or []:
+                    if isinstance(_row, dict):
+                        for _rk in ("term", "core_idea", "exam_trap", "quick_recall"):
+                            if _row.get(_rk):
+                                _row[_rk] = _strip_markdown_artifacts(_row[_rk], block=False)
+
         context = {
             "title": title,
             "created_at": created_at,

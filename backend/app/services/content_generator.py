@@ -146,7 +146,7 @@ def _build_prompt(
         "{\n"
         '  "summary": "<markdown string - see rules below>",\n'
         '  "flashcards": [{"front": "<question or term>", "back": "<answer or definition>"}],\n'
-        '  "quiz": [{"question": "<question>", "options": ["A: ...", "B: ...", "C: ...", "D: ..."], "answer": "<A/B/C/D>", "explanation": "<why correct>"}],\n'
+        '  "quiz": [{"question": "<question>", "options": ["<plain option text>", "<plain option text>", "<plain option text>", "<plain option text>"], "answer": "<A/B/C/D>", "explanation": "<why correct>"}],\n'
         '  "glossary": [{"term": "<term>", "definition": "<precise academic definition>"}]\n'
         "}\n\n"
         "SUMMARY RULES:\n"
@@ -155,18 +155,25 @@ def _build_prompt(
         "- 2-3 sentences of explanation per section\n"
         "- A > blockquote with a counterintuitive or surprising insight (mandatory for every section)\n"
         "- Key concepts: `term1`, `term2`, `term3` (mandatory, backticks only)\n"
-        "- Examples: -> first example -> second example (mandatory)\n"
+        "- Examples: → first example → second example (mandatory)\n"
         "- Do NOT use **bold**. Use `backticks` for key terms only.\n"
         f"- Maximum {word_budget} words total across all sections\n\n"
-        f"FLASHCARD RULES: {n_flash} cards. Front = question or key term. Back = precise answer or definition. "
+        f"FLASHCARD RULES: {n_flash} cards. Front = one focused question or key term. Back = a precise, self-contained answer or definition. "
+        "Each card must be ATOMIC - test exactly ONE concept; never combine two ideas into one card. "
+        "Do NOT create duplicate or near-duplicate cards; every card must cover a distinct concept. "
         "Cover the most testable concepts from the lecture. Flashcards must test subject matter concepts only. "
         "Never generate a flashcard about class logistics, exam structure, mark allocations, study plans, or anything the professor said about the class itself. "
         "Only generate cards about what the professor taught.\n\n"
-        f"QUIZ RULES: {n_quiz} multiple-choice questions. Bloom's taxonomy: mix recall, understanding, and application. "
-        "Each option must be plausible. Explanation must be 1-2 sentences. Quiz questions must test understanding of subject matter concepts only. "
+        f"QUIZ RULES: {n_quiz} multiple-choice questions, each with EXACTLY 4 options and EXACTLY ONE correct answer. "
+        "Options must be PLAIN text WITHOUT any 'A:'/'B:' letter prefix (the answer field carries the letter). "
+        "Distractors must be plausible, mutually exclusive, and roughly the same length as the correct answer - never joke options, 'all/none of the above', or overlapping choices. "
+        "The 'answer' field is a single letter A/B/C/D matching the 0-based position of the correct option. "
+        "Bloom's taxonomy: mix recall, understanding, and application. Explanation must be 1-2 sentences stating why the correct option is right. "
+        "Quiz questions must test understanding of subject matter concepts only. "
         "Never ask about mark allocations, exam structure, class logistics, or study plans. Every question must relate to a concept the professor actually explained.\n\n"
         "GLOSSARY RULES: 15-25 terms. Include every distinct subject matter term the professor defined or explained. "
-        "Use the professor's own definition where possible, not a textbook definition. Order alphabetically. "
+        "Deduplicate terms (case-insensitive) - never list the same term twice. Order strictly alphabetically by term. "
+        "Each definition is 1-2 precise sentences using the professor's own definition where possible, not a textbook definition. "
         "Never include terms about class logistics or exam structure."
     )
 
@@ -207,6 +214,83 @@ def summary_has_required_structure(summary: str, transcript: str = "") -> bool:
             return False
 
     return True
+
+
+def _normalise_content(data: dict) -> dict:
+    """
+    Defensively normalise model output so downstream rendering is always
+    internally consistent:
+      - flashcards: keep dicts with front/back, drop duplicates (by front+back)
+      - quiz: keep well-formed items (question + >=2 options + valid A-D answer),
+              strip stray 'A:'/'B:' option prefixes, coerce answer to a letter
+      - glossary: drop blanks, dedupe by lowercased term, sort alphabetically
+    Malformed items are skipped rather than crashing the pipeline.
+    """
+    # ---- flashcards ----
+    flashcards = []
+    seen_fc = set()
+    for c in (data.get("flashcards") or []):
+        if not isinstance(c, dict):
+            continue
+        front = str(c.get("front", "")).strip()
+        back = str(c.get("back", "")).strip()
+        if not front and not back:
+            continue
+        key = (front.lower(), back.lower())
+        if key in seen_fc:
+            continue
+        seen_fc.add(key)
+        flashcards.append({"front": front, "back": back})
+
+    # ---- quiz ----
+    quiz = []
+    prefix_re = re.compile(r"^\s*[A-Da-d][:.\)]\s*")
+    for q in (data.get("quiz") or []):
+        if not isinstance(q, dict):
+            continue
+        question = str(q.get("question", "")).strip()
+        raw_opts = q.get("options")
+        if not question or not isinstance(raw_opts, list):
+            continue
+        options = [prefix_re.sub("", str(o)).strip() for o in raw_opts if str(o).strip()]
+        if len(options) < 2:
+            continue
+        answer = str(q.get("answer", "")).strip().upper()
+        letter = answer[:1] if answer[:1] in "ABCD" else "A"
+        # Guard: answer letter must index into the available options.
+        if ord(letter) - 65 >= len(options):
+            letter = "A"
+        explanation = str(q.get("explanation", "")).strip()
+        quiz.append({
+            "question": question,
+            "options": options,
+            "answer": letter,
+            "explanation": explanation,
+        })
+
+    # ---- glossary ----
+    glossary = []
+    seen_terms = set()
+    for g in (data.get("glossary") or []):
+        if not isinstance(g, dict):
+            continue
+        term = str(g.get("term", "")).strip()
+        definition = str(g.get("definition", "")).strip()
+        if not term:
+            continue
+        key = term.lower()
+        if key in seen_terms:
+            continue
+        seen_terms.add(key)
+        glossary.append({"term": term, "definition": definition})
+    glossary.sort(key=lambda x: x["term"].lower())
+
+    return {
+        "summary": data.get("summary", ""),
+        "flashcards": flashcards,
+        "quiz": quiz,
+        "glossary": glossary,
+    }
 
 
 def generate(
@@ -290,12 +374,7 @@ def generate(
             print(f"[content-gen] flashcards value: {data.get('flashcards')}")
             print(f"[content-gen] quiz type: {type(data.get('quiz'))}")
             print(f"[content-gen] glossary type: {type(data.get('glossary'))}")
-            return {
-                "summary": data.get("summary", ""),
-                "flashcards": data.get("flashcards", []),
-                "quiz": data.get("quiz", []),
-                "glossary": data.get("glossary", []),
-            }
+            return _normalise_content(data if isinstance(data, dict) else {})
 
         except json.JSONDecodeError as exc:
             print(f"[content_generator] JSON parse error (attempt {attempt + 1}): {exc}")
