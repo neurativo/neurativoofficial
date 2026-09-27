@@ -161,10 +161,28 @@ function App({ user }) {
     const peakSpeechEnergyRef  = useRef(0);
     const noiseFloorRef        = useRef(0);
     const silentChunksRef      = useRef(0);
+    // Failsafe: count consecutive chunks skipped as "silent". If the threshold
+    // is mis-calibrated (noisy calibration, quiet/distant speaker), this could
+    // otherwise silently drop the entire transcript. We force-upload before that
+    // ever happens (see recorder.onstop).
+    const skippedInARowRef     = useRef(0);
+    // Guards mic-disconnect recovery so it never re-enters into a restart loop.
+    const micRecoveryInFlightRef = useRef(false);
 
     const SPEECH_BIN_LOW  = 2;
     const SPEECH_BIN_HIGH = 20;
-    const SILENCE_WARN_AFTER = 2;
+    // Only warn after several consecutive silent windows (~1 min), so natural
+    // pauses (writing on a board, slide changes, a student question) don't
+    // trigger a false "no speech" warning.
+    const SILENCE_WARN_AFTER = 5;
+    // Hard failsafe: never skip more than this many consecutive windows. Once
+    // reached, upload the next window regardless of the energy threshold so a
+    // bad calibration can never produce a silent/empty transcript.
+    const FORCE_UPLOAD_AFTER_SKIPS = 3;
+    // A chunk is only treated as silent when its peak energy is clearly below
+    // the noise floor. This margin prevents borderline/quiet real speech (which
+    // sits just above the floor) from being discarded.
+    const SILENCE_MARGIN = 1.25;
 
     // ── Effects ───────────────────────────────────────────
 
@@ -897,15 +915,33 @@ function App({ user }) {
                     },
                 });
                 micStreamRef.current = captureStream;
-                // Fix 6: recover from unexpected microphone disconnects
+                // Fix 6: recover from unexpected microphone disconnects.
+                // Gentle recovery: pause, attempt ONE reconnect, and if that fails
+                // leave the session paused for the user to resume manually — never
+                // spin in a blind restart loop (which would re-calibrate repeatedly
+                // and could churn credits/sessions).
                 captureStream.getTracks().forEach(track => {
                     track.onended = () => {
                         if (!isRecordingRef.current) return;
-                        showError('Microphone disconnected. Reconnecting…', 0);
+                        if (micRecoveryInFlightRef.current) return; // guard re-entry
+                        micRecoveryInFlightRef.current = true;
+                        showError('Microphone disconnected. Attempting to reconnect…', 0);
                         isRecordingRef.current = false;
                         setSessionStatus('paused');
                         stopAudioMonitoring();
-                        setTimeout(() => startRecording(targetId), 2000);
+                        setTimeout(async () => {
+                            try {
+                                // Probe that a mic is actually available again before restarting.
+                                const probe = await navigator.mediaDevices.getUserMedia({ audio: true });
+                                probe.getTracks().forEach(t => t.stop());
+                                micRecoveryInFlightRef.current = false;
+                                startRecording(targetId);
+                            } catch {
+                                micRecoveryInFlightRef.current = false;
+                                showError('Microphone unavailable. Press Resume when your mic is reconnected.', 0);
+                                // Stay paused — user resumes manually. No restart loop.
+                            }
+                        }, 2000);
                     };
                 });
             }
@@ -976,6 +1012,9 @@ function App({ user }) {
 
             const measuredFloor = await calibrateNoiseFloor(dataArray);
             let speechThreshold = Math.max(5, Math.min(40, measuredFloor * 1.8));
+            // Fresh start: clear any stale silence/skip state from a previous run.
+            silentChunksRef.current = 0;
+            skippedInARowRef.current = 0;
 
             // Resilience 5: request screen wake lock so device doesn't sleep
             await requestWakeLock();
@@ -1022,15 +1061,34 @@ function App({ user }) {
                 recorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
                 recorder.onstop = () => {
                     // Tab audio is a clean digital signal — never skip as "silent".
-                    // Mic audio uses energy threshold to skip silent chunks.
-                    const isSilent = !isTabMode && peakSpeechEnergyRef.current < speechThreshold;
-                    if (audioChunksRef.current.length > 0 && !isSilent) {
+                    // Mic audio uses an energy threshold to skip genuinely silent
+                    // windows, but with several failsafes so real speech is never lost.
+                    const hasData = audioChunksRef.current.length > 0;
+                    // Require the peak to be CLEARLY below the floor (× margin) before
+                    // calling a window silent — protects quiet/distant/borderline speech.
+                    const silenceCutoff = Math.min(speechThreshold, noiseFloorRef.current * SILENCE_MARGIN);
+                    const looksSilent = !isTabMode && peakSpeechEnergyRef.current < silenceCutoff;
+                    // FAILSAFE: after N consecutive skips, force-upload the next window
+                    // regardless of the threshold, so a mis-calibrated floor can never
+                    // silently swallow the whole transcript.
+                    const forceUpload = skippedInARowRef.current >= FORCE_UPLOAD_AFTER_SKIPS;
+                    const shouldUpload = hasData && (isTabMode || !looksSilent || forceUpload);
+
+                    if (shouldUpload) {
                         silentChunksRef.current = 0;
+                        skippedInARowRef.current = 0;
                         const blobType = recorder.mimeType || supportedMime || 'audio/webm';
                         uploadChunk(new Blob(audioChunksRef.current, { type: blobType }), targetId);
-                    } else if (isSilent) {
-                        noiseFloorRef.current = 0.9 * noiseFloorRef.current + 0.1 * peakSpeechEnergyRef.current;
-                        speechThreshold = Math.max(5, Math.min(40, noiseFloorRef.current * 1.8));
+                    } else if (looksSilent) {
+                        skippedInARowRef.current += 1;
+                        // Update the noise floor ONLY from windows quieter than the current
+                        // floor. This lets the floor track a genuinely quieter room but
+                        // prevents it from ratcheting UPWARD by absorbing speech energy
+                        // (which would progressively drop more and more real speech).
+                        if (peakSpeechEnergyRef.current < noiseFloorRef.current) {
+                            noiseFloorRef.current = 0.9 * noiseFloorRef.current + 0.1 * peakSpeechEnergyRef.current;
+                            speechThreshold = Math.max(5, Math.min(40, noiseFloorRef.current * 1.8));
+                        }
                         silentChunksRef.current += 1;
                         if (silentChunksRef.current >= SILENCE_WARN_AFTER) {
                             showError('No speech detected — is your microphone muted or too quiet?');
