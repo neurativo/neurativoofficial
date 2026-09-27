@@ -582,10 +582,13 @@ function App({ user }) {
         if (sseRef.current) sseRef.current.close();
         // Pass auth token as query param since EventSource can't set headers.
         // Retry token fetch up to 3 times — Clerk session may not be ready immediately.
+        // Use skipCache so a reconnect after token expiry (Clerk tokens are short-lived,
+        // ~60s) always fetches a FRESH token instead of replaying the expired cached one,
+        // which was causing repeated 401s mid-session.
         let token = null;
         for (let attempt = 0; attempt < 3 && !token; attempt++) {
             if (attempt > 0) await new Promise(r => setTimeout(r, 500 * attempt));
-            token = await window.Clerk?.session?.getToken().catch(() => null);
+            token = await window.Clerk?.session?.getToken({ skipCache: true }).catch(() => null);
         }
         if (!token) { console.warn('[SSE] No auth token — SSE skipped, polling will cover updates'); return; }
         const qs = `?token=${encodeURIComponent(token)}`;
@@ -1006,7 +1009,7 @@ function App({ user }) {
             drawLoop();
 
             const startLoop = () => {
-                if (!isRecordingRef.current) { micStream.getTracks().forEach(t => t.stop()); return; }
+                if (!isRecordingRef.current) { micStreamRef.current?.getTracks().forEach(t => t.stop()); return; }
                 peakSpeechEnergyRef.current = 0;
                 audioChunksRef.current = [];
                 // Only use webm — Whisper API does not accept ogg files.
@@ -1035,7 +1038,7 @@ function App({ user }) {
                         }
                     }
                     if (isRecordingRef.current) startLoop();
-                    else micStream.getTracks().forEach(t => t.stop());
+                    else micStreamRef.current?.getTracks().forEach(t => t.stop());
                 };
                 // Resilience 7: point worker tick at the current recorder instance
                 if (timerWorkerRef.current) {
