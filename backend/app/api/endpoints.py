@@ -1635,7 +1635,19 @@ def get_lecture_details(lecture_id: str, user=Depends(get_active_user)):
     lecture = get_lecture_for_summarization(lecture_id)
     if not lecture:
         raise HTTPException(status_code=404, detail="Lecture not found")
-    return enrich_lecture_payload(lecture, section_rows=get_lecture_sections(lecture_id))
+    # Enrichment (concept cards, grounded notes, graphs, optional OpenAI calls) is
+    # best-effort. While a live lecture is still capturing, the transcript can be
+    # tiny/empty and enrichment may fail — that must NOT 500 the polling client.
+    # Fall back to the base lecture payload and log the real cause.
+    try:
+        return enrich_lecture_payload(lecture, section_rows=get_lecture_sections(lecture_id))
+    except HTTPException:
+        raise
+    except Exception as exc:
+        import traceback
+        print(f"[lectures/{lecture_id}] enrich failed (returning base payload): {exc}")
+        traceback.print_exc()
+        return lecture
 
 
 @router.post("/ask/{lecture_id}")
