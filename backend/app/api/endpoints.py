@@ -811,8 +811,12 @@ def start_live_session(request: Request, body: StartSessionBody = StartSessionBo
         cleanup_stale_live_sessions()
     except Exception as e:
         print(f"[live/start] stale cleanup failed: {e}")
-    # Grant starter credits on first session (idempotent — no-op if already granted)
-    maybe_grant_starter(str(user.id), email=user.email, email_verified=user.email_verified)
+    # Grant starter credits on first session (idempotent — no-op if already granted).
+    # Non-fatal: a starter-grant failure must never block starting a session.
+    try:
+        maybe_grant_starter(str(user.id), email=user.email, email_verified=user.email_verified)
+    except Exception as e:
+        print(f"[live/start] maybe_grant_starter failed (non-fatal): {e}")
     # Credit check — must have at least 1 credit before starting a session
     check_credits(str(user.id))
     try:
@@ -886,8 +890,16 @@ def start_live_session(request: Request, body: StartSessionBody = StartSessionBo
         }
     except HTTPException:
         raise
-    except Exception:
-        raise HTTPException(status_code=500, detail="Failed to start live session")
+    except Exception as e:
+        # Surface the real cause in server logs so failures are diagnosable.
+        # (Previously this swallowed the exception, making every 500 opaque.)
+        import traceback
+        print(f"[live/start] FAILED for user={getattr(user, 'id', '?')}: {e}")
+        traceback.print_exc()
+        detail = "Failed to start live session"
+        if settings.ENVIRONMENT != "production":
+            detail = f"Failed to start live session: {e}"
+        raise HTTPException(status_code=500, detail=detail)
 
 
 _openai_client = OpenAI(api_key=settings.OPENAI_API_KEY) if settings.OPENAI_API_KEY else None
