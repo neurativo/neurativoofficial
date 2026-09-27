@@ -17,26 +17,57 @@ export { renderDomainContent };
 // Extracts fenced code blocks from a set of lines, returning
 // { codeBlocks: string[], remainingLines: string[] } where each codeBlock is
 // the full ```...``` fence (so renderDomainContent renders it as a <pre>).
+//
+// Tolerant of malformed input: same-line fences (```py x=1```), unclosed
+// trailing fences (```py x=1  ...EOF), inline fences appearing mid-line, and
+// multiple back-to-back fences. Any line that still contains ``` after normal
+// block extraction is scrubbed of residual fence markers so the prose passed
+// downstream NEVER carries a literal ```.
 function extractFencedCode(lines) {
     const codeBlocks = [];
     const remaining = [];
     let i = 0;
     while (i < lines.length) {
         const l = lines[i];
-        if (l.trim().startsWith('```')) {
-            const buf = [lines[i]];
-            i += 1;
-            // Same-line fence close (```python x=1```)
-            if (l.trim().length > 3 && l.trim().slice(3).includes('```')) {
-                codeBlocks.push(l.trim());
+        const t = l.trim();
+        if (t.startsWith('```')) {
+            // Same-line fence close (```python x=1```) OR a line carrying more than
+            // one fence marker — treat the whole line as a self-contained block.
+            const fenceCount = (t.match(/```/g) || []).length;
+            if (fenceCount >= 2) {
+                codeBlocks.push(t);
+                i += 1;
                 continue;
             }
+            // Opening fence: consume until the matching closing fence …
+            const buf = [l];
+            i += 1;
             while (i < lines.length && !lines[i].trim().startsWith('```')) {
                 buf.push(lines[i]);
                 i += 1;
             }
-            if (i < lines.length) { buf.push(lines[i]); i += 1; }
+            if (i < lines.length) {
+                // Found a closing fence line.
+                buf.push(lines[i]);
+                i += 1;
+            } else {
+                // … or hit end-of-input with the fence still open (unclosed trailing
+                // fence). Synthesize a closing fence so downstream renders cleanly.
+                buf.push('```');
+            }
             codeBlocks.push(buf.join('\n'));
+            continue;
+        }
+        // A non-fence-leading line may still contain a stray inline ``` — never let
+        // it flow into prose as literal text. Strip the fence markers AND any leaked
+        // language token that immediately followed a malformed opening fence.
+        if (l.includes('```')) {
+            const stripped = l
+                .replace(/```[ \t]*(csharp|cs|javascript|js|typescript|ts|python|py|java|cpp|c\+\+|go|golang|rust|rs|ruby|rb|php|swift|kotlin|kt|scala|sql|bash|sh|shell|html|css|json|xml|yaml|yml|jsx|tsx)\b/gi, ' ')
+                .replace(/`{3,}/g, ' ')
+                .replace(/[ \t]{2,}/g, ' ');
+            remaining.push(stripped);
+            i += 1;
             continue;
         }
         remaining.push(l);
@@ -61,7 +92,7 @@ export function parseSummary(text) {
         ? trimmed.split('## ').filter(s => s.trim())
         : [trimmed];
 
-    return blocks.map((block, idx) => {
+    const sections = blocks.map((block, idx) => {
         const rawLines = block.split('\n');
         // Structured blocks: first line is the title. Unstructured: synthesize one.
         let title;
@@ -181,4 +212,68 @@ export function parseSummary(text) {
 
         return { title, lead_sentence, prose, concepts, examples, highlights, codeBlocks };
     });
+
+    // Fix D: collapse duplicate section cards. A live master_summary can repeat
+    // the same "## " section (identical title/content), which previously rendered
+    // as multiple identical cards. dedupSections keeps one (richest) per identity.
+    return dedupSections(sections);
+}
+
+// ── Section de-duplication ───────────────────────────────────────────────────
+// Live SSE/polling can deliver a master_summary whose markdown contains the SAME
+// section more than once (e.g. "02 Python's Role in Data Analysis" repeated),
+// producing duplicate cards. Collapse them to a single card, keyed by a STABLE
+// identity (normalized title + a hash of the lead/prose), keeping the RICHEST
+// instance (most content) so nothing is lost. Returns each surviving section
+// augmented with a stable `_key` usable as a React key.
+function stableHash(str) {
+    let h = 5381;
+    for (let i = 0; i < str.length; i++) {
+        h = ((h << 5) + h) ^ str.charCodeAt(i); // djb2-xor
+    }
+    return (h >>> 0).toString(36);
+}
+
+function normalizeTitle(title) {
+    return (title || '')
+        .toLowerCase()
+        .replace(/^\d+[.)\s-]*/, '')   // drop leading numbering like "02 " / "2) "
+        .replace(/[^a-z0-9]+/g, ' ')   // collapse punctuation
+        .trim();
+}
+
+function sectionRichness(sec) {
+    return (sec.lead_sentence?.length || 0)
+        + (sec.prose?.length || 0)
+        + (sec.concepts?.length || 0) * 8
+        + (sec.examples?.length || 0) * 8
+        + (sec.highlights?.length || 0) * 8
+        + (sec.codeBlocks?.length || 0) * 8;
+}
+
+export function dedupSections(sections) {
+    if (!Array.isArray(sections)) return [];
+    const byKey = new Map();      // stableKey -> { sec, order }
+    let order = 0;
+    for (const sec of sections) {
+        const titleKey = normalizeTitle(sec.title);
+        const contentSig = stableHash(
+            (sec.lead_sentence || '').trim().toLowerCase() + '\u0001' +
+            (sec.prose || '').trim().toLowerCase()
+        );
+        // Prefer title identity when a meaningful title exists; otherwise fall back
+        // to a content hash so untitled/synthesized sections still dedup correctly.
+        const key = titleKey ? `t:${titleKey}` : `c:${contentSig}`;
+
+        const existing = byKey.get(key);
+        if (!existing) {
+            byKey.set(key, { sec: { ...sec, _key: key }, order: order++ });
+        } else if (sectionRichness(sec) > sectionRichness(existing.sec)) {
+            // Keep the richer duplicate but preserve its original position.
+            byKey.set(key, { sec: { ...sec, _key: key }, order: existing.order });
+        }
+    }
+    return Array.from(byKey.values())
+        .sort((a, b) => a.order - b.order)
+        .map(e => e.sec);
 }

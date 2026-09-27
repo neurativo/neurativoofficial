@@ -166,9 +166,13 @@ def _complete_live_session_end(lecture_id: str, user_id: str, background_tasks: 
                 last_idx           = pending_chunks[-1]['chunk_index']
                 if micro_list:
                     final_section = generate_section_summary(micro_list, language=language, topic=topic)
-                    create_lecture_section(
-                        lecture_id, final_section, start_idx, last_idx, current_total_secs
-                    )
+                    # Fix B: skip creating a card for sparse / non-educational tails.
+                    if final_section and final_section.strip():
+                        create_lecture_section(
+                            lecture_id, final_section, start_idx, last_idx, current_total_secs
+                        )
+                    else:
+                        print(f"[END] Empty final section (sparse/non-lecture) — no card created (lecture={lecture_id})")
 
             all_sections = get_section_summaries(lecture_id)
             if all_sections:
@@ -245,10 +249,19 @@ def _check_owner(lecture_id: str, user_id: str) -> None:
 #  Language-agnostic. Works identically in any language.
 # =============================================================================
 
+# Chunks are ~12s each. Tuned so a *single-topic* lecture (low semantic
+# divergence) still emits a section card roughly every 60-90s instead of
+# waiting for the hard cap:
+#   MIN_CHUNKS=3      → earliest a section can fire is ~36s (guard).
+#   HARD_CAP_CHUNKS=6 → guaranteed card by ~72s even with zero divergence.
+#   MOMENTUM_WINDOW=3 → momentum reaches 1.0 at MIN_CHUNKS+3 = 6 chunks, so
+#                       time-pressure alone can carry a boundary on flat content.
+#   TRIGGER_THRESHOLD=0.50 → with the momentum weight raised below, ~5 chunks of
+#                       even a continuous topic clears the bar before the cap.
 MIN_CHUNKS        = 3
-HARD_CAP_CHUNKS   = 10
-MOMENTUM_WINDOW   = 7
-TRIGGER_THRESHOLD = 0.55
+HARD_CAP_CHUNKS   = 6
+MOMENTUM_WINDOW   = 3
+TRIGGER_THRESHOLD = 0.50
 
 
 def _mean_pairwise_similarity(embeddings: list) -> float:
@@ -272,9 +285,15 @@ def should_trigger_section(pending_chunks: list) -> tuple:
     if n >= HARD_CAP_CHUNKS:
         return True, {"reason": "hard_cap", "chunks": n}
 
+    # Trigger counts ALL pending chunks (n) — including CIF-excluded ones with
+    # empty micro_summaries — so the section clock is never starved by filtering.
+    # Only NON-EMPTY summaries feed the semantic embeddings; when there are too
+    # few to embed, fall back to momentum alone so cards still flow on time.
     summaries = [c['micro_summary'] for c in pending_chunks if c.get('micro_summary', '').strip()]
-    if len(summaries) < MIN_CHUNKS:
-        return False, {"reason": "insufficient_summaries"}
+    if len(summaries) < 2:
+        momentum_score = min(1.0, (n - MIN_CHUNKS) / MOMENTUM_WINDOW)
+        fire = momentum_score >= 0.999  # only momentum can decide with no semantics
+        return fire, {"reason": "momentum_only", "chunks": n, "momentum": round(momentum_score, 3)}
 
     try:
         embeddings = get_embeddings(summaries)
@@ -293,8 +312,10 @@ def should_trigger_section(pending_chunks: list) -> tuple:
     # Signal 3: Momentum
     momentum_score = min(1.0, (n - MIN_CHUNKS) / MOMENTUM_WINDOW)
 
-    # Composite
-    composite  = (0.50 * divergence_score) + (0.30 * drift_score) + (0.20 * momentum_score)
+    # Composite — momentum weight raised from 0.20 → 0.45 so a continuous
+    # single-topic lecture (low divergence/drift) still accumulates enough score
+    # from time-pressure alone to fire around 5-6 chunks, well before the cap.
+    composite  = (0.35 * divergence_score) + (0.20 * drift_score) + (0.45 * momentum_score)
     should_fire = composite >= TRIGGER_THRESHOLD
 
     debug = {
@@ -990,18 +1011,33 @@ def _run_summarization(
     # ── CIF Routing ───────────────────────────────────────────────────────────
     # Only act on high-confidence non-lecture classifications (> 0.75).
     # On confidence <= 0.75 for any type: fall through to normal summarization.
-    if cif_confidence > 0.75:
-        if cif_type == "OFF_TOPIC":
-            print(f"[BG][CIF] Dropped OFF_TOPIC chunk (lecture={lecture_id})")
-            return
+    #
+    # IMPORTANT (Fix A): non-lecture chunks are excluded from summary *content*
+    # but must NOT starve the N.A.S.T. trigger. We still insert a chunk row with
+    # an EMPTY micro_summary so chunk_index stays continuous and the section
+    # trigger keeps counting real elapsed time. Empty micro_summaries are
+    # filtered out of the section content downstream.
+    if cif_confidence > 0.75 and cif_type in ("OFF_TOPIC", "STUDENT_QUESTION"):
         if cif_type == "STUDENT_QUESTION":
             try:
                 save_student_question(lecture_id, chunk_text)
                 print(f"[BG][CIF] Saved STUDENT_QUESTION for lecture={lecture_id}")
             except Exception as sq_err:
                 print(f"[BG][CIF] save_student_question failed (non-fatal): {sq_err}")
-            return
-        # LECTURER_RESPONSE → treat as LECTURE, fall through
+        else:
+            print(f"[BG][CIF] OFF_TOPIC chunk excluded from content (lecture={lecture_id})")
+        # Record an empty-content chunk so the trigger clock keeps advancing.
+        try:
+            db.table("lecture_chunks").insert({
+                "lecture_id":    lecture_id,
+                "transcript":    chunk_text,
+                "micro_summary": "",   # excluded from section content, still counts for timing
+                "chunk_index":   chunk_idx,
+            }).execute()
+        except Exception as ins_err:
+            print(f"[BG][CIF] non-lecture chunk insert failed (non-fatal): {ins_err}")
+        return
+    # LECTURER_RESPONSE (and all low-confidence types) → treat as LECTURE, fall through
 
     # ── Phase 1: micro summary ────────────────────────────────────────────────
     try:
@@ -1083,10 +1119,25 @@ def _run_summarization(
         # like total_sections column can after concurrent inserts.
         section_count = get_latest_section_count(lecture_id)
 
-        micro_list = [c["micro_summary"] for c in pending_chunks]
+        # Exclude CIF-excluded / empty chunks from section CONTENT (they still
+        # counted toward the trigger clock above).
+        micro_list = [c["micro_summary"] for c in pending_chunks if (c.get("micro_summary") or "").strip()]
+
+        # If there is no real content to summarise, advance the section boundary
+        # (so the empty window doesn't re-trigger forever) but create NO card.
+        if not micro_list:
+            print(f"[BG] No content in pending window — no card created (lecture={lecture_id})")
+            return
 
         # Phase 2: section summary (topic-aware)
         new_section = generate_section_summary(micro_list, language=language, topic=topic)
+
+        # Fix B: anti-filler guard — if the summariser judged the content sparse /
+        # non-educational it returns "". Do NOT insert a section row or bump
+        # total_sections; skip straight to the master-summary refresh.
+        if not new_section or not new_section.strip():
+            print(f"[BG] Empty section summary (sparse/non-lecture) — no card created (lecture={lecture_id})")
+            return
 
         # Fix 1: upsert with ignore_duplicates handles any remaining race window
         try:

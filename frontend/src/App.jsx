@@ -5,7 +5,7 @@ import { trackPageview } from './lib/trackPageview';
 import { useClerk } from '@clerk/react';
 import QAAnswer from './components/QAAnswer';
 import { renderDomainContent } from './lib/renderDomainContent.jsx';
-import { parseSummary } from './lib/summaryRenderer.jsx';
+import { parseSummary, dedupSections } from './lib/summaryRenderer.jsx';
 import TopUpBanner from './components/TopUpBanner.jsx';
 
 const LANGUAGE_NAMES = {
@@ -2092,7 +2092,7 @@ function App({ user }) {
                                 <span className="text-[11px] font-semibold text-[#a3a3a3] uppercase tracking-wider">Summary</span>
                                 <div className="flex items-center gap-1 font-mono text-[11px] text-[#a3a3a3]">
                                     {(() => {
-                                        const count = parseSummary(summary).length;
+                                        const count = dedupSections(parseSummary(summary)).length;
                                         return <span>{count} section{count !== 1 ? 's' : ''}</span>;
                                     })()}
                                     {sessionStatus === 'recording' && (
@@ -2107,10 +2107,10 @@ function App({ user }) {
                             <div className="flex-1 overflow-y-auto">
                                 {summary ? (
                                     <div className="p-3 space-y-2.5">
-                                        {parseSummary(summary).map((sec, idx) => {
+                                        {dedupSections(parseSummary(summary)).map((sec, idx) => {
                                             const isNew = idx === newSectionIdx;
                                             return (
-                                                <div key={idx}
+                                                <div key={sec._key || idx}
                                                     className="summary-card-enter"
                                                     style={{
                                                         border: '1px solid #e2e8f0',

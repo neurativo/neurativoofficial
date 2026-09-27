@@ -1,7 +1,104 @@
 import json
 import time
+import re
 import app.services.openai_service as openai_service
 from app.services.cost_tracker import log_cost
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Fix B — anti-filler / anti-hallucination guards for sparse or non-lecture audio
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Phrases that mark advertisements, sponsor reads, or pure chatter — NOT teaching.
+_NON_EDUCATIONAL_MARKERS = (
+    "sponsor", "sponsored by", "this video is brought to you",
+    "hosting", "web host", "altahost", "vpn", "use code", "promo code",
+    "discount", "sign up at", "sign up today", "visit our website",
+    "link in the description", "link in the bio", "subscribe", "like and subscribe",
+    "smash that", "hit the bell", "check out", "limited time offer",
+    "buy now", "shop now", "coupon",
+)
+
+# Filler openers/closers that carry no lecture content on their own.
+_TRIVIAL_PHRASES = (
+    "let's get started", "lets get started", "let's begin", "lets begin",
+    "welcome back", "hello everyone", "hi everyone", "thanks for watching",
+    "see you next time", "that's all for today", "thats all for today",
+    "in this video", "in today's video", "in todays video",
+    "before we begin", "okay so", "alright", "um", "uh",
+)
+
+
+def _strip_markdown(text: str) -> str:
+    """Remove markdown scaffolding so we measure real informational content."""
+    if not text:
+        return ""
+    t = text
+    t = re.sub(r"`{1,3}[^`]*`{1,3}", " ", t)       # code spans / fences
+    t = re.sub(r"[#>*_\-→`$\[\]{}]", " ", t)          # markdown markers
+    t = re.sub(r"key concepts:|examples:", " ", t, flags=re.IGNORECASE)
+    t = re.sub(r"\s+", " ", t)
+    return t.strip()
+
+
+def _is_low_content(combined_micro: str) -> bool:
+    """
+    True when the combined micro-summaries carry no real teaching content:
+    empty/whitespace, too short to be a section, dominated by ad/promo markers,
+    or made up entirely of trivial openers. Used to suppress filler section cards.
+    """
+    raw = (combined_micro or "").strip()
+    if not raw:
+        return True
+
+    plain = _strip_markdown(raw).lower()
+    if not plain:
+        return True
+
+    # Too few real words to constitute a lecture section.
+    words = [w for w in re.findall(r"[a-zA-Z0-9']+", plain) if len(w) > 1]
+    if len(words) < 12:
+        return True
+
+    # Advertisement / promo dominated content → not a lecture section.
+    if any(marker in plain for marker in _NON_EDUCATIONAL_MARKERS):
+        # If it's ONLY promo (no substantial residual after removing trivials), drop it.
+        residual = plain
+        for phrase in _TRIVIAL_PHRASES:
+            residual = residual.replace(phrase, " ")
+        residual_words = [w for w in re.findall(r"[a-zA-Z0-9']+", residual) if len(w) > 1]
+        if len(residual_words) < 25:
+            return True
+
+    # Entirely trivial openers/closers with nothing else.
+    residual = plain
+    for phrase in _TRIVIAL_PHRASES:
+        residual = residual.replace(phrase, " ")
+    residual_words = [w for w in re.findall(r"[a-zA-Z0-9']+", residual) if len(w) > 1]
+    if len(residual_words) < 8:
+        return True
+
+    return False
+
+
+def _is_placeholder_summary(text: str) -> bool:
+    """
+    True when the LLM hallucinated a filler/placeholder section instead of
+    refusing (e.g. 'The lecture has not yet commenced ... placeholder for future
+    discussions'). Such output must be discarded so no card is created.
+    """
+    if not text:
+        return True
+    low = text.lower()
+    placeholder_markers = (
+        "has not yet commenced", "not yet commenced", "has not yet begun",
+        "placeholder for future", "placeholder for", "serves as a placeholder",
+        "no specific content", "without specific content", "yet to begin",
+        "will be discussed", "future discussions", "to be discussed later",
+        "no content was provided", "does not contain", "lacks specific content",
+        "awaiting content", "content will follow",
+    )
+    return any(m in low for m in placeholder_markers)
 
 
 def _language_instruction(language: str) -> str:
@@ -258,6 +355,12 @@ def generate_section_summary(micro_summaries: list, language: str = "en", topic:
     if not openai_service.client:
         return ""
     combined_micro = "\n".join(micro_summaries)
+    # Fix B: suppress section cards for sparse / non-educational input (ads,
+    # promos, pure chatter, trailing silence). Returning "" means the caller
+    # creates NO card and does not bump total_sections.
+    if _is_low_content(combined_micro):
+        print("[section] Low-content / non-educational input — returning empty (no card).")
+        return ""
     lang_note      = _multilingual_instruction()
     topic_note     = _section_guidance(topic)
     fmt            = _format_guidance(topic)
@@ -314,7 +417,13 @@ def generate_section_summary(micro_summaries: list, language: str = "en", topic:
             log_cost("section_summary", "gpt-4o-mini",
                      input_tokens=response.usage.prompt_tokens,
                      output_tokens=response.usage.completion_tokens)
-            return response.choices[0].message.content
+            result = response.choices[0].message.content or ""
+            # Fix B: if the model hallucinated a placeholder card instead of
+            # producing real content, discard it so NO card is created.
+            if _is_placeholder_summary(result):
+                print("[section] Placeholder/filler output detected — returning empty (no card).")
+                return ""
+            return result
         except Exception as e:
             last_err = e
             if attempt < 2:

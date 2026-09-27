@@ -22,7 +22,10 @@ function isCodeTopic(topic) {
 }
 
 function hasFencedCode(text) {
-    return /```[\s\S]*?```/.test(text);
+    // Fire on ANY triple-backtick sequence — including orphan/unclosed/inline
+    // fences — so malformed fences are always routed through renderCodeBlocks
+    // and never leak as literal ``` text.
+    return /```/.test(text);
 }
 
 function hasMath(text) {
@@ -72,12 +75,70 @@ export function renderDomainContent(text, topic) {
         return renderInlineCode(part);
     });
 
+    // FINAL SAFETY PASS — after all structured parsing, no residual triple-backtick
+    // sequences or lone stray backticks may survive as literal text. This catches
+    // malformed / orphan / inline / back-to-back fences the parsers above missed.
+    parts = parts.flatMap(part => {
+        if (typeof part !== 'string') return [part];
+        const cleaned = sanitizeResidualFences(part);
+        return cleaned === '' ? [] : [cleaned];
+    });
+
+    // Remaining plain strings stay as-is — but FIRST scrub any residual literal
+    // backticks (Fix C). If a malformed / orphan / unbalanced fence slipped past
+    // fenced-code and inline-code rendering, its backticks would otherwise show
+    // as literal text. We strip stray ``` fences (with any leaked language token)
+    // and lone ` marks from the leftover *string* parts only — real <code>/<pre>
+    // elements produced above are React nodes and are never touched.
+    const LEAKED_LANG = /`{1,3}[ \t]*(csharp|cs|javascript|js|typescript|ts|python|py|java|cpp|c\+\+|c#|go|golang|rust|rs|ruby|rb|php|swift|kotlin|kt|scala|sql|bash|sh|shell|html|css|json|xml|yaml|yml|jsx|tsx)\b/gi;
+    parts = parts.map(part => {
+        if (typeof part !== 'string') return part;
+        return part
+            .replace(LEAKED_LANG, ' ')
+            .replace(/`+/g, '')          // remove any surviving single/triple backticks
+            .replace(/[ \t]{2,}/g, ' ');
+    });
+
     // Remaining plain strings stay as-is
     return parts.map((part, i) =>
         typeof part === 'string'
             ? <span key={i}>{part}</span>
             : React.cloneElement(part, { key: i })
     );
+}
+
+// ── Residual-fence sanitizer ─────────────────────────────────────────────────
+// Removes any leftover ``` markers, orphan/unclosed fences, back-to-back fences,
+// and leaked leading language tokens (csharp/javascript/python/...) so literal
+// markdown code-fence characters NEVER reach the DOM as visible text.
+const LEAKED_LANG_TOKENS = [
+    'csharp', 'cs', 'javascript', 'js', 'typescript', 'ts', 'python', 'py',
+    'java', 'cpp', 'c\\+\\+', 'c', 'go', 'golang', 'rust', 'rs', 'ruby', 'rb',
+    'php', 'swift', 'kotlin', 'kt', 'scala', 'sql', 'bash', 'sh', 'shell',
+    'html', 'css', 'json', 'xml', 'yaml', 'yml', 'jsx', 'tsx',
+];
+
+function sanitizeResidualFences(text) {
+    if (typeof text !== 'string' || text.indexOf('`') === -1) return text;
+
+    let out = text;
+
+    // 1) Strip any triple-backtick fence immediately followed by a language token,
+    //    e.g. "```csharp" -> "" (the leaked language label after a broken fence).
+    const langAlt = LEAKED_LANG_TOKENS.join('|');
+    out = out.replace(new RegExp('```[ \\t]*(?:' + langAlt + ')\\b', 'gi'), ' ');
+
+    // 2) Remove any remaining triple-backtick (or longer) fence markers outright.
+    out = out.replace(/`{3,}/g, ' ');
+
+    // 3) Any surviving lone stray backticks (unpaired inline ticks the inline-code
+    //    pass could not match) are removed so no `` ` `` ever shows as literal text.
+    out = out.replace(/`/g, '');
+
+    // 4) Collapse whitespace introduced by the removals, but keep single newlines.
+    out = out.replace(/[ \t]{2,}/g, ' ').replace(/[ \t]+\n/g, '\n');
+
+    return out.trim() === '' ? '' : out;
 }
 
 // ── Inline code rendering ────────────────────────────────────────────────────
@@ -113,17 +174,37 @@ function renderInlineCode(text) {
 // ── Code rendering ─────────────────────────────────────────────────────────
 
 function renderCodeBlocks(text) {
-    const CODE_FENCE = /```(\w*)[ \t]*\n?([\s\S]*?)```/g;
+    // Tolerant fence matcher:
+    //  • ```lang\n code ```            (well-formed block)
+    //  • ```lang code ```             (inline, no newlines)
+    //  • ```lang code                 (orphan / unclosed — consumes to next fence or EOS)
+    //  • ``` ``` ``` ...              (multiple back-to-back fences on one line)
+    // Group 1 = optional language token, Group 2 = code body.
+    // The alternation ends a block at the next ``` OR end-of-string so unclosed
+    // trailing fences are still captured and never leak as literal ``` text.
+    const CODE_FENCE = /```[ \t]*(\w+)?[ \t]*\r?\n?([\s\S]*?)(?:```|$)/g;
     const parts = [];
     let last = 0;
     let match;
 
     while ((match = CODE_FENCE.exec(text)) !== null) {
+        // Guard against zero-length matches (e.g. bare "``````") causing infinite loops.
+        if (match.index === CODE_FENCE.lastIndex) {
+            CODE_FENCE.lastIndex++;
+            continue;
+        }
         if (match.index > last) {
             parts.push(text.slice(last, match.index));
         }
-        const lang = match[1];
-        const code = match[2];
+        const lang = match[1] || '';
+        const code = (match[2] || '').replace(/`+$/, '').trim();
+
+        // Empty fence (no real code) — drop entirely, emit nothing literal.
+        if (!code) {
+            last = CODE_FENCE.lastIndex;
+            continue;
+        }
+
         let highlighted;
         try {
             highlighted = lang && hljs.getLanguage(lang)
@@ -135,7 +216,7 @@ function renderCodeBlocks(text) {
         parts.push(
             <CodeBlock key={match.index} lang={lang} highlighted={highlighted} raw={code} />
         );
-        last = match.index + match[0].length;
+        last = CODE_FENCE.lastIndex;
     }
 
     if (last < text.length) parts.push(text.slice(last));
